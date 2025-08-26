@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [viteSourceLocator({
     prefix: 'mgx'
   }), react()],
-  base: './',
+  base: '/ai-ad-video-creator',
   build: {
     outDir: 'dist',
     assetsDir: 'assets'
