@@ -19,15 +19,15 @@ const Step1 = ({ onNext, formData, setFormData }) => {
     },
     { 
       name: 'coreValue', 
-      label: '핵심 가치', 
+      label: '핵심 차별점', // 수정됨: "핵심 가치" → "핵심 차별점"
       type: 'text', 
-      placeholder: '브랜드의 제공할 수 있는 독창적이고 근본적인 가치' 
+      placeholder: '브랜드가 제공할 수 있는 가치와 차별점' 
     },
     { 
       name: 'coreTarget', 
       label: '핵심 타겟', 
       type: 'text', 
-      placeholder: '예: 사회초년생 재테크에 관심이 많은 20대 후반의 직장인' 
+      placeholder: '예: 사회초년생 화장품에 관심이 많은 20대의 여성 직장인' 
     },
     {
       name: 'coreGoal',
@@ -127,11 +127,8 @@ const Step1 = ({ onNext, formData, setFormData }) => {
         </button>
       </div>
 
-      {/* 입력 데이터 미리보기 (개발용) */}
-      <div className="mt-6 p-4 bg-gray-50 rounded-md">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">입력된 데이터:</h3>
-        <pre className="text-xs text-gray-600">{JSON.stringify(formData, null, 2)}</pre>
-      </div>
+      {/* 입력 데이터 미리보기 (개발용) 삭제됨 */}
+      {/* 하단 안내문구/로켓이모지 완전히 삭제됨 */}
     </div>
   );
 };
