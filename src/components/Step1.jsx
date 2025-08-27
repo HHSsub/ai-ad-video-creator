@@ -110,7 +110,6 @@ const Step1 = ({ onNext, formData, setFormData }) => {
                 }`}
               />
             )}
-            // 주석석
             
             {errors[field.name] && (
               <p className="text-red-500 text-sm">{errors[field.name]}</p>
