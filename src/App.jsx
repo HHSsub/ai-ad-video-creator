@@ -107,12 +107,6 @@ function App() {
             />
           )}
         </div>
-
-        {/* 푸터 */}
-        <div className="mt-12 text-center text-sm text-gray-500">
-          <p>🚀 개발 완료 후 CapCut API 연동을 통해 실제 영상 생성이 가능합니다</p>
-          <p className="mt-1">💡 모든 데이터는 콘솔(F12)에서도 확인할 수 있습니다</p>
-        </div>
       </div>
     </div>
   );
