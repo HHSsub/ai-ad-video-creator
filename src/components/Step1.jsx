@@ -3,13 +3,12 @@ import { useState } from 'react';
 const Step1 = ({ onNext, formData, setFormData }) => {
   const [errors, setErrors] = useState({});
 
-  // 폼 필드 정의 - 요구사항에 맞게 6가지 필드로 수정
   const fields = [
     { 
       name: 'brandName', 
       label: '브랜드명', 
       type: 'text', 
-      placeholder: '예: 삼성, 쿠팡, 새로운브랜드' 
+      placeholder: '예: 삼성, 쿠팡, 새로운 브랜드' 
     },
     { 
       name: 'businessCategory', 
@@ -19,7 +18,7 @@ const Step1 = ({ onNext, formData, setFormData }) => {
     },
     { 
       name: 'coreValue', 
-      label: '핵심 차별점', // 수정됨: "핵심 가치" → "핵심 차별점"
+      label: '핵심 차별점', 
       type: 'text', 
       placeholder: '브랜드가 제공할 수 있는 가치와 차별점' 
     },
@@ -43,30 +42,24 @@ const Step1 = ({ onNext, formData, setFormData }) => {
     }
   ];
 
-  // 입력값 변경 처리
   const handleInputChange = (name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }));
-    // 에러가 있다면 제거
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
-  // 유효성 검사
   const validateForm = () => {
     const newErrors = {};
-    
     fields.forEach(field => {
       if (!formData[field.name] || formData[field.name].trim() === '') {
         newErrors[field.name] = `${field.label}은(는) 필수 입력 항목입니다.`;
       }
     });
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // 다음 단계로 진행
   const handleNext = () => {
     if (validateForm()) {
       onNext();
@@ -126,9 +119,6 @@ const Step1 = ({ onNext, formData, setFormData }) => {
           다음 단계
         </button>
       </div>
-
-      {/* 입력 데이터 미리보기 (개발용) 삭제됨 */}
-      {/* 하단 안내문구/로켓이모지 완전히 삭제됨 */}
     </div>
   );
 };
