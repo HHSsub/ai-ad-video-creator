@@ -83,10 +83,14 @@ const Step2 = ({ onNext, onPrev, formData, setBrandClassification }) => {
           입력 정보 요약
         </h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div><span className="font-medium">업종:</span> {formData.industry}</div>
-          <div><span className="font-medium">타겟 연령:</span> {formData.ageGroup}</div>
-          <div><span className="font-medium">광고 톤:</span> {formData.tone}</div>
-          <div><span className="font-medium">광고 목표:</span> {formData.goal}</div>
+          <div><span className="font-medium">업종:</span> {formData.industryCategory}</div>
+          <div><span className="font-medium">핵심 타겟:</span> {formData.coreTarget}</div>
+          <div><span className="font-medium">핵심 목적:</span> {formData.corePurpose}</div>
+          <div><span className="font-medium">영상 길이:</span> {formData.videoLength}</div>
+          <div><span className="font-medium">핵심 차별점:</span> {formData.coreDifferentiation}</div>
+          {formData.additionalRequirements && (
+            <div><span className="font-medium">추가 요구사항:</span> {formData.additionalRequirements}</div>
+          )}
         </div>
       </div>
 

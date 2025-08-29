@@ -7,10 +7,12 @@ function App() {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     brandName: '',
-    ageGroup: '',
-    industry: '',
-    tone: '',
-    goal: ''
+    industryCategory: '',
+    coreTarget: '',
+    corePurpose: '',
+    videoLength: '',
+    coreDifferentiation: '',
+    additionalRequirements: ''
   });
   const [brandClassification, setBrandClassification] = useState(null);
 

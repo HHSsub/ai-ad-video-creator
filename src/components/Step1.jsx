@@ -8,37 +8,50 @@ const Step1 = ({ onNext, formData, setFormData }) => {
       name: 'brandName', 
       label: '브랜드명', 
       type: 'text', 
-      placeholder: '예: 삼성, 쿠팡, 새로운 브랜드' 
+      placeholder: '예: 삼성, 쿠팡, 새로운 브랜드',
+      required: true
     },
     { 
-      name: 'businessCategory', 
-      label: '비즈니스 카테고리', 
+      name: 'industryCategory', 
+      label: '산업/서비스 카테고리', 
       type: 'text', 
-      placeholder: '예: 프리미엄 비건 뷰티, AI 기반 SaaS 솔루션, 구독형 키즈 에듀테크' 
-    },
-    { 
-      name: 'coreValue', 
-      label: '핵심 차별점', 
-      type: 'text', 
-      placeholder: '브랜드가 제공할 수 있는 가치와 차별점' 
+      placeholder: '예: 뷰티, 푸드, 게임, 테크, 카페 등',
+      required: true
     },
     { 
       name: 'coreTarget', 
       label: '핵심 타겟', 
       type: 'text', 
-      placeholder: '예: 사회초년생 화장품에 관심이 많은 20대의 여성 직장인' 
+      placeholder: '예: 사회초년생 재테크에 관심이 많은 20대 후반의 직장인 등 자유롭게 기재',
+      required: true
     },
     {
-      name: 'coreGoal',
-      label: '핵심 목표',
+      name: 'corePurpose',
+      label: '핵심 목적',
       type: 'select',
-      options: ['브랜드 인지도 강화', '구매 전환']
+      options: ['브랜드 인지도 강화', '구매 전환'],
+      required: true
     },
     {
       name: 'videoLength',
       label: '영상 길이',
       type: 'select',
-      options: ['숏폼(10초)', '스탠다드(30초)', '롱폼(60초)']
+      options: ['10초', '30초', '60초'],
+      required: true
+    },
+    { 
+      name: 'coreDifferentiation', 
+      label: '핵심 차별점', 
+      type: 'text', 
+      placeholder: '브랜드의 제공하는 독창적이고 차별화된 포인트',
+      required: true
+    },
+    { 
+      name: 'additionalRequirements', 
+      label: '추가 요구사항 (선택사항)', 
+      type: 'textarea', 
+      placeholder: '자유롭게 원하는 컨셉이나 요구사항이 있으면 기재',
+      required: false
     }
   ];
 
@@ -52,7 +65,7 @@ const Step1 = ({ onNext, formData, setFormData }) => {
   const validateForm = () => {
     const newErrors = {};
     fields.forEach(field => {
-      if (!formData[field.name] || formData[field.name].trim() === '') {
+      if (field.required && (!formData[field.name] || formData[field.name].trim() === '')) {
         newErrors[field.name] = `${field.label}은(는) 필수 입력 항목입니다.`;
       }
     });
@@ -69,14 +82,14 @@ const Step1 = ({ onNext, formData, setFormData }) => {
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-        1단계: 6가지 입력
+        1단계: 7가지 입력
       </h2>
       
       <div className="space-y-4">
         {fields.map(field => (
           <div key={field.name} className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              {field.label} <span className="text-red-500">*</span>
+              {field.label} {field.required && <span className="text-red-500">*</span>}
             </label>
             
             {field.type === 'select' ? (
@@ -92,6 +105,16 @@ const Step1 = ({ onNext, formData, setFormData }) => {
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
+            ) : field.type === 'textarea' ? (
+              <textarea
+                value={formData[field.name] || ''}
+                onChange={(e) => handleInputChange(field.name, e.target.value)}
+                placeholder={field.placeholder}
+                rows="3"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors[field.name] ? 'border-red-500' : 'border-gray-300'
+                }`}
+              />
             ) : (
               <input
                 type={field.type}
