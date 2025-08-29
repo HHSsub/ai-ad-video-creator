@@ -8,6 +8,7 @@ const Step3 = ({ onPrev, formData, setBrandClassification }) => {
   const [finalPrompt, setFinalPrompt] = useState(null);
   const [showJson, setShowJson] = useState(false);
   const [processingLogs, setProcessingLogs] = useState([]);
+  const [localBrandClassification, setLocalBrandClassification] = useState(null);
 
   useEffect(() => {
     if (formData) {
@@ -28,6 +29,7 @@ const Step3 = ({ onPrev, formData, setBrandClassification }) => {
       logs.push(`✅ 브랜드 분류 완료: ${brandResult.classification} (기존: ${brandResult.isExisting})`);
       console.log('브랜드 분류 결과:', brandResult);
       
+      setLocalBrandClassification(brandResult);
       setBrandClassification(brandResult);
       
       // 2. 입력 데이터를 키워드로 매핑
@@ -126,7 +128,7 @@ const Step3 = ({ onPrev, formData, setBrandClassification }) => {
           ✅ 처리 과정 완료
         </h3>
         <div className="text-sm text-green-700">
-          <p>• 브랜드 분류: {brandClassification?.classification || 'N/A'}</p>
+          <p>• 브랜드 분류: {localBrandClassification?.classification || 'N/A'}</p>
           <p>• 키워드 매핑: {mappedData?.keywords?.length || 0}개</p>
           <p>• 스토리보드: {scenes.length}개 장면</p>
           <p>• JSON 프롬프트: 생성 완료</p>
@@ -256,15 +258,17 @@ const Step3 = ({ onPrev, formData, setBrandClassification }) => {
       </div>
 
       {/* 프롬프트 요약 정보 */}
-      <div className="mt-6 p-4 bg-gray-50 rounded-md">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">프롬프트 요약:</h3>
-        <div className="text-sm text-gray-600 space-y-1">
-          <div><span className="font-medium">프로젝트:</span> {finalPrompt.project.title}</div>
-          <div><span className="font-medium">브랜드 분류:</span> {finalPrompt.brand.classification}</div>
-          <div><span className="font-medium">총 영상 길이:</span> {finalPrompt.project.target_duration}</div>
-          <div><span className="font-medium">장면 수:</span> {finalPrompt.storyboard.total_scenes}개</div>
+      {finalPrompt && (
+        <div className="mt-6 p-4 bg-gray-50 rounded-md">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">프롬프트 요약:</h3>
+          <div className="text-sm text-gray-600 space-y-1">
+            <div><span className="font-medium">프로젝트:</span> {finalPrompt.project.title}</div>
+            <div><span className="font-medium">브랜드 분류:</span> {localBrandClassification?.classification || 'N/A'}</div>
+            <div><span className="font-medium">총 영상 길이:</span> {finalPrompt.project.target_duration}</div>
+            <div><span className="font-medium">장면 수:</span> {finalPrompt.storyboard.total_scenes}개</div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 개발자용 상세 로그 */}
       <div className="mt-6 p-4 bg-gray-900 text-green-400 rounded-md">
