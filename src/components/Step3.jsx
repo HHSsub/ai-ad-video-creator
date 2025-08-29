@@ -1,31 +1,83 @@
 import { useState, useEffect } from 'react';
+import { classifyBrand } from '../mock/brands.js';
 import { mapInputsToKeywords, generateStoryboardScenes, generateFinalPrompt } from '../mappings.js';
 
-const Step3 = ({ onPrev, formData, brandClassification }) => {
+const Step3 = ({ onPrev, formData, setBrandClassification }) => {
   const [mappedData, setMappedData] = useState(null);
   const [scenes, setScenes] = useState([]);
   const [finalPrompt, setFinalPrompt] = useState(null);
   const [showJson, setShowJson] = useState(false);
+  const [processingLogs, setProcessingLogs] = useState([]);
 
   useEffect(() => {
-    if (formData && brandClassification) {
-      // 1. 입력 데이터를 키워드로 매핑
-      const mapped = mapInputsToKeywords(formData);
-      setMappedData(mapped);
-
-      // 2. 스토리보드 장면 생성
-      const generatedScenes = generateStoryboardScenes(formData, brandClassification, mapped);
-      setScenes(generatedScenes);
-
-      // 3. 최종 JSON 프롬프트 생성
-      const prompt = generateFinalPrompt(formData, brandClassification, generatedScenes);
-      setFinalPrompt(prompt);
-
-      // 4. 콘솔에 출력 (개발용)
-      console.log('=== AI 광고 영상 스토리보드 프롬프트 ===');
-      console.log(JSON.stringify(prompt, null, 2));
+    if (formData) {
+      // 백단에서 브랜드 분류 및 스토리보드 생성 프로세스 시작
+      processBrandClassificationAndStoryboard();
     }
-  }, [formData, brandClassification]);
+  }, [formData]);
+
+  const processBrandClassificationAndStoryboard = async () => {
+    const logs = [];
+    
+    try {
+      // 1. 브랜드 분류 시작
+      logs.push('🚀 브랜드 분류 프로세스 시작...');
+      console.log('=== 브랜드 분류 프로세스 시작 ===');
+      
+      const brandResult = classifyBrand(formData.brandName);
+      logs.push(`✅ 브랜드 분류 완료: ${brandResult.classification} (기존: ${brandResult.isExisting})`);
+      console.log('브랜드 분류 결과:', brandResult);
+      
+      setBrandClassification(brandResult);
+      
+      // 2. 입력 데이터를 키워드로 매핑
+      logs.push('🔍 입력 데이터 키워드 매핑 시작...');
+      console.log('=== 입력 데이터 키워드 매핑 ===');
+      console.log('입력 데이터:', formData);
+      
+      const mapped = mapInputsToKeywords(formData);
+      logs.push(`✅ 키워드 매핑 완료: ${mapped.keywords.length}개 키워드 생성`);
+      console.log('매핑된 키워드:', mapped);
+      
+      setMappedData(mapped);
+      
+      // 3. 스토리보드 장면 생성
+      logs.push('🎬 스토리보드 장면 생성 시작...');
+      console.log('=== 스토리보드 장면 생성 ===');
+      
+      const generatedScenes = generateStoryboardScenes(formData, brandResult, mapped);
+      logs.push(`✅ 스토리보드 생성 완료: ${generatedScenes.length}개 장면`);
+      console.log('생성된 스토리보드:', generatedScenes);
+      
+      setScenes(generatedScenes);
+      
+      // 4. 최종 JSON 프롬프트 생성
+      logs.push('📝 최종 JSON 프롬프트 생성 시작...');
+      console.log('=== 최종 JSON 프롬프트 생성 ===');
+      
+      const prompt = generateFinalPrompt(formData, brandResult, generatedScenes);
+      logs.push('✅ 최종 JSON 프롬프트 생성 완료');
+      console.log('최종 JSON 프롬프트:', prompt);
+      
+      setFinalPrompt(prompt);
+      
+      // 5. 전체 프로세스 완료 로그
+      logs.push('🎉 모든 프로세스 완료!');
+      console.log('=== 전체 프로세스 완료 ===');
+      console.log('최종 결과:', {
+        brandClassification: brandResult,
+        mappedData: mapped,
+        scenes: generatedScenes,
+        finalPrompt: prompt
+      });
+      
+    } catch (error) {
+      logs.push(`❌ 오류 발생: ${error.message}`);
+      console.error('프로세스 오류:', error);
+    }
+    
+    setProcessingLogs(logs);
+  };
 
   // JSON 복사 기능
   const copyToClipboard = () => {
@@ -38,7 +90,26 @@ const Step3 = ({ onPrev, formData, brandClassification }) => {
   if (!mappedData || !scenes.length || !finalPrompt) {
     return (
       <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-        <div className="text-center">스토리보드 생성 중...</div>
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            2단계: 스토리보드 생성 중...
+          </h2>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        </div>
+        
+        {/* 처리 과정 로그 표시 */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">
+            처리 과정 로그
+          </h3>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {processingLogs.map((log, index) => (
+              <div key={index} className="text-sm text-gray-700 bg-white p-2 rounded border">
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -46,8 +117,21 @@ const Step3 = ({ onPrev, formData, brandClassification }) => {
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-        3단계: 스토리보드 및 JSON 프롬프트 생성 완료
+        2단계: 스토리보드 및 JSON 프롬프트 생성 완료
       </h2>
+
+      {/* 처리 과정 로그 요약 */}
+      <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <h3 className="text-lg font-semibold text-green-800 mb-3">
+          ✅ 처리 과정 완료
+        </h3>
+        <div className="text-sm text-green-700">
+          <p>• 브랜드 분류: {brandClassification?.classification || 'N/A'}</p>
+          <p>• 키워드 매핑: {mappedData?.keywords?.length || 0}개</p>
+          <p>• 스토리보드: {scenes.length}개 장면</p>
+          <p>• JSON 프롬프트: 생성 완료</p>
+        </div>
+      </div>
 
       {/* 매핑된 키워드 및 스타일 */}
       <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -151,7 +235,6 @@ const Step3 = ({ onPrev, formData, brandClassification }) => {
           위에서 생성된 JSON 프롬프트를 CapCut API로 전송하여 실제 영상을 생성할 수 있습니다.
         </p>
         <p className="text-sm text-yellow-600">
-          {/* TODO: CapCut API 호출 위치 */}
           개발자 참고: mappings.js 파일의 generateFinalPrompt 함수에서 API 호출 코드를 추가하세요.
         </p>
       </div>
@@ -180,6 +263,18 @@ const Step3 = ({ onPrev, formData, brandClassification }) => {
           <div><span className="font-medium">브랜드 분류:</span> {finalPrompt.brand.classification}</div>
           <div><span className="font-medium">총 영상 길이:</span> {finalPrompt.project.target_duration}</div>
           <div><span className="font-medium">장면 수:</span> {finalPrompt.storyboard.total_scenes}개</div>
+        </div>
+      </div>
+
+      {/* 개발자용 상세 로그 */}
+      <div className="mt-6 p-4 bg-gray-900 text-green-400 rounded-md">
+        <h3 className="text-sm font-medium text-green-400 mb-2">개발자용 상세 로그:</h3>
+        <div className="text-xs space-y-1 max-h-32 overflow-y-auto">
+          {processingLogs.map((log, index) => (
+            <div key={index} className="text-green-400">
+              {log}
+            </div>
+          ))}
         </div>
       </div>
     </div>

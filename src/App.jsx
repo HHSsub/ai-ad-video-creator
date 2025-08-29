@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import Step1 from './components/Step1.jsx';
-import Step2 from './components/Step2.jsx';
 import Step3 from './components/Step3.jsx';
 
 function App() {
@@ -16,21 +15,21 @@ function App() {
   });
   const [brandClassification, setBrandClassification] = useState(null);
 
-  // 단계 진행 함수
+  // 단계 진행 함수 - Step2를 건너뛰고 Step3으로 직접 이동
   const handleNext = () => {
-    setCurrentStep(prev => prev + 1);
+    // Step1에서 Step3으로 직접 이동
+    setCurrentStep(3);
   };
 
   const handlePrev = () => {
-    setCurrentStep(prev => prev - 1);
+    setCurrentStep(1);
   };
 
-  // 진행 상태 표시
+  // 진행 상태 표시 - Step2 제거
   const ProgressBar = () => {
     const steps = [
       { number: 1, title: '기본 정보 입력' },
-      { number: 2, title: '브랜드 분류' },
-      { number: 3, title: '스토리보드 생성' }
+      { number: 2, title: '스토리보드 생성' }
     ];
 
     return (
@@ -92,20 +91,11 @@ function App() {
             />
           )}
           
-          {currentStep === 2 && (
-            <Step2 
-              onNext={handleNext}
-              onPrev={handlePrev}
-              formData={formData}
-              setBrandClassification={setBrandClassification}
-            />
-          )}
-          
           {currentStep === 3 && (
             <Step3 
               onPrev={handlePrev}
               formData={formData}
-              brandClassification={brandClassification}
+              setBrandClassification={setBrandClassification}
             />
           )}
         </div>
