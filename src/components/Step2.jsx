@@ -245,8 +245,9 @@ const getTargetAgeTextStyle = (targetAge) => {
 export const generateFinalPrompt = (formData, freepikResults = null) => {
   const storyboard = generateStoryboard(formData, freepikResults);
   const keywords = mapToKeywords(formData, freepikResults);
-
+  
   const finalPrompt = {
+    // 프로젝트 메타데이터
     project_info: {
       brand_name: formData.brandName,
       target_audience: formData.targetAge,
@@ -257,6 +258,7 @@ export const generateFinalPrompt = (formData, freepikResults = null) => {
       version: "2.0_freepik_video_complete"
     },
 
+    // Freepik 연동 정보 (비디오 + 이미지)
     freepik_integration: {
       status: freepikResults ? "completed" : "not_available",
       total_resources: freepikResults?.statistics?.successfulResources || 0,
@@ -274,6 +276,7 @@ export const generateFinalPrompt = (formData, freepikResults = null) => {
       })) || []
     },
 
+    // 최종 영상 정보
     final_video: {
       total_duration: freepikResults?.finalVideo?.totalDuration || 30,
       resolution: freepikResults?.finalVideo?.resolution || "1920x1080",
@@ -283,6 +286,7 @@ export const generateFinalPrompt = (formData, freepikResults = null) => {
       note: "Individual video segments from Freepik ready for compilation"
     },
 
+    // 개별 영상 세그먼트 목록
     video_segments: freepikResults?.videoResults?.map((video, index) => ({
       segment_id: video.id,
       scene_number: video.sceneNumber,
@@ -303,8 +307,10 @@ export const generateFinalPrompt = (formData, freepikResults = null) => {
       }
     })) || [],
 
+    // 스토리보드 (Freepik 자료 포함)
     storyboard: storyboard,
 
+    // 키워드 및 스타일 가이드
     creative_direction: {
       primary_keywords: keywords.industry.concat(keywords.tone).slice(0, 8),
       secondary_keywords: keywords.targetAge.concat(keywords.goal),
@@ -317,6 +323,7 @@ export const generateFinalPrompt = (formData, freepikResults = null) => {
       }
     },
 
+    // 후처리 가이드
     post_production: {
       compilation_tool: "FFmpeg or similar video editor",
       audio_guide: {
@@ -337,20 +344,37 @@ export const generateFinalPrompt = (formData, freepikResults = null) => {
         target_size: "under_100MB",
         duration: freepikResults?.finalVideo?.totalDuration || 30
       }
+    }
+  };
+
+  // 콘솔에 JSON 출력 (개발용)
+  console.log('=== Freepik 완전 통합 영상 제작 JSON ===');
+  console.log(JSON.stringify(finalPrompt, null, 2));
+  
+  return finalPrompt;
+};formData.tone),
+        typography: getTargetAgeTextStyle(formData.targetAge),
+        animation_style: formData.tone === '역동적' ? 'fast_dynamic' : 'smooth_elegant',
+        brand_consistency: formData.brandName ? 'maintain_brand_colors' : 'creative_freedom'
+      }
     },
 
+    // CapCut 템플릿 추천
     recommended_templates: generateTemplateRecommendations(formData, keywords),
 
+    // 음악 및 사운드 가이드
     audio_guide: {
       music_genre: getMusicGenreByToneAndAge(formData.tone, formData.targetAge),
       voice_over: formData.tone === '전문적' ? 'professional_narrator' : 'friendly_conversational',
-      sound_effects: formData.tone === '유머러스' ? 'playful_quirky' : 'minimal_clean'
+      sound_effects: formData.tone === '유머러스' ? 'playful_sfx' : 'minimal_clean'
     },
 
+    // API 호출 설정 (실제 CapCut API 연동용)
     api_integration: {
       status: "ready_for_capcut_api",
       endpoint: "CapCut API v2",
       note: "이 JSON 데이터를 CapCut API로 전송하여 실제 영상 생성",
+      // TODO: 실제 CapCut API 호출 위치
       call_instructions: {
         method: "POST",
         headers: {
@@ -362,10 +386,10 @@ export const generateFinalPrompt = (formData, freepikResults = null) => {
     }
   };
 
-  // 개발용 콘솔 출력
+  // 콘솔에 JSON 출력 (개발용)
   console.log('=== Freepik 통합 CapCut JSON 프롬프트 ===');
   console.log(JSON.stringify(finalPrompt, null, 2));
-
+  
   return finalPrompt;
 };
 
