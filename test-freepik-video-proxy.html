@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freepik 동영상 생성 테스트 (프록시)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="container mx-auto px-4 max-w-4xl">
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">Freepik 동영상 생성 테스트 (프록시)</h1>
+        
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h3 class="text-blue-800 font-semibold mb-2">📌 프록시 서버 사용</h3>
+            <p class="text-blue-700 text-sm">이 페이지는 CORS 문제를 해결하기 위해 프록시 서버를 통해 Freepik API를 호출합니다.</p>
+        </div>
+        
+        <!-- API 키 입력 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">API 설정</h2>
+            <div class="mb-4">
+                <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-2">Freepik API 키</label>
+                <input type="password" id="apiKey" placeholder="여기에 Freepik API 키를 입력하세요" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-sm text-gray-500 mt-1">API 키는 <a href="https://www.freepik.com/api" target="_blank" class="text-blue-500 hover:underline">Freepik API 페이지</a>에서 발급받을 수 있습니다.</p>
+            </div>
+        </div>
+
+        <!-- 동영상 생성 폼 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">동영상 생성 (Image-to-Video)</h2>
+            
+            <!-- 이미지 업로드 -->
+            <div class="mb-4">
+                <label for="imageInput" class="block text-sm font-medium text-gray-700 mb-2">첫 프레임 이미지</label>
+                <input type="file" id="imageInput" accept="image/*" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-sm text-gray-500 mt-1">JPG, JPEG, PNG 형식만 지원. 최대 20MB, 최소 300px</p>
+                
+                <!-- 이미지 미리보기 -->
+                <div id="imagePreview" class="mt-4 hidden">
+                    <img id="previewImg" src="" alt="Preview" class="max-w-xs h-auto border rounded-lg">
+                </div>
+            </div>
+
+            <!-- 또는 이미지 URL -->
+            <div class="mb-4">
+                <label for="imageUrl" class="block text-sm font-medium text-gray-700 mb-2">또는 이미지 URL</label>
+                <input type="url" id="imageUrl" placeholder="https://example.com/image.jpg" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-sm text-gray-500 mt-1">이미지 파일 대신 URL을 사용할 수 있습니다.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="videoPrompt" class="block text-sm font-medium text-gray-700 mb-2">동영상 프롬프트</label>
+                    <textarea id="videoPrompt" rows="3" placeholder="동영상에서 일어날 움직임을 설명하세요" 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">A beautiful sunset over the mountains with birds flying in the sky</textarea>
+                    <p class="text-sm text-gray-500 mt-1">최대 2000자</p>
+                </div>
+                <div>
+                    <label for="duration" class="block text-sm font-medium text-gray-700 mb-2">동영상 길이</label>
+                    <select id="duration" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="6" selected>6초</option>
+                        <option value="10">10초</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="promptOptimizer" checked 
+                           class="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <span class="text-sm text-gray-700">프롬프트 최적화 사용</span>
+                </label>
+                <p class="text-sm text-gray-500 mt-1">AI가 자동으로 프롬프트를 최적화하여 더 나은 결과를 생성합니다.</p>
+            </div>
+
+            <button onclick="generateVideo()" 
+                    class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200">
+                동영상 생성
+            </button>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <div id="loading" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-600 mr-3"></div>
+                <span class="text-yellow-800">동영상을 생성 중입니다... 시간이 오래 걸릴 수 있습니다.</span>
+            </div>
+            <div class="mt-2">
+                <p class="text-sm text-yellow-700">Task ID: <span id="taskId" class="font-mono"></span></p>
+                <p class="text-sm text-yellow-700">예상 소요 시간: 2-5분</p>
+            </div>
+        </div>
+
+        <!-- 결과 표시 -->
+        <div id="result" class="hidden bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">생성 결과</h2>
+            <div id="videoContainer">
+                <!-- 생성된 동영상이 여기에 표시됩니다 -->
+            </div>
+        </div>
+
+        <!-- 에러 표시 -->
+        <div id="error" class="hidden bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <h3 class="text-red-800 font-semibold mb-2">오류 발생</h3>
+            <p id="errorMessage" class="text-red-700"></p>
+        </div>
+
+        <!-- 로그 -->
+        <div class="bg-gray-50 rounded-lg p-4 mt-6">
+            <h3 class="text-lg font-semibold mb-2">API 응답 로그</h3>
+            <pre id="log" class="text-sm text-gray-600 whitespace-pre-wrap max-h-96 overflow-y-auto"></pre>
+        </div>
+    </div>
+
+    <script>
+        let currentTaskId = null;
+        let pollInterval = null;
+        const PROXY_BASE_URL = 'http://localhost:3001'; // 프록시 서버 주소
+
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function showError(message) {
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            log(`ERROR: ${message}`);
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        function showLoading(taskId) {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('taskId').textContent = taskId;
+            document.getElementById('result').classList.add('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+        }
+
+        // 이미지 파일 미리보기
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('imagePreview').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 파일을 Base64로 변환
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        async function generateVideo() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const videoPrompt = document.getElementById('videoPrompt').value.trim();
+            const duration = parseInt(document.getElementById('duration').value);
+            const promptOptimizer = document.getElementById('promptOptimizer').checked;
+            const imageFile = document.getElementById('imageInput').files[0];
+            const imageUrl = document.getElementById('imageUrl').value.trim();
+
+            if (!apiKey) {
+                showError('API 키를 입력해주세요.');
+                return;
+            }
+
+            if (!videoPrompt) {
+                showError('동영상 프롬프트를 입력해주세요.');
+                return;
+            }
+
+            if (!imageFile && !imageUrl) {
+                showError('첫 프레임 이미지 파일을 선택하거나 이미지 URL을 입력해주세요.');
+                return;
+            }
+
+            if (videoPrompt.length > 2000) {
+                showError('프롬프트는 2000자를 초과할 수 없습니다.');
+                return;
+            }
+
+            hideError();
+
+            let firstFrameImage;
+            
+            try {
+                if (imageFile) {
+                    // 파일을 Base64로 변환
+                    firstFrameImage = await fileToBase64(imageFile);
+                } else {
+                    // URL 사용
+                    firstFrameImage = imageUrl;
+                }
+
+                const requestData = {
+                    prompt: videoPrompt,
+                    first_frame_image: firstFrameImage,
+                    duration: duration,
+                    prompt_optimizer: promptOptimizer,
+                    webhook_url: null // 웹훅 없이 폴링으로 상태 확인
+                };
+
+                log(`동영상 생성 요청 (프록시 경유): ${JSON.stringify({...requestData, first_frame_image: imageFile ? '[Base64 Image Data]' : firstFrameImage}, null, 2)}`);
+
+                const response = await fetch(`${PROXY_BASE_URL}/api/freepik/video`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-freepik-api-key': apiKey
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                log(`프록시 서버 응답: ${JSON.stringify(data, null, 2)}`);
+
+                if (!response.ok) {
+                    throw new Error(data.message || data.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                if (data.data && data.data.task_id) {
+                    currentTaskId = data.data.task_id;
+                    showLoading(currentTaskId);
+                    startPolling(apiKey, currentTaskId);
+                } else {
+                    throw new Error('Task ID를 받지 못했습니다.');
+                }
+
+            } catch (error) {
+                showError(`동영상 생성 실패: ${error.message}`);
+                hideLoading();
+            }
+        }
+
+        async function checkTaskStatus(apiKey, taskId) {
+            try {
+                const response = await fetch(`${PROXY_BASE_URL}/api/freepik/video/${taskId}`, {
+                    headers: {
+                        'x-freepik-api-key': apiKey
+                    }
+                });
+
+                const data = await response.json();
+                log(`상태 확인 (프록시 경유): ${JSON.stringify(data, null, 2)}`);
+
+                if (!response.ok) {
+                    throw new Error(data.message || data.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                return data;
+            } catch (error) {
+                log(`상태 확인 실패: ${error.message}`);
+                throw error;
+            }
+        }
+
+        function startPolling(apiKey, taskId) {
+            pollInterval = setInterval(async () => {
+                try {
+                    const statusData = await checkTaskStatus(apiKey, taskId);
+                    
+                    if (statusData.data.status === 'COMPLETED') {
+                        clearInterval(pollInterval);
+                        hideLoading();
+                        displayVideoResult(statusData.data);
+                    } else if (statusData.data.status === 'FAILED') {
+                        clearInterval(pollInterval);
+                        hideLoading();
+                        showError('동영상 생성이 실패했습니다.');
+                    }
+                    // IN_PROGRESS인 경우 계속 폴링
+                } catch (error) {
+                    clearInterval(pollInterval);
+                    hideLoading();
+                    showError(`상태 확인 중 오류: ${error.message}`);
+                }
+            }, 5000); // 5초마다 상태 확인 (동영상은 시간이 더 오래 걸림)
+        }
+
+        function displayVideoResult(data) {
+            const resultDiv = document.getElementById('result');
+            const videoContainer = document.getElementById('videoContainer');
+            
+            videoContainer.innerHTML = '';
+            
+            if (data.video_url) {
+                const videoDiv = document.createElement('div');
+                videoDiv.className = 'border rounded-lg overflow-hidden';
+                videoDiv.innerHTML = `
+                    <video controls class="w-full h-auto" preload="metadata">
+                        <source src="${data.video_url}" type="video/mp4">
+                        브라우저가 동영상을 지원하지 않습니다.
+                    </video>
+                    <div class="p-4">
+                        <p class="text-sm text-gray-600 mb-2">생성된 동영상</p>
+                        <div class="flex gap-2">
+                            <a href="${data.video_url}" target="_blank" 
+                               class="text-blue-500 hover:underline text-sm">새 탭에서 보기</a>
+                            <a href="${data.video_url}" download 
+                               class="text-green-500 hover:underline text-sm">다운로드</a>
+                        </div>
+                    </div>
+                `;
+                videoContainer.appendChild(videoDiv);
+                
+                resultDiv.classList.remove('hidden');
+                log(`동영상 생성 완료: ${data.video_url}`);
+            } else {
+                showError('생성된 동영상이 없습니다.');
+            }
+        }
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Freepik 동영상 생성 테스트 페이지 (프록시)가 로드되었습니다.');
+            log('프록시 서버가 http://localhost:3001에서 실행 중인지 확인하세요.');
+            log('API 키를 입력하고 이미지와 프롬프트를 설정한 후 "동영상 생성" 버튼을 클릭하세요.');
+            log('동영상 생성은 2-5분 정도 소요될 수 있습니다.');
+        });
+    </script>
+</body>
+</html>
+

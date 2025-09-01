@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freepik 이미지 생성 테스트 (프록시)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="container mx-auto px-4 max-w-4xl">
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">Freepik 이미지 생성 테스트 (프록시)</h1>
+        
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h3 class="text-blue-800 font-semibold mb-2">📌 프록시 서버 사용</h3>
+            <p class="text-blue-700 text-sm">이 페이지는 CORS 문제를 해결하기 위해 프록시 서버를 통해 Freepik API를 호출합니다.</p>
+        </div>
+        
+        <!-- API 키 입력 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">API 설정</h2>
+            <div class="mb-4">
+                <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-2">Freepik API 키</label>
+                <input type="password" id="apiKey" placeholder="여기에 Freepik API 키를 입력하세요" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-sm text-gray-500 mt-1">API 키는 <a href="https://www.freepik.com/api" target="_blank" class="text-blue-500 hover:underline">Freepik API 페이지</a>에서 발급받을 수 있습니다.</p>
+            </div>
+        </div>
+
+        <!-- 이미지 생성 폼 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">이미지 생성</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="prompt" class="block text-sm font-medium text-gray-700 mb-2">프롬프트</label>
+                    <textarea id="prompt" rows="3" placeholder="생성하고 싶은 이미지를 설명하세요" 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">a beautiful sunset over mountains with a lake</textarea>
+                </div>
+                <div>
+                    <label for="model" class="block text-sm font-medium text-gray-700 mb-2">모델</label>
+                    <select id="model" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="realism">Realism (사실적)</option>
+                        <option value="fluid">Fluid (창의적)</option>
+                        <option value="zen">Zen (부드러운)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="resolution" class="block text-sm font-medium text-gray-700 mb-2">해상도</label>
+                    <select id="resolution" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="1k">1K</option>
+                        <option value="2k" selected>2K</option>
+                        <option value="4k">4K</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="aspectRatio" class="block text-sm font-medium text-gray-700 mb-2">비율</label>
+                    <select id="aspectRatio" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="square_1_1" selected>정사각형 (1:1)</option>
+                        <option value="widescreen_16_9">와이드스크린 (16:9)</option>
+                        <option value="social_story_9_16">세로형 (9:16)</option>
+                        <option value="classic_4_3">클래식 (4:3)</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="generateImage()" 
+                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200">
+                이미지 생성
+            </button>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <div id="loading" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-600 mr-3"></div>
+                <span class="text-yellow-800">이미지를 생성 중입니다... 잠시만 기다려주세요.</span>
+            </div>
+            <div class="mt-2">
+                <p class="text-sm text-yellow-700">Task ID: <span id="taskId" class="font-mono"></span></p>
+            </div>
+        </div>
+
+        <!-- 결과 표시 -->
+        <div id="result" class="hidden bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">생성 결과</h2>
+            <div id="imageContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- 생성된 이미지들이 여기에 표시됩니다 -->
+            </div>
+        </div>
+
+        <!-- 에러 표시 -->
+        <div id="error" class="hidden bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <h3 class="text-red-800 font-semibold mb-2">오류 발생</h3>
+            <p id="errorMessage" class="text-red-700"></p>
+        </div>
+
+        <!-- 로그 -->
+        <div class="bg-gray-50 rounded-lg p-4 mt-6">
+            <h3 class="text-lg font-semibold mb-2">API 응답 로그</h3>
+            <pre id="log" class="text-sm text-gray-600 whitespace-pre-wrap max-h-96 overflow-y-auto"></pre>
+        </div>
+    </div>
+
+    <script>
+        let currentTaskId = null;
+        let pollInterval = null;
+        const PROXY_BASE_URL = 'http://localhost:3001'; // 프록시 서버 주소
+
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function showError(message) {
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            log(`ERROR: ${message}`);
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        function showLoading(taskId) {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('taskId').textContent = taskId;
+            document.getElementById('result').classList.add('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+        }
+
+        async function generateImage() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const prompt = document.getElementById('prompt').value.trim();
+            const model = document.getElementById('model').value;
+            const resolution = document.getElementById('resolution').value;
+            const aspectRatio = document.getElementById('aspectRatio').value;
+
+            if (!apiKey) {
+                showError('API 키를 입력해주세요.');
+                return;
+            }
+
+            if (!prompt) {
+                showError('프롬프트를 입력해주세요.');
+                return;
+            }
+
+            hideError();
+            
+            const requestData = {
+                prompt: prompt,
+                model: model,
+                resolution: resolution,
+                aspect_ratio: aspectRatio,
+                webhook_url: null // 웹훅 없이 폴링으로 상태 확인
+            };
+
+            log(`이미지 생성 요청 (프록시 경유): ${JSON.stringify(requestData, null, 2)}`);
+
+            try {
+                const response = await fetch(`${PROXY_BASE_URL}/api/freepik/mystic`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-freepik-api-key': apiKey
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                log(`프록시 서버 응답: ${JSON.stringify(data, null, 2)}`);
+
+                if (!response.ok) {
+                    throw new Error(data.message || data.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                if (data.data && data.data.task_id) {
+                    currentTaskId = data.data.task_id;
+                    showLoading(currentTaskId);
+                    startPolling(apiKey, currentTaskId);
+                } else {
+                    throw new Error('Task ID를 받지 못했습니다.');
+                }
+
+            } catch (error) {
+                showError(`이미지 생성 실패: ${error.message}`);
+                hideLoading();
+            }
+        }
+
+        async function checkTaskStatus(apiKey, taskId) {
+            try {
+                const response = await fetch(`${PROXY_BASE_URL}/api/freepik/mystic/${taskId}`, {
+                    headers: {
+                        'x-freepik-api-key': apiKey
+                    }
+                });
+
+                const data = await response.json();
+                log(`상태 확인 (프록시 경유): ${JSON.stringify(data, null, 2)}`);
+
+                if (!response.ok) {
+                    throw new Error(data.message || data.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                return data;
+            } catch (error) {
+                log(`상태 확인 실패: ${error.message}`);
+                throw error;
+            }
+        }
+
+        function startPolling(apiKey, taskId) {
+            pollInterval = setInterval(async () => {
+                try {
+                    const statusData = await checkTaskStatus(apiKey, taskId);
+                    
+                    if (statusData.data.status === 'COMPLETED') {
+                        clearInterval(pollInterval);
+                        hideLoading();
+                        displayResults(statusData.data);
+                    } else if (statusData.data.status === 'FAILED') {
+                        clearInterval(pollInterval);
+                        hideLoading();
+                        showError('이미지 생성이 실패했습니다.');
+                    }
+                    // IN_PROGRESS인 경우 계속 폴링
+                } catch (error) {
+                    clearInterval(pollInterval);
+                    hideLoading();
+                    showError(`상태 확인 중 오류: ${error.message}`);
+                }
+            }, 3000); // 3초마다 상태 확인
+        }
+
+        function displayResults(data) {
+            const resultDiv = document.getElementById('result');
+            const imageContainer = document.getElementById('imageContainer');
+            
+            imageContainer.innerHTML = '';
+            
+            if (data.generated && data.generated.length > 0) {
+                data.generated.forEach((imageUrl, index) => {
+                    const imageDiv = document.createElement('div');
+                    imageDiv.className = 'border rounded-lg overflow-hidden';
+                    imageDiv.innerHTML = `
+                        <img src="${imageUrl}" alt="Generated Image ${index + 1}" 
+                             class="w-full h-auto object-cover">
+                        <div class="p-3">
+                            <p class="text-sm text-gray-600">이미지 ${index + 1}</p>
+                            <a href="${imageUrl}" target="_blank" 
+                               class="text-blue-500 hover:underline text-sm">새 탭에서 보기</a>
+                        </div>
+                    `;
+                    imageContainer.appendChild(imageDiv);
+                });
+                
+                resultDiv.classList.remove('hidden');
+                log(`이미지 생성 완료: ${data.generated.length}개의 이미지가 생성되었습니다.`);
+            } else {
+                showError('생성된 이미지가 없습니다.');
+            }
+        }
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Freepik 이미지 생성 테스트 페이지 (프록시)가 로드되었습니다.');
+            log('프록시 서버가 http://localhost:3001에서 실행 중인지 확인하세요.');
+            log('API 키를 입력하고 프롬프트를 작성한 후 "이미지 생성" 버튼을 클릭하세요.');
+        });
+    </script>
+</body>
+</html>
+
