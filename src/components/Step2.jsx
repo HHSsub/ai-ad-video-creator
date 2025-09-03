@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 
-// 로딩 중일 때 표시할 스피너 컴포넌트
 const Spinner = () => (
   <div className="flex flex-col justify-center items-center text-center">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -18,64 +17,58 @@ const Spinner = () => (
 const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) => {
   const [error, setError] = useState(null);
 
-  /**
-   * 사용자 입력을 기반으로, 6가지 다른 스타일이 적용된 프롬프트 배열을 생성합니다.
-   * @returns {Promise<Array<{style: string, prompt: string}>>} 각기 다른 스타일 설명이 포함된 프롬프트 객체 배열
-   */
   const createStyledPrompts = async () => {
-    // 1. public 폴더의 프롬프트 템플릿을 읽어옵니다.
-    const response = await fetch('/input_prompt.txt');
-    if (!response.ok) {
+    try {
+      // 경로를 절대 경로('/')에서 상대 경로('./')로 수정합니다.
+      // 이렇게 하면 GitHub Pages의 하위 디렉토리에서도 파일을 올바르게 찾을 수 있습니다.
+      const response = await fetch('./input_prompt.txt'); 
+      if (!response.ok) {
+        // 네트워크 오류나 404 오류에 대한 좀 더 상세한 정보를 포함합니다.
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const basePromptTemplate = await response.text();
+
+      const userInputString = `
+        - 브랜드명: ${formData.brandName}
+        - 산업/서비스 카테고리: ${formData.industryCategory}
+        - 핵심 타겟: ${formData.coreTarget}
+        - 핵심 목적: ${formData.corePurpose}
+        - 영상 길이: ${formData.videoLength}
+        - 핵심 차별점: ${formData.coreDifferentiation}
+        - 추가 요구사항: ${formData.additionalRequirements || '없음'}
+      `;
+      const basePrompt = basePromptTemplate.replace('{userInput}', userInputString);
+
+      const visualStyles = [
+        { name: 'Cinematic', description: 'A cinematic shot, dramatic lighting, high detail, 8k' },
+        { name: 'Minimalist', description: 'Minimalist style, clean background, simple composition, focused on the subject' },
+        { name: 'Vibrant and Energetic', description: 'Vibrant and energetic, dynamic motion, bright colors, abstract background' },
+        { name: 'Photorealistic', description: 'A photorealistic image, as if taken with a DSLR camera, sharp focus, natural lighting' },
+        { name: 'Vintage', description: 'Vintage film look, retro color palette, grainy texture, 1980s aesthetic' },
+        { name: 'Futuristic', description: 'Futuristic and sleek, neon lights, metallic textures, high-tech feel' },
+      ];
+
+      const styledPrompts = visualStyles.map(style => ({
+        style: style.name,
+        prompt: `${basePrompt}\n\n### Visual Style Guideline\n- Style: ${style.description}`
+      }));
+
+      return styledPrompts;
+
+    } catch (e) {
+      console.error("프롬프트 생성 중 오류:", e);
+      // 에러를 다시 던져서 handleGenerateStyledImages 함수에서 잡을 수 있도록 합니다.
       throw new Error('프롬프트 템플릿 파일(input_prompt.txt)을 불러오는 데 실패했습니다.');
     }
-    const basePromptTemplate = await response.text();
-
-    // 2. Step1의 formData를 프롬프트에 삽입할 문자열로 변환합니다.
-    const userInputString = `
-      - 브랜드명: ${formData.brandName}
-      - 산업/서비스 카테고리: ${formData.industryCategory}
-      - 핵심 타겟: ${formData.coreTarget}
-      - 핵심 목적: ${formData.corePurpose}
-      - 영상 길이: ${formData.videoLength}
-      - 핵심 차별점: ${formData.coreDifferentiation}
-      - 추가 요구사항: ${formData.additionalRequirements || '없음'}
-    `;
-    const basePrompt = basePromptTemplate.replace('{userInput}', userInputString);
-
-    // 3. 6가지의 서로 다른 시각적 스타일을 정의합니다.
-    const visualStyles = [
-      { name: 'Cinematic', description: 'A cinematic shot, dramatic lighting, high detail, 8k' },
-      { name: 'Minimalist', description: 'Minimalist style, clean background, simple composition, focused on the subject' },
-      { name: 'Vibrant and Energetic', description: 'Vibrant and energetic, dynamic motion, bright colors, abstract background' },
-      { name: 'Photorealistic', description: 'A photorealistic image, as if taken with a DSLR camera, sharp focus, natural lighting' },
-      { name: 'Vintage', description: 'Vintage film look, retro color palette, grainy texture, 1980s aesthetic' },
-      { name: 'Futuristic', description: 'Futuristic and sleek, neon lights, metallic textures, high-tech feel' },
-    ];
-
-    // 4. 기본 프롬프트에 각 스타일 설명을 추가하여 6개의 최종 프롬프트를 생성합니다.
-    const styledPrompts = visualStyles.map(style => ({
-      style: style.name,
-      prompt: `${basePrompt}\n\n### Visual Style Guideline\n- Style: ${style.description}`
-    }));
-
-    return styledPrompts;
   };
 
-  /**
-   * 백엔드에 여러 스타일의 이미지 생성을 한 번에 요청하는 메인 함수
-   */
   const handleGenerateStyledImages = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // 1. 6가지 스타일이 적용된 프롬프트 배열 생성
       const styledPrompts = await createStyledPrompts();
-
-      // 2. 영상 길이에 따라 스타일별로 생성할 이미지 개수 계산 (길이의 절반)
       const imageCountPerStyle = Math.ceil(parseInt(formData.videoLength) / 2);
-
-      // 3. 백엔드 API에 프롬프트 배열과 이미지 개수를 담아 요청
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
       const response = await fetch(`${apiBaseUrl}/api/generate-styled-images`, {
         method: 'POST',
@@ -83,7 +76,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompts: styledPrompts, // {style, prompt} 객체 배열
+          prompts: styledPrompts,
           count: imageCountPerStyle,
         } ),
       });
@@ -95,14 +88,11 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
       const result = await response.json();
 
-      // 4. 백엔드로부터 받은 구조화된 결과를 storyboard 상태에 저장
-      //    (백엔드 응답이 [{ style: 'Cinematic', images: [...] }, ...] 형태라고 가정)
       if (!result.storyboards || result.storyboards.length === 0) {
         throw new Error('서버로부터 생성된 이미지를 받아오지 못했습니다.');
       }
       setStoryboard(result.storyboards);
 
-      // 5. 성공 시 다음 단계로 이동
       onNext();
 
     } catch (err) {
