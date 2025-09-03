@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Freepik API CORS 우회를 위한 프록시 서버",
   "main": "proxy-server.js",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
