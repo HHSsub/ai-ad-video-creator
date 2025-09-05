@@ -34,6 +34,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         - 핵심 타겟: ${formData.coreTarget}
         - 핵심 차별점: ${formData.coreDifferentiation}
         - 영상요구사항: ${formData.videoRequirements || '없음'}
+        - 브랜드 로고: ${formData.brandLogo ? '업로드됨' : '없음'}
+        - 제품 이미지: ${formData.productImage ? '업로드됨' : '없음'}
       `;
       const basePrompt = basePromptTemplate.replace('{userInput}', userInputString);
 
@@ -41,39 +43,46 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         { 
           name: 'Cinematic', 
           description: 'cinematic shot dramatic lighting high detail 8k',
-          searchTerms: ['cinematic', 'dramatic', 'professional', 'high quality']
+          searchTerms: ['cinematic', 'dramatic', 'professional', 'high quality'],
+          demoSeed: 'cinematic-professional'
         },
         { 
           name: 'Minimalist', 
           description: 'minimalist style clean background simple composition',
-          searchTerms: ['minimalist', 'clean', 'simple', 'modern']
+          searchTerms: ['minimalist', 'clean', 'simple', 'modern'],
+          demoSeed: 'minimalist-clean'
         },
         { 
           name: 'Vibrant and Energetic', 
           description: 'vibrant energetic dynamic motion bright colors',
-          searchTerms: ['vibrant', 'energetic', 'colorful', 'dynamic']
+          searchTerms: ['vibrant', 'energetic', 'colorful', 'dynamic'],
+          demoSeed: 'vibrant-colorful'
         },
         { 
           name: 'Photorealistic', 
           description: 'photorealistic DSLR camera sharp focus natural lighting',
-          searchTerms: ['realistic', 'professional', 'photography', 'natural']
+          searchTerms: ['realistic', 'professional', 'photography', 'natural'],
+          demoSeed: 'realistic-photo'
         },
         { 
           name: 'Vintage', 
           description: 'vintage film retro color palette grainy texture 1980s',
-          searchTerms: ['vintage', 'retro', '1980s', 'classic']
+          searchTerms: ['vintage', 'retro', '1980s', 'classic'],
+          demoSeed: 'vintage-retro'
         },
         { 
           name: 'Futuristic', 
           description: 'futuristic sleek neon lights metallic textures high-tech',
-          searchTerms: ['futuristic', 'modern', 'technology', 'sleek']
+          searchTerms: ['futuristic', 'modern', 'technology', 'sleek'],
+          demoSeed: 'futuristic-tech'
         },
       ];
 
       return visualStyles.map(style => ({
         style: style.name,
         prompt: `${basePrompt}\n\n### Visual Style Guideline\n- Style: ${style.description}`,
-        searchTerms: style.searchTerms
+        searchTerms: style.searchTerms,
+        demoSeed: style.demoSeed
       }));
 
     } catch (e) {
