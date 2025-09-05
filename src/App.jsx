@@ -11,11 +11,15 @@ function App() {
   const [formData, setFormData] = useState({
     brandName: '',
     industryCategory: '',
-    coreTarget: '',
-    corePurpose: '',
+    productServiceCategory: '',
+    productServiceName: '',
+    videoPurpose: '',
     videoLength: '',
+    coreTarget: '',
     coreDifferentiation: '',
-    additionalRequirements: ''
+    videoRequirements: '',
+    brandLogo: null,
+    productImage: null
   });
 
   // Step2에서 생성된 스토리보드 데이터를 관리하는 상태
