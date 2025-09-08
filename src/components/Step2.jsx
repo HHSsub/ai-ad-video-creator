@@ -118,18 +118,15 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       console.log('=== Freepik API 호출 ===');
       console.log('검색어:', searchQuery);
       
-      const endpoint = '/api/freepik-proxy';
+      // const endpoint = '/api/freepik-proxy';
+      const endpoint = `/api/freepik/search?searchQuery=${encodeURIComponent(searchQuery)}&count=${count}`;
       console.log('엔드포인트:', endpoint);
 
       const response = await fetch(endpoint, {
-        method: 'POST',
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          searchQuery: searchQuery,
-          count: count
-        })
+          'x-freepik-api-key': process.env.REACT_APP_FREEPIK_API_KEY // 또는 사용자 입력값
+        }
       });
 
       console.log('응답 상태:', response.status);
