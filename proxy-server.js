@@ -83,6 +83,51 @@ app.get('/api/freepik/mystic/:taskId', async (req, res) => {
     }
 });
 
+// 이미지 검색 프록시 추가 (GET)
+app.get('/api/freepik/search', async (req, res) => {
+    try {
+        const { searchQuery, count = 5 } = req.query;
+        if (!searchQuery) {
+            return res.status(400).json({ error: 'searchQuery is required' });
+        }
+
+        const API_KEY = req.headers['x-freepik-api-key'];
+        if (!API_KEY) {
+            return res.status(401).json({ error: 'API key missing' });
+        }
+
+        const apiUrl = 'https://api.freepik.com/v1/resources';
+        const params = new URLSearchParams({
+            locale: 'en-US',
+            page: '1',
+            limit: Math.min(count, 20).toString(),
+            order: 'relevance',
+            term: searchQuery.trim()
+        });
+
+        params.append('filters[content_type]', 'photo');
+        params.append('filters[orientation]', 'horizontal');
+        params.append('filters[orientation]', 'vertical');
+
+        const fullUrl = `${apiUrl}?${params.toString()}`;
+        const response = await fetch(fullUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'x-freepik-api-key': API_KEY
+            }
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            return res.status(response.status).json(data);
+        }
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: '검색 프록시 오류', message: error.message });
+    }
+});
+
 // 동영상 생성 프록시
 app.post('/api/freepik/video', async (req, res) => {
     try {
