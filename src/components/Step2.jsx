@@ -42,37 +42,37 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         {
           name: 'Cinematic Professional',
           description: 'cinematic professional shot dramatic lighting high detail 8k corporate',
-          searchTerms: ['cinematic', 'professional', 'corporate', 'high quality', 'business'],
+          searchTerms: ['business', 'professional', 'corporate'],
           demoSeed: 'cinematic-professional'
         },
         {
           name: 'Modern Minimalist',
           description: 'minimalist modern clean background simple composition contemporary',
-          searchTerms: ['minimalist', 'clean', 'simple', 'modern', 'contemporary'],
+          searchTerms: ['minimalist', 'clean', 'modern'],
           demoSeed: 'minimalist-clean'
         },
         {
           name: 'Vibrant Dynamic',
           description: 'vibrant energetic dynamic motion bright colors active lifestyle',
-          searchTerms: ['vibrant', 'energetic', 'colorful', 'dynamic', 'active'],
+          searchTerms: ['colorful', 'energetic', 'dynamic'],
           demoSeed: 'vibrant-colorful'
         },
         {
           name: 'Natural Lifestyle',
           description: 'natural lifestyle photorealistic everyday life authentic people',
-          searchTerms: ['natural', 'lifestyle', 'realistic', 'people', 'authentic'],
+          searchTerms: ['lifestyle', 'natural', 'people'],
           demoSeed: 'natural-lifestyle'
         },
         {
           name: 'Premium Luxury',
           description: 'luxury premium elegant sophisticated high-end exclusive',
-          searchTerms: ['luxury', 'premium', 'elegant', 'sophisticated', 'exclusive'],
+          searchTerms: ['luxury', 'premium', 'elegant'],
           demoSeed: 'luxury-premium'
         },
         {
           name: 'Tech Innovation',
           description: 'technology innovation futuristic digital modern tech startup',
-          searchTerms: ['technology', 'innovation', 'digital', 'tech', 'futuristic'],
+          searchTerms: ['technology', 'digital', 'innovation'],
           demoSeed: 'tech-innovation'
         }
       ];
@@ -89,143 +89,80 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     }
   };
 
-  // 개선된 검색어 생성 함수
+  // 간단한 검색어 생성 함수
   const generateSearchQuery = (formData, style) => {
-    const industryMap = {
-      '뷰티': 'beauty cosmetics skincare wellness',
-      '푸드': 'food restaurant cuisine culinary',
-      '게임': 'gaming technology entertainment digital',
-      '테크': 'technology business innovation startup',
-      '커피': 'coffee shop cafe lifestyle',
-      '패션': 'fashion style clothing apparel',
-      '여행': 'travel vacation tourism adventure',
-      '헬스': 'fitness health wellness exercise',
-      '금융': 'finance banking business money',
-      '교육': 'education learning study academic'
+    // 기본 산업 키워드
+    const industryKeywords = {
+      '뷰티': 'beauty',
+      '푸드': 'food',
+      '게임': 'gaming',
+      '테크': 'technology',
+      '커피': 'coffee',
+      '패션': 'fashion',
+      '여행': 'travel',
+      '헬스': 'fitness',
+      '금융': 'business',
+      '교육': 'education'
     };
 
-    const purposeMap = {
-      '브랜드 인지도 강화': 'brand awareness marketing campaign',
-      '구매 전환': 'sales conversion product showcase',
-      '신제품 출시': 'product launch new release',
-      '이벤트 홍보': 'event promotion marketing'
-    };
-
-    // 기본 검색어 구성
-    const industryTerms = industryMap[formData.industryCategory] || 'business product';
-    const purposeTerms = purposeMap[formData.videoPurpose] || 'marketing advertisement';
-    const styleTerms = style.searchTerms.join(' ');
+    const industryTerm = industryKeywords[formData.industryCategory] || 'business';
+    const styleTerm = style.searchTerms[0] || 'professional';
     
-    // 브랜드명이나 제품명이 있으면 포함
-    const brandTerms = [formData.brandName, formData.productServiceName]
-      .filter(Boolean)
-      .join(' ');
-
-    // 최종 검색어 조합 (너무 길지 않게)
-    const searchTerms = [industryTerms, styleTerms, purposeTerms]
-      .filter(Boolean)
-      .join(' ')
-      .split(' ')
-      .slice(0, 8) // 최대 8개 키워드
-      .join(' ');
-
-    return searchTerms.trim();
+    // 간단한 검색어로 구성 (너무 복잡하지 않게)
+    return `${industryTerm} ${styleTerm}`;
   };
 
-  // 개선된 Freepik API 호출 함수
+  // Freepik API 호출 함수 (단순화)
   const fetchImagesFromFreepik = async (searchQuery, count = 5) => {
     try {
-      console.log('=== Freepik API 호출 시작 ===');
+      console.log('=== Freepik API 호출 ===');
       console.log('검색어:', searchQuery);
-      console.log('요청 이미지 수:', count);
       
-      // 현재 도메인에 맞는 API 엔드포인트 구성
-      const isProduction = window.location.hostname !== 'localhost';
-      const apiBase = isProduction ? window.location.origin : 'http://localhost:3000';
-      const endpoint = `${apiBase}/api/freepik-proxy`;
-      
-      console.log('API 엔드포인트:', endpoint);
-
-      const requestBody = {
-        searchQuery: searchQuery.trim(),
-        count: Math.min(Math.max(1, count), 10) // 1-10 사이로 제한
-      };
-
-      console.log('요청 본문:', requestBody);
+      const endpoint = '/api/freepik-proxy';
+      console.log('엔드포인트:', endpoint);
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          searchQuery: searchQuery,
+          count: count
+        })
       });
 
       console.log('응답 상태:', response.status);
-      console.log('응답 헤더:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API 응답 오류:', errorText);
-        
-        let errorMessage = `HTTP ${response.status}`;
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.error || errorMessage;
-        } catch (e) {
-          // JSON 파싱 실패시 원본 텍스트 사용
-        }
-        
-        throw new Error(`API 호출 실패: ${errorMessage}`);
+        console.error('API 오류 응답:', errorText);
+        throw new Error(`API 호출 실패: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('API 응답 데이터:', data);
+      console.log('API 응답:', data);
       
-      if (data.success && data.images && Array.isArray(data.images) && data.images.length > 0) {
-        const validImages = data.images.filter(img => img.url);
-        console.log(`성공: ${validImages.length}개 유효한 이미지 발견`);
-        
-        return validImages.map(img => ({
-          id: img.id || Math.random().toString(36).substr(2, 9),
+      if (data.success && data.images && data.images.length > 0) {
+        return data.images.map(img => ({
+          id: img.id,
           url: img.url,
           thumbnail: img.thumbnail || img.url,
-          title: img.title || 'Freepik Image',
-          tags: img.tags || [],
-          premium: img.premium || false
+          title: img.title,
+          tags: img.tags || []
         }));
       } else {
-        console.log('이미지 없음 또는 실패:', data);
-        throw new Error(data.error || 'No valid images found');
+        throw new Error('이미지를 찾을 수 없습니다');
       }
     } catch (error) {
-      console.error('fetchImagesFromFreepik 오류:', error);
+      console.error('API 호출 오류:', error);
       throw error;
     }
   };
 
-  // 대체 이미지 생성 함수 (더 많은 옵션)
+  // 대체 이미지 생성 함수
   const generateFallbackImages = (style, count = 5) => {
-    const fallbackSets = {
-      'Cinematic Professional': [
-        'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&q=80',
-        'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80',
-        'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800&q=80'
-      ],
-      'Modern Minimalist': [
-        'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80',
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80',
-        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80'
-      ],
-      'Vibrant Dynamic': [
-        'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=800&q=80',
-        'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80',
-        'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&q=80'
-      ]
-    };
-
-    const defaultImages = [
+    const unsplashImages = [
       'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&q=80',
       'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80',
       'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800&q=80',
@@ -233,14 +170,12 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80'
     ];
 
-    const images = fallbackSets[style] || defaultImages;
-    return images.slice(0, count).map((url, index) => ({
+    return unsplashImages.slice(0, count).map((url, index) => ({
       id: `fallback-${style}-${index}`,
       url: url,
       thumbnail: url,
       title: `${style} 대체 이미지 ${index + 1}`,
-      tags: ['fallback', style.toLowerCase()],
-      premium: false,
+      tags: ['fallback'],
       isFallback: true
     }));
   };
@@ -257,8 +192,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         ...stylePrompt,
         images,
         searchQuery,
-        status: 'success',
-        timestamp: new Date().toISOString()
+        status: 'success'
       };
     } catch (error) {
       console.error(`"${stylePrompt.style}" API 호출 실패:`, error.message);
@@ -271,8 +205,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         searchQuery,
         status: 'fallback_used',
         error: error.message,
-        usedFallback: true,
-        timestamp: new Date().toISOString()
+        usedFallback: true
       };
     }
   };
@@ -284,11 +217,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
     try {
       console.log('=== 스토리보드 생성 시작 ===');
-      console.log('사용자 폼 데이터:', formData);
-
+      
       const styledPrompts = await createStyledPrompts();
-      console.log('생성된 스타일 프롬프트:', styledPrompts.length);
-
       const processedPrompts = [];
       let successCount = 0;
       let fallbackCount = 0;
@@ -297,52 +227,33 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         const stylePrompt = styledPrompts[i];
         console.log(`\n=== 스타일 ${i+1}/${styledPrompts.length}: "${stylePrompt.style}" ===`);
         
-        try {
-          const processedStyle = await processStyleWithImages(stylePrompt);
-          processedPrompts.push(processedStyle);
-          
-          if (processedStyle.status === 'success') {
-            successCount++;
-          } else {
-            fallbackCount++;
-          }
-          
-          console.log(`"${stylePrompt.style}" 완료 - 상태: ${processedStyle.status}, 이미지: ${processedStyle.images.length}개`);
-        } catch (error) {
-          console.error(`"${stylePrompt.style}" 처리 중 오류:`, error);
-          
-          // 완전 실패 케이스
-          processedPrompts.push({
-            ...stylePrompt,
-            images: [],
-            searchQuery: generateSearchQuery(formData, stylePrompt),
-            status: 'failed',
-            error: error.message,
-            timestamp: new Date().toISOString()
-          });
+        const processedStyle = await processStyleWithImages(stylePrompt);
+        processedPrompts.push(processedStyle);
+        
+        if (processedStyle.status === 'success') {
+          successCount++;
+        } else {
+          fallbackCount++;
         }
+        
+        console.log(`"${stylePrompt.style}" 완료: ${processedStyle.images.length}개 이미지`);
 
-        // API 호출 간격 조정
+        // API 호출 간격 조정 (1초 대기)
         if (i < styledPrompts.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
-      // 디버그 정보 설정
       setDebugInfo({
         totalStyles: styledPrompts.length,
         successCount,
         fallbackCount,
-        failedCount: styledPrompts.length - successCount - fallbackCount,
-        timestamp: new Date().toISOString()
+        failedCount: 0
       });
 
-      console.log('\n=== 최종 결과 ===');
-      console.log(`성공: ${successCount}, 대체: ${fallbackCount}, 실패: ${styledPrompts.length - successCount - fallbackCount}`);
+      console.log(`\n=== 최종 결과: 성공 ${successCount}, 대체 ${fallbackCount} ===`);
       
       setStoryboard(processedPrompts);
-      
-      // 결과에 관계없이 다음 단계로 진행
       onNext();
       
     } catch (error) {
@@ -363,7 +274,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             <div className="text-sm text-blue-700">
               <p>성공: {debugInfo.successCount}개</p>
               <p>대체 이미지 사용: {debugInfo.fallbackCount}개</p>
-              <p>실패: {debugInfo.failedCount}개</p>
             </div>
           </div>
         )}
@@ -418,4 +328,42 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           onClick={onPrev}
           className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center"
         >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="current
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          이전 단계
+        </button>
+        <button
+          onClick={handleGenerateStoryboard}
+          disabled={isLoading}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+              생성 중...
+            </>
+          ) : (
+            <>
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              스토리보드 생성
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+Step2.propTypes = {
+  onNext: PropTypes.func.isRequired,
+  onPrev: PropTypes.func.isRequired,
+  formData: PropTypes.object.isRequired,
+  setStoryboard: PropTypes.func.isRequired,
+  setIsLoading: PropTypes.func.isRequired,
+  isLoading: PropTypes.bool.isRequired
+};
+
+export default Step2;
