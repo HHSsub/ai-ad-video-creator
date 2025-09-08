@@ -10,11 +10,21 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (req.method !== 'POST') {
+  // 여기 수정: POST만 허용하는 대신 GET도 허용
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-
+  
   try {
+    // GET 방식일 경우 쿼리 파라미터에서 가져오기
+    const searchQuery = req.method === 'GET' 
+      ? req.query.searchQuery 
+      : req.body.searchQuery;
+
+    const count = req.method === 'GET'
+      ? (req.query.count || 5)
+      : (req.body.count || 5);
+    
     const { searchQuery, count = 5 } = req.body;
 
     // API 키 확인
