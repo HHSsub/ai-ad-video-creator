@@ -123,7 +123,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       console.log('검색어:', searchQuery);
       
       // POST 메서드로 변경하고 body에 데이터 전송
-      const response = await fetch('/api/freepik-proxy', {
+      const endpoint = process.env.NEXT_PUBLIC_API_BASE_URL ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/freepik-proxy` : '/api/freepik-proxy';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
