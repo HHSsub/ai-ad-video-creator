@@ -1,17 +1,15 @@
 export default async function handler(req, res) {
-  // CORS 설정 (더 완전한 CORS 헤더 추가)
+  // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-freepik-api-key');
-  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.setHeader('Access-Control-Max-Age', '86400');
 
-  // OPTIONS 요청 처리 (preflight)
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  // POST 메서드만 허용
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -19,110 +17,141 @@ export default async function handler(req, res) {
   try {
     const { searchQuery, count = 5 } = req.body;
 
-    // 환경 변수 확인 (여러 형태의 키 지원)
+    // API 키 확인
     const API_KEY = process.env.FREEPIK_API_KEY || 
                     process.env.REACT_APP_FREEPIK_API_KEY || 
                     process.env.VITE_FREEPIK_API_KEY;
 
+    console.log('=== Freepik Proxy Debug ===');
+    console.log('환경변수 확인:', {
+      hasFreepikKey: !!process.env.FREEPIK_API_KEY,
+      hasReactKey: !!process.env.REACT_APP_FREEPIK_API_KEY,
+      hasViteKey: !!process.env.VITE_FREEPIK_API_KEY,
+      finalKey: API_KEY ? `${API_KEY.substring(0, 8)}...` : 'NOT_FOUND'
+    });
+
     if (!API_KEY) {
-      console.error('사용 가능한 환경 변수:', Object.keys(process.env).filter(key => key.includes('FREEPIK')));
       return res.status(500).json({
-        error: 'FREEPIK API KEY not configured',
+        error: 'Freepik API key not found',
         success: false,
-        availableKeys: Object.keys(process.env).filter(key => key.includes('FREEPIK'))
+        debug: {
+          availableEnvVars: Object.keys(process.env).filter(key => 
+            key.includes('FREEPIK') || key.includes('API')
+          )
+        }
       });
     }
 
-    // 검색어 검증
-    if (!searchQuery || typeof searchQuery !== 'string' || searchQuery.trim().length === 0) {
+    if (!searchQuery || typeof searchQuery !== 'string') {
       return res.status(400).json({
         error: 'Valid searchQuery is required',
         success: false
       });
     }
 
-    // Freepik API 엔드포인트 (최신 v1 API 사용)
+    // Freepik API 호출 (올바른 파라미터 형식 사용)
     const apiUrl = 'https://api.freepik.com/v1/resources';
-    
-    // 쿼리 파라미터 구성 (올바른 형식으로 수정)
     const params = new URLSearchParams({
       locale: 'en-US',
       page: '1',
-      limit: Math.min(Math.max(1, parseInt(count)), 20).toString(), // 1-20 사이로 제한
-      order: 'latest',
-      term: searchQuery.trim() // 'term' 파라미터 사용
+      limit: Math.min(count, 20).toString(), // 최대 20개
+      order: 'relevance', // relevance 또는 recent
+      term: searchQuery.trim() // 검색어 (term 파라미터 사용)
     });
 
-    // 필터 추가 (JSON 문자열로 전달)
+    // 필터 추가 (올바른 형식)
     const filters = {
-      content_type: ['photo'],
-      orientation: ['horizontal', 'vertical'],
-      people: ['none', 'one', 'group']
+      content_type: ['photo'], // photo, vector, psd, ai
+      orientation: ['horizontal', 'vertical']
     };
-    params.append('filters', JSON.stringify(filters));
+
+    // 필터를 별도 파라미터로 추가
+    Object.entries(filters).forEach(([key, values]) => {
+      values.forEach(value => {
+        params.append(`filters[${key}]`, value);
+      });
+    });
 
     const fullUrl = `${apiUrl}?${params.toString()}`;
-    console.log('Freepik API 호출:', fullUrl);
-    console.log('사용 중인 API 키 (앞 10자):', API_KEY.substring(0, 10) + '...');
+    console.log('API 호출 URL:', fullUrl);
+    console.log('API 키 (앞 8자):', API_KEY.substring(0, 8) + '...');
 
-    // Freepik API 호출 (올바른 헤더 사용)
     const response = await fetch(fullUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'x-freepik-api-key': API_KEY, // 올바른 헤더명 사용
-        'User-Agent': 'AI-Ad-Video-Creator/1.0'
+        'x-freepik-api-key': API_KEY, // 올바른 헤더명
+        'User-Agent': 'AI-Ad-Creator/1.0'
       }
     });
 
-    console.log('Freepik API 응답 상태:', response.status);
-    console.log('Freepik API 응답 헤더:', Object.fromEntries(response.headers.entries()));
+    console.log('API 응답 상태:', response.status);
+    console.log('API 응답 헤더:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Freepik API 오류 응답:', errorText);
+      console.error('Freepik API 오류:', errorText);
       
-      let errorMessage = `Freepik API error: ${response.status}`;
+      let errorMessage = `API Error ${response.status}`;
+      let errorDetails = errorText;
       
-      // 구체적인 오류 메시지 제공
-      if (response.status === 401) {
-        errorMessage = 'Invalid API key or authentication failed';
-      } else if (response.status === 403) {
-        errorMessage = 'API key permissions insufficient or quota exceeded';
-      } else if (response.status === 400) {
-        errorMessage = 'Invalid request parameters';
-      } else if (response.status === 429) {
-        errorMessage = 'Rate limit exceeded';
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.message || errorJson.error || errorMessage;
+        errorDetails = errorJson;
+      } catch (e) {
+        // JSON 파싱 실패시 원본 텍스트 사용
       }
       
       return res.status(response.status).json({
         error: errorMessage,
-        details: errorText,
+        details: errorDetails,
         success: false,
-        statusCode: response.status
+        statusCode: response.status,
+        debug: {
+          url: fullUrl,
+          headers: {
+            'x-freepik-api-key': `${API_KEY.substring(0, 8)}...`
+          }
+        }
       });
     }
 
     const data = await response.json();
-    console.log('Freepik API 응답 데이터 구조:', {
+    console.log('API 응답 구조:', {
       hasData: !!data.data,
       dataLength: data.data?.length || 0,
-      totalResults: data.total || 0
+      totalResults: data.total || 0,
+      sampleItem: data.data?.[0] ? {
+        id: data.data[0].id,
+        hasImage: !!data.data[0].image,
+        hasThumbnails: !!data.data[0].thumbnails
+      } : 'NO_DATA'
     });
     
-    // 응답 데이터 처리 (더 안전한 데이터 처리)
+    // 응답 데이터 처리
     if (data && data.data && Array.isArray(data.data)) {
       const images = data.data.map((item, index) => {
-        // 이미지 URL 추출 (다양한 형태 지원)
-        const imageUrl = item.image?.source?.url || 
-                         item.image?.url || 
-                         item.thumbnails?.large?.url ||
-                         item.url;
+        // 다양한 이미지 URL 패턴 지원
+        let imageUrl = null;
+        let thumbnailUrl = null;
+
+        // 이미지 URL 우선순위
+        if (item.image) {
+          imageUrl = item.image.source?.url || item.image.url;
+        }
         
-        const thumbnailUrl = item.thumbnails?.medium?.url || 
-                            item.thumbnails?.small?.url || 
-                            item.thumbnails?.large?.url ||
-                            imageUrl;
+        // 썸네일 URL 우선순위  
+        if (item.thumbnails) {
+          thumbnailUrl = item.thumbnails.large?.url || 
+                        item.thumbnails.medium?.url || 
+                        item.thumbnails.small?.url;
+        }
+
+        // 썸네일이 없으면 원본 이미지 사용
+        if (!thumbnailUrl && imageUrl) {
+          thumbnailUrl = imageUrl;
+        }
 
         return {
           id: item.id || `freepik-${index}`,
@@ -131,8 +160,8 @@ export default async function handler(req, res) {
           thumbnail: thumbnailUrl,
           tags: Array.isArray(item.tags) ? item.tags : [],
           premium: !!item.premium,
-          author: item.author || 'Unknown',
-          description: item.description || ''
+          description: item.description || '',
+          author: item.author || 'Freepik'
         };
       }).filter(img => img.url); // URL이 있는 이미지만 필터링
 
@@ -143,11 +172,10 @@ export default async function handler(req, res) {
         searchQuery,
         page: 1,
         limit: count,
-        api_info: {
+        apiInfo: {
           provider: 'Freepik API v1',
           timestamp: new Date().toISOString(),
-          quota_used: response.headers.get('x-ratelimit-remaining') ? 
-            (100 - parseInt(response.headers.get('x-ratelimit-remaining'))) : 'unknown'
+          responseHeaders: Object.fromEntries(response.headers.entries())
         }
       };
 
@@ -155,26 +183,29 @@ export default async function handler(req, res) {
       return res.status(200).json(result);
       
     } else {
-      console.log('검색 결과 없음 또는 잘못된 응답 구조');
+      console.log('이미지 없음 - API 응답:', data);
       return res.status(200).json({
         success: true,
         images: [],
         total: 0,
         searchQuery,
-        message: 'No images found for this search query',
-        api_response: data // 디버깅용
+        message: 'No images found',
+        debug: {
+          apiResponse: data
+        }
       });
     }
 
   } catch (error) {
-    console.error('Freepik Proxy 전체 오류:', error);
+    console.error('Proxy 전체 오류:', error);
     console.error('오류 스택:', error.stack);
     
     return res.status(500).json({
       error: 'Internal server error',
       details: error.message,
       success: false,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
