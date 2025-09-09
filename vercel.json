@@ -1,9 +1,7 @@
 {
-  "version": 2,
   "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs18.x",
-      "maxDuration": 300
+    "api/*.js": {
+      "runtime": "nodejs20.x"
     }
   },
   "rewrites": [
@@ -27,10 +25,6 @@
         {
           "key": "Access-Control-Allow-Headers",
           "value": "Content-Type, Authorization, x-freepik-api-key"
-        },
-        {
-          "key": "Access-Control-Max-Age",
-          "value": "86400"
         }
       ]
     }
