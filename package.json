@@ -2,7 +2,7 @@
   "name": "ai-ad-video-creator",
   "private": true,
   "version": "1.0.0",
-  "description": "Freepik API CORS 우회를 위한 프록시 서버",
+  "description": "AI 광고 영상 제작 도구 - Freepik API 및 Gemini AI 통합",
   "main": "proxy-server.js",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "prop-types": "^15.8.1"
+    "prop-types": "^15.8.1",
+    "@google/generative-ai": "^0.15.0"
   },
   "devDependencies": {
     "@tailwindcss/aspect-ratio": "^0.4.2",
@@ -32,11 +33,17 @@
     "vite": "^4.4.5"
   },
   "keywords": [
+    "ai",
+    "video",
+    "advertisement",
     "freepik",
-    "api",
-    "proxy",
-    "cors"
+    "gemini",
+    "storyboard",
+    "automation"
   ],
   "author": "AI Assistant",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
