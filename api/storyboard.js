@@ -265,7 +265,7 @@ async function generateImagesForStyle(prompts, apiKey, videoLength) {
         body: JSON.stringify({
           prompt: prompts[i],
           num_images: 1,
-          aspect_ratio: 'landscape_16_9',
+          aspect_ratio: 'widescreen_16_9',
           guidance_scale: 7.5,
           num_inference_steps: 30
         })
