@@ -344,8 +344,8 @@ async function generateImagesForStyle(prompts, apiKey, videoLength) {
 
 // 최적화된 폴링 함수
 async function pollForImageResultOptimized(taskId, apiKey) {
-  const maxAttempts = 10; // 30회 → 10회로 단축
-  const interval = 5000; // 3초 → 5초로 조정
+  const maxAttempts = 10;
+  const interval = 5000;
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
@@ -362,7 +362,6 @@ async function pollForImageResultOptimized(taskId, apiKey) {
       if (!response.ok) {
         console.error(`폴링 실패 (${response.status}):`, await response.text());
         
-        // 500 에러면 잠시 더 대기 후 재시도
         if (response.status === 500) {
           console.log('500 에러 - 더 긴 대기 후 재시도');
           await new Promise(resolve => setTimeout(resolve, interval * 2));
@@ -375,12 +374,33 @@ async function pollForImageResultOptimized(taskId, apiKey) {
       const result = await response.json();
       console.log(`폴링 결과 ${attempt + 1}:`, result.data?.status);
       
-      if (result.data && result.data.status === 'COMPLETED' && result.data.result && result.data.result.length > 0) {
-        console.log('이미지 생성 완료!');
-        return result.data.result[0].url;
+      // 응답 구조 디버깅
+      if (result.data && result.data.status === 'COMPLETED') {
+        console.log('COMPLETED 응답 전체 구조:', JSON.stringify(result.data, null, 2));
+        
+        // Freepik 공식 문서에 따른 정확한 구조
+        // generated 배열에 직접 URL 문자열이 들어있음
+        let imageUrl = null;
+        
+        if (result.data.generated && Array.isArray(result.data.generated) && result.data.generated.length > 0) {
+          // generated 배열의 첫 번째 요소가 직접 URL 문자열
+          imageUrl = result.data.generated[0];
+          console.log('Freepik 공식 구조에서 이미지 URL 추출:', imageUrl);
+        }
+        
+        if (imageUrl && typeof imageUrl === 'string') {
+          console.log('이미지 생성 완료!');
+          return imageUrl;
+        } else {
+          console.log('COMPLETED 상태이지만 generated 배열에 URL 없음. 전체 응답:', result);
+          // COMPLETED인데 URL이 없으면 한 번 더 대기 후 재시도
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
       } else if (result.data && result.data.status === 'FAILED') {
+        console.log('이미지 생성 실패:', result.data);
         throw new Error('Image generation failed');
-      } else if (result.data && result.data.status === 'CREATED') {
+      } else if (result.data && (result.data.status === 'CREATED' || result.data.status === 'IN_PROGRESS')) {
         console.log('아직 생성 중... 계속 대기');
       }
 
@@ -390,7 +410,6 @@ async function pollForImageResultOptimized(taskId, apiKey) {
     } catch (error) {
       console.error(`폴링 시도 ${attempt + 1} 실패:`, error.message);
       
-      // 마지막 시도가 아니면 계속
       if (attempt < maxAttempts - 1) {
         await new Promise(resolve => setTimeout(resolve, interval));
         continue;
