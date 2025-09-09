@@ -452,11 +452,11 @@ function getImageCountByDuration(videoLength) {
   }
 }
 
-// 이미지당 지속 시간 계산
+// 이미지당 지속 시간 계산 (비디오 API 호환)
 function getDurationPerImage(videoLength) {
-  const totalSeconds = parseInt(videoLength);
-  const imageCount = getImageCountByDuration(videoLength);
-  return totalSeconds / imageCount;
+  // Freepik API는 6초 또는 10초만 허용
+  // 총 길이에 상관없이 각 세그먼트는 6초로 통일
+  return 6;
 }
 
 // 검색 쿼리 생성
