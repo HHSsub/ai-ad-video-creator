@@ -251,110 +251,156 @@ function generateStyledPrompts(formData, style, creativeBrief) {
 async function generateImagesForStyle(prompts, apiKey, videoLength) {
   const images = [];
   
-  for (let i = 0; i < prompts.length; i++) {
-    try {
-      console.log(`이미지 ${i + 1}/${prompts.length} 생성 중...`);
-      
-      // Freepik API 이미지 생성 요청
-      const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/flux-dev', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-freepik-api-key': apiKey
-        },
-        body: JSON.stringify({
-          prompt: prompts[i],
-          num_images: 1,
-          aspect_ratio: 'widescreen_16_9',
-          guidance_scale: 7.5,
-          num_inference_steps: 30
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`이미지 생성 실패 (${response.status}):`, errorText);
-        throw new Error(`Image generation failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('이미지 생성 응답:', result);
-
-      if (result.data && result.data.task_id) {
-        // 비동기 처리: task_id로 결과 폴링
-        const imageUrl = await pollForImageResult(result.data.task_id, apiKey);
+  // 병렬 처리로 속도 개선 (최대 3개 동시)
+  const batchSize = 3;
+  const batches = [];
+  
+  for (let i = 0; i < prompts.length; i += batchSize) {
+    batches.push(prompts.slice(i, i + batchSize));
+  }
+  
+  for (const batch of batches) {
+    const batchPromises = batch.map(async (prompt, index) => {
+      try {
+        console.log(`배치 이미지 생성 중: ${prompt.substring(0, 50)}...`);
         
-        if (imageUrl) {
-          images.push({
-            id: `image-${i + 1}`,
-            url: imageUrl,
-            thumbnail: imageUrl,
-            title: `Scene ${i + 1}`,
-            prompt: prompts[i],
-            duration: getDurationPerImage(videoLength),
-            sceneNumber: i + 1
-          });
+        // 프롬프트 단순화 (길이 제한)
+        const cleanPrompt = prompt
+          .replace(/[^\w\s,.-]/g, '') // 특수문자 제거
+          .substring(0, 500) // 길이 제한
+          .trim();
+        
+        console.log(`정제된 프롬프트: ${cleanPrompt}`);
+        
+        // Freepik API 이미지 생성 요청 (단순화된 파라미터)
+        const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/flux-dev', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-freepik-api-key': apiKey
+          },
+          body: JSON.stringify({
+            prompt: cleanPrompt,
+            num_images: 1,
+            aspect_ratio: 'widescreen_16_9'
+            // 다른 파라미터 제거로 단순화
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`이미지 생성 실패 (${response.status}):`, errorText);
+          throw new Error(`Image generation failed: ${response.status}`);
         }
+
+        const result = await response.json();
+        console.log('이미지 생성 응답:', result);
+
+        if (result.data && result.data.task_id) {
+          // 단순화된 폴링 (최대 10회, 5초 간격)
+          const imageUrl = await pollForImageResultOptimized(result.data.task_id, apiKey);
+          
+          if (imageUrl) {
+            return {
+              id: `image-${Date.now()}-${index}`,
+              url: imageUrl,
+              thumbnail: imageUrl,
+              title: `Scene ${index + 1}`,
+              prompt: cleanPrompt,
+              duration: getDurationPerImage(videoLength),
+              sceneNumber: index + 1
+            };
+          }
+        }
+        
+        throw new Error('No task_id received');
+
+      } catch (error) {
+        console.error(`배치 이미지 생성 실패:`, error);
+        throw error;
       }
+    });
 
-      // API 호출 간격 조정
+    // 배치 실행 (병렬)
+    const batchResults = await Promise.allSettled(batchPromises);
+    
+    batchResults.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        images.push(result.value);
+      } else {
+        console.error(`배치 ${index} 실패:`, result.reason);
+        // 실패한 경우에만 에러 기록, 계속 진행
+      }
+    });
+
+    // 배치 간 짧은 대기
+    if (batches.indexOf(batch) < batches.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 2000));
-
-    } catch (error) {
-      console.error(`이미지 ${i + 1} 생성 실패:`, error);
-      
-      // 실패시 플레이스홀더 추가
-      images.push({
-        id: `image-${i + 1}`,
-        url: null,
-        thumbnail: null,
-        title: `Scene ${i + 1} (Failed)`,
-        prompt: prompts[i],
-        duration: getDurationPerImage(videoLength),
-        sceneNumber: i + 1,
-        error: error.message
-      });
     }
   }
 
   return images;
 }
 
-// 이미지 생성 결과 폴링
-async function pollForImageResult(taskId, apiKey, maxAttempts = 30) {
+// 최적화된 폴링 함수
+async function pollForImageResultOptimized(taskId, apiKey) {
+  const maxAttempts = 10; // 30회 → 10회로 단축
+  const interval = 5000; // 3초 → 5초로 조정
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
+      console.log(`폴링 시도 ${attempt + 1}/${maxAttempts}: ${taskId}`);
+      
       const response = await fetch(`https://api.freepik.com/v1/ai/text-to-image/flux-dev/${taskId}`, {
         method: 'GET',
         headers: {
-          'x-freepik-api-key': apiKey
+          'x-freepik-api-key': apiKey,
+          'Accept': 'application/json'
         }
       });
 
       if (!response.ok) {
+        console.error(`폴링 실패 (${response.status}):`, await response.text());
+        
+        // 500 에러면 잠시 더 대기 후 재시도
+        if (response.status === 500) {
+          console.log('500 에러 - 더 긴 대기 후 재시도');
+          await new Promise(resolve => setTimeout(resolve, interval * 2));
+          continue;
+        }
+        
         throw new Error(`Status check failed: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log(`폴링 결과 ${attempt + 1}:`, result.data?.status);
       
       if (result.data && result.data.status === 'COMPLETED' && result.data.result && result.data.result.length > 0) {
+        console.log('이미지 생성 완료!');
         return result.data.result[0].url;
       } else if (result.data && result.data.status === 'FAILED') {
         throw new Error('Image generation failed');
+      } else if (result.data && result.data.status === 'CREATED') {
+        console.log('아직 생성 중... 계속 대기');
       }
 
       // 대기 후 재시도
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, interval));
 
     } catch (error) {
-      console.error(`Polling attempt ${attempt + 1} failed:`, error);
-      if (attempt === maxAttempts - 1) {
-        throw error;
+      console.error(`폴링 시도 ${attempt + 1} 실패:`, error.message);
+      
+      // 마지막 시도가 아니면 계속
+      if (attempt < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, interval));
+        continue;
       }
+      
+      throw error;
     }
   }
 
-  throw new Error('Image generation timeout');
+  throw new Error('Image generation timeout - 50초 초과');
 }
 
 // 영상 길이별 이미지 수 계산
@@ -391,8 +437,8 @@ function generateSearchQuery(formData, style) {
   return `${industry} ${styleKeyword} ${formData.brandName}`.trim();
 }
 
-// 대체 이미지 생성
-function generateFallbackImages(styleName, count) {
+// 빠른 대체 이미지 생성 함수 (타임아웃 방지용)
+function generateQuickFallbackImages(styleName, count) {
   const unsplashImages = [
     'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&q=80&fit=crop',
     'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80&fit=crop',
@@ -405,13 +451,14 @@ function generateFallbackImages(styleName, count) {
   ];
 
   return Array.from({ length: count }, (_, i) => ({
-    id: `fallback-${styleName}-${i + 1}`,
+    id: `quick-${styleName}-${i + 1}`,
     url: unsplashImages[i % unsplashImages.length],
     thumbnail: unsplashImages[i % unsplashImages.length],
-    title: `${styleName} Scene ${i + 1} (Fallback)`,
-    prompt: `${styleName} fallback image`,
+    title: `${styleName} Scene ${i + 1}`,
+    prompt: `${styleName} professional image`,
     duration: 2,
     sceneNumber: i + 1,
-    isFallback: true
+    isFallback: true,
+    source: 'unsplash'
   }));
 }
