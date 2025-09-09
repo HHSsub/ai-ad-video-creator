@@ -215,33 +215,53 @@ function processPromptWithFormData(template, formData) {
 
 // 스타일별 프롬프트 생성
 function generateStyledPrompts(formData, style, creativeBrief) {
-  const basePrompt = `${formData.brandName} ${formData.industryCategory} advertisement`;
-  const stylePrompt = style.description;
-  const targetPrompt = `targeting ${formData.coreTarget}`;
+  const baseElements = [
+    formData.brandName,
+    formData.industryCategory, 
+    'advertisement'
+  ];
+  
+  const targetPrompt = formData.coreTarget ? `targeting ${formData.coreTarget}` : '';
+  const differentiationPrompt = formData.coreDifferentiation || '';
   
   // 영상 길이에 따른 장면 수 계산
   const sceneCount = getImageCountByDuration(formData.videoLength);
   
+  // 다양한 장면별 시나리오 생성
+  const sceneScenarios = [
+    'opening brand introduction with logo',
+    'product showcase detailed view',
+    'lifestyle usage demonstration',
+    'close-up product benefits',
+    'customer satisfaction moment',
+    'call to action with brand logo'
+  ];
+  
   const prompts = [];
   
   for (let i = 0; i < sceneCount; i++) {
-    const scenePrompts = [
-      `${basePrompt}, scene ${i + 1}/${sceneCount}`,
-      stylePrompt,
+    // 각 장면마다 다른 시나리오 사용
+    const scenario = sceneScenarios[i % sceneScenarios.length];
+    
+    const sceneElements = [
+      ...baseElements,
+      `scene ${i + 1} of ${sceneCount}`,
+      scenario,
+      style.description,
       targetPrompt,
-      `high quality, professional, commercial photography`,
-      `${formData.coreDifferentiation}`
-    ];
+      differentiationPrompt,
+      'high quality, professional, commercial photography'
+    ].filter(Boolean);
     
-    // 브랜드 로고나 제품 이미지가 있는 경우 특정 장면에 포함
+    // 브랜드 로고나 제품 이미지 포함 (특정 장면에)
     if (i === 0 && formData.brandLogo) {
-      scenePrompts.push('featuring brand logo prominently');
+      sceneElements.push('featuring brand logo prominently');
     }
-    if (i === 2 && formData.productImage) {
-      scenePrompts.push('featuring product prominently');
+    if ((i === 1 || i === 3) && formData.productImage) {
+      sceneElements.push('featuring product prominently');
     }
     
-    prompts.push(scenePrompts.join(', '));
+    prompts.push(sceneElements.join(', '));
   }
   
   return prompts;
