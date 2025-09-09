@@ -58,7 +58,7 @@ export default async function handler(req, res) {
             taskId: videoResult.taskId,
             videoUrl: videoResult.videoUrl, // 완료된 경우
             status: videoResult.status,
-            duration: image.duration || 3,
+            duration: 6, // 고정 6초
             prompt: generateVideoPrompt(image, formData),
             createdAt: new Date().toISOString()
           });
