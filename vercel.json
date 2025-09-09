@@ -6,26 +6,12 @@
       "maxDuration": 300
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     }
   ],
-  "env": {
-    "FREEPIK_API_KEY": "@freepik-api-key",
-    "GEMINI_API_KEY": "@gemini-api-key"
-  },
-  "build": {
-    "env": {
-      "VITE_FREEPIK_API_KEY": "@freepik-api-key",
-      "VITE_GEMINI_API_KEY": "@gemini-api-key"
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",
@@ -35,7 +21,7 @@
           "value": "*"
         },
         {
-          "key": "Access-Control-Allow-Methods",
+          "key": "Access-Control-Allow-Methods", 
           "value": "GET, POST, PUT, DELETE, OPTIONS"
         },
         {
