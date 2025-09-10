@@ -16,7 +16,8 @@
     "prop-types": "^15.8.1",
     "@google/generative-ai": "^0.15.0",
     "@vitejs/plugin-react": "^4.0.3",
-    "vite": "^4.4.5"
+    "vite": "^4.4.5",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@tailwindcss/aspect-ratio": "^0.4.2",
@@ -33,5 +34,21 @@
   },
   "engines": {
     "node": "22.x"
+  },
+  "vercelBuildOutput": {
+    "functions": {
+      "api/compile-videos.js": {
+        "runtime": "nodejs18.x",
+        "maxDuration": 300
+      },
+      "api/apply-bgm.js": {
+        "runtime": "nodejs18.x", 
+        "maxDuration": 300
+      },
+      "api/upload-final-video.js": {
+        "runtime": "nodejs18.x",
+        "maxDuration": 120
+      }
+    }
   }
 }
