@@ -17,7 +17,8 @@
     "@google/generative-ai": "^0.15.0",
     "@vitejs/plugin-react": "^4.0.3",
     "vite": "^4.4.5",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "googleapis": "^132.0.0"
   },
   "devDependencies": {
     "@tailwindcss/aspect-ratio": "^0.4.2",
