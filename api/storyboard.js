@@ -282,85 +282,172 @@ function generateStyledPrompts(formData, style, creativeBrief) {
 }
 
 /**
- * Gemini 브리프에서 장면별 이미지 프롬프트 추출
+ * Gemini 브리프에서 장면별 이미지 프롬프트 추출 및 전문적 프롬프트 생성
  */
 function extractScenePromptsFromBrief(creativeBrief, formData) {
-  console.log('Gemini 브리프에서 장면 프롬프트 추출 중...');
+  console.log('Gemini 브리프 기반 전문 프롬프트 생성...');
   
   if (!creativeBrief || creativeBrief.length < 100) {
-    console.log('브리프가 없거나 너무 짧음, 기본 프롬프트 사용');
-    return generateBasicPrompts(formData);
+    console.log('브리프가 없거나 너무 짧음, 전문 기본 프롬프트 사용');
+    return generateProfessionalPrompts(formData);
   }
   
   // Gemini 브리프를 분석하여 장면별 설명 추출
   const scenePrompts = [];
   
-  // 정규식으로 장면 관련 내용 찾기
+  // 정규식으로 장면 관련 내용 찾기 (더 정확하게)
   const scenePatterns = [
-    /장면\s*[1-6][\s\S]*?비주얼[:\s]*([^\n]+)/gi,
-    /scene\s*[1-6][\s\S]*?visual[:\s]*([^\n]+)/gi,
-    /\d+[\.\)]\s*([^:\n]+)[\s\S]*?비주얼[:\s]*([^\n]+)/gi,
-    /### 장면 \d+[\s\S]*?- \*\*비주얼\*\*: ([^\n]+)/gi
+    /장면\s*[1-6][\s\S]*?(?:비주얼|컨셉)[:\s]*([^\n]{20,200})/gi,
+    /### 장면 \d+[\s\S]*?- \*\*(?:비주얼|컨셉)\*\*: ([^\n]{20,200})/gi,
+    /scene\s*[1-6][\s\S]*?visual[:\s]*([^\n]{20,200})/gi,
+    /\d+[\.\)]\s*([^:\n]{10,100})[\s\S]*?(?:비주얼|컨셉)[:\s]*([^\n]{20,200})/gi
   ];
   
   let extractedScenes = [];
   
   // 각 패턴으로 장면 추출 시도
   for (const pattern of scenePatterns) {
-    pattern.lastIndex = 0; // 정규식 리셋
+    pattern.lastIndex = 0;
     let match;
     while ((match = pattern.exec(creativeBrief)) !== null && extractedScenes.length < 6) {
       const sceneDescription = match[1] || match[2];
-      if (sceneDescription && sceneDescription.trim().length > 10) {
-        // 불필요한 문구 제거하고 이미지 생성에 적합하게 변환
-        const cleanedDescription = sceneDescription
-          .replace(/\*\*/g, '') // 마크다운 제거
-          .replace(/브랜드|로고|메시지/g, formData.brandName || 'brand') // 일반적인 단어를 브랜드명으로 교체
-          .replace(/제품\/서비스/g, formData.productServiceCategory || 'product')
-          .replace(/타겟|고객/g, formData.coreTarget || 'customer')
-          .trim();
-        
-        extractedScenes.push(cleanedDescription);
+      if (sceneDescription && sceneDescription.trim().length > 20) {
+        // 전문적인 광고 이미지 프롬프트로 변환
+        const professionalPrompt = convertToProfessionalImagePrompt(sceneDescription, formData, extractedScenes.length + 1);
+        extractedScenes.push(professionalPrompt);
       }
     }
     
-    if (extractedScenes.length >= 3) break; // 충분한 장면을 찾았으면 중단
+    if (extractedScenes.length >= 6) break;
   }
   
-  console.log(`Gemini 브리프에서 ${extractedScenes.length}개 장면 추출:`, extractedScenes);
+  console.log(`Gemini 브리프에서 ${extractedScenes.length}개 전문 장면 추출`);
   
-  // 추출된 장면이 부족하면 보완
+  // 추출된 장면이 부족하면 전문적 프롬프트로 보완
   while (extractedScenes.length < 6) {
-    const fallbackScenes = [
-      `${formData.brandName} brand introduction with ${formData.industryCategory} elements`,
-      `${formData.productServiceCategory} product showcase for ${formData.coreTarget}`,
-      `lifestyle scene showing ${formData.coreDifferentiation}`,
-      `customer using ${formData.brandName} product with satisfaction`,
-      `benefits demonstration of ${formData.coreDifferentiation}`,
-      `call to action scene with ${formData.brandName} branding`
-    ];
-    
+    const professionalPrompts = generateProfessionalPrompts(formData);
     const fallbackIndex = extractedScenes.length;
-    extractedScenes.push(fallbackScenes[fallbackIndex] || `${formData.brandName} advertisement scene`);
+    extractedScenes.push(professionalPrompts[fallbackIndex] || professionalPrompts[0]);
   }
   
-  return extractedScenes.slice(0, 6); // 최대 6개 장면
+  return extractedScenes.slice(0, 6);
 }
 
 /**
- * 기본 프롬프트 생성 (Gemini 브리프 추출 실패시)
+ * 텍스트를 전문적인 이미지 프롬프트로 변환
  */
-function generateBasicPrompts(formData) {
-  console.log('기본 프롬프트 생성 (Gemini 브리프 대체)');
+function convertToProfessionalImagePrompt(description, formData, sceneNumber) {
+  const brandName = formData.brandName || 'brand';
+  const industry = formData.industryCategory || 'commercial';
+  const product = formData.productServiceCategory || 'product';
+  const target = formData.coreTarget || 'customers';
+  const differentiation = formData.coreDifferentiation || 'quality';
+  
+  // 기본 설명 정제
+  let cleanDescription = description
+    .replace(/\*\*/g, '') // 마크다운 제거
+    .replace(/브랜드|로고/g, brandName)
+    .replace(/제품\/서비스|제품|서비스/g, product)
+    .replace(/타겟|고객/g, target)
+    .replace(/차별점|특징/g, differentiation)
+    .trim();
+  
+  // 장면별 전문적 프롬프트 요소 추가
+  const sceneContext = getSceneContext(sceneNumber, formData);
+  const professionalElements = getProfessionalElements(formData);
+  const technicalSpecs = getTechnicalSpecs();
+  
+  // 최종 전문 프롬프트 구성
+  const professionalPrompt = [
+    `professional commercial photography of ${cleanDescription}`,
+    sceneContext,
+    professionalElements,
+    `featuring ${brandName} ${product} for ${target}`,
+    `highlighting ${differentiation}`,
+    `${industry} industry advertisement`,
+    technicalSpecs
+  ].filter(Boolean).join(', ');
+  
+  return professionalPrompt;
+}
+
+/**
+ * 장면별 컨텍스트 생성
+ */
+function getSceneContext(sceneNumber, formData) {
+  const contexts = [
+    `opening scene with ${formData.brandName} brand introduction`, // 장면 1
+    `product showcase highlighting ${formData.productServiceCategory}`, // 장면 2  
+    `lifestyle demonstration of ${formData.coreDifferentiation}`, // 장면 3
+    `close-up benefits showing ${formData.productServiceCategory} results`, // 장면 4
+    `customer satisfaction with ${formData.brandName} experience`, // 장면 5
+    `call-to-action finale with ${formData.brandName} branding` // 장면 6
+  ];
+  
+  return contexts[sceneNumber - 1] || contexts[0];
+}
+
+/**
+ * 전문적 요소 생성 (산업별 특화)
+ */
+function getProfessionalElements(formData) {
+  const industry = formData.industryCategory?.toLowerCase() || '';
+  const product = formData.productServiceCategory?.toLowerCase() || '';
+  
+  // 스킨케어/화장품 전문 요소
+  if (product.includes('스킨') || product.includes('로션') || product.includes('화장품') || industry.includes('뷰티')) {
+    return 'luxury skincare studio setting, soft diffused beauty lighting, clean minimalist aesthetic, premium cosmetic packaging, glowing healthy skin, dermatologist-approved environment, spa-like ambiance, professional beauty photography';
+  }
+  
+  // 게임 전문 요소
+  if (industry.includes('게임') || product.includes('게임')) {
+    return 'professional gaming setup, RGB lighting effects, esports arena atmosphere, high-tech gaming peripherals, competitive gaming environment, neon accents, futuristic gaming interface';
+  }
+  
+  // 테크 전문 요소
+  if (industry.includes('테크') || product.includes('소프트웨어')) {
+    return 'modern tech office, clean minimalist workspace, innovative technology display, professional business environment, sleek digital interfaces, contemporary corporate setting';
+  }
+  
+  // 푸드/카페 전문 요소
+  if (industry.includes('푸드') || industry.includes('카페') || product.includes('커피')) {
+    return 'professional culinary environment, warm ambient lighting, artisanal food presentation, cozy cafe atmosphere, gourmet kitchen setting, premium ingredients display';
+  }
+  
+  // 기본 전문 요소
+  return 'professional commercial environment, high-end product placement, sophisticated lighting setup, premium brand presentation, corporate advertising quality';
+}
+
+/**
+ * 기술적 사양
+ */
+function getTechnicalSpecs() {
+  return 'shot with professional camera, commercial advertising quality, high resolution, perfect lighting, 16:9 aspect ratio, brand commercial style, marketing photography';
+}
+
+/**
+ * 전문적 기본 프롬프트 생성 (Gemini 브리프 추출 실패시)
+ */
+function generateProfessionalPrompts(formData) {
+  console.log('전문적 기본 프롬프트 생성');
+  
+  const brandName = formData.brandName || 'brand';
+  const industry = formData.industryCategory || 'commercial';
+  const product = formData.productServiceCategory || 'product';
+  const target = formData.coreTarget || 'customers';
+  const differentiation = formData.coreDifferentiation || 'quality';
+  
+  const professionalElements = getProfessionalElements(formData);
+  const technicalSpecs = getTechnicalSpecs();
   
   return [
-    `${formData.brandName} ${formData.industryCategory} brand introduction scene`,
-    `${formData.productServiceCategory} product showcase highlighting ${formData.coreDifferentiation}`,
-    `${formData.coreTarget} using ${formData.brandName} product in lifestyle setting`,
-    `close-up demonstration of ${formData.coreDifferentiation} benefits`,
-    `satisfied customer enjoying ${formData.brandName} ${formData.productServiceCategory}`,
-    `${formData.brandName} call to action scene with branding elements`
-  ].map(prompt => prompt.replace(/\s+/g, ' ').trim());
+    `professional commercial photography of ${brandName} brand introduction, ${professionalElements}, opening scene with logo presentation, ${technicalSpecs}`,
+    `professional commercial photography of ${product} showcase, detailed product demonstration, ${professionalElements}, highlighting ${differentiation}, ${technicalSpecs}`,
+    `professional commercial photography of ${target} using ${brandName} ${product}, lifestyle demonstration, ${professionalElements}, authentic usage scenario, ${technicalSpecs}`,
+    `professional commercial photography of ${product} benefits demonstration, close-up results showing, ${professionalElements}, before and after transformation, ${technicalSpecs}`,
+    `professional commercial photography of satisfied ${target} with ${brandName} experience, customer testimonial scene, ${professionalElements}, positive emotions and satisfaction, ${technicalSpecs}`,
+    `professional commercial photography of ${brandName} call-to-action finale, brand logo and contact information, ${professionalElements}, compelling purchase motivation, ${technicalSpecs}`
+  ];
 }
 
 // Freepik API로 이미지 생성
