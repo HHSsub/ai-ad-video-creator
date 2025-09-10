@@ -38,16 +38,51 @@ export default async function handler(req, res) {
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // 정확히 2.5 Flash로 수정
 
     // 프롬프트 템플릿 로드 및 처리
     const promptTemplate = await loadPromptTemplate();
     const processedPrompt = processPromptWithFormData(promptTemplate, formData);
 
-    console.log('Gemini API 요청 시작...');
-    const result = await model.generateContent(processedPrompt);
-    const creativeBrief = result.response.text();
-    console.log('Gemini 브리프 생성 완료');
+    console.log('Gemini 2.5 Flash API 요청 시작...');
+    
+    // 재시도 로직 추가 (503 오류 대응)
+    let creativeBrief = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts && !creativeBrief) {
+      try {
+        attempts++;
+        console.log(`Gemini 2.5 Flash API 시도 ${attempts}/${maxAttempts}...`);
+        
+        const result = await model.generateContent(processedPrompt);
+        creativeBrief = result.response.text();
+        console.log('Gemini 2.5 Flash 브리프 생성 완료');
+        break;
+        
+      } catch (geminiError) {
+        console.error(`Gemini 2.5 Flash API 시도 ${attempts} 실패:`, geminiError.message);
+        
+        if (geminiError.status === 503 || geminiError.message.includes('overloaded')) {
+          if (attempts < maxAttempts) {
+            const delay = Math.pow(2, attempts) * 1000; // 지수 백오프: 2초, 4초, 8초
+            console.log(`모델 과부하 감지, ${delay/1000}초 후 재시도...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } else {
+            console.log('최대 재시도 횟수 도달, 대체 브리프 사용');
+            creativeBrief = generateFallbackCreativeBrief(formData);
+            break;
+          }
+        } else {
+          // 503이 아닌 다른 오류는 즉시 대체 브리프 사용
+          console.log('Gemini 2.5 Flash API 오류, 대체 브리프 사용:', geminiError.message);
+          creativeBrief = generateFallbackCreativeBrief(formData);
+          break;
+        }
+      }
+    }
 
     // 2. 6가지 스타일별 이미지 생성
     const styles = [
@@ -153,7 +188,8 @@ export default async function handler(req, res) {
         createdAt: new Date().toISOString(),
         totalStyles: styles.length,
         successCount: storyboardResults.filter(s => s.status === 'success').length,
-        fallbackCount: storyboardResults.filter(s => s.status === 'fallback').length
+        fallbackCount: storyboardResults.filter(s => s.status === 'fallback').length,
+        geminiModel: 'gemini-2.5-flash'
       }
     };
 
@@ -476,28 +512,110 @@ function generateSearchQuery(formData, style) {
   return `${industry} ${styleKeyword} ${formData.brandName}`.trim();
 }
 
-// 빠른 대체 이미지 생성 함수 (타임아웃 방지용)
-function generateQuickFallbackImages(styleName, count) {
-  const unsplashImages = [
-    'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&q=80&fit=crop',
-    'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80&fit=crop',
-    'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800&q=80&fit=crop',
-    'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80&fit=crop',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80&fit=crop',
-    'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&q=80&fit=crop',
-    'https://images.unsplash.com/photo-1551650975-87deedd944c3?w=800&q=80&fit=crop',
-    'https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?w=800&q=80&fit=crop'
+/**
+ * Gemini API 실패시 사용할 대체 브리프 생성
+ */
+function generateFallbackCreativeBrief(formData) {
+  console.log('대체 크리에이티브 브리프 생성 중...');
+  
+  const brandName = formData.brandName || '브랜드';
+  const industry = formData.industryCategory || '일반';
+  const purpose = formData.videoPurpose || '브랜드 홍보';
+  const length = formData.videoLength || '30초';
+  const target = formData.coreTarget || '일반 소비자';
+  const differentiation = formData.coreDifferentiation || '고품질 제품/서비스';
+
+  return `
+# ${brandName} 광고 영상 크리에이티브 브리프
+
+## 프로젝트 개요
+- **브랜드**: ${brandName}
+- **업종**: ${industry}
+- **영상 목적**: ${purpose}  
+- **영상 길이**: ${length}
+- **타겟 고객**: ${target}
+
+## 핵심 메시지
+${brandName}는 ${industry} 분야에서 ${differentiation}을(를) 통해 고객에게 특별한 가치를 제공합니다.
+
+## 스토리보드 구성 (6장면)
+
+### 장면 1: 오프닝 (0-${Math.ceil(parseInt(length)/6)}초)
+- **컨셉**: 브랜드 로고와 함께 강렬한 첫인상
+- **비주얼**: ${brandName} 로고, ${industry} 관련 배경
+- **메시지**: "${brandName}와 함께하는 새로운 경험"
+
+### 장면 2: 문제 제기 (${Math.ceil(parseInt(length)/6)}-${Math.ceil(parseInt(length)*2/6)}초)
+- **컨셉**: 타겟 고객의 니즈나 불편함 제시
+- **비주얼**: ${target}의 일상적인 고민 상황
+- **메시지**: "이런 고민, 누구나 한 번쯤 해봤죠?"
+
+### 장면 3: 솔루션 제시 (${Math.ceil(parseInt(length)*2/6)}-${Math.ceil(parseInt(length)*3/6)}초)
+- **컨셉**: ${brandName}의 제품/서비스 소개
+- **비주얼**: 제품/서비스의 핵심 기능 클로즈업
+- **메시지**: "${differentiation}으로 해결하세요"
+
+### 장면 4: 사용 장면 (${Math.ceil(parseInt(length)*3/6)}-${Math.ceil(parseInt(length)*4/6)}초)
+- **컨셉**: 실제 사용하는 모습과 만족스러운 표정
+- **비주얼**: ${target}이 제품/서비스를 사용하는 자연스러운 모습
+- **메시지**: "이렇게 간편하고 효과적이에요"
+
+### 장면 5: 혜택 강조 (${Math.ceil(parseInt(length)*4/6)}-${Math.ceil(parseInt(length)*5/6)}초)  
+- **컨셉**: 사용 후의 긍정적인 변화와 만족감
+- **비주얼**: 만족스러운 결과와 행복한 표정
+- **메시지**: "${brandName}와 함께한 달라진 일상"
+
+### 장면 6: 클로징 (${Math.ceil(parseInt(length)*5/6)}-${length}초)
+- **컨셉**: 브랜드 로고와 구매 유도 메시지
+- **비주얼**: ${brandName} 로고, 연락처/웹사이트
+- **메시지**: "지금 바로 ${brandName}와 함께하세요!"
+
+## 전체 톤앤매너
+- **스타일**: ${industry} 업계에 적합한 전문적이면서도 친근한 분위기
+- **색상**: 브랜드 컬러를 기반으로 한 일관된 컬러 팔레트
+- **음악**: ${purpose}에 어울리는 감성적이고 기억에 남는 BGM
+- **속도**: ${length} 길이에 맞는 적절한 템포와 리듬감
+
+## 기술 사양
+- **해상도**: 1920x1080 (Full HD)
+- **비율**: 16:9 (가로형)
+- **형식**: MP4, H.264 코덱
+- **프레임레이트**: 30fps
+- **예상 용량**: ${Math.ceil(parseInt(length) * 2)}MB
+
+## 핵심 성공 지표
+1. **브랜드 인지도**: ${brandName} 로고와 메시지의 명확한 전달
+2. **타겟 반응**: ${target}의 공감과 관심 유도
+3. **행동 유도**: ${purpose} 목적 달성을 위한 효과적인 CTA
+4. **기억성**: 차별화된 메시지로 오래 기억되는 영상
+
+*이 브리프는 Gemini 2.5 Flash API 대신 대체 시스템으로 생성되었습니다.*
+`;
+}
+
+/**
+ * 대체 이미지 생성 함수 (플레이스홀더용)
+ */
+function generateFallbackImages(styleName, count) {
+  const placeholderImages = [
+    'https://via.placeholder.com/800x450/3B82F6/FFFFFF?text=Business+Professional',
+    'https://via.placeholder.com/800x450/10B981/FFFFFF?text=Product+Showcase', 
+    'https://via.placeholder.com/800x450/F59E0B/FFFFFF?text=Lifestyle+Scene',
+    'https://via.placeholder.com/800x450/EF4444/FFFFFF?text=Call+To+Action',
+    'https://via.placeholder.com/800x450/8B5CF6/FFFFFF?text=Brand+Identity',
+    'https://via.placeholder.com/800x450/06B6D4/FFFFFF?text=Customer+Happy'
   ];
 
   return Array.from({ length: count }, (_, i) => ({
-    id: `quick-${styleName}-${i + 1}`,
-    url: unsplashImages[i % unsplashImages.length],
-    thumbnail: unsplashImages[i % unsplashImages.length],
+    id: `fallback-${styleName}-${i + 1}`,
+    url: placeholderImages[i % placeholderImages.length],
+    thumbnail: placeholderImages[i % placeholderImages.length],
     title: `${styleName} Scene ${i + 1}`,
-    prompt: `${styleName} professional image`,
-    duration: 2,
+    prompt: `${styleName} advertisement scene ${i + 1}`,
+    duration: Math.ceil(parseInt('30') / count), // 기본 30초 기준
     sceneNumber: i + 1,
     isFallback: true,
-    source: 'unsplash'
+    source: 'placeholder',
+    note: 'Gemini API 대체 이미지'
   }));
 }
