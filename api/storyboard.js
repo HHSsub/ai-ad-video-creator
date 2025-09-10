@@ -380,13 +380,21 @@ async function generateImagesForStyle(prompts, apiKey, videoLength) {
       try {
         console.log(`배치 이미지 생성 중: ${prompt.substring(0, 50)}...`);
         
-        // 프롬프트 단순화 (길이 제한)
+        // 프롬프트 정제 (한글과 핵심 키워드 보존)
         const cleanPrompt = prompt
-          .replace(/[^\w\s,.-]/g, '') // 특수문자 제거
-          .substring(0, 500) // 길이 제한
+          .replace(/[^\w\s가-힣,.-]/g, '') // 한글 보존, 특수문자만 제거
+          .replace(/\s+/g, ' ') // 연속 공백 정리
+          .substring(0, 800) // 길이 늘림 (더 많은 정보 보존)
           .trim();
         
+        console.log(`원본 프롬프트: ${prompt}`);
         console.log(`정제된 프롬프트: ${cleanPrompt}`);
+        
+        // 프롬프트가 너무 짧거나 의미없으면 스킵
+        if (cleanPrompt.length < 20) {
+          console.warn('프롬프트가 너무 짧음, 스킵:', cleanPrompt);
+          throw new Error('Prompt too short after cleaning');
+        }
         
         // Freepik API 이미지 생성 요청 (단순화된 파라미터)
         const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/flux-dev', {
