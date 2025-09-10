@@ -249,58 +249,118 @@ function processPromptWithFormData(template, formData) {
   return template.replace('{USER_INPUT}', userInputString.trim());
 }
 
-// 스타일별 프롬프트 생성
+// 스타일별 프롬프트 생성 - Gemini 브리프 기반으로 수정
 function generateStyledPrompts(formData, style, creativeBrief) {
-  const baseElements = [
-    formData.brandName,
-    formData.industryCategory, 
-    'advertisement'
-  ];
+  console.log('Gemini 브리프 기반 프롬프트 생성 시작...');
   
-  const targetPrompt = formData.coreTarget ? `targeting ${formData.coreTarget}` : '';
-  const differentiationPrompt = formData.coreDifferentiation || '';
+  // Gemini 브리프에서 장면별 프롬프트 추출
+  const extractedPrompts = extractScenePromptsFromBrief(creativeBrief, formData);
   
   // 영상 길이에 따른 장면 수 계산
   const sceneCount = getImageCountByDuration(formData.videoLength);
   
-  // 다양한 장면별 시나리오 생성
-  const sceneScenarios = [
-    'opening brand introduction with logo',
-    'product showcase detailed view',
-    'lifestyle usage demonstration',
-    'close-up product benefits',
-    'customer satisfaction moment',
-    'call to action with brand logo'
-  ];
-  
   const prompts = [];
   
   for (let i = 0; i < sceneCount; i++) {
-    // 각 장면마다 다른 시나리오 사용
-    const scenario = sceneScenarios[i % sceneScenarios.length];
+    // Gemini에서 추출한 장면 설명 사용
+    const geminiScenePrompt = extractedPrompts[i] || `${formData.brandName} ${formData.industryCategory} advertisement scene ${i + 1}`;
     
-    const sceneElements = [
-      ...baseElements,
-      `scene ${i + 1} of ${sceneCount}`,
-      scenario,
+    // 스타일 적용하여 최종 프롬프트 구성
+    const styledPrompt = [
+      geminiScenePrompt,
       style.description,
-      targetPrompt,
-      differentiationPrompt,
-      'high quality, professional, commercial photography'
-    ].filter(Boolean);
+      'high quality professional commercial photography',
+      'advertising style',
+      '16:9 aspect ratio'
+    ].filter(Boolean).join(', ');
     
-    // 브랜드 로고나 제품 이미지 포함 (특정 장면에)
-    if (i === 0 && formData.brandLogo) {
-      sceneElements.push('featuring brand logo prominently');
-    }
-    if ((i === 1 || i === 3) && formData.productImage) {
-      sceneElements.push('featuring product prominently');
-    }
-    
-    prompts.push(sceneElements.join(', '));
+    console.log(`장면 ${i + 1} Gemini 기반 프롬프트:`, styledPrompt);
+    prompts.push(styledPrompt);
   }
   
   return prompts;
+}
+
+/**
+ * Gemini 브리프에서 장면별 이미지 프롬프트 추출
+ */
+function extractScenePromptsFromBrief(creativeBrief, formData) {
+  console.log('Gemini 브리프에서 장면 프롬프트 추출 중...');
+  
+  if (!creativeBrief || creativeBrief.length < 100) {
+    console.log('브리프가 없거나 너무 짧음, 기본 프롬프트 사용');
+    return generateBasicPrompts(formData);
+  }
+  
+  // Gemini 브리프를 분석하여 장면별 설명 추출
+  const scenePrompts = [];
+  
+  // 정규식으로 장면 관련 내용 찾기
+  const scenePatterns = [
+    /장면\s*[1-6][\s\S]*?비주얼[:\s]*([^\n]+)/gi,
+    /scene\s*[1-6][\s\S]*?visual[:\s]*([^\n]+)/gi,
+    /\d+[\.\)]\s*([^:\n]+)[\s\S]*?비주얼[:\s]*([^\n]+)/gi,
+    /### 장면 \d+[\s\S]*?- \*\*비주얼\*\*: ([^\n]+)/gi
+  ];
+  
+  let extractedScenes = [];
+  
+  // 각 패턴으로 장면 추출 시도
+  for (const pattern of scenePatterns) {
+    pattern.lastIndex = 0; // 정규식 리셋
+    let match;
+    while ((match = pattern.exec(creativeBrief)) !== null && extractedScenes.length < 6) {
+      const sceneDescription = match[1] || match[2];
+      if (sceneDescription && sceneDescription.trim().length > 10) {
+        // 불필요한 문구 제거하고 이미지 생성에 적합하게 변환
+        const cleanedDescription = sceneDescription
+          .replace(/\*\*/g, '') // 마크다운 제거
+          .replace(/브랜드|로고|메시지/g, formData.brandName || 'brand') // 일반적인 단어를 브랜드명으로 교체
+          .replace(/제품\/서비스/g, formData.productServiceCategory || 'product')
+          .replace(/타겟|고객/g, formData.coreTarget || 'customer')
+          .trim();
+        
+        extractedScenes.push(cleanedDescription);
+      }
+    }
+    
+    if (extractedScenes.length >= 3) break; // 충분한 장면을 찾았으면 중단
+  }
+  
+  console.log(`Gemini 브리프에서 ${extractedScenes.length}개 장면 추출:`, extractedScenes);
+  
+  // 추출된 장면이 부족하면 보완
+  while (extractedScenes.length < 6) {
+    const fallbackScenes = [
+      `${formData.brandName} brand introduction with ${formData.industryCategory} elements`,
+      `${formData.productServiceCategory} product showcase for ${formData.coreTarget}`,
+      `lifestyle scene showing ${formData.coreDifferentiation}`,
+      `customer using ${formData.brandName} product with satisfaction`,
+      `benefits demonstration of ${formData.coreDifferentiation}`,
+      `call to action scene with ${formData.brandName} branding`
+    ];
+    
+    const fallbackIndex = extractedScenes.length;
+    extractedScenes.push(fallbackScenes[fallbackIndex] || `${formData.brandName} advertisement scene`);
+  }
+  
+  return extractedScenes.slice(0, 6); // 최대 6개 장면
+}
+
+/**
+ * 기본 프롬프트 생성 (Gemini 브리프 추출 실패시)
+ */
+function generateBasicPrompts(formData) {
+  console.log('기본 프롬프트 생성 (Gemini 브리프 대체)');
+  
+  return [
+    `${formData.brandName} ${formData.industryCategory} brand introduction scene`,
+    `${formData.productServiceCategory} product showcase highlighting ${formData.coreDifferentiation}`,
+    `${formData.coreTarget} using ${formData.brandName} product in lifestyle setting`,
+    `close-up demonstration of ${formData.coreDifferentiation} benefits`,
+    `satisfied customer enjoying ${formData.brandName} ${formData.productServiceCategory}`,
+    `${formData.brandName} call to action scene with branding elements`
+  ].map(prompt => prompt.replace(/\s+/g, ' ').trim());
 }
 
 // Freepik API로 이미지 생성
