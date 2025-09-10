@@ -194,7 +194,7 @@ async function generateVideoFromImage(image, apiKey, formData, segmentDuration) 
       body: JSON.stringify({
         prompt: videoPrompt,
         first_frame_image: image.url,
-        duration: Math.min(segmentDuration, 10), // Freepik API 최대 10초 제한
+        duration: segmentDuration >= 6 ? 10 : 6, // Freepik API는 6초 또는 10초만 허용
         webhook_url: null // 웹훅은 사용하지 않음
       })
     });
