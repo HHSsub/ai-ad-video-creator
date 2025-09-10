@@ -284,12 +284,12 @@ function generateStyledPrompts(formData, style, creativeBrief) {
 /**
  * Gemini 브리프에서 장면별 이미지 프롬프트 추출 및 전문적 프롬프트 생성
  */
-function extractScenePromptsFromBrief(creativeBrief, formData) {
+async function extractScenePromptsFromBrief(creativeBrief, formData) {
   console.log('Gemini 브리프 기반 전문 프롬프트 생성...');
   
   if (!creativeBrief || creativeBrief.length < 100) {
     console.log('브리프가 없거나 너무 짧음, 전문 기본 프롬프트 사용');
-    return generateProfessionalPrompts(formData);
+    return await generateProfessionalPrompts(formData);
   }
   
   // Gemini 브리프를 분석하여 장면별 설명 추출
@@ -313,7 +313,7 @@ function extractScenePromptsFromBrief(creativeBrief, formData) {
       const sceneDescription = match[1] || match[2];
       if (sceneDescription && sceneDescription.trim().length > 20) {
         // 전문적인 광고 이미지 프롬프트로 변환
-        const professionalPrompt = convertToProfessionalImagePrompt(sceneDescription, formData, extractedScenes.length + 1);
+        const professionalPrompt = await convertToProfessionalImagePrompt(sceneDescription, formData, extractedScenes.length + 1);
         extractedScenes.push(professionalPrompt);
       }
     }
@@ -325,7 +325,7 @@ function extractScenePromptsFromBrief(creativeBrief, formData) {
   
   // 추출된 장면이 부족하면 전문적 프롬프트로 보완
   while (extractedScenes.length < 6) {
-    const professionalPrompts = generateProfessionalPrompts(formData);
+    const professionalPrompts = await generateProfessionalPrompts(formData);
     const fallbackIndex = extractedScenes.length;
     extractedScenes.push(professionalPrompts[fallbackIndex] || professionalPrompts[0]);
   }
