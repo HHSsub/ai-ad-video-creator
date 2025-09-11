@@ -3,29 +3,25 @@ import PropTypes from 'prop-types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-const SpinnerOverlay = ({ percent, completedByStatus, ready, total }) => (
+const SpinnerOverlay = ({ percent, completedByStatus, ready, total, lines }) => (
   <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center">
-    <div className="w-full max-w-lg bg-white/10 rounded p-6 text-white">
-      <div className="flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white" />
+    <div className="w-full max-w-2xl bg-white/10 rounded p-6 text-white">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">영상 제작 중입니다...</h3>
+        <span className="text-sm text-white/80">{percent}%</span>
       </div>
-      <h3 className="text-center text-lg mt-4">영상 제작 중입니다...</h3>
-
-      <div className="mt-4">
-        <div className="flex justify-between text-sm text-white/80 mb-1">
-          <span>전체 진행률</span>
-          <span>{percent}%</span>
-        </div>
-        <div className="w-full bg-white/20 rounded h-2 overflow-hidden">
-          <div className="bg-white h-2 transition-all duration-300" style={{ width: `${percent}%` }} />
-        </div>
-
-        <div className="mt-3 text-sm text-white/80">
-          상태 완료: {completedByStatus}/{total} · URL 준비: {ready}/{total}
-        </div>
+      <div className="w-full bg-white/20 rounded h-2 mt-3 overflow-hidden">
+        <div className="bg-white h-2 transition-all duration-300" style={{ width: `${percent}%` }} />
       </div>
-
-      <p className="mt-4 text-center text-white/80 text-sm">브라우저를 닫지 마세요.</p>
+      <div className="mt-2 text-sm text-white/90">
+        상태 완료: {completedByStatus}/{total} · URL 준비: {ready}/{total}
+      </div>
+      <details className="mt-4 text-sm text-white/90" open>
+        <summary className="cursor-pointer select-none">세부 로그</summary>
+        <div className="mt-2 h-40 overflow-auto bg-black/40 rounded p-2 font-mono text-xs whitespace-pre-wrap">
+          {(lines || []).slice(-200).join('\n')}
+        </div>
+      </details>
     </div>
   </div>
 );
@@ -35,6 +31,7 @@ SpinnerOverlay.propTypes = {
   completedByStatus: PropTypes.number,
   ready: PropTypes.number,
   total: PropTypes.number,
+  lines: PropTypes.arrayOf(PropTypes.string),
 };
 
 const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
@@ -43,33 +40,36 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
 
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [videoError, setVideoError] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [totalSegments, setTotalSegments] = useState(0);
+  const [total, setTotal] = useState(0);
   const [completedByStatus, setCompletedByStatus] = useState(0);
   const [readyWithUrl, setReadyWithUrl] = useState(0);
-  const [overallPercent, setOverallPercent] = useState(0);
+  const [percent, setPercent] = useState(0);
   const [progressMap, setProgressMap] = useState({});
-  const [allCompletedAt, setAllCompletedAt] = useState(null);
+  const [completedAt, setCompletedAt] = useState(null);
+  const [logs, setLogs] = useState([]);
 
-  const isBusy = isGeneratingVideo || isLoading;
+  const isBusy = isGenerating || isLoading;
   const noData = !Array.isArray(styles) || styles.length === 0;
 
+  const log = (msg) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+
   useEffect(() => {
-    if (selectedStyle && Array.isArray(selectedStyle.images)) {
+    if (selectedStyle && selectedStyle.images) {
       setSelectedImages(selectedStyle.images);
     }
   }, [selectedStyle]);
 
   const handleStyleSelect = (styleData) => {
-    if (isGeneratingVideo) return;
+    if (isGenerating) return;
     setSelectedStyle(styleData);
     setSelectedImages(styleData.images || []);
   };
 
   const handleImageToggle = (imageId) => {
-    if (isGeneratingVideo) return;
+    if (isGenerating) return;
     setSelectedImages((prev) => {
       if (prev.some((img) => img.id === imageId)) {
         return prev.filter((img) => img.id !== imageId);
@@ -80,71 +80,48 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
     });
   };
 
-  const startVideoGeneration = async () => {
-    if (!selectedStyle) {
-      alert('스타일을 먼저 선택해주세요.');
-      return;
-    }
-    if (selectedImages.length === 0) {
-      alert('최소 1개 이상의 이미지를 선택해주세요.');
-      return;
-    }
+  const start = async () => {
+    if (!selectedStyle) return alert('스타일을 먼저 선택하세요.');
+    if (selectedImages.length === 0) return alert('최소 1개의 이미지를 선택하세요.');
 
-    setIsGeneratingVideo(true);
+    setIsGenerating(true);
     setIsLoading?.(true);
-    setVideoError(null);
-    setProgressMap({});
-    setTotalSegments(selectedImages.length);
+    setError(null);
+    setPercent(0);
     setCompletedByStatus(0);
     setReadyWithUrl(0);
-    setOverallPercent(0);
-    setAllCompletedAt(null);
+    setCompletedAt(null);
+    setProgressMap({});
+    setLogs([]);
 
     try {
-      // 1) 비디오 생성 시작
-      const response = await fetch(`${API_BASE}/api/generate-video`, {
+      log(`영상 생성 요청 시작: 스타일=${selectedStyle.style || selectedStyle.name}, 이미지 ${selectedImages.length}개`);
+
+      const resp = await fetch(`${API_BASE}/api/generate-video`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selectedStyle: selectedStyle.style || selectedStyle.name || 'Default',
-          selectedImages: selectedImages,
-          formData: formData,
-        }),
+        body: JSON.stringify({ selectedStyle: selectedStyle.style || selectedStyle.name, selectedImages, formData }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || `서버 오류: ${response.status}`);
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        log(`generate-video 실패: ${resp.status} ${txt}`);
+        throw new Error(`영상 생성 실패: ${resp.status}`);
       }
 
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || '영상 생성에 실패했습니다.');
+      const data = await resp.json();
+      const tasks = (data.tasks || []).map((t) => ({ taskId: t.taskId, sceneNumber: t.sceneNumber, title: t.title, duration: t.duration }));
+      setTotal(tasks.length);
+      log(`요청 완료. 생성 세그먼트 ${tasks.length}개. 폴링 시작`);
 
-      const tasks = (Array.isArray(data.tasks) ? data.tasks : []).map((t) => ({
-        taskId: t.taskId,
-        sceneNumber: t.sceneNumber,
-        duration: t.duration,
-        title: t.title,
-      }));
-
-      if (tasks.length === 0) {
-        setIsGeneratingVideo(false);
-        setIsLoading?.(false);
-        setVideoError('생성 요청은 성공했지만 세그먼트가 비었습니다.');
-        return;
-      }
-
-      setTotalSegments(tasks.length);
-
-      // 2) 상태 폴링 (미완료만)
-      let pollTimer = null;
-
+      let poll;
       const tick = async () => {
         const pending = tasks.filter((t) => progressMap[t.sceneNumber] !== 'completed');
         if (pending.length === 0) {
-          clearInterval(pollTimer);
-          setIsGeneratingVideo(false);
+          clearInterval(poll);
+          setIsGenerating(false);
           setIsLoading?.(false);
+          log('모든 세그먼트 상태 완료. URL 대기 없이 종료');
           return;
         }
 
@@ -157,66 +134,62 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
 
           if (!r.ok) {
             const txt = await r.text().catch(() => '');
-            console.warn('비디오 상태 조회 실패:', r.status, txt);
+            log(`status 실패: ${r.status} ${txt}`);
             return;
           }
 
           const result = await r.json();
-          const segments = Array.isArray(result?.segments) ? result.segments : [];
-
+          const segs = Array.isArray(result?.segments) ? result.segments : [];
           const map = { ...progressMap };
+
           let byStatus = 0;
           let withUrl = 0;
-
-          for (const s of segments) {
-            const status = String(s.status || '').toLowerCase();
-            map[s.sceneNumber] = status;
-            if (status === 'completed') {
+          for (const s of segs) {
+            const st = String(s.status || '').toLowerCase();
+            map[s.sceneNumber] = st;
+            if (st === 'completed') {
               byStatus++;
               if (s.videoUrl) withUrl++;
             }
           }
 
           setProgressMap(map);
-          const total = result?.summary?.total ?? tasks.length;
+          const totalNow = result?.summary?.total ?? tasks.length;
           setCompletedByStatus(byStatus);
           setReadyWithUrl(withUrl);
-          setOverallPercent(total ? Math.round((byStatus / total) * 100) : 0);
+          setPercent(Math.round((byStatus / totalNow) * 100));
 
-          const allDoneByStatus = byStatus === total;
-          if (allDoneByStatus && !allCompletedAt) {
-            setAllCompletedAt(Date.now());
-          }
+          log(`상태: 완료 ${byStatus}/${totalNow}, URL ${withUrl}/${totalNow}`);
 
-          const graceMs = 90_000;
-          const gracePassed =
-            allDoneByStatus && allCompletedAt && Date.now() - allCompletedAt >= graceMs;
+          if (byStatus === totalNow && !completedAt) setCompletedAt(Date.now());
 
-          if (allDoneByStatus && (withUrl === total || gracePassed)) {
-            clearInterval(pollTimer);
-            setIsGeneratingVideo(false);
+          const grace = 90_000;
+          if (byStatus === totalNow && (withUrl === totalNow || (completedAt && Date.now() - completedAt >= grace))) {
+            clearInterval(poll);
+            setIsGenerating(false);
             setIsLoading?.(false);
+            log('모든 세그먼트 완료 및 URL 준비(또는 유예 만료). 종료');
           }
         } catch (e) {
-          console.warn('폴링 예외:', e?.message || e);
+          log(`폴링 예외: ${e?.message || e}`);
         }
       };
 
       await tick();
-      pollTimer = setInterval(tick, 5000);
+      poll = setInterval(tick, 5000);
 
-      // 안전 타임아웃
       setTimeout(() => {
-        if (pollTimer) clearInterval(pollTimer);
-        setIsGeneratingVideo(false);
+        if (poll) clearInterval(poll);
+        setIsGenerating(false);
         setIsLoading?.(false);
-        console.log('폴링 타임아웃');
+        log('폴링 타임아웃(10분)');
       }, 10 * 60 * 1000);
-    } catch (error) {
-      console.error('영상 생성 실패:', error);
-      setVideoError(error.message);
-      setIsGeneratingVideo(false);
+    } catch (e) {
+      console.error('영상 생성 오류:', e);
+      setError(e.message);
+      setIsGenerating(false);
       setIsLoading?.(false);
+      log(`에러: ${e.message}`);
     }
   };
 
@@ -224,10 +197,11 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
     <div className="max-w-7xl mx-auto p-6 relative">
       {isBusy && (
         <SpinnerOverlay
-          percent={overallPercent}
+          percent={percent}
           completedByStatus={completedByStatus}
           ready={readyWithUrl}
-          total={totalSegments}
+          total={total}
+          lines={logs}
         />
       )}
 
@@ -239,9 +213,9 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
           </p>
         </div>
 
-        {videoError && (
+        {error && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded p-3">
-            {videoError}
+            {error}
           </div>
         )}
 
@@ -251,13 +225,13 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
           </div>
         ) : (
           <>
-            {/* 스타일 리스트 */}
+            {/* 스타일 리스트 (기존 레이아웃 유지) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               {styles.map((style) => (
                 <div
                   key={style.style || style.name}
                   className={`border rounded p-3 cursor-pointer ${selectedStyle?.style === style.style || selectedStyle?.name === style.name ? 'ring-2 ring-blue-500' : 'hover:border-gray-400'}`}
-                  onClick={() => handleStyleSelect(style)}
+                  onClick={() => (isBusy ? null : setSelectedStyle(style))}
                 >
                   <div className="font-semibold mb-2">{style.style || style.name}</div>
                   <div className="text-xs text-gray-500 mb-3">{style.description}</div>
@@ -275,7 +249,7 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
               ))}
             </div>
 
-            {/* 이미지 선택 */}
+            {/* 이미지 선택 (기존 레이아웃 유지) */}
             {selectedStyle && (
               <div className="mb-6">
                 <h3 className="text-lg font-semibold mb-2">
@@ -287,15 +261,9 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
                     return (
                       <label
                         key={img.id}
-                        className={`relative block border rounded overflow-hidden ${
-                          checked ? 'ring-2 ring-blue-500' : 'hover:border-gray-400'
-                        }`}
+                        className={`relative block border rounded overflow-hidden ${checked ? 'ring-2 ring-blue-500' : 'hover:border-gray-400'}`}
                       >
-                        <img
-                          src={img.thumbnail || img.url}
-                          alt={img.title}
-                          className="w-full h-32 object-cover"
-                        />
+                        <img src={img.thumbnail || img.url} alt={img.title} className="w-full h-32 object-cover" />
                         <input
                           type="checkbox"
                           className="absolute top-2 left-2"
@@ -310,7 +278,7 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
               </div>
             )}
 
-            {/* 액션 바 */}
+            {/* 액션 바 (기존 유지) */}
             <div className="flex items-center justify-between pt-6 border-t border-gray-200">
               <div className="flex items-center gap-3">
                 <button
@@ -329,7 +297,7 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
               </div>
 
               <button
-                onClick={startVideoGeneration}
+                onClick={start}
                 disabled={!selectedStyle || selectedImages.length === 0 || isBusy}
                 className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
               >
