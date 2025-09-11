@@ -56,8 +56,9 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
 
   const log = (msg) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
+
   useEffect(() => {
-    if (selectedStyle && selectedStyle.images) {
+    if (selectedStyle && Array.isArray(selectedStyle.images)) {
       setSelectedImages(selectedStyle.images);
     }
   }, [selectedStyle]);
@@ -219,13 +220,12 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
           </div>
         )}
 
-        {noData ? (
+        {!Array.isArray(styles) || styles.length === 0 ? (
           <div className="p-6 text-center text-gray-600 border rounded">
             스토리보드가 아직 준비되지 않았습니다. 이전 단계에서 스토리보드를 먼저 생성하세요.
           </div>
         ) : (
           <>
-            {/* 스타일 리스트 (기존 레이아웃 유지) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               {styles.map((style) => (
                 <div
@@ -249,7 +249,6 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
               ))}
             </div>
 
-            {/* 이미지 선택 (기존 레이아웃 유지) */}
             {selectedStyle && (
               <div className="mb-6">
                 <h3 className="text-lg font-semibold mb-2">
@@ -278,7 +277,6 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
               </div>
             )}
 
-            {/* 액션 바 (기존 유지) */}
             <div className="flex items-center justify-between pt-6 border-t border-gray-200">
               <div className="flex items-center gap-3">
                 <button
