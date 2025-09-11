@@ -5,19 +5,18 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''; // 예: https://api.yo
 
 const Spinner = () => (
   <div className="flex flex-col justify-center items-center text-center">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600"></div>
-    <p className="mt-4 text-lg text-gray-700">
-      AI를 활용하여 스토리보드를 생성하는 중입니다.
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+    <p className="mt-4 text-lg text-white/90">
+      스토리보드를 생성하는 중입니다...
     </p>
-    <p className="text-sm text-gray-500 mt-2">
-      Gemini AI가 브리프/프롬프트를 만들고, Freepik API가 이미지를 생성합니다.
+    <p className="text-sm text-white/70 mt-2">
+      Gemini가 브리프/프롬프트를 만들고, Freepik이 이미지를 생성 중입니다.
     </p>
   </div>
 );
 
 const PLACEHOLDERS = [
-  // via.placeholder.com 이 일부 환경에서 DNS 실패 → placehold.co로 변경
-  // 텍스트는 URL 인코딩
+  // via.placeholder.com 일부 환경 문제 → placehold.co 사용
   `https://placehold.co/800x450/3B82F6/FFFFFF?text=${encodeURIComponent('Business Professional')}`,
   `https://placehold.co/800x450/10B981/FFFFFF?text=${encodeURIComponent('Product Showcase')}`,
   `https://placehold.co/800x450/F59E0B/FFFFFF?text=${encodeURIComponent('Lifestyle Scene')}`,
@@ -29,10 +28,6 @@ const PLACEHOLDERS = [
 function getImageCountByVideoLength(videoLength) {
   const map = { '10초': 5, '30초': 15, '60초': 30 };
   return map[videoLength] || 15;
-}
-
-async function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function runWithConcurrency(tasks, limit, onProgress) {
@@ -60,24 +55,28 @@ async function runWithConcurrency(tasks, limit, onProgress) {
 const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) => {
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
-  const [currentPhase, setCurrentPhase] = useState('');
+  const [currentPhase, setCurrentPhase] = useState('idle'); // idle | generating | done
   const [progress, setProgress] = useState(0);
+
+  const isBusy = isLoading || currentPhase === 'generating';
 
   const updatePhase = (phase, p) => {
     setCurrentPhase(phase);
-    if (typeof p === 'number') setProgress(Math.max(0, Math.min(100, Math.round(p))));
+    if (typeof p === 'number') {
+      const clamped = Math.max(0, Math.min(100, Math.round(p)));
+      setProgress(clamped);
+    }
   };
 
   const handleGenerateStoryboard = async () => {
-    setIsLoading(true);
+    setIsLoading?.(true);
     setError(null);
     setDebugInfo(null);
     setProgress(0);
+    updatePhase('generating', 1);
 
     try {
       // 1) Init: 브리프/컨셉/이미지 프롬프트/스타일 목록
-      updatePhase('브리프/프롬프트 생성 준비...', 5);
-
       const initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,276 +106,216 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         totalStyles: styles.length,
         imageCountPerStyle,
         geminiModel: initData?.metadata?.geminiModel || 'n/a',
-        fallbackModel: initData?.metadata?.fallbackGeminiModel || ''
+        fallbackModel: initData?.metadata?.fallbackGeminiModel || '',
+        modelChain: initData?.metadata?.geminiModelChain || []
       });
-      updatePhase('브리프/프롬프트 생성 완료', 20);
+      updatePhase('generating', 10);
 
-      // 2) 이미지 생성: styleName 필수! (서버가 prompt + styleName 없으면 400)
-      const totalImages = styles.length * imageCountPerStyle;
+      // 2) 이미지 생성: styleName 필수
+      const promptsToUse = imagePrompts.slice(0, imageCountPerStyle);
+      const totalImages = styles.length * promptsToUse.length;
+      let produced = 0;
 
-      const makeTask = (styleIndex, imgIndex) => async () => {
-        const style = styles[styleIndex];
-        const ip = imagePrompts[imgIndex];
+      const storyboard = [];
 
-        // 서버 요구 바디: { prompt, styleName, sceneNumber?, title? }
-        const body = {
-          prompt: ip?.prompt,
-          styleName: style?.name,  // 중요: style.name을 styleName으로!
-          sceneNumber: ip?.sceneNumber,
-          title: ip?.title
-        };
+      for (const style of styles) {
+        const tasks = promptsToUse.map((p, idx) => async () => {
+          const body = {
+            prompt: p?.prompt,
+            styleName: style.name,
+            sceneNumber: p?.sceneNumber,
+            title: p?.title
+          };
 
-        let attempt = 0;
-        const maxAttempts = 2;
-        while (attempt < maxAttempts) {
-          attempt++;
           try {
-            const r = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+            const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(body)
             });
-            const text = await r.text();
-            let data = null;
-            try { data = JSON.parse(text); } catch { /* ignore */ }
 
-            if (!r.ok) {
-              const msg = data?.error || text || `HTTP ${r.status}`;
-              throw new Error(msg);
+            let url = '';
+            if (res.ok) {
+              const data = await res.json();
+              url = data?.url || '';
             }
 
-            if (data?.success && data?.url) {
-              return {
-                ok: true,
-                styleIndex,
-                imageIndex: imgIndex,
-                sceneNumber: ip?.sceneNumber,
-                duration: ip?.duration,
-                title: ip?.title,
-                url: data.url,
-                thumbnail: data.thumbnail || data.url,
-                prompt: data.prompt || ip?.prompt,
-              };
+            if (!url) {
+              // 실패 시 플레이스홀더
+              url = PLACEHOLDERS[idx % PLACEHOLDERS.length];
             }
-            throw new Error(data?.error || '이미지 생성 실패');
+
+            produced++;
+            const pctCore = 10 + (produced / totalImages) * 80; // 10 → 90
+            updatePhase('generating', pctCore);
+
+            return {
+              id: `${style.name.toLowerCase().replace(/\s+/g, '-')}-${idx + 1}`,
+              title: p?.title || `Scene ${p?.sceneNumber || idx + 1}`,
+              url,
+              thumbnail: url,
+              prompt: `${p?.prompt || ''}, ${style.description}`,
+              duration: p?.duration,
+              sceneNumber: p?.sceneNumber || idx + 1
+            };
           } catch (e) {
-            if (attempt >= maxAttempts) {
-              const ph = PLACEHOLDERS[(imgIndex % PLACEHOLDERS.length)];
-              return {
-                ok: false,
-                styleIndex,
-                imageIndex: imgIndex,
-                sceneNumber: ip?.sceneNumber,
-                duration: ip?.duration,
-                title: ip?.title,
-                url: ph,
-                thumbnail: ph,
-                prompt: ip?.prompt,
-                isFallback: true,
-                error: e?.message || 'unknown'
-              };
-            }
-            await sleep(1200);
-          }
-        }
-      };
+            produced++;
+            const pctCore = 10 + (produced / totalImages) * 80;
+            updatePhase('generating', pctCore);
 
-      const tasks = [];
-      for (let s = 0; s < styles.length; s++) {
-        for (let i = 0; i < imageCountPerStyle; i++) {
-          tasks.push(makeTask(s, i));
-        }
+            // 완전 실패 시에도 플레이스홀더
+            return {
+              id: `${style.name.toLowerCase().replace(/\s+/g, '-')}-${idx + 1}`,
+              title: p?.title || `Scene ${p?.sceneNumber || idx + 1}`,
+              url: PLACEHOLDERS[idx % PLACEHOLDERS.length],
+              thumbnail: PLACEHOLDERS[idx % PLACEHOLDERS.length],
+              prompt: `${p?.prompt || ''}, ${style.description}`,
+              duration: p?.duration,
+              sceneNumber: p?.sceneNumber || idx + 1
+            };
+          }
+        });
+
+        const images = await runWithConcurrency(tasks, 3, () => {}); // 동시 3개
+        images.sort((a, b) => (a.sceneNumber || 0) - (b.sceneNumber || 0));
+
+        storyboard.push({
+          style: style.name,
+          description: style.description,
+          colorPalette: style.colorPalette,
+          images,
+          searchQuery: `${formData.brandName} ${formData.industryCategory} advertisement`,
+          status: images.length > 0 ? 'success' : 'fallback'
+        });
       }
 
-      updatePhase('이미지 생성 시작...', 25);
-
-      const results = await runWithConcurrency(tasks, 2, (completed, total) => {
-        const p = 25 + (completed / total) * 70;
-        const curStyle = Math.min(styles.length, Math.floor(completed / imageCountPerStyle) + 1);
-        setCurrentPhase(`이미지 생성 중... (스타일 ${curStyle}/${styles.length}, 전체 ${completed}/${total})`);
-        setProgress(Math.round(p));
+      // 최종 결과 반영
+      setStoryboard?.({
+        success: true,
+        creativeBrief: initData.creativeBrief,
+        storyboardConcepts: initData.storyboardConcepts,
+        imagePrompts: promptsToUse,
+        storyboard,
+        metadata: {
+          ...(initData?.metadata || {}),
+          successCount: storyboard.filter(s => s.status === 'success').length,
+          fallbackCount: storyboard.filter(s => s.status === 'fallback').length,
+          processSteps: 4
+        }
       });
 
-      const storyboard = styles.map((st, idx) => {
-        const imgs = results
-          .filter((r) => r?.styleIndex === idx)
-          .sort((a, b) => (a.imageIndex ?? 0) - (b.imageIndex ?? 0))
-          .map((r, k) => ({
-            id: `${st.name.toLowerCase().replace(/\s+/g, '-')}-${k + 1}`,
-            title: r.title || `Scene ${k + 1}`,
-            url: r.url,
-            thumbnail: r.thumbnail,
-            prompt: r.prompt,
-            duration: r.duration || 6,
-            sceneNumber: r.sceneNumber || (k + 1),
-            isFallback: !!r.isFallback
-          }));
+      updatePhase('done', 100);
 
-        return {
-          style: st.name,
-          description: st.description,
-          colorPalette: st.colorPalette,
-          images: imgs,
-          status: imgs.some((i) => !i.isFallback) ? 'success' : 'fallback'
-        };
-      });
-
-      setDebugInfo((prev) => ({
-        ...prev,
-        successCount: storyboard.filter((s) => s.status === 'success').length,
-        fallbackCount: storyboard.filter((s) => s.status === 'fallback').length
-      }));
-
-      updatePhase('최종 정리 중...', 98);
-      setStoryboard(storyboard);
-      updatePhase('완료!', 100);
-
-      setTimeout(() => onNext(), 600);
+      // 생성 완료 후 바로 다음 단계로 이동
+      onNext?.();
     } catch (e) {
-      console.error('스토리보드 생성 실패:', e);
-      let msg = '스토리보드 생성 중 오류가 발생했습니다.';
-      if (e?.message) msg = e.message;
-      setError(msg);
-      setProgress(0);
-      setCurrentPhase('');
+      console.error('스토리보드 생성 오류:', e);
+      setError(e?.message || '스토리보드 생성 중 오류가 발생했습니다.');
+      updatePhase('idle', 0);
     } finally {
-      setIsLoading(false);
+      setIsLoading?.(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-        <Spinner />
-        {currentPhase && (
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="font-medium text-blue-800">{currentPhase}</h4>
-              <span className="text-sm text-blue-600">{progress}%</span>
-            </div>
-            <div className="w-full bg-blue-200 rounded-full h-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-        {debugInfo && (
-          <div className="mt-4 p-4 bg-green-50 rounded-lg">
-            <h4 className="font-medium text-green-800 mb-2">처리 현황</h4>
-            <div className="text-sm text-green-700 space-y-1">
-              <p>총 스타일: {debugInfo.totalStyles}개</p>
-              {debugInfo.imageCountPerStyle && <p>스타일당 이미지: {debugInfo.imageCountPerStyle}개</p>}
-              {typeof debugInfo.successCount === 'number' && <p>성공: {debugInfo.successCount}개</p>}
-              {typeof debugInfo.fallbackCount === 'number' && <p>대체 스타일: {debugInfo.fallbackCount}개</p>}
-              {debugInfo.geminiModel && <p>Gemini 모델: {debugInfo.geminiModel}{debugInfo.fallbackModel ? ` (fallback: ${debugInfo.fallbackModel})` : ''}</p>}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">
-        2단계: AI 스토리보드 생성
-      </h2>
+    <div className="w-full">
+      {/* 상단 헤더/설명 */}
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold">2단계: 스토리보드 생성</h2>
+        <p className="text-gray-600 mt-1">
+          제공한 정보로 AI가 스토리보드와 이미지를 자동 생성합니다.
+        </p>
+      </div>
 
-      {/* 입력 정보 요약 (원본 유지) */}
-      {/* ... 생략: 기존 UI 동일 ... */}
-
-      {error && (
-        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L9.414 10l1.293-1.293a1 1 0 10-1.414-1.414L7.586 8.586 6.293 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">스토리보드 생성 오류</h3>
-              <div className="mt-2 text-sm text-red-700">
-                <p>{error}</p>
-              </div>
-              <div className="mt-3">
-                <button
-                  onClick={() => setError(null)}
-                  className="text-sm bg-red-100 text-red-800 px-3 py-1 rounded hover:bg-red-200 transition-colors"
-                >
-                  닫기
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* 디버그 정보 */}
+      {debugInfo && (
+        <div className="mb-4 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded p-3">
+          <div>스타일 개수: {debugInfo.totalStyles}</div>
+          <div>스타일당 이미지 수: {debugInfo.imageCountPerStyle}</div>
+          <div>Gemini 모델: {debugInfo.geminiModel} {debugInfo.fallbackModel ? `(fallback: ${debugInfo.fallbackModel})` : ''}</div>
         </div>
       )}
 
-      <div className="flex justify-between items-center">
+      {/* 에러 알림 */}
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded p-3">
+          {error}
+        </div>
+      )}
+
+      {/* 진행 바 */}
+      <div className="w-full h-2 bg-gray-200 rounded overflow-hidden mb-4">
+        <div
+          className="h-2 bg-blue-600 transition-all duration-300"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* 액션 버튼 */}
+      <div className="flex items-center gap-3">
         <button
+          type="button"
+          className={`px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'} `}
           onClick={onPrev}
-          className="flex items-center px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors shadow-md"
+          disabled={isBusy}
+          title={isBusy ? '생성 중에는 이전 단계로 이동할 수 없습니다.' : '이전 단계로 이동'}
         >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
           이전 단계
         </button>
 
-        <div className="text-center">
-          <div className="text-sm text-gray-500 mb-2">예상 소요시간: 2~5분</div>
-          <div className="text-xs text-gray-400">AI 처리 + 이미지 생성 (동시 2개)</div>
-        </div>
+        <button
+          type="button"
+          className={`px-4 py-2 rounded text-white ${isBusy ? 'bg-blue-300 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'}`}
+          onClick={handleGenerateStoryboard}
+          disabled={isBusy}
+          title={isBusy ? '생성 중입니다...' : '스토리보드 자동 생성 시작'}
+        >
+          {isBusy ? '생성 중...' : '스토리보드 생성'}
+        </button>
 
         <button
-          onClick={handleGenerateStoryboard}
-          disabled={isLoading}
-          className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+          type="button"
+          className={`ml-auto px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}`}
+          onClick={() => window.location.reload()}
+          disabled={isBusy}
+          title={isBusy ? '생성 중에는 새로 시작할 수 없습니다.' : '초기 상태로 새로 시작'}
         >
-          {isLoading ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-              생성 중...
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              🚀 AI 스토리보드 생성
-            </>
-          )}
+          새로 시작
         </button>
       </div>
 
-      <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <div className="flex items-start">
-          <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div>
-            <h4 className="text-sm font-medium text-yellow-800">참고사항</h4>
-            <div className="text-sm text-yellow-700 mt-1 space-y-1">
-              <p>• 긴 작업을 나눠 호출하여 504를 방지합니다.</p>
-              <p>• 일부 이미지는 대체 이미지로 채워질 수 있습니다.</p>
-              <p>• 네트워크/Freepik 대기시간에 따라 시간이 달라질 수 있습니다.</p>
-              <p>• EC2 API를 사용하려면 VITE_API_BASE_URL을 설정하세요.</p>
+      {/* 전체 화면 오버레이(생성 중) */}
+      {(isBusy) && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
+          role="alert"
+          aria-live="assertive"
+        >
+          <div className="w-full max-w-md p-6">
+            <Spinner />
+            <div className="mt-6 w-full h-2 bg-white/20 rounded overflow-hidden">
+              <div
+                className="h-2 bg-white transition-all duration-300"
+                style={{ width: `${Math.max(5, progress)}%` }}
+              />
             </div>
+            <p className="mt-3 text-center text-white/80 text-sm">
+              진행률 {Math.max(5, Math.round(progress))}%
+            </p>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
 
 Step2.propTypes = {
-  onNext: PropTypes.func.isRequired,
-  onPrev: PropTypes.func.isRequired,
+  onNext: PropTypes.func,
+  onPrev: PropTypes.func,
   formData: PropTypes.object.isRequired,
-  setStoryboard: PropTypes.func.isRequired,
-  setIsLoading: PropTypes.func.isRequired,
-  isLoading: PropTypes.bool.isRequired
+  setStoryboard: PropTypes.func,
+  setIsLoading: PropTypes.func,
+  isLoading: PropTypes.bool
 };
 
 export default Step2;
