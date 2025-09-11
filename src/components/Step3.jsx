@@ -14,13 +14,7 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
   const [videoError, setVideoError] = useState(null);
   const [totalSegments, setTotalSegments] = useState(0);
   const [completedSegments, setCompletedSegments] = useState(0);
-
-  const overallPercent = useMemo(() => {
-    if (!totalSegments) return 0;
-    const pct = Math.round((completedSegments / totalSegments) * 100);
-    return Math.max(0, Math.min(100, pct));
-  }, [completedSegments, totalSegments]);
-
+  
   useEffect(() => {
     if (selectedStyle && selectedStyle.images) {
       setSelectedImages(selectedStyle.images);
