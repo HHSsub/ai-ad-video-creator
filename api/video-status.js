@@ -1,133 +1,171 @@
+// Check Freepik Image-to-Video task statuses.
+// Input: { tasks: [{taskId, sceneNumber, duration, title}], compile?: boolean }
+// Output: segments with status/videoUrl, and an FFmpeg command to merge completed ones.
+
 export default async function handler(req, res) {
-  // CORS 헤더 설정
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { taskIds } = req.body;
-
-    if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
-      return res.status(400).json({ 
-        error: 'Task IDs array is required' 
-      });
+    const { tasks, compile } = req.body || {};
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return res.status(400).json({ error: 'tasks array is required' });
     }
 
-    console.log('비디오 상태 확인 요청:', taskIds.length + '개 작업');
+    const freepikApiKey =
+      process.env.FREEPIK_API_KEY ||
+      process.env.REACT_APP_FREEPIK_API_KEY ||
+      process.env.VITE_FREEPIK_API_KEY;
+    if (!freepikApiKey) throw new Error('Freepik API key not found');
 
-    const freepikApiKey = process.env.FREEPIK_API_KEY || 
-                          process.env.REACT_APP_FREEPIK_API_KEY || 
-                          process.env.VITE_FREEPIK_API_KEY;
-
-    if (!freepikApiKey) {
-      throw new Error('Freepik API key not found');
-    }
-
-    const statusResults = [];
-
-    // 각 task ID의 상태 확인
-    for (const taskId of taskIds) {
-      try {
-        console.log(`상태 확인 중: ${taskId}`);
-        
-        const response = await fetch(`https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p/${taskId}`, {
-          method: 'GET',
-          headers: {
-            'x-freepik-api-key': freepikApiKey
-          }
+    const checked = [];
+    for (const t of tasks) {
+      const taskId = t?.taskId;
+      if (!taskId) {
+        checked.push({
+          sceneNumber: t?.sceneNumber ?? null,
+          title: t?.title ?? null,
+          taskId: null,
+          status: 'error',
+          videoUrl: null,
+          duration: t?.duration ?? null,
+          error: 'Missing taskId',
         });
+        continue;
+      }
 
-        if (!response.ok) {
-          throw new Error(`Status check failed: ${response.status}`);
+      try {
+        const r = await fetch(
+          `https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p/${taskId}`,
+          {
+            method: 'GET',
+            headers: {
+              'x-freepik-api-key': freepikApiKey,
+              Accept: 'application/json',
+            },
+          }
+        );
+
+        if (!r.ok) {
+          const text = await r.text();
+          console.error(`[video-status] status check ${taskId} 실패 (${r.status}):`, text);
+          checked.push({
+            sceneNumber: t?.sceneNumber ?? null,
+            title: t?.title ?? null,
+            taskId,
+            status: 'error',
+            videoUrl: null,
+            duration: t?.duration ?? null,
+            error: `Status check failed: ${r.status}`,
+          });
+          continue;
         }
 
-        const result = await response.json();
-        console.log(`Task ${taskId} 상태:`, result.data?.status);
+        const json = await r.json();
+        const providerStatus = json?.data?.status || 'UNKNOWN';
+        const upper = String(providerStatus).toUpperCase();
 
-        statusResults.push({
-          taskId: taskId,
-          status: result.data?.status || 'UNKNOWN',
-          videoUrl: result.data?.result && result.data.result.length > 0 
-            ? result.data.result[0].url 
-            : null,
-          thumbnailUrl: result.data?.result && result.data.result.length > 0 
-            ? result.data.result[0].thumbnail_url 
-            : null,
-          progress: result.data?.progress || 0,
-          duration: result.data?.result && result.data.result.length > 0 
-            ? result.data.result[0].duration 
-            : null,
-          error: result.data?.status === 'FAILED' 
-            ? result.data?.error || 'Generation failed' 
-            : null,
-          updatedAt: new Date().toISOString()
+        let status = 'in_progress';
+        if (upper === 'COMPLETED') status = 'completed';
+        else if (upper === 'FAILED' || upper === 'ERROR') status = 'failed';
+        else if (upper === 'UNKNOWN') status = 'unknown';
+
+        const videoUrl =
+          Array.isArray(json?.data?.result) && json.data.result[0]?.url
+            ? json.data.result[0].url
+            : null;
+        const duration =
+          Array.isArray(json?.data?.result) && json.data.result[0]?.duration
+            ? json.data.result[0].duration
+            : t?.duration ?? null;
+
+        checked.push({
+          sceneNumber: t?.sceneNumber ?? null,
+          title: t?.title ?? null,
+          taskId,
+          status,
+          videoUrl,
+          duration,
+          providerStatus,
         });
-
-      } catch (error) {
-        console.error(`Task ${taskId} 상태 확인 실패:`, error.message);
-        
-        statusResults.push({
-          taskId: taskId,
-          status: 'ERROR',
+      } catch (err) {
+        console.error(`[video-status] status check ${taskId} 예외:`, err.message);
+        checked.push({
+          sceneNumber: t?.sceneNumber ?? null,
+          title: t?.title ?? null,
+          taskId,
+          status: 'error',
           videoUrl: null,
-          thumbnailUrl: null,
-          progress: 0,
-          duration: null,
-          error: error.message,
-          updatedAt: new Date().toISOString()
+          duration: t?.duration ?? null,
+          error: err.message,
         });
       }
-
-      // API 호출 간격 조정
-      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // 전체 상태 요약
-    const summary = {
-      total: statusResults.length,
-      completed: statusResults.filter(r => r.status === 'COMPLETED').length,
-      inProgress: statusResults.filter(r => r.status === 'IN_PROGRESS').length,
-      failed: statusResults.filter(r => r.status === 'FAILED' || r.status === 'ERROR').length,
-      pending: statusResults.filter(r => r.status === 'PENDING' || r.status === 'QUEUED').length
-    };
+    const completed = checked.filter((s) => s.status === 'completed' && s.videoUrl);
+    const failed = checked.filter((s) => s.status === 'failed' || s.status === 'error');
+    const inProgress = checked.filter((s) => s.status === 'in_progress' || s.status === 'unknown');
 
-    const allCompleted = summary.completed === summary.total;
-    const hasFailures = summary.failed > 0;
+    const ffmpeg = generateFFmpegCommandFromUrls(completed);
 
-    console.log('상태 확인 완료:', summary);
-
-    const response = {
+    const payload = {
       success: true,
-      summary: summary,
-      allCompleted: allCompleted,
-      hasFailures: hasFailures,
-      statusResults: statusResults,
-      completedVideos: statusResults.filter(r => r.status === 'COMPLETED' && r.videoUrl),
-      metadata: {
-        checkedAt: new Date().toISOString(),
-        apiProvider: 'Freepik',
-        model: 'minimax-hailuo-02-768p'
-      }
+      summary: {
+        total: checked.length,
+        completed: completed.length,
+        inProgress: inProgress.length,
+        failed: failed.length,
+      },
+      segments: checked,
+      compilationGuide: {
+        ready: completed.length > 0,
+        command: ffmpeg,
+        note:
+          completed.length === 0
+            ? 'No completed videos available for compilation yet.'
+            : 'Download the listed segments then run the FFmpeg command to merge.',
+      },
     };
 
-    res.status(200).json(response);
+    // Optionally, you can add server-side merge later (requires ffmpeg & storage route)
+    // if (compile === true) { ... }
 
+    return res.status(200).json(payload);
   } catch (error) {
-    console.error('비디오 상태 확인 중 전체 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    console.error('[video-status] 전체 오류:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
+}
+
+/**
+ * Build a practical FFmpeg command:
+ * 1) Download completed URLs to local files
+ * 2) Concatenate into final_video.mp4 (video-only)
+ */
+function generateFFmpegCommandFromUrls(completedSegments) {
+  if (!Array.isArray(completedSegments) || completedSegments.length === 0) {
+    return 'No completed videos available for compilation';
+  }
+
+  // 1) Download commands (curl)
+  const downloads = completedSegments
+    .map((s, i) => `curl -L "${s.videoUrl}" -o segment_${i + 1}.mp4`)
+    .join(' && ');
+
+  // 2) Inputs for FFmpeg
+  const inputs = completedSegments
+    .map((_, i) => `-i "segment_${i + 1}.mp4"`)
+    .join(' ');
+
+  // 3) Use concat filtergraph (video-only)
+  const vInputs = completedSegments.map((_, i) => `[${i}:v]`).join('');
+  const filter = `${vInputs}concat=n=${completedSegments.length}:v=1:a=0[outv]`;
+
+  return `${downloads} && ffmpeg ${inputs} -filter_complex "${filter}" -map "[outv]" -c:v libx264 -preset medium -crf 23 final_video.mp4`;
 }
