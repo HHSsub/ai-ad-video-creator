@@ -6,9 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''; // 예: https://api.yo
 const Spinner = () => (
   <div className="flex flex-col justify-center items-center text-center">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-    <p className="mt-4 text-lg text-white/90">
-      스토리보드를 생성하는 중입니다...
-    </p>
+    <p className="mt-4 text-lg text-white/90">스토리보드를 생성하는 중입니다...</p>
     <p className="text-sm text-white/70 mt-2">
       Gemini가 브리프/프롬프트를 만들고, Freepik이 이미지를 생성 중입니다.
     </p>
@@ -75,7 +73,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     updatePhase('generating', 1);
 
     try {
-      // 1) Init: 브리프/컨셉/이미지 프롬프트/스타일 목록
+      // 1) Init 호출
       const initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -115,13 +113,13 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const totalImages = styles.length * promptsToUse.length;
       let produced = 0;
 
-      const storyboardArray = [];
+      const storyboardArray = []; // ▶ Step3가 기대하는: 배열
 
       for (const style of styles) {
         const tasks = promptsToUse.map((p, idx) => async () => {
           const body = {
             prompt: p?.prompt,
-            styleName: style.name,
+            styleName: style.name,           // 서버가 요구하는 필드
             sceneNumber: p?.sceneNumber,
             title: p?.title
           };
@@ -140,7 +138,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             }
 
             if (!url) {
-              url = PLACEHOLDERS[idx % PLACEHOLDERS.length];
+              url = PLACEHOLDERS[idx % PLACEHOLDERS.length]; // 실패 시 플레이스홀더
             }
 
             produced++;
@@ -178,7 +176,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         images.sort((a, b) => (a.sceneNumber || 0) - (b.sceneNumber || 0));
 
         storyboardArray.push({
-          style: style.name,
+          style: style.name,                 // ▶ Step3가 읽는 필드명
           description: style.description,
           colorPalette: style.colorPalette,
           images,
@@ -187,7 +185,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         });
       }
 
-      // ▶ Step3가 기대하는 형태(배열)만 set: .map 에러 원인 제거
+      // ▶ 오직 배열만 넘김: Step3의 storyboard.map 정상 작동
       setStoryboard?.(storyboardArray);
 
       updatePhase('done', 100);
@@ -214,7 +212,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         <div className="mb-4 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded p-3">
           <div>스타일 개수: {debugInfo.totalStyles}</div>
           <div>스타일당 이미지 수: {debugInfo.imageCountPerStyle}</div>
-          <div>Gemini 모델: {debugInfo.geminiModel} {debugInfo.fallbackModel ? `(fallback: ${debugInfo.fallbackModel})` : ''}</div>
+          <div>
+            Gemini 모델: {debugInfo.geminiModel}{' '}
+            {debugInfo.fallbackModel ? `(fallback: ${debugInfo.fallbackModel})` : ''}
+          </div>
         </div>
       )}
 
@@ -263,26 +264,28 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </button>
       </div>
 
-      {(isBusy) && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
-          role="alert"
-          aria-live="assertive"
-        >
-          <div className="w-full max-w-md p-6">
-            <Spinner />
-            <div className="mt-6 w-full h-2 bg-white/20 rounded overflow-hidden">
-              <div
-                className="h-2 bg-white transition-all duration-300"
-                style={{ width: `${Math.max(5, progress)}%` }}
-              />
+      {(isBusy) => (
+        isBusy && (
+          <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="w-full max-w-md p-6">
+              <Spinner />
+              <div className="mt-6 w-full h-2 bg-white/20 rounded overflow-hidden">
+                <div
+                  className="h-2 bg-white transition-all duration-300"
+                  style={{ width: `${Math.max(5, progress)}%` }}
+                />
+              </div>
+              <p className="mt-3 text-center text-white/80 text-sm">
+                진행률 {Math.max(5, Math.round(progress))}%
+              </p>
             </div>
-            <p className="mt-3 text-center text-white/80 text-sm">
-              진행률 {Math.max(5, Math.round(progress))}%
-            </p>
           </div>
-        </div>
-      )}
+        )
+      )(isBusy)}
     </div>
   );
 };
