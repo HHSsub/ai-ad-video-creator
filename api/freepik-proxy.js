@@ -24,8 +24,6 @@ export default async function handler(req, res) {
     const count = req.method === 'GET'
       ? (req.query.count || 5)
       : (req.body.count || 5);
-    
-    const { searchQuery, count = 5 } = req.body;
 
     // API 키 확인
     const API_KEY = process.env.FREEPIK_API_KEY || 
@@ -69,18 +67,15 @@ export default async function handler(req, res) {
       term: searchQuery.trim() // 검색어 (term 파라미터 사용)
     });
 
-    // 필터 추가 (올바른 형식)
+    // 필터 추가 (간소화된 형식으로 수정)
     const filters = {
-      content_type: ['photo'], // photo, vector, psd, ai
+      content_type: ['photo'], // photo, vector만 사용
       orientation: ['horizontal', 'vertical']
     };
 
-    // 필터를 별도 파라미터로 추가
-    Object.entries(filters).forEach(([key, values]) => {
-      values.forEach(value => {
-        params.append(`filters[${key}]`, value);
-      });
-    });
+    // 필터를 쿼리 파라미터로 직접 추가 (더 안전한 방식)
+    params.append('content_type', 'photo');
+    params.append('orientation', 'horizontal');
 
     const fullUrl = `${apiUrl}?${params.toString()}`;
     console.log('API 호출 URL:', fullUrl);
@@ -90,7 +85,7 @@ export default async function handler(req, res) {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'x-freepik-api-key': API_KEY, // 올바른 헤더명
+        'X-Freepik-API-Key': API_KEY, // 일관된 헤더명으로 변경
         'User-Agent': 'AI-Ad-Creator/1.0'
       }
     });

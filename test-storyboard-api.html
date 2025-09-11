@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Storyboard API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { background: #ffe6e6; }
+        .success { background: #e6ffe6; }
+        button { padding: 10px 20px; margin: 5px; }
+        img { max-width: 300px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Freepik API 이미지 생성 테스트</h1>
+    
+    <button onclick="testImageGeneration()">이미지 생성 테스트</button>
+    <button onclick="testImageSearch()">이미지 검색 테스트</button>
+    <button onclick="clearLogs()">로그 지우기</button>
+    
+    <div id="logs"></div>
+    <div id="images"></div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = 'log ' + type;
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(div);
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+            document.getElementById('images').innerHTML = '';
+        }
+        
+        async function testImageGeneration() {
+            log('이미지 생성 API 테스트 시작...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: 'professional business woman using smartphone, modern office background, happy expression',
+                        sceneNumber: 1,
+                        conceptId: 1,
+                        style: 'professional'
+                    })
+                });
+                
+                log(`응답 상태: ${response.status}`);
+                
+                const data = await response.json();
+                log(`응답 데이터: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.success && data.url) {
+                    log('이미지 생성 성공!', 'success');
+                    showImage(data.url, 'Generated Image');
+                } else {
+                    log('이미지 생성 실패: ' + (data.error || 'Unknown error'), 'error');
+                }
+                
+            } catch (error) {
+                log('API 호출 오류: ' + error.message, 'error');
+            }
+        }
+        
+        async function testImageSearch() {
+            log('이미지 검색 API 테스트 시작...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/freepik-proxy`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        searchQuery: 'business woman smartphone office',
+                        count: 3
+                    })
+                });
+                
+                log(`응답 상태: ${response.status}`);
+                
+                const data = await response.json();
+                log(`검색 결과: ${data.images?.length || 0}개 이미지 찾음`);
+                
+                if (data.success && data.images && data.images.length > 0) {
+                    log('이미지 검색 성공!', 'success');
+                    data.images.forEach((img, index) => {
+                        showImage(img.url || img.thumbnail, `Search Result ${index + 1}`);
+                    });
+                } else {
+                    log('이미지 검색 실패: ' + (data.error || 'No images found'), 'error');
+                }
+                
+            } catch (error) {
+                log('API 호출 오류: ' + error.message, 'error');
+            }
+        }
+        
+        function showImage(url, title) {
+            const images = document.getElementById('images');
+            const div = document.createElement('div');
+            div.style.display = 'inline-block';
+            div.style.margin = '10px';
+            div.innerHTML = `
+                <h4>${title}</h4>
+                <img src="${url}" onerror="this.style.display='none'" />
+                <p><small>${url}</small></p>
+            `;
+            images.appendChild(div);
+        }
+    </script>
+</body>
+</html>

@@ -232,9 +232,8 @@ const searchFreepikImages = async (query) => {
   const response = await fetch(`${searchUrl}?${params.toString()}`, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${FREEPIK_API_KEY}`,
-      'Accept-Language': 'ko-KR,en-US',
-      'Content-Type': 'application/json'
+      'X-Freepik-API-Key': FREEPIK_API_KEY, // 일관된 헤더명 사용
+      'Accept': 'application/json'
     }
   });
 
@@ -368,9 +367,8 @@ const searchFreepikVideos = async (query) => {
   const response = await fetch(`${searchUrl}?${params.toString()}`, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${FREEPIK_API_KEY}`,
-      'Accept-Language': 'ko-KR,en-US',
-      'Content-Type': 'application/json'
+      'X-Freepik-API-Key': FREEPIK_API_KEY, // 일관된 헤더명 사용
+      'Accept': 'application/json'
     }
   });
 

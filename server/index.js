@@ -5,6 +5,7 @@ import bodyParser from 'body-parser';
 
 import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
+import freepikProxy from '../api/freepik-proxy.js';
 import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 
@@ -23,6 +24,7 @@ const bind = (path, handler, methods = ['POST']) => {
 
 bind('/api/storyboard-init', storyboardInit, ['POST']);
 bind('/api/storyboard-render-image', storyboardRenderImage, ['POST']);
+bind('/api/freepik-proxy', freepikProxy, ['GET', 'POST']);
 bind('/api/generate-video', generateVideo, ['POST']);
 bind('/api/video-status', videoStatus, ['POST']);
 

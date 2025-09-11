@@ -76,40 +76,34 @@ async function callFreepikAPI(url, options, label = 'API') {
   throw lastError || new Error(`${label} 최대 재시도 횟수 초과`);
 }
 
-// Classic API (올바른 파라미터)
+// Classic API - 실제 작동하는 파라미터로 수정
 async function generateImageClassic(prompt, apiKey) {
   const url = `${FREEPIK_API_BASE}/ai/text-to-image`;
   
   const optimizedPrompt = optimizePrompt(prompt);
   
-  // 올바른 Classic API 파라미터
+  // 실제 Freepik API 스펙에 맞는 파라미터
   const requestBody = {
     prompt: optimizedPrompt,
-    negative_prompt: "blurry, distorted, low quality, watermark, text, logo, oversaturated, noise",
-    guidance_scale: 7.5,
-    seed: Math.floor(Math.random() * 1000000),
+    negative_prompt: "blurry, distorted, low quality, watermark, text, logo, oversaturated, noise, NSFW",
     num_images: 1,
     image: {
-      size: "widescreen_16_9"
-    },
-    styling: {
-      style: "photo" // 올바른 스타일 값
-    },
-    filter_nsfw: true
+      size: "landscape" // 가능한 값: square, portrait, landscape
+    }
   };
   
   console.log('[generateImageClassic] 요청:', {
     prompt: optimizedPrompt.substring(0, 100) + '...',
-    style: requestBody.styling.style,
-    size: requestBody.image.size
+    size: requestBody.image.size,
+    url: url
   });
   
   const options = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-freepik-api-key': apiKey,
-      'User-Agent': 'AI-Ad-Creator/1.0'
+      'X-Freepik-API-Key': apiKey, // 올바른 헤더명
+      'Accept': 'application/json'
     },
     body: JSON.stringify(requestBody)
   };
@@ -118,50 +112,46 @@ async function generateImageClassic(prompt, apiKey) {
   
   console.log('[generateImageClassic] 전체 응답:', JSON.stringify(result.data, null, 2));
   
-  // Classic API 응답 구조 처리
+  // API 응답 구조에 맞게 수정
   if (result.data && result.data.data && Array.isArray(result.data.data) && result.data.data.length > 0) {
-    const imageUrl = result.data.data[0];
-    console.log('[generateImageClassic] 이미지 URL:', imageUrl);
+    const imageData = result.data.data[0];
+    const imageUrl = imageData.base64 ? `data:image/jpeg;base64,${imageData.base64}` : imageData.url;
+    console.log('[generateImageClassic] 이미지 URL 획득');
     return {
       success: true,
       imageUrl: imageUrl,
       method: 'classic'
     };
   } else {
-    throw new Error('Classic API에서 이미지 URL을 찾을 수 없음');
+    throw new Error('Classic API에서 이미지 데이터를 찾을 수 없음');
   }
 }
 
-// Imagen3 API (올바른 파라미터)
+// Imagen3 API - 더 간단한 파라미터로 수정
 async function generateImageImagen3(prompt, apiKey) {
   const url = `${FREEPIK_API_BASE}/ai/text-to-image/imagen3`;
   
   const optimizedPrompt = optimizePrompt(prompt);
   
-  // 올바른 Imagen3 파라미터
+  // 단순화된 Imagen3 파라미터
   const requestBody = {
     prompt: optimizedPrompt,
     num_images: 1,
-    aspect_ratio: "widescreen_16_9",
-    styling: {
-      style: "photo" // photo, digital-art, 3d 등 유효한 값
-    },
-    person_generation: "allow_adult",
-    safety_settings: "block_low_and_above"
+    aspect_ratio: "16:9" // 16:9, 1:1, 9:16 등 지원
   };
   
   console.log('[generateImageImagen3] 요청:', {
     prompt: optimizedPrompt.substring(0, 100) + '...',
-    style: requestBody.styling.style,
-    aspect_ratio: requestBody.aspect_ratio
+    aspect_ratio: requestBody.aspect_ratio,
+    url: url
   });
   
   const options = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-freepik-api-key': apiKey,
-      'User-Agent': 'AI-Ad-Creator/1.0'
+      'X-Freepik-API-Key': apiKey, // 일관된 헤더명 사용
+      'Accept': 'application/json'
     },
     body: JSON.stringify(requestBody)
   };
@@ -180,15 +170,15 @@ async function generateImageImagen3(prompt, apiKey) {
   }
 }
 
-// Imagen3 상태 확인
+// Imagen3 상태 확인 - 헤더 일관성 맞춤
 async function checkImagen3Status(taskId, apiKey) {
   const url = `${FREEPIK_API_BASE}/ai/text-to-image/imagen3/${taskId}`;
   
   const options = {
     method: 'GET',
     headers: {
-      'x-freepik-api-key': apiKey,
-      'User-Agent': 'AI-Ad-Creator/1.0'
+      'X-Freepik-API-Key': apiKey, // 일관된 헤더명
+      'Accept': 'application/json'
     }
   };
   
@@ -269,8 +259,49 @@ async function saveImageLocally(imageUrl, conceptId, sceneNumber) {
   }
 }
 
+// Freepik 이미지 검색 폴백 (생성이 실패했을 때 사용)
+async function searchFreepikImages(query, apiKey) {
+  const url = `${FREEPIK_API_BASE}/resources`;
+  
+  const params = new URLSearchParams({
+    locale: 'en-US',
+    page: '1',
+    limit: '3',
+    order: 'relevance',
+    term: query,
+    content_type: 'photo',
+    orientation: 'horizontal'
+  });
+  
+  const options = {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'X-Freepik-API-Key': apiKey
+    }
+  };
+  
+  const result = await callFreepikAPI(`${url}?${params.toString()}`, options, 'searchFreepikImages');
+  
+  if (result.data && result.data.data && Array.isArray(result.data.data) && result.data.data.length > 0) {
+    const item = result.data.data[0];
+    const imageUrl = item.image?.source?.url || item.image?.url || item.thumbnails?.large?.url;
+    
+    if (imageUrl) {
+      console.log('[searchFreepikImages] 검색 결과 이미지 URL:', imageUrl);
+      return {
+        success: true,
+        imageUrl: imageUrl,
+        method: 'search'
+      };
+    }
+  }
+  
+  throw new Error('검색에서 적절한 이미지를 찾을 수 없음');
+}
+
 function generateFallbackImage(conceptId, sceneNumber) {
-  console.log('[generateFallbackImage] 폴백 이미지 생성');
+  console.log('[generateFallbackImage] 플레이스홀더 이미지 생성');
   
   const placeholderImages = [
     'https://via.placeholder.com/1920x1080/3B82F6/FFFFFF?text=Professional+Scene+1',
@@ -381,7 +412,20 @@ export default async function handler(req, res) {
         }
       } catch (imagen3Error) {
         console.error('[storyboard-render-image] Imagen3도 실패:', imagen3Error.message);
-        throw imagen3Error;
+        
+        // 3. 이미지 생성 모두 실패시 검색 시도
+        try {
+          console.log('[storyboard-render-image] 이미지 검색 폴백 시도');
+          const searchResult = await searchFreepikImages(prompt, apiKey);
+          
+          if (searchResult.success) {
+            console.log('[storyboard-render-image] 검색 폴백 성공');
+            finalResult = searchResult;
+          }
+        } catch (searchError) {
+          console.error('[storyboard-render-image] 검색 폴백도 실패:', searchError.message);
+          throw searchError;
+        }
       }
     }
 
