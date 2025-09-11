@@ -59,10 +59,39 @@ For each scene, you must provide a detailed image prompt.
 ### Scene 1 (0:00-0:02)
 - **Image Prompt**: Camera: Canon EOS R5, 50mm lens, medium shot, eye-level. A young female mage, Middle Eastern-inspired, oval face with defined cheekbones, focused and determined expression, long flowing silver hair, wearing intricately embroidered flowing robes. She is holding a glowing, intricately carved staff diagonally across her body, with her head slightly turned to the left. Environment: A vast, sun-drenched desert ruin with crumbling sandstone pillars. Detail Level: insanely detailed, micro-details, visible skin pores, stitching on the robes, cracks on the stone platform. Lighting: Golden hour cinematic light with long shadows. Color: Warm golds, oranges, and deep browns. Style: Cinematic and Story-Driven, photorealistic, sharp focus
 
-(Repeat the exact Scene block pattern shown above to produce Scenes 2 through Scene {{scene_count}} inclusive. 
-Rules:
-- EXACT total scenes: {{scene_count}} (Scene 1 ... Scene {{scene_count}})
-- Each scene duration: 2 seconds
-- Timecodes must increment sequentially with no gaps or overlap (e.g., Scene n starts where Scene n-1 ended)
-- Do NOT output more than {{scene_count}} scenes
-- Keep the formatting strictly: "### Scene X (MM:SS-MM:SS)" then a single "- **Image Prompt**: ..." line.)
+----------------------------------------------------------------
+MULTI-CONCEPT EXTENSION (DO NOT ALTER ANY TEXT ABOVE)
+You are now given:
+- Creative Brief (text)
+- Concepts JSON Array of exactly 6 items:
+  [{ "concept_id": 1, "concept_name": "...", "summary": "...", "keywords": [...] }, ...]
+Task:
+Generate SIX SEPARATE storyboard sections in ONE response.
+For EACH concept_id (1..6):
+  - Provide EXACTLY {{scene_count}} scenes
+  - Timecodes: each scene = 2 seconds; start at 0:00; Scene N starts where Scene N-1 ended
+  - Format strictly:
+    ### Concept {concept_id}: {concept_name}
+    #### Scene 1 (MM:SS-MM:SS)
+    - **Image Prompt**: ...
+    #### Scene 2 (MM:SS-MM:SS)
+    - **Image Prompt**: ...
+    ...
+    #### Scene {{scene_count}} (...timecode...)
+  - Each Image Prompt: 70-100 words, follow ALL requirements above (camera, composition, pose orientation specifics, mise-en-scène, detail keywords, lighting, color, style/tone, quality).
+  - Maintain internal consistency per concept (subjects, environment, props).
+  - NEVER mix or merge details between different concepts.
+  - DO NOT output additional explanation, commentary, JSON, or lists outside this exact Markdown pattern.
+  - DO NOT exceed {{scene_count}} scenes per concept.
+Output order: Concept 1 .. Concept 6 in ascending concept_id.
+Insert a single heading at top:
+## Multi-Concept Storyboards
+
+INPUT BRIEF (verbatim):
+{{brief}}
+
+INPUT CONCEPTS JSON (verbatim):
+{{concepts_json}}
+
+Generate now.
+----------------------------------------------------------------
