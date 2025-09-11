@@ -1,5 +1,5 @@
 // Generate videos from selected images via Freepik Image-to-Video API
-// Returns a project with taskIds. Actual video URLs are populated later by /api/video-status.
+// Returns taskIds immediately. Frontend should poll /api/video-status to get playable video URLs.
 
 export default async function handler(req, res) {
   // CORS
@@ -44,7 +44,11 @@ export default async function handler(req, res) {
     // Kick off image-to-video jobs (async on provider side)
     for (let i = 0; i < selectedImages.length; i++) {
       const image = selectedImages[i];
-      console.log(`[generate-video] 비디오 ${i + 1}/${selectedImages.length} 생성 시작: ${image.title || image.sceneNumber || ''}`);
+      console.log(
+        `[generate-video] 비디오 ${i + 1}/${selectedImages.length} 생성 시작: ${
+          image.title || image.sceneNumber || ''
+        }`
+      );
 
       try {
         if (!image.url) throw new Error('Image URL is required for video generation');
@@ -127,7 +131,7 @@ export default async function handler(req, res) {
       videoProject: {
         projectId,
         brandName: formData?.brandName || 'Unknown',
-        selectedStyle,
+        selectedStyle: selectedStyle,
         totalSegments: selectedImages.length,
         successfulSegments: videoSegments.length,
         failedSegments: failedSegments.length,
@@ -137,12 +141,12 @@ export default async function handler(req, res) {
         status:
           failedSegments.length === 0 && videoSegments.length === 0
             ? 'failed'
-            : 'in_progress', // 중요: 초기엔 in_progress로 유지
+            : 'in_progress', // 초기엔 in_progress
         createdAt: new Date().toISOString(),
       },
       videoSegments,
       failedSegments,
-      tasks, // 프론트는 이 배열로 /api/video-status를 폴링하면 됨
+      tasks, // 프론트는 이 배열로 /api/video-status를 폴링
       durationInfo: {
         requested: totalSeconds,
         actual: actualTotalDuration,
@@ -151,9 +155,10 @@ export default async function handler(req, res) {
       },
       compilationGuide: {
         tool: 'FFmpeg',
-        command: 'No completed videos available for compilation', // 초기엔 비어 있음
+        command:
+          'No completed videos available for compilation (server-side merge is handled by /api/compile-videos).',
         instruction:
-          'Status becomes completed asynchronously. Call /api/video-status with the provided tasks to get video URLs and an updated FFmpeg command.',
+          'Call /api/video-status to collect completed video URLs, then POST them to /api/compile-videos to get a merged video URL.',
         resolution: '1920x1080',
       },
       metadata: {
