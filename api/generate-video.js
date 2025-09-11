@@ -1,5 +1,36 @@
 // Generate videos from selected images via Freepik Image-to-Video API
-// Returns taskIds immediately. Frontend should poll /api/video-status to get playable video URLs.
+// Parallel dispatch with bounded concurrency, optional webhook, prompt clamp.
+
+function clampPrompt(s, max) {
+  if (!s) return '';
+  if (s.length <= max) return s;
+  return s.slice(0, max - 20) + '...';
+}
+
+function buildVideoPrompt(image, formData) {
+  const base = [
+    image.title ? `Title: ${image.title}` : null,
+    formData?.brandName ? `Brand: ${formData.brandName}` : null,
+    formData?.industryCategory ? `Category: ${formData.industryCategory}` : null,
+    'High-quality cinematic motion, gentle camera parallax, natural easing',
+    'Keep subject identity consistent across frames; avoid distortions',
+  ].filter(Boolean).join('. ');
+  return base + '. ' + (image.prompt || '');
+}
+
+async function runPool(items, limit, worker) {
+  const results = new Array(items.length);
+  let i = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const idx = i++;
+      if (idx >= items.length) break;
+      results[idx] = await worker(items[idx], idx);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
 
 export default async function handler(req, res) {
   // CORS
@@ -12,7 +43,13 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { selectedStyle, selectedImages, formData, targetTotalDuration } = req.body || {};
+    const {
+      selectedStyle,
+      selectedImages,
+      formData,
+      targetTotalDuration,
+      concurrency = 3, // new: bounded parallelism
+    } = req.body || {};
 
     if (!selectedStyle || !Array.isArray(selectedImages) || selectedImages.length === 0) {
       return res.status(400).json({ error: 'Selected style and images are required' });
@@ -22,42 +59,42 @@ export default async function handler(req, res) {
       process.env.FREEPIK_API_KEY ||
       process.env.REACT_APP_FREEPIK_API_KEY ||
       process.env.VITE_FREEPIK_API_KEY;
-
     if (!freepikApiKey) throw new Error('Freepik API key not found');
 
-    // Duration planning
+    const webhookUrl = process.env.FREEPIK_WEBHOOK_URL || null; // optional
+
+    // Freepik supports 6s or 10s only. We choose the lowest viable for throughput.
     const totalSeconds = parseInt(targetTotalDuration || formData?.videoLength || 30, 10);
     const imageCount = selectedImages.length;
-    const segmentDuration = Math.max(2, Math.floor(totalSeconds / imageCount)); // min 2s
+    const desiredPerSegment = Math.max(2, Math.floor(totalSeconds / imageCount));
+    const segmentDuration = desiredPerSegment >= 6 ? 10 : 6; // provider constraint
 
     console.log('[generate-video] 요청 수신', {
       style: selectedStyle,
       imageCount,
       targetDuration: totalSeconds,
-      perSegment: segmentDuration,
+      perSegmentDesired: desiredPerSegment,
+      providerSegment: segmentDuration,
       brandName: formData?.brandName,
+      concurrency,
+      webhookUrl: !!webhookUrl,
     });
 
     const videoSegments = [];
     const failedSegments = [];
 
-    // Kick off image-to-video jobs (async on provider side)
-    for (let i = 0; i < selectedImages.length; i++) {
-      const image = selectedImages[i];
-      console.log(
-        `[generate-video] 비디오 ${i + 1}/${selectedImages.length} 생성 시작: ${
-          image.title || image.sceneNumber || ''
-        }`
-      );
+    const tasksInput = selectedImages.map((image, i) => ({ image, i }));
 
+    await runPool(tasksInput, concurrency, async ({ image, i }) => {
       try {
         if (!image.url) throw new Error('Image URL is required for video generation');
-        const videoPromptRaw = generateVideoPrompt(image, formData);
-        const videoPrompt = clampPrompt(videoPromptRaw, 1900); // Freepik limit <= 2000
+
+        const videoPromptRaw = buildVideoPrompt(image, formData);
+        const videoPrompt = clampPrompt(videoPromptRaw, 1900);
 
         console.log('[generate-video] 프롬프트 길이:', {
           scene: image.sceneNumber || i + 1,
-          promptLength: videoPrompt.length
+          promptLength: videoPrompt.length,
         });
 
         const response = await fetch(
@@ -71,9 +108,8 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               prompt: videoPrompt,
               first_frame_image: image.url,
-              // Freepik supports 6s or 10s only
-              duration: segmentDuration >= 6 ? 10 : 6,
-              webhook_url: null,
+              duration: segmentDuration, // 6 or 10 only
+              webhook_url: webhookUrl,   // optional push
             }),
           }
         );
@@ -88,44 +124,36 @@ export default async function handler(req, res) {
         const taskId = result?.data?.task_id;
         if (!taskId) throw new Error('Invalid video generation response (no task_id)');
 
-        // Initially IN PROGRESS — videoUrl is not ready yet
-        videoSegments.push({
+        videoSegments[i] = {
           segmentId: `segment-${i + 1}`,
           sceneNumber: image.sceneNumber || i + 1,
-          originalImage: {
-            url: image.url,
-            title: image.title || null,
-          },
+          originalImage: { url: image.url, title: image.title || null },
           taskId,
           videoUrl: null,
           status: 'in_progress',
           duration: segmentDuration,
           prompt: videoPrompt,
           createdAt: new Date().toISOString(),
-        });
-
-        // slight delay to avoid rate limits
-        if (i < selectedImages.length - 1) {
-          await new Promise((r) => setTimeout(r, 1500));
-        }
+        };
       } catch (err) {
         console.error(`[generate-video] 비디오 ${i + 1} 생성 실패:`, err.message);
-        failedSegments.push({
+        failedSegments[i] = {
           segmentId: `segment-${i + 1}`,
           sceneNumber: i + 1,
           originalImage: selectedImages[i],
           error: err.message,
           status: 'failed',
           duration: segmentDuration,
-        });
+        };
       }
-    }
+    });
 
-    const actualTotalDuration = videoSegments.reduce((sum, s) => sum + s.duration, 0);
+    const okSegments = videoSegments.filter(Boolean);
+    const actualTotalDuration = okSegments.reduce((sum, s) => sum + s.duration, 0);
     const projectId = `project-${Date.now()}`;
 
-    // Return tasks to the client for polling via /api/video-status
-    const tasks = videoSegments.map((s) => ({
+    // Return tasks; frontend should poll only the ones not yet ready
+    const tasks = okSegments.map((s) => ({
       taskId: s.taskId,
       sceneNumber: s.sceneNumber,
       duration: s.duration,
@@ -137,148 +165,43 @@ export default async function handler(req, res) {
       videoProject: {
         projectId,
         brandName: formData?.brandName || 'Unknown',
-        selectedStyle: selectedStyle,
+        selectedStyle,
         totalSegments: selectedImages.length,
-        successfulSegments: videoSegments.length,
-        failedSegments: failedSegments.length,
+        successfulSegments: okSegments.length,
+        failedSegments: failedSegments.filter(Boolean).length,
         requestedDuration: totalSeconds,
         actualDuration: actualTotalDuration,
         segmentDuration,
         status:
-          failedSegments.length === 0 && videoSegments.length === 0
-            ? 'failed'
-            : 'in_progress', // 초기엔 in_progress
+          okSegments.length === 0 ? 'failed' : 'in_progress',
         createdAt: new Date().toISOString(),
       },
-      videoSegments,
-      failedSegments,
-      tasks, // 프론트는 이 배열로 /api/video-status를 폴링
+      videoSegments: okSegments,
+      failedSegments: failedSegments.filter(Boolean),
+      tasks,
       durationInfo: {
         requested: totalSeconds,
         actual: actualTotalDuration,
-        perSegment: segmentDuration,
+        perSegmentProvider: segmentDuration,
+        perSegmentDesired: desiredPerSegment,
         segments: selectedImages.length,
       },
-      compilationGuide: {
-        tool: 'FFmpeg',
-        command:
-          'Server-side merge is handled by /api/compile-videos.',
-        instruction:
-          'Call /api/video-status to collect completed video URLs, then POST them to /api/compile-videos to get a merged video URL.',
-        resolution: '1920x1080',
-      },
       metadata: {
-        apiProvider: 'Freepik',
-        model: 'minimax-hailuo-02-768p',
-        generatedAt: new Date().toISOString(),
-        note: 'Video generation is asynchronous. Poll /api/video-status with the task IDs.',
+        webhookEnabled: !!webhookUrl,
+        provider: 'freepik/minimax-hailuo-02-768p',
       },
     };
 
     console.log('[generate-video] 프로젝트 생성 완료', {
       projectId,
-      총세그먼트: responsePayload.videoProject.totalSegments,
-      성공요청수: responsePayload.videoProject.successfulSegments,
-      실패요청수: responsePayload.videoProject.failedSegments,
+      총세그먼트: selectedImages.length,
+      성공요청수: okSegments.length,
+      실패요청수: failedSegments.filter(Boolean).length,
     });
 
-    res.status(200).json(responsePayload);
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[generate-video] 전체 오류:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
-}
-
-/**
- * Build a motion-oriented prompt for image-to-video.
- * Note: We keep it concise and clamp under API limit.
- */
-function generateVideoPrompt(image, formData) {
-  const baseRaw = String(image.prompt || image.title || 'commercial advertisement scene');
-  const basePrompt = baseRaw.slice(0, 800); // base 자체가 너무 길면 1차 컷
-
-  const motionKeywords = [
-    'smooth camera movement',
-    'professional cinematography',
-    'commercial video style',
-    'high quality motion',
-    'brand commercial',
-  ];
-
-  const brandElements = [];
-  if (formData?.brandName) brandElements.push(formData.brandName);
-  if (formData?.industryCategory) brandElements.push(formData.industryCategory);
-
-  let styleKeywords = [];
-  if (formData?.videoPurpose === '브랜드 인지도 강화') {
-    styleKeywords = ['memorable', 'impactful', 'brand focused'];
-  } else if (formData?.videoPurpose === '구매 전환') {
-    styleKeywords = ['persuasive', 'product focused', 'call to action'];
-  } else if (formData?.videoPurpose === '신제품 출시') {
-    styleKeywords = ['innovative', 'new', 'exciting reveal'];
-  }
-
-  const totalDuration = parseInt(formData?.videoLength || 30, 10);
-  let pacingKeywords = [];
-  if (totalDuration <= 15) pacingKeywords = ['fast paced', 'quick cuts', 'dynamic'];
-  else if (totalDuration <= 30) pacingKeywords = ['medium paced', 'smooth transitions'];
-  else pacingKeywords = ['slow paced', 'cinematic', 'detailed'];
-
-  // 중복 제거 후, 순차 누적해서 2000자 이하가 되도록 빌드
-  const unique = (arr) => {
-    const seen = new Set();
-    return arr.filter((x) => {
-      const k = x.toLowerCase().trim();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-  };
-
-  const parts = unique([
-    basePrompt,
-    ...motionKeywords,
-    ...brandElements,
-    ...styleKeywords,
-    ...pacingKeywords,
-    `${formData?.videoLength || '30'}s commercial advertisement`,
-    'no text overlay',
-    'professional lighting',
-    '1920x1080 resolution',
-  ]);
-
-  return joinUntil(parts, 1900); // 최종 클램프
-}
-
-/**
- * Join array with ", " until reaching maxLen
- */
-function joinUntil(parts, maxLen) {
-  const sep = ', ';
-  let out = '';
-  for (let i = 0; i < parts.length; i++) {
-    const piece = String(parts[i]).trim();
-    if (!piece) continue;
-    const tryAdd = out ? out + sep + piece : piece;
-    if (tryAdd.length > maxLen) break;
-    out = tryAdd;
-  }
-  return out;
-}
-
-/**
- * Clamp raw prompt as last safety
- */
-function clampPrompt(text, maxLen) {
-  if (!text) return '';
-  if (text.length <= maxLen) return text;
-  // 우선 쉼표 단위로 줄이고, 그래도 길면 하드컷
-  const parts = text.split(',');
-  let out = joinUntil(parts.map((s) => s.trim()), maxLen);
-  if (out.length > maxLen) out = out.slice(0, maxLen);
-  return out;
 }
