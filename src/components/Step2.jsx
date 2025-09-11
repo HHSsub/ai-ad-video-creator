@@ -16,7 +16,6 @@ const Spinner = () => (
 );
 
 const PLACEHOLDERS = [
-  // via.placeholder.com 일부 환경 문제 → placehold.co 사용
   `https://placehold.co/800x450/3B82F6/FFFFFF?text=${encodeURIComponent('Business Professional')}`,
   `https://placehold.co/800x450/10B981/FFFFFF?text=${encodeURIComponent('Product Showcase')}`,
   `https://placehold.co/800x450/F59E0B/FFFFFF?text=${encodeURIComponent('Lifestyle Scene')}`,
@@ -111,12 +110,12 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       });
       updatePhase('generating', 10);
 
-      // 2) 이미지 생성: styleName 필수
+      // 2) 이미지 생성
       const promptsToUse = imagePrompts.slice(0, imageCountPerStyle);
       const totalImages = styles.length * promptsToUse.length;
       let produced = 0;
 
-      const storyboard = [];
+      const storyboardArray = [];
 
       for (const style of styles) {
         const tasks = promptsToUse.map((p, idx) => async () => {
@@ -141,7 +140,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             }
 
             if (!url) {
-              // 실패 시 플레이스홀더
               url = PLACEHOLDERS[idx % PLACEHOLDERS.length];
             }
 
@@ -158,17 +156,17 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               duration: p?.duration,
               sceneNumber: p?.sceneNumber || idx + 1
             };
-          } catch (e) {
+          } catch (_e) {
             produced++;
             const pctCore = 10 + (produced / totalImages) * 80;
             updatePhase('generating', pctCore);
 
-            // 완전 실패 시에도 플레이스홀더
+            const ph = PLACEHOLDERS[idx % PLACEHOLDERS.length];
             return {
               id: `${style.name.toLowerCase().replace(/\s+/g, '-')}-${idx + 1}`,
               title: p?.title || `Scene ${p?.sceneNumber || idx + 1}`,
-              url: PLACEHOLDERS[idx % PLACEHOLDERS.length],
-              thumbnail: PLACEHOLDERS[idx % PLACEHOLDERS.length],
+              url: ph,
+              thumbnail: ph,
               prompt: `${p?.prompt || ''}, ${style.description}`,
               duration: p?.duration,
               sceneNumber: p?.sceneNumber || idx + 1
@@ -176,10 +174,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           }
         });
 
-        const images = await runWithConcurrency(tasks, 3, () => {}); // 동시 3개
+        const images = await runWithConcurrency(tasks, 3, () => {});
         images.sort((a, b) => (a.sceneNumber || 0) - (b.sceneNumber || 0));
 
-        storyboard.push({
+        storyboardArray.push({
           style: style.name,
           description: style.description,
           colorPalette: style.colorPalette,
@@ -189,24 +187,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         });
       }
 
-      // 최종 결과 반영
-      setStoryboard?.({
-        success: true,
-        creativeBrief: initData.creativeBrief,
-        storyboardConcepts: initData.storyboardConcepts,
-        imagePrompts: promptsToUse,
-        storyboard,
-        metadata: {
-          ...(initData?.metadata || {}),
-          successCount: storyboard.filter(s => s.status === 'success').length,
-          fallbackCount: storyboard.filter(s => s.status === 'fallback').length,
-          processSteps: 4
-        }
-      });
+      // ▶ Step3가 기대하는 형태(배열)만 set: .map 에러 원인 제거
+      setStoryboard?.(storyboardArray);
 
       updatePhase('done', 100);
-
-      // 생성 완료 후 바로 다음 단계로 이동
       onNext?.();
     } catch (e) {
       console.error('스토리보드 생성 오류:', e);
@@ -219,7 +203,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
   return (
     <div className="w-full">
-      {/* 상단 헤더/설명 */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold">2단계: 스토리보드 생성</h2>
         <p className="text-gray-600 mt-1">
@@ -227,7 +210,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </p>
       </div>
 
-      {/* 디버그 정보 */}
       {debugInfo && (
         <div className="mb-4 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded p-3">
           <div>스타일 개수: {debugInfo.totalStyles}</div>
@@ -236,14 +218,12 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </div>
       )}
 
-      {/* 에러 알림 */}
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded p-3">
           {error}
         </div>
       )}
 
-      {/* 진행 바 */}
       <div className="w-full h-2 bg-gray-200 rounded overflow-hidden mb-4">
         <div
           className="h-2 bg-blue-600 transition-all duration-300"
@@ -251,7 +231,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         />
       </div>
 
-      {/* 액션 버튼 */}
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -284,7 +263,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </button>
       </div>
 
-      {/* 전체 화면 오버레이(생성 중) */}
       {(isBusy) && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
