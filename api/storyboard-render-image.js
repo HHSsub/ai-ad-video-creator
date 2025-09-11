@@ -1,5 +1,4 @@
 // Freepik 1장 생성 전용 엔드포인트 (원본 단일 이미지 로직 그대로 복제)
-// 스타일/이미지 개수/lengthMap 등 기존 설정은 변경하지 않음.
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,11 +16,9 @@ export default async function handler(req, res) {
     const { prompt, styleName, sceneNumber, title } = req.body || {};
     if (!prompt || !styleName) return res.status(400).json({ error: 'prompt and styleName are required' });
 
-    // Freepik API 키 확인 (원본과 동일 키 탐색)
     const freepikApiKey = process.env.FREEPIK_API_KEY || process.env.REACT_APP_FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
     if (!freepikApiKey) throw new Error('Freepik API key not found');
 
-    // 원본 styles 그대로
     const styles = [
       { name: 'Cinematic Professional', description: 'cinematic professional shot dramatic lighting high detail 8k corporate' },
       { name: 'Modern Minimalist',      description: 'minimalist modern clean background simple composition contemporary'   },
@@ -54,7 +51,6 @@ export default async function handler(req, res) {
   }
 }
 
-// 원본과 동일한 단일 이미지 생성/폴링
 async function generateSingleImageWithFreepik(prompt, apiKey) {
   try {
     const cleanPrompt = prompt
@@ -122,7 +118,6 @@ async function pollForImageResultOptimized(taskId, apiKey) {
       if (!response.ok) {
         console.error(`폴링 실패 (${response.status}):`, await response.text());
         if (response.status === 500) {
-          console.log('500 에러 - 더 긴 대기 후 재시도');
           await new Promise(resolve => setTimeout(resolve, interval * 2));
           continue;
         }
@@ -138,7 +133,6 @@ async function pollForImageResultOptimized(taskId, apiKey) {
           imageUrl = result.data.generated[0];
         }
         if (imageUrl && typeof imageUrl === 'string') {
-          console.log('이미지 생성 완료!');
           return imageUrl;
         } else {
           await new Promise(resolve => setTimeout(resolve, 2000));
