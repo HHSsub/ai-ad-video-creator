@@ -58,3 +58,11 @@ For each scene, you must provide a detailed image prompt.
 ##Storyboard Image Prompts
 ### Scene 1 (0:00-0:02)
 - **Image Prompt**: Camera: Canon EOS R5, 50mm lens, medium shot, eye-level. A young female mage, Middle Eastern-inspired, oval face with defined cheekbones, focused and determined expression, long flowing silver hair, wearing intricately embroidered flowing robes. She is holding a glowing, intricately carved staff diagonally across her body, with her head slightly turned to the left. Environment: A vast, sun-drenched desert ruin with crumbling sandstone pillars. Detail Level: insanely detailed, micro-details, visible skin pores, stitching on the robes, cracks on the stone platform. Lighting: Golden hour cinematic light with long shadows. Color: Warm golds, oranges, and deep browns. Style: Cinematic and Story-Driven, photorealistic, sharp focus
+
+(Repeat the exact Scene block pattern shown above to produce Scenes 2 through Scene {{scene_count}} inclusive. 
+Rules:
+- EXACT total scenes: {{scene_count}} (Scene 1 ... Scene {{scene_count}})
+- Each scene duration: 2 seconds
+- Timecodes must increment sequentially with no gaps or overlap (e.g., Scene n starts where Scene n-1 ended)
+- Do NOT output more than {{scene_count}} scenes
+- Keep the formatting strictly: "### Scene X (MM:SS-MM:SS)" then a single "- **Image Prompt**: ..." line.)
