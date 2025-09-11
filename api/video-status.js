@@ -1,6 +1,7 @@
 // Check Freepik Image-to-Video task statuses.
-// Input: { tasks: [{taskId, sceneNumber, duration, title}], compile?: boolean }
-// Output: segments with status/videoUrl, and an FFmpeg command to merge completed ones.
+// Input: { tasks: [{taskId, sceneNumber, duration, title}] }
+// Output: segments with status/videoUrl.
+// Use this to enable per-segment <video> playback once completed.
 
 export default async function handler(req, res) {
   // CORS
@@ -13,7 +14,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { tasks, compile } = req.body || {};
+    const { tasks } = req.body || {};
     if (!Array.isArray(tasks) || tasks.length === 0) {
       return res.status(400).json({ error: 'tasks array is required' });
     }
@@ -112,8 +113,6 @@ export default async function handler(req, res) {
     const failed = checked.filter((s) => s.status === 'failed' || s.status === 'error');
     const inProgress = checked.filter((s) => s.status === 'in_progress' || s.status === 'unknown');
 
-    const ffmpeg = generateFFmpegCommandFromUrls(completed);
-
     const payload = {
       success: true,
       summary: {
@@ -122,50 +121,12 @@ export default async function handler(req, res) {
         inProgress: inProgress.length,
         failed: failed.length,
       },
-      segments: checked,
-      compilationGuide: {
-        ready: completed.length > 0,
-        command: ffmpeg,
-        note:
-          completed.length === 0
-            ? 'No completed videos available for compilation yet.'
-            : 'Download the listed segments then run the FFmpeg command to merge.',
-      },
+      segments: checked, // 프론트는 여기 videoUrl로 카드별 재생 버튼 활성화
     };
-
-    // Optionally, you can add server-side merge later (requires ffmpeg & storage route)
-    // if (compile === true) { ... }
 
     return res.status(200).json(payload);
   } catch (error) {
     console.error('[video-status] 전체 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-}
-
-/**
- * Build a practical FFmpeg command:
- * 1) Download completed URLs to local files
- * 2) Concatenate into final_video.mp4 (video-only)
- */
-function generateFFmpegCommandFromUrls(completedSegments) {
-  if (!Array.isArray(completedSegments) || completedSegments.length === 0) {
-    return 'No completed videos available for compilation';
-  }
-
-  // 1) Download commands (curl)
-  const downloads = completedSegments
-    .map((s, i) => `curl -L "${s.videoUrl}" -o segment_${i + 1}.mp4`)
-    .join(' && ');
-
-  // 2) Inputs for FFmpeg
-  const inputs = completedSegments
-    .map((_, i) => `-i "segment_${i + 1}.mp4"`)
-    .join(' ');
-
-  // 3) Use concat filtergraph (video-only)
-  const vInputs = completedSegments.map((_, i) => `[${i}:v]`).join('');
-  const filter = `${vInputs}concat=n=${completedSegments.length}:v=1:a=0[outv]`;
-
-  return `${downloads} && ffmpeg ${inputs} -filter_complex "${filter}" -map "[outv]" -c:v libx264 -preset medium -crf 23 final_video.mp4`;
 }
