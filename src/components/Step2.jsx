@@ -118,6 +118,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
       for (const style of styles) {
         const images = [];
+        let localDone = 0;
+
         const tasks = promptsToUse.map((p, idx) => async () => {
           const promptToSend = p.prompt;
 
@@ -136,6 +138,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             if (!res.ok) {
               const txt = await res.text().catch(() => '');
               setImagesFail((f) => f + 1);
+              localDone++;
+              const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
+              setPercent(cur);
               log(`이미지 생성 실패: [${style.name}] Scene ${p.sceneNumber} - ${res.status} ${txt}`);
               return;
             }
@@ -151,22 +156,21 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               sceneNumber: p.sceneNumber,
             });
             setImagesDone((d) => d + 1);
-
-            // 진행률 반영: 스토리보드(20%) + 이미지(80%)
-            const doneNow = (prev => prev); // dummy for readability
-            const currentDone = (imagesDone + 1);
-            const cur = Math.min(100, Math.round(20 + (currentDone + imagesFail) / totalImages * 80));
+            localDone++;
+            const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
             setPercent(cur);
             log(`이미지 생성 완료: [${style.name}] Scene ${p.sceneNumber} -> ${data.url}`);
           } catch (e) {
             setImagesFail((f) => f + 1);
+            localDone++;
+            const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
+            setPercent(cur);
             log(`이미지 생성 예외: [${style.name}] Scene ${p.sceneNumber} - ${e?.message || e}`);
           }
         });
 
         await runWithConcurrency(tasks, 4, (done, total) => {
-          const frac = (done + imagesDone + imagesFail) / totalImages;
-          const cur = Math.min(100, Math.round(20 + frac * 80));
+          const cur = Math.min(100, Math.round(20 + ((imagesDone + imagesFail + done) / totalImages) * 80));
           setPercent(cur);
         });
 
@@ -196,7 +200,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       });
 
       setIsLoading?.(false);
-      setTimeout(() => setLogs((prev) => [...prev, '완료']), 0);
       onNext?.();
     } catch (e) {
       console.error('Step2 오류:', e);
@@ -230,7 +233,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-700 rounded p-3 text-sm">
             스타일 수: {debugInfo.stylesCount} · 스타일당 장면 수: {debugInfo.perStyleScenes} · 전체 이미지: {imagesTotal}
             <br />
-            진행: 성공 {imagesDone} · 실패 {imagesFail}
+            진행(실시간): 성공 {imagesDone} · 실패 {imagesFail}
           </div>
         )}
 
