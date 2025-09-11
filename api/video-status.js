@@ -1,7 +1,5 @@
-// Check Freepik Image-to-Video task statuses.
-// Input: { tasks: [{taskId, sceneNumber, duration, title}] }
-// Output: segments with status/videoUrl.
-// Use this to enable per-segment <video> playback once completed.
+// Check Freepik Image-to-Video task statuses with simple in-memory cache.
+const TASK_CACHE = new Map(); // taskId -> { status, videoUrl, sceneNumber, updatedAt }
 
 export default async function handler(req, res) {
   // CORS
@@ -41,6 +39,9 @@ export default async function handler(req, res) {
         continue;
       }
 
+      // 기본 캐시
+      const cached = TASK_CACHE.get(taskId);
+
       try {
         const r = await fetch(
           `https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p/${taskId}`,
@@ -54,6 +55,19 @@ export default async function handler(req, res) {
         );
 
         if (!r.ok) {
+          // 5xx면 캐시가 있으면 캐시로 대체해 플럭추에이션 완화
+          if (r.status >= 500 && cached) {
+            checked.push({
+              sceneNumber: cached.sceneNumber ?? t?.sceneNumber ?? null,
+              title: t?.title ?? null,
+              taskId,
+              status: cached.status,
+              videoUrl: cached.videoUrl ?? null,
+              duration: t?.duration ?? null,
+              providerStatus: 'CACHED_AFTER_5XX',
+            });
+            continue;
+          }
           const text = await r.text();
           console.error(`[video-status] status check ${taskId} 실패 (${r.status}):`, text);
           checked.push({
@@ -86,7 +100,7 @@ export default async function handler(req, res) {
             ? json.data.result[0].duration
             : t?.duration ?? null;
 
-        checked.push({
+        const item = {
           sceneNumber: t?.sceneNumber ?? null,
           title: t?.title ?? null,
           taskId,
@@ -94,34 +108,59 @@ export default async function handler(req, res) {
           videoUrl,
           duration,
           providerStatus,
+        };
+
+        // 캐시 업데이트
+        TASK_CACHE.set(taskId, {
+          status: item.status,
+          videoUrl: item.videoUrl,
+          sceneNumber: item.sceneNumber,
+          updatedAt: Date.now(),
         });
+
+        checked.push(item);
       } catch (err) {
         console.error(`[video-status] status check ${taskId} 예외:`, err.message);
-        checked.push({
-          sceneNumber: t?.sceneNumber ?? null,
-          title: t?.title ?? null,
-          taskId,
-          status: 'error',
-          videoUrl: null,
-          duration: t?.duration ?? null,
-          error: err.message,
-        });
+        if (cached) {
+          checked.push({
+            sceneNumber: cached.sceneNumber ?? t?.sceneNumber ?? null,
+            title: t?.title ?? null,
+            taskId,
+            status: cached.status,
+            videoUrl: cached.videoUrl ?? null,
+            duration: t?.duration ?? null,
+            providerStatus: 'CACHED_AFTER_EXCEPTION',
+          });
+        } else {
+          checked.push({
+            sceneNumber: t?.sceneNumber ?? null,
+            title: t?.title ?? null,
+            taskId,
+            status: 'error',
+            videoUrl: null,
+            duration: t?.duration ?? null,
+            error: err.message,
+          });
+        }
       }
     }
 
-    const completed = checked.filter((s) => s.status === 'completed' && s.videoUrl);
-    const failed = checked.filter((s) => s.status === 'failed' || s.status === 'error');
-    const inProgress = checked.filter((s) => s.status === 'in_progress' || s.status === 'unknown');
+    const completedByStatus = checked.filter((s) => s.status === 'completed').length;
+    const ready = checked.filter((s) => s.status === 'completed' && s.videoUrl).length;
+    const failed = checked.filter((s) => s.status === 'failed' || s.status === 'error').length;
+    const inProgress = checked.filter((s) => s.status === 'in_progress' || s.status === 'unknown').length;
 
     const payload = {
       success: true,
       summary: {
         total: checked.length,
-        completed: completed.length,
-        inProgress: inProgress.length,
-        failed: failed.length,
+        completed: ready,             // 하위호환: 기존 completed는 "URL까지 준비된" 개수
+        completedByStatus,            // 추가: 상태 기준 완료
+        ready,                        // 추가: URL까지 준비된 개수
+        inProgress,
+        failed,
       },
-      segments: checked, // 프론트는 여기 videoUrl로 카드별 재생 버튼 활성화
+      segments: checked,
     };
 
     return res.status(200).json(payload);
