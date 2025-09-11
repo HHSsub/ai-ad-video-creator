@@ -7,70 +7,52 @@ function setCors(res) {
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
-// Gemini 견고 재시도(지수 백오프+지터, 폴백 모델 옵션)
+// 다중 모델 체인(기본 + 폴백들)으로 견고 재시도
 async function callGeminiWithRetry(getModel, prompt, stepLabel) {
   const delays = [2000, 4000, 8000, 16000, 16000, 16000, 16000, 16000]; // 최대 8회
   const maxAttempts = delays.length;
 
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
-  const fallbackModel = process.env.FALLBACK_GEMINI_MODEL || '';
+  const primary = (process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite').trim();
+  const fallbacks = (process.env.FALLBACK_GEMINI_MODELS || process.env.FALLBACK_GEMINI_MODEL || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const modelsToTry = [primary, ...fallbacks];
 
   let lastError;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      console.log(`${stepLabel} Gemini API 시도 ${attempt}/${maxAttempts}... (model=${primaryModel})`);
-      const model = getModel(primaryModel);
-      const result = await model.generateContent(prompt);
-      return result.response.text();
-    } catch (e) {
-      lastError = e;
-      const msg = e?.message || '';
-      const status = e?.status;
-      console.error(`${stepLabel} Gemini API 시도 ${attempt} 실패:`, msg);
-
-      if (status === 503 || msg.includes('overloaded') || msg.includes('Service Unavailable')) {
-        if (attempt < maxAttempts) {
-          const jitter = Math.floor(Math.random() * 1000);
-          const wait = delays[attempt - 1] + jitter;
-          console.log(`모델 과부하 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
-          await new Promise(r => setTimeout(r, wait));
-          continue;
-        }
-      }
-      break;
-    }
-  }
-
-  if (fallbackModel) {
-    console.warn(`${stepLabel}: 기본 모델 실패. 폴백 모델 시도(model=${fallbackModel})`);
+  for (const modelName of modelsToTry) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        console.log(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt}/${maxAttempts}... (model=${fallbackModel})`);
-        const model = getModel(fallbackModel);
+        console.log(`${stepLabel} Gemini API 시도 ${attempt}/${maxAttempts}... (model=${modelName})`);
+        const model = getModel(modelName);
         const result = await model.generateContent(prompt);
         return result.response.text();
       } catch (e) {
         lastError = e;
         const msg = e?.message || '';
         const status = e?.status;
-        console.error(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt} 실패:`, msg);
+        console.error(`${stepLabel} Gemini API 시도 ${attempt} 실패 (model=${modelName}):`, msg);
 
-        if (status === 503 || msg.includes('overloaded') || msg.includes('Service Unavailable')) {
+        // 과부하/레이트리밋 재시도
+        if (status === 503 || status === 429 || msg.includes('overloaded') || msg.includes('Service Unavailable') || msg.match(/rate/i)) {
           if (attempt < maxAttempts) {
             const jitter = Math.floor(Math.random() * 1000);
             const wait = delays[attempt - 1] + jitter;
-            console.log(`모델 과부하 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
+            console.log(`모델 과부하/제한 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
             await new Promise(r => setTimeout(r, wait));
             continue;
           }
         }
+        // 그 외 오류는 다음 모델로 폴백
         break;
       }
     }
+    console.warn(`${stepLabel}: 모델 실패, 다음 폴백 모델 시도 -> ${modelsToTry[modelsToTry.indexOf(modelName) + 1] || '(없음)'}`);
   }
 
-  throw new Error(`${stepLabel}: Gemini API 최대 재시도 초과${fallbackModel ? ' (폴백 포함)' : ''} - ${lastError?.message || 'unknown error'}`);
+  throw new Error(`${stepLabel}: Gemini API 최대 재시도 초과(모든 폴백 포함) - ${lastError?.message || 'unknown error'}`);
 }
 
 export default async function handler(req, res) {
@@ -93,7 +75,6 @@ export default async function handler(req, res) {
     const imagePromptsText = await callGeminiWithRetry(getModel, buildImagePromptsPrompt(storyboardConcepts, formData), '3단계');
     const imagePrompts = extractImagePromptsFromResponse(imagePromptsText);
 
-    // 원본 styles(불변)
     const styles = [
       { name: 'Cinematic Professional', description: 'cinematic professional shot dramatic lighting high detail 8k corporate', colorPalette: '#1a365d,#2d3748,#4a5568,#e2e8f0' },
       { name: 'Modern Minimalist',      description: 'minimalist modern clean background simple composition contemporary',   colorPalette: '#ffffff,#f7fafc,#e2e8f0,#cbd5e0' },
@@ -117,8 +98,7 @@ export default async function handler(req, res) {
         videoPurpose: formData.videoPurpose,
         createdAt: new Date().toISOString(),
         totalStyles: styles.length,
-        geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
-        fallbackGeminiModel: process.env.FALLBACK_GEMINI_MODEL || '',
+        geminiModelChain: [process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite', ...(process.env.FALLBACK_GEMINI_MODELS ? process.env.FALLBACK_GEMINI_MODELS.split(',').map(s=>s.trim()).filter(Boolean) : (process.env.FALLBACK_GEMINI_MODEL ? [process.env.FALLBACK_GEMINI_MODEL] : []))],
         processSteps: 3,
         imageCountPerStyle: imageCount
       }
