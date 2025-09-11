@@ -1,20 +1,28 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
   // 방어: 배열/객체 모두 지원
   const styles = Array.isArray(storyboard) ? storyboard : (storyboard?.storyboard ?? []);
-  const [overallPercent, setOverallPercent] = useState(0);
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
   const [videoProject, setVideoProject] = useState(null);
+
+  // 진행 관련
   const [videoProgress, setVideoProgress] = useState({}); // sceneNumber -> status
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [videoError, setVideoError] = useState(null);
+
+  // 퍼센트/카운트
   const [totalSegments, setTotalSegments] = useState(0);
-  const [completedSegments, setCompletedSegments] = useState(0);
-  
+  const [completedByStatus, setCompletedByStatus] = useState(0); // status 기준 완료
+  const [readyWithUrl, setReadyWithUrl] = useState(0); // videoUrl까지 확보된 개수
+  const [overallPercent, setOverallPercent] = useState(0); // status 기준 퍼센트
+
+  // 100% 이후 유예타이머
+  const [allCompletedAt, setAllCompletedAt] = useState(null); // Date | null
+
   useEffect(() => {
     if (selectedStyle && selectedStyle.images) {
       setSelectedImages(selectedStyle.images);
@@ -22,11 +30,13 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
   }, [selectedStyle]);
 
   const handleStyleSelect = (styleData) => {
+    if (isGeneratingVideo) return;
     setSelectedStyle(styleData);
     setSelectedImages(styleData.images || []);
   };
 
   const handleImageToggle = (imageId) => {
+    if (isGeneratingVideo) return;
     setSelectedImages(prev => {
       if (prev.some(img => img.id === imageId)) {
         return prev.filter(img => img.id !== imageId);
@@ -52,7 +62,10 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
     setVideoError(null);
     setVideoProgress({});
     setTotalSegments(selectedImages.length);
-    setCompletedSegments(0);
+    setCompletedByStatus(0);
+    setReadyWithUrl(0);
+    setOverallPercent(0);
+    setAllCompletedAt(null);
 
     try {
       const response = await fetch(`${API_BASE}/api/generate-video`, {
@@ -71,16 +84,20 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
       }
 
       const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.error || '영상 생성에 실패했습니다.');
+      if (!data.success) throw new Error(data.error || '영상 생성에 실패했습니다.');
+
+      setVideoProject(data?.videoProject || null);
+
+      const segments = Array.isArray(data.videoSegments) ? data.videoSegments : [];
+      if (segments.length === 0) {
+        setIsGeneratingVideo(false);
+        setIsLoading?.(false);
+        setVideoError('생성 요청은 성공했지만 세그먼트가 비었습니다.');
+        return;
       }
 
-      setVideoProject(data);
-
-      if (data.videoSegments && data.videoSegments.length > 0) {
-        setTotalSegments(data.videoSegments.length);
-        startVideoPolling(data.videoSegments);
-      }
+      setTotalSegments(segments.length);
+      startVideoPolling(segments);
     } catch (error) {
       console.error('영상 생성 실패:', error);
       setVideoError(error.message);
@@ -89,93 +106,109 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
     }
   };
 
-  // 기존 startVideoPolling 함수 전체 교체
   const startVideoPolling = async (videoSegments) => {
-  // 서버 요구 스펙: tasks 배열
-  const tasks = (videoSegments || [])
-    .filter(segment => segment?.taskId)
-    .map(segment => ({
-      taskId: segment.taskId,
-      sceneNumber: segment.sceneNumber,
-      duration: segment.duration,
-      title: segment.originalImage?.title || `Segment ${segment.sceneNumber}`
-    }));
+    const tasks = (videoSegments || [])
+      .filter(segment => segment?.taskId)
+      .map(segment => ({
+        taskId: segment.taskId,
+        sceneNumber: segment.sceneNumber,
+        duration: segment.duration,
+        title: segment.originalImage?.title || `Segment ${segment.sceneNumber}`
+      }));
 
-  if (tasks.length === 0) {
-    console.log('폴링할 task가 없습니다.');
-    setIsGeneratingVideo(false);
-    setIsLoading?.(false);
-    return;
-  }
-
-  // 총 세그먼트 수
-  setTotalSegments(tasks.length);
-
-  let pollTimer = null;
-
-  const tick = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/video-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tasks }) // ▶ 핵심: { tasks } 로 보냄
-      });
-
-      if (!response.ok) {
-        const txt = await response.text().catch(() => '');
-        console.warn('비디오 상태 조회 실패:', response.status, txt);
-        return;
-      }
-
-      const result = await response.json();
-      const segments = Array.isArray(result?.segments) ? result.segments : [];
-
-      // 씬별 상태 맵
-      const map = {};
-      let completedCount = 0;
-      for (const s of segments) {
-        map[s.sceneNumber] = s.status;
-        if (s.status === 'completed' && s.videoUrl) completedCount++;
-      }
-      setVideoProgress(map);
-
-      // 진행률 계산
-      const total = result?.summary?.total ?? tasks.length;
-      const completed = result?.summary?.completed ?? completedCount;
-      setCompletedSegments(completed);
-      const pct = total ? Math.round((completed / total) * 100) : 0;
-      setOverallPercent(pct);
-
-      // 모두 완료되면 종료
-      if (completed === total) {
-        clearInterval(pollTimer);
-        setIsGeneratingVideo(false);
-        setIsLoading?.(false);
-      }
-    } catch (e) {
-      console.warn('폴링 예외:', e?.message || e);
+    if (tasks.length === 0) {
+      console.log('폴링할 task가 없습니다.');
+      setIsGeneratingVideo(false);
+      setIsLoading?.(false);
+      return;
     }
+
+    setTotalSegments(tasks.length);
+
+    let pollTimer = null;
+    let completedStatusMarked = false; // 전체 completed(상태 기준) 최초 도달 시점 마킹
+
+    const tick = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/video-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tasks }) // 반드시 { tasks }
+        });
+
+        if (!response.ok) {
+          const txt = await response.text().catch(() => '');
+          console.warn('비디오 상태 조회 실패:', response.status, txt);
+          return;
+        }
+
+        const result = await response.json();
+        const segments = Array.isArray(result?.segments) ? result.segments : [];
+
+        // 씬 상태 맵
+        const map = {};
+        let byStatus = 0;
+        let withUrl = 0;
+
+        for (const s of segments) {
+          const status = String(s.status || '').toLowerCase();
+          map[s.sceneNumber] = status;
+          if (status === 'completed') {
+            byStatus++;
+            if (s.videoUrl) withUrl++;
+          }
+        }
+
+        setVideoProgress(map);
+        setCompletedByStatus(byStatus);
+        setReadyWithUrl(withUrl);
+
+        const total = result?.summary?.total ?? tasks.length;
+        const pct = total ? Math.round((byStatus / total) * 100) : 0;
+        setOverallPercent(pct);
+
+        // 전체 완료(상태 기준) 시점 기록
+        if (!completedStatusMarked && byStatus === total) {
+          completedStatusMarked = true;
+          setAllCompletedAt(Date.now());
+        }
+
+        // 종료 조건:
+        // 1) 상태 기준으로 모두 완료 AND (모두 URL 준비됨 OR 90초 유예 경과)
+        const graceMs = 90_000;
+        const allDoneByStatus = byStatus === total;
+        const allReady = withUrl === total;
+        const gracePassed = allDoneByStatus && allCompletedAt && Date.now() - allCompletedAt >= graceMs;
+
+        if (allDoneByStatus && (allReady || gracePassed)) {
+          clearInterval(pollTimer);
+          setIsGeneratingVideo(false);
+          setIsLoading?.(false);
+        }
+      } catch (e) {
+        console.warn('폴링 예외:', e?.message || e);
+      }
+    };
+
+    await tick();
+    // 5초 간격(부하 완화)
+    pollTimer = setInterval(tick, 5000);
+
+    // 10분 타임아웃(보호)
+    setTimeout(() => {
+      if (pollTimer) clearInterval(pollTimer);
+      setIsGeneratingVideo(false);
+      setIsLoading?.(false);
+      console.log('폴링 타임아웃');
+    }, 10 * 60 * 1000);
   };
-
-  // 즉시 1회 실행 후 3초마다 폴링
-  await tick();
-  pollTimer = setInterval(tick, 3000);
-
-  // 10분 타임아웃
-  setTimeout(() => {
-    if (pollTimer) clearInterval(pollTimer);
-    setIsGeneratingVideo(false);
-    setIsLoading?.(false);
-    console.log('폴링 타임아웃');
-  }, 10 * 60 * 1000);
-};
 
   const isBusy = isGeneratingVideo || isLoading;
   const noData = !Array.isArray(styles) || styles.length === 0;
 
   return (
     <div className="max-w-7xl mx-auto p-6 relative">
-      {/* 제작 중 오버레이: 전체 차단 + 진행률 */}
+      {/* 제작 중 오버레이 */}
       {isBusy && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center">
           <div className="w-full max-w-lg bg-white/10 rounded p-6 text-white">
@@ -183,6 +216,7 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white" />
             </div>
             <h3 className="text-center text-lg mt-4">영상 제작 중입니다...</h3>
+
             <div className="mt-4">
               <div className="flex justify-between text-sm text-white/80 mb-1">
                 <span>전체 진행률</span>
@@ -194,16 +228,19 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
                   style={{ width: `${overallPercent}%` }}
                 />
               </div>
-              {/* 간단한 씬 상태 */}
-              {Object.keys(videoProgress).length > 0 && (
-                <div className="mt-3 text-sm text-white/80 max-h-48 overflow-auto">
-                  {Object.entries(videoProgress).map(([scene, status]) => (
-                    <div key={scene}>씬 {scene}: {status}</div>
-                  ))}
-                </div>
-              )}
+
+              {/* 간단한 씬 상태 + URL 준비 현황 */}
+              <div className="mt-3 text-sm text-white/80 max-h-48 overflow-auto">
+                <div className="mb-1">상태 완료: {completedByStatus}/{totalSegments} · URL 준비: {readyWithUrl}/{totalSegments}</div>
+                {Object.entries(videoProgress).map(([scene, status]) => (
+                  <div key={scene}>씬 {scene}: {status}</div>
+                ))}
+              </div>
             </div>
-            <p className="mt-4 text-center text-white/80 text-sm">브라우저를 닫지 마세요.</p>
+
+            <p className="mt-4 text-center text-white/80 text-sm">
+              브라우저를 닫지 마세요.
+            </p>
           </div>
         </div>
       )}
@@ -237,7 +274,7 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
                 <div
                   key={style.style}
                   className={`border rounded p-3 cursor-pointer ${selectedStyle?.style === style.style ? 'ring-2 ring-blue-500' : 'hover:border-gray-400'}`}
-                  onClick={() => !isBusy && handleStyleSelect(style)}
+                  onClick={() => handleStyleSelect(style)}
                 >
                   <div className="font-semibold mb-2">{style.style}</div>
                   <div className="text-xs text-gray-500 mb-3">{style.description}</div>
@@ -266,7 +303,7 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
                           type="checkbox"
                           className="absolute top-2 left-2"
                           checked={checked}
-                          onChange={() => !isBusy && handleImageToggle(img.id)}
+                          onChange={() => handleImageToggle(img.id)}
                         />
                         <div className="p-2 text-xs text-gray-600">{img.title}</div>
                       </label>
@@ -305,23 +342,6 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
               </div>
             )}
           </>
-        )}
-
-        {/* 사용 안내 */}
-        {!isBusy && (
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h4 className="text-sm font-medium text-yellow-800">영상 생성 가이드</h4>
-                <div className="text-sm text-yellow-700 mt-1">
-                  <p>1. 스타일 선택 → 2. 이미지 선택 → 3. 영상 생성 → 4. 완료 후 다운로드</p>
-                </div>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </div>
