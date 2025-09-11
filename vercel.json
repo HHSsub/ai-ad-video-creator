@@ -1,5 +1,17 @@
 {
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 300
+    },
+    "api/**/*.background.js": {
+      "maxDuration": 900
+    }
+  },
   "rewrites": [
+    {
+      "source": "/api/storyboard",
+      "destination": "/api/storyboard.background"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
@@ -14,7 +26,7 @@
           "value": "*"
         },
         {
-          "key": "Access-Control-Allow-Methods", 
+          "key": "Access-Control-Allow-Methods",
           "value": "GET, POST, PUT, DELETE, OPTIONS"
         },
         {
