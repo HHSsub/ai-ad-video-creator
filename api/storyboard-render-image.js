@@ -8,8 +8,8 @@ const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 // 재시도 설정
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
-const POLLING_MAX_ATTEMPTS = 30;
-const POLLING_INTERVAL = 3000;
+const POLLING_MAX_ATTEMPTS = 20;
+const POLLING_INTERVAL = 4000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -31,26 +31,31 @@ async function callFreepikAPI(url, options, label = 'API') {
     try {
       console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES}: ${url}`);
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const response = await fetch(url, {
         ...options,
-        timeout: 30000 // 30초 타임아웃
+        signal: controller.signal
       });
       
-      const data = await response.json();
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
-        console.warn(`[${label}] HTTP ${response.status}:`, data);
+        const errorText = await response.text().catch(() => '');
+        console.warn(`[${label}] HTTP ${response.status}:`, errorText);
         
-        if (isRetryableError(data, response.status) && attempt < MAX_RETRIES) {
+        if (isRetryableError({ message: errorText }, response.status) && attempt < MAX_RETRIES) {
           const delay = RETRY_DELAY * attempt;
           console.log(`[${label}] ${delay}ms 후 재시도...`);
           await sleep(delay);
           continue;
         }
         
-        throw new Error(`HTTP ${response.status}: ${data.message || data.error || 'Unknown error'}`);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
+      const data = await response.json();
       console.log(`[${label}] 성공 (시도 ${attempt})`);
       return { success: true, data };
       
@@ -81,10 +86,10 @@ async function generateImage(prompt, apiKey) {
   
   const requestBody = {
     prompt: optimizedPrompt,
-    negative_prompt: 'blurry, distorted, low quality, watermark, text, logo, oversaturated, noise',
+    negative_prompt: 'blurry, distorted, low quality, watermark, text, logo, oversaturated, noise, duplicate, deformed',
     num_images: 1,
     image: {
-      size: 'widescreen_16_9' // 광고 영상에 적합한 16:9 비율
+      size: 'widescreen_16_9'
     },
     style: 'photorealistic',
     guidance_scale: 7.5,
@@ -113,9 +118,9 @@ async function generateImage(prompt, apiKey) {
 
 // 프롬프트 최적화
 function optimizePrompt(prompt) {
-  // 기본 품질 키워드가 없으면 추가
   let optimized = prompt.trim();
   
+  // 기본 품질 키워드가 없으면 추가
   const qualityKeywords = ['4K', '8K', 'high quality', 'professional', 'detailed', 'sharp focus'];
   const hasQuality = qualityKeywords.some(keyword => 
     optimized.toLowerCase().includes(keyword.toLowerCase())
@@ -154,21 +159,35 @@ async function pollImageStatus(taskId, apiKey) {
       
       console.log(`[pollImageStatus] 상태: ${status}`);
       
-      if (status === 'completed') {
+      if (status === 'completed' || status === 'COMPLETED') {
         const imageData = result.data.data;
+        
+        // 다양한 응답 구조 지원
+        let imageUrl = null;
         if (imageData.image && imageData.image.url) {
-          console.log('[pollImageStatus] 이미지 생성 완료');
+          imageUrl = imageData.image.url;
+        } else if (imageData.generated && Array.isArray(imageData.generated) && imageData.generated[0]) {
+          imageUrl = imageData.generated[0];
+        } else if (imageData.result && Array.isArray(imageData.result) && imageData.result[0]?.url) {
+          imageUrl = imageData.result[0].url;
+        } else if (imageData.url) {
+          imageUrl = imageData.url;
+        }
+        
+        if (imageUrl) {
+          console.log('[pollImageStatus] 이미지 생성 완료:', imageUrl);
           return {
             success: true,
-            imageUrl: imageData.image.url,
+            imageUrl: imageUrl,
             data: imageData
           };
         } else {
+          console.warn('[pollImageStatus] 완료되었지만 이미지 URL을 찾을 수 없음:', imageData);
           throw new Error('완료되었지만 이미지 URL이 없음');
         }
-      } else if (status === 'failed' || status === 'error') {
+      } else if (status === 'failed' || status === 'error' || status === 'FAILED') {
         throw new Error(`이미지 생성 실패: ${status}`);
-      } else if (status === 'processing' || status === 'queued') {
+      } else if (status === 'processing' || status === 'queued' || status === 'PROCESSING' || status === 'QUEUED') {
         console.log(`[pollImageStatus] 대기 중... (${status})`);
         await sleep(POLLING_INTERVAL);
         continue;
@@ -197,7 +216,12 @@ async function saveImageLocally(imageUrl, conceptId, sceneNumber) {
   try {
     console.log('[saveImageLocally] 다운로드 시작:', imageUrl);
     
-    const response = await fetch(imageUrl);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    const response = await fetch(imageUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
       throw new Error(`이미지 다운로드 실패: ${response.status}`);
     }
@@ -312,9 +336,19 @@ export default async function handler(req, res) {
         throw new Error('이미지 생성 폴링 실패');
       }
       
-      // 3. 이미지 로컬 저장 시도
-      console.log('[storyboard-render-image] 3단계: 이미지 저장');
-      const finalUrl = await saveImageLocally(pollResult.imageUrl, conceptId, sceneNumber);
+      // 3. 이미지 로컬 저장 시도 (선택적)
+      console.log('[storyboard-render-image] 3단계: 이미지 URL 확인');
+      let finalUrl = pollResult.imageUrl;
+      
+      // 로컬 저장 시도 (실패해도 원본 URL 사용)
+      try {
+        const localUrl = await saveImageLocally(pollResult.imageUrl, conceptId, sceneNumber);
+        if (localUrl !== pollResult.imageUrl) {
+          finalUrl = localUrl;
+        }
+      } catch (saveError) {
+        console.warn('[storyboard-render-image] 로컬 저장 실패, 원본 URL 사용:', saveError.message);
+      }
       
       const processingTime = Date.now() - startTime;
       
