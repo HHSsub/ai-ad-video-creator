@@ -113,13 +113,13 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const totalImages = styles.length * promptsToUse.length;
       let produced = 0;
 
-      const storyboardArray = []; // ▶ Step3가 기대하는: 배열
+      const storyboardArray = []; // Step3가 기대하는: 배열
 
       for (const style of styles) {
         const tasks = promptsToUse.map((p, idx) => async () => {
           const body = {
             prompt: p?.prompt,
-            styleName: style.name,           // 서버가 요구하는 필드
+            styleName: style.name,           // 서버 요구 필드
             sceneNumber: p?.sceneNumber,
             title: p?.title
           };
@@ -176,7 +176,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         images.sort((a, b) => (a.sceneNumber || 0) - (b.sceneNumber || 0));
 
         storyboardArray.push({
-          style: style.name,                 // ▶ Step3가 읽는 필드명
+          style: style.name,                 // Step3가 읽는 필드명
           description: style.description,
           colorPalette: style.colorPalette,
           images,
@@ -185,7 +185,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         });
       }
 
-      // ▶ 오직 배열만 넘김: Step3의 storyboard.map 정상 작동
+      // 배열만 넘김: Step3의 storyboard.map 정상 작동
       setStoryboard?.(storyboardArray);
 
       updatePhase('done', 100);
@@ -264,28 +264,27 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </button>
       </div>
 
-      {(isBusy) => (
-        isBusy && (
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
-            role="alert"
-            aria-live="assertive"
-          >
-            <div className="w-full max-w-md p-6">
-              <Spinner />
-              <div className="mt-6 w-full h-2 bg-white/20 rounded overflow-hidden">
-                <div
-                  className="h-2 bg-white transition-all duration-300"
-                  style={{ width: `${Math.max(5, progress)}%` }}
-                />
-              </div>
-              <p className="mt-3 text-center text-white/80 text-sm">
-                진행률 {Math.max(5, Math.round(progress))}%
-              </p>
+      {/* 오버레이: 함수가 아닌 JSX로 직접 렌더 */}
+      {isBusy && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
+          role="alert"
+          aria-live="assertive"
+        >
+          <div className="w-full max-w-md p-6">
+            <Spinner />
+            <div className="mt-6 w-full h-2 bg-white/20 rounded overflow-hidden">
+              <div
+                className="h-2 bg-white transition-all duration-300"
+                style={{ width: `${Math.max(5, progress)}%` }}
+              />
             </div>
+            <p className="mt-3 text-center text-white/80 text-sm">
+              진행률 {Math.max(5, Math.round(progress))}%
+            </p>
           </div>
-        )
-      )(isBusy)}
+        </div>
+      )}
     </div>
   );
 };
