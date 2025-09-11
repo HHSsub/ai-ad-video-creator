@@ -122,9 +122,17 @@ export default async function handler(req, res) {
         videoPurpose: formData.videoPurpose,
         createdAt: new Date().toISOString(),
         totalStyles: styles.length,
-        geminiModelChain: [process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite', ...(process.env.FALLBACK_GEMINI_MODELS ? process.env.FALLBACK_GEMINI_MODELS.split(',').map(s=>s.trim()).filter(Boolean) : (process.env.FALLBACK_GEMINI_MODEL ? [process.env.FALLBACK_GEMINI_MODEL] : []))],
+        geminiModelChain: [
+          process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
+          ...(process.env.FALLBACK_GEMINI_MODELS
+            ? process.env.FALLBACK_GEMINI_MODELS.split(',').map(s => s.trim()).filter(Boolean)
+            : (process.env.FALLBACK_GEMINI_MODEL ? [process.env.FALLBACK_GEMINI_MODEL] : []))
+        ],
         processSteps: 3,
-        imageCountPerStyle: imageCount
+        imageCountPerStyle: getImageCountByVideoLength(formData.videoLength),
+        // ▶ 프런트가 읽는 키 추가 (Step2.jsx에서 사용)
+        geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+        fallbackGeminiModel: process.env.FALLBACK_GEMINI_MODEL || ''
       }
     });
 
