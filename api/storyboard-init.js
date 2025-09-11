@@ -65,6 +65,68 @@ function buildThirdPrompt(secondOutput, formData) {
 }
 
 /**
+ * 재시도/폴백 유틸
+ */
+const DEFAULT_MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN ||
+  process.env.GEMINI_MODEL ||
+  'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash,gemini-1.5-flash')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const MAX_ATTEMPTS = Number(process.env.GEMINI_MAX_ATTEMPTS || 8);
+const BASE_BACKOFF = Number(process.env.GEMINI_BASE_BACKOFF_MS || 1500);
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const jitter = (ms) => Math.round(ms * (0.7 + Math.random() * 0.6));
+
+function isRetryable(err) {
+  const msg = (err?.message || '').toLowerCase();
+  const code = err?.status;
+  if (code === 429 || code === 500 || code === 502 || code === 503 || code === 504) return true;
+  if (msg.includes('overloaded') || msg.includes('quota') || msg.includes('timeout') || msg.includes('fetch failed')) return true;
+  return false;
+}
+
+async function callGeminiWithFallback(genAI, modelChain, prompt, stepLabel) {
+  let attempt = 0;
+  let globalAttempt = 0;
+  const totalMax = Math.max(MAX_ATTEMPTS, modelChain.length * 2);
+
+  // 각 모델 최소 2회씩 시도 후 다음 모델로 폴백
+  while (globalAttempt < totalMax) {
+    for (const modelName of modelChain) {
+      for (let mTry = 1; mTry <= 2; mTry++) {
+        attempt++;
+        globalAttempt++;
+        console.log(`[storyboard-init] ${stepLabel} | 시도 ${attempt}/${totalMax} | 모델=${modelName} | mTry=${mTry}/2`);
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const t = Date.now();
+          const resp = await model.generateContent(prompt);
+          const text = resp.response.text();
+          console.log(`[storyboard-init] ${stepLabel} | 모델=${modelName} 성공 (${Date.now() - t}ms)`);
+          return { text, modelName, tookMs: Date.now() - t, attempts: attempt };
+        } catch (err) {
+          const retryable = isRetryable(err);
+          console.warn(`[storyboard-init] ${stepLabel} | 모델=${modelName} 실패(status=${err?.status || '-'}): ${err?.message}`);
+          if (!retryable) {
+            // 비재시도성 오류는 바로 throw
+            throw err;
+          }
+          const delay = jitter(BASE_BACKOFF * Math.pow(2, Math.floor(attempt / modelChain.length)));
+          console.log(`[storyboard-init] ${stepLabel} | 재시도 대기 ${delay}ms`);
+          await sleep(delay);
+          if (globalAttempt >= totalMax) break;
+        }
+      }
+      if (globalAttempt >= totalMax) break;
+    }
+  }
+  throw new Error(`${stepLabel} 실패: 모든 모델 재시도/폴백 소진`);
+}
+
+/**
  * 3단계 응답에서 이미지 프롬프트 추출(네가 지시한 섹션/형식 강제)
  */
 function extractImagePromptsFromResponse(responseText, formData) {
@@ -84,12 +146,10 @@ function extractImagePromptsFromResponse(responseText, formData) {
     const sceneNum = parseInt(m[1], 10);
     let clean = m[2].replace(/\*\*/g, '').trim();
 
-    // 부족하면 핵심 디테일 보강(누락시에만)
     const must = ['insanely detailed', 'micro-details', 'hyper-realistic', 'visible skin pores', 'sharp focus', '4K'];
     for (const kw of must) {
       if (!clean.toLowerCase().includes(kw.toLowerCase())) clean += `, ${kw}`;
     }
-    // 70~100 단어 요구 조건을 완화 체크
     const wordCount = clean.split(/\s+/).length;
     if (wordCount < 60) {
       clean += ', elaborate mise-en-scène, professional commercial photography, cinematic lighting';
@@ -103,7 +163,6 @@ function extractImagePromptsFromResponse(responseText, formData) {
     });
   }
 
-  // 장면 수 보정(부족 시 마지막 복제)
   const need = scenesPerStyle(formData.videoLength);
   while (prompts.length < need && prompts.length > 0) {
     const idx = prompts.length + 1;
@@ -133,36 +192,31 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('Gemini API key not found');
-
     const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-    const model = genAI.getGenerativeModel({ model: modelName });
+
+    const modelChain = DEFAULT_MODEL_CHAIN;
+    console.log('[storyboard-init] 모델 체인:', modelChain.join(' , '));
 
     // 1단계
-    const p1 = buildFirstPrompt(formData);
     console.log('[storyboard-init] 1단계(Gemini) 시작...');
-    const t1 = Date.now();
-    const firstOut = (await model.generateContent(p1)).response.text();
-    console.log(`[storyboard-init] 1단계 완료 (${Date.now() - t1}ms)`);
+    const p1 = buildFirstPrompt(formData);
+    const r1 = await callGeminiWithFallback(genAI, modelChain, p1, '1단계');
+    const firstOut = r1.text;
 
     // 2단계
-    const p2 = buildSecondPrompt(firstOut, formData);
     console.log('[storyboard-init] 2단계(Gemini) 시작...');
-    const t2 = Date.now();
-    const secondOut = (await model.generateContent(p2)).response.text();
-    console.log(`[storyboard-init] 2단계 완료 (${Date.now() - t2}ms)`);
+    const p2 = buildSecondPrompt(firstOut, formData);
+    const r2 = await callGeminiWithFallback(genAI, modelChain, p2, '2단계');
+    const secondOut = r2.text;
 
     // 3단계
-    const p3 = buildThirdPrompt(secondOut, formData);
     console.log('[storyboard-init] 3단계(Gemini) 시작...');
-    const t3 = Date.now();
-    const thirdOut = (await model.generateContent(p3)).response.text();
-    console.log(`[storyboard-init] 3단계 완료 (${Date.now() - t3}ms)`);
+    const p3 = buildThirdPrompt(secondOut, formData);
+    const r3 = await callGeminiWithFallback(genAI, modelChain, p3, '3단계');
+    const thirdOut = r3.text;
 
-    // 추출
     const imagePrompts = extractImagePromptsFromResponse(thirdOut, formData);
 
-    // 스타일(이름/설명/팔레트만 제공; 렌더는 프롬프트 그대로)
     const styles = [
       { name: 'Cinematic Professional', description: 'cinematic professional, dramatic lighting, filmic color grading', colorPalette: '#1a365d,#2d3748,#e2e8f0' },
       { name: 'Modern Minimalist',      description: 'minimal, clean, negative space, soft gradients',                 colorPalette: '#ffffff,#f7fafc,#cbd5e0' },
@@ -188,9 +242,12 @@ export default async function handler(req, res) {
           second: !!SECOND_PROMPT,
           third: !!THIRD_PROMPT,
         },
-        geminiModel: modelName,
+        geminiModelChain: modelChain,
         timingsMs: {
           total: Date.now() - tStart,
+          step1: r1.tookMs,
+          step2: r2.tookMs,
+          step3: r3.tookMs,
         },
       },
     });
