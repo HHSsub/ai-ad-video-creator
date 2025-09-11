@@ -12,7 +12,7 @@ async function callGeminiWithRetry(getModel, prompt, stepLabel) {
   const delays = [2000, 4000, 8000, 16000, 16000, 16000, 16000, 16000]; // 최대 8회
   const maxAttempts = delays.length;
 
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
   const fallbackModel = process.env.FALLBACK_GEMINI_MODEL || '';
 
   let lastError;
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
     if (!geminiApiKey) throw new Error('Gemini API key not found');
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const getModel = (modelName) => genAI.getGenerativeModel({ model: modelName || 'gemini-2.5-flash' });
+    const getModel = (modelName) => genAI.getGenerativeModel({ model: modelName || 'gemini-2.5-flash-lite' });
 
     const creativeBrief = await callGeminiWithRetry(getModel, buildCreativeBriefPrompt(formData), '1단계');
     const storyboardConcepts = await callGeminiWithRetry(getModel, buildStoryboardPrompt(creativeBrief, formData), '2단계');
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
         videoPurpose: formData.videoPurpose,
         createdAt: new Date().toISOString(),
         totalStyles: styles.length,
-        geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+        geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
         fallbackGeminiModel: process.env.FALLBACK_GEMINI_MODEL || '',
         processSteps: 3,
         imageCountPerStyle: imageCount
