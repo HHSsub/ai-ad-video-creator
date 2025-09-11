@@ -11,13 +11,18 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { prompt, styleName, sceneNumber, title } = req.body || {};
-    if (!prompt || !styleName) return res.status(400).json({ error: 'prompt and styleName are required' });
+    // 스타일 이름은 styleName 또는 style.name 어느 쪽이든 허용 (호환성 보강)
+    const { prompt, styleName: rawStyleName, style, sceneNumber, title } = req.body || {};
+    const styleName = rawStyleName || style?.name;
+
+    if (!prompt || !styleName) {
+      return res.status(400).json({ error: 'prompt and styleName are required' });
+    }
 
     const freepikApiKey = process.env.FREEPIK_API_KEY || process.env.REACT_APP_FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
     if (!freepikApiKey) throw new Error('Freepik API key not found');
 
-    // 원본 styles 설명 그대로(설정값 변경 없음)
+    // 원본 styles 설명 동일
     const styles = [
       { name: 'Cinematic Professional', description: 'cinematic professional shot dramatic lighting high detail 8k corporate' },
       { name: 'Modern Minimalist',      description: 'minimalist modern clean background simple composition contemporary'   },
@@ -26,10 +31,10 @@ export default async function handler(req, res) {
       { name: 'Premium Luxury',         description: 'luxury premium elegant sophisticated high-end exclusive'             },
       { name: 'Tech Innovation',        description: 'technology innovation futuristic digital modern tech startup'        }
     ];
-    const style = styles.find(s => s.name === styleName);
-    if (!style) return res.status(400).json({ error: `Unknown styleName: ${styleName}` });
+    const styleDef = styles.find(s => s.name === styleName);
+    if (!styleDef) return res.status(400).json({ error: `Unknown styleName: ${styleName}` });
 
-    const finalPrompt = `${prompt}, ${style.description}`;
+    const finalPrompt = `${prompt}, ${styleDef.description}`;
     const imageResult = await generateSingleImageWithFreepik(finalPrompt, freepikApiKey);
     if (!imageResult.success) return res.status(502).json({ success: false, error: imageResult.error });
 
@@ -49,13 +54,13 @@ export default async function handler(req, res) {
 async function generateSingleImageWithFreepik(prompt, apiKey) {
   try {
     const cleanPrompt = prompt
-      .replace(/[^\w\s가-힣,.-]/g, '')
+      .replace(/[^\w\s가-힣,.\-:;()]/g, '') // 약간 완화: 기본 문장부호 유지
       .replace(/\s+/g, ' ')
       .substring(0, 800)
       .trim();
 
     if (cleanPrompt.length < 20) throw new Error('프롬프트가 너무 짧습니다.');
-    console.log(`Freepik 이미지 생성 요청: ${cleanPrompt.substring(0, 100)}...`);
+    console.log(`Freepik 이미지 생성 요청: ${cleanPrompt.substring(0, 120)}...`);
 
     const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/flux-dev', {
       method: 'POST',
