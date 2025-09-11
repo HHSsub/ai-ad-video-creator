@@ -8,6 +8,77 @@ function setCors(res) {
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
+// 지수 백오프 + 지터로 Gemini 호출을 견고하게
+async function callGeminiWithRetry(getModel, prompt, stepLabel) {
+  // 최대 8회 시도: 2,4,8,16,16,16,16,16 (+ 각 0~1초 지터)
+  const delays = [2000, 4000, 8000, 16000, 16000, 16000, 16000, 16000];
+  const maxAttempts = delays.length;
+
+  // 환경변수로 폴백 모델 허용(설정 없으면 미사용)
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const fallbackModel = process.env.FALLBACK_GEMINI_MODEL || '';
+
+  // 1) 기본 모델 시도
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`${stepLabel} Gemini API 시도 ${attempt}/${maxAttempts}... (model=${primaryModel})`);
+      const model = getModel(primaryModel);
+      const result = await model.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      lastError = e;
+      const msg = (e && e.message) || '';
+      const status = e && e.status;
+      console.error(`${stepLabel} Gemini API 시도 ${attempt} 실패:`, e?.message || e);
+
+      // 503 또는 과부하 메시지일 때만 재시도
+      if (status === 503 || msg.includes('overloaded') || msg.includes('Service Unavailable')) {
+        if (attempt < maxAttempts) {
+          const jitter = Math.floor(Math.random() * 1000); // 0~1000ms
+          const wait = delays[attempt - 1] + jitter;
+          console.log(`모델 과부하 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+      }
+      // 재시도 불가 케이스면 즉시 종료
+      break;
+    }
+  }
+
+  // 2) 폴백 모델이 설정된 경우, 동일 정책으로 추가 시도
+  if (fallbackModel) {
+    console.warn(`${stepLabel}: 기본 모델 실패. 폴백 모델 시도(model=${fallbackModel})`);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt}/${maxAttempts}... (model=${fallbackModel})`);
+        const model = getModel(fallbackModel);
+        const result = await model.generateContent(prompt);
+        return result.response.text();
+      } catch (e) {
+        lastError = e;
+        const msg = (e && e.message) || '';
+        const status = e && e.status;
+        console.error(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt} 실패:`, e?.message || e);
+
+        if (status === 503 || msg.includes('overloaded') || msg.includes('Service Unavailable')) {
+          if (attempt < maxAttempts) {
+            const jitter = Math.floor(Math.random() * 1000);
+            const wait = delays[attempt - 1] + jitter;
+            console.log(`모델 과부하 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
+            await new Promise(r => setTimeout(r, wait));
+            continue;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  throw new Error(`${stepLabel}: Gemini API 최대 재시도 초과${fallbackModel ? ' (폴백 포함)' : ''} - ${(lastError && lastError.message) || 'unknown error'}`);
+}
+
 export default async function handler(req, res) {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -22,14 +93,26 @@ export default async function handler(req, res) {
     if (!geminiApiKey) throw new Error('Gemini API key not found');
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const getModel = (modelName) => genAI.getGenerativeModel({ model: modelName || 'gemini-2.5-flash' });
 
-    // 1~3단계 수행 (원본과 동일 로직/재시도 패턴)
-    const creativeBrief = await generateCreativeBrief(model, formData);
-    const storyboardConcepts = await generateStoryboardConcepts(model, creativeBrief, formData);
-    const imagePrompts = await generateImagePrompts(model, storyboardConcepts, formData);
+    // 1단계 프롬프트 작성
+    const briefPrompt = buildCreativeBriefPrompt(formData);
+    // 1단계 호출(강화된 재시도)
+    const creativeBrief = await callGeminiWithRetry(getModel, briefPrompt, '1단계');
 
-    // 원본 styles를 그대로 복제
+    // 2단계 프롬프트 작성
+    const storyboardPrompt = buildStoryboardPrompt(creativeBrief, formData);
+    // 2단계 호출(강화된 재시도)
+    const storyboardConcepts = await callGeminiWithRetry(getModel, storyboardPrompt, '2단계');
+
+    // 3단계 프롬프트 작성
+    const imagePromptPrompt = buildImagePromptsPrompt(storyboardConcepts, formData);
+    // 3단계 호출(강화된 재시도)
+    const imagePrompts = extractImagePromptsFromResponse(
+      await callGeminiWithRetry(getModel, imagePromptPrompt, '3단계')
+    );
+
+    // 원본 styles(변경 없음)
     const styles = [
       { name: 'Cinematic Professional', description: 'cinematic professional shot dramatic lighting high detail 8k corporate', colorPalette: '#1a365d,#2d3748,#4a5568,#e2e8f0' },
       { name: 'Modern Minimalist',      description: 'minimalist modern clean background simple composition contemporary',   colorPalette: '#ffffff,#f7fafc,#e2e8f0,#cbd5e0' },
@@ -39,51 +122,42 @@ export default async function handler(req, res) {
       { name: 'Tech Innovation',        description: 'technology innovation futuristic digital modern tech startup',        colorPalette: '#2b6cb0,#3182ce,#4299e1,#63b3ed' }
     ];
 
-    // 원본 lengthMap과 동일 규칙으로 imageCount 계산
+    // 원본 lengthMap 규칙 유지
     const imageCount = getImageCountByVideoLength(formData.videoLength);
 
     res.status(200).json({
       success: true,
       creativeBrief,
       storyboardConcepts,
-      imagePrompts,   // 전체 프롬프트 (클라이언트에서 0..imageCount-1 만큼 사용)
-      styles,         // 서버에서 finalPrompt 합성시 필요
+      imagePrompts,
+      styles,
       metadata: {
         brandName: formData.brandName,
         videoLength: formData.videoLength,
         videoPurpose: formData.videoPurpose,
         createdAt: new Date().toISOString(),
         totalStyles: styles.length,
-        geminiModel: 'gemini-2.5-flash',
+        geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+        fallbackGeminiModel: process.env.FALLBACK_GEMINI_MODEL || '',
         processSteps: 3,
         imageCountPerStyle: imageCount
       }
     });
-
   } catch (error) {
     console.error('storyboard-init 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 }
 
-/**
- * 원본과 동일: 영상 길이에 따른 이미지 수 계산
- */
+// 원본 lengthMap과 동일
 function getImageCountByVideoLength(videoLength) {
-  const lengthMap = {
-    '10초': 5,
-    '30초': 15,
-    '60초': 30
-  };
+  const lengthMap = { '10초': 5, '30초': 15, '60초': 30 };
   return lengthMap[videoLength] || 15;
 }
 
-/**
- * 1단계: 원본 로직을 동일하게 복제(프롬프트/재시도 패턴 동일)
- */
-async function generateCreativeBrief(model, formData) {
-  try {
-    const inputPromptTemplate = `당신은 업계 최상위 크리에이티브 디렉터(Creative Director)이자 브랜드 전략가(Brand Strategist)입니다. 사용자가 제공하는 핵심 정보에 기반해, 브랜드 목적과 타깃에 최적화된 광고 전략과 메시지를 설계하세요.
+// 1단계 프롬프트
+function buildCreativeBriefPrompt(formData) {
+  const inputPromptTemplate = `당신은 업계 최상위 크리에이티브 디렉터(Creative Director)이자 브랜드 전략가(Brand Strategist)입니다. 사용자가 제공하는 핵심 정보에 기반해, 브랜드 목적과 타깃에 최적화된 광고 전략과 메시지를 설계하세요.
 
 다음 정보를 기반으로 6장면의 스토리보드와 각 장면별 이미지 생성을 위한 구체적인 지침을 작성하세요:
 
@@ -98,7 +172,7 @@ async function generateCreativeBrief(model, formData) {
 
 결과는 다음 단계에서 활용할 수 있는 형태로 제공해주세요.`;
 
-    const userInputString = `
+  const userInputString = `
 브랜드명: ${formData.brandName}
 산업 카테고리: ${formData.industryCategory}
 제품/서비스 카테고리: ${formData.productServiceCategory}
@@ -110,49 +184,13 @@ async function generateCreativeBrief(model, formData) {
 영상 요구사항: ${formData.videoRequirements || '없음'}
 브랜드 로고: ${formData.brandLogo ? '업로드됨 - 영상에 포함 필요' : '없음'}
 제품 이미지: ${formData.productImage ? '업로드됨 - 영상에 포함 필요' : '없음'}
-    `;
-    const finalPrompt = inputPromptTemplate.replace('{USER_INPUT}', userInputString.trim());
-
-    let creativeBrief = null;
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts && !creativeBrief) {
-      try {
-        attempts++;
-        console.log(`1단계 Gemini API 시도 ${attempts}/${maxAttempts}...`);
-        const result = await model.generateContent(finalPrompt);
-        creativeBrief = result.response.text();
-        console.log('1단계: 크리에이티브 브리프 생성 완료');
-        break;
-      } catch (geminiError) {
-        console.error(`1단계 Gemini API 시도 ${attempts} 실패:`, geminiError.message);
-        if (geminiError.status === 503 || (geminiError.message || '').includes('overloaded')) {
-          if (attempts < maxAttempts) {
-            const delay = Math.pow(2, attempts) * 1000;
-            console.log(`모델 과부하 감지, ${delay/1000}초 후 재시도...`);
-            await new Promise(r => setTimeout(r, delay));
-            continue;
-          }
-        }
-        if (attempts >= maxAttempts) {
-          throw new Error('1단계: 크리에이티브 브리프 생성 실패 - Gemini API 최대 재시도 초과');
-        }
-      }
-    }
-    return creativeBrief;
-  } catch (error) {
-    console.error('1단계 크리에이티브 브리프 생성 오류:', error);
-    throw new Error(`1단계 실패: ${error.message}`);
-  }
+  `;
+  return inputPromptTemplate.replace('{USER_INPUT}', userInputString.trim());
 }
 
-/**
- * 2단계: 원본 로직 복제
- */
-async function generateStoryboardConcepts(model, creativeBrief, formData) {
-  try {
-    const secondPromptTemplate = `당신은 최고 수준의 광고 영상 스토리보드 기획 전문가입니다. 사용자의 요청을 분석하여 최신 트렌드와 바이럴 요소까지 반영한 6가지 고정 컨셉의 스토리보드를 작성하세요.
+// 2단계 프롬프트
+function buildStoryboardPrompt(creativeBrief, formData) {
+  const secondPromptTemplate = `당신은 최고 수준의 광고 영상 스토리보드 기획 전문가입니다. 사용자의 요청을 분석하여 최신 트렌드와 바이럴 요소까지 반영한 6가지 고정 컨셉의 스토리보드를 작성하세요.
 
 컨셉 기획 및 스토리보드 작성 프로세스:
 - 컨셉 1: 욕망의 시각화
@@ -180,7 +218,7 @@ async function generateStoryboardConcepts(model, creativeBrief, formData) {
 - **장면 2 (0:02-0:04)**: [...]
 **음향/음악**: [...]`;
 
-    const combinedPrompt = `
+  return `
 다음은 1단계에서 생성된 ${formData.brandName}의 크리에이티브 브리프입니다:
 
 ${creativeBrief}
@@ -194,45 +232,11 @@ ${secondPromptTemplate}
 브랜드/상황: ${formData.brandName} (${formData.industryCategory})
 영상 길이: ${formData.videoLength}
 `;
-
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts) {
-      try {
-        attempts++;
-        console.log(`2단계 Gemini API 시도 ${attempts}/${maxAttempts}...`);
-        const result = await model.generateContent(combinedPrompt);
-        const storyboardConcepts = result.response.text();
-        console.log('2단계: 스토리보드 컨셉 생성 완료');
-        return storyboardConcepts;
-      } catch (geminiError) {
-        console.error(`2단계 Gemini API 시도 ${attempts} 실패:`, geminiError.message);
-        if (geminiError.status === 503 || (geminiError.message || '').includes('overloaded')) {
-          if (attempts < maxAttempts) {
-            const delay = Math.pow(2, attempts) * 1000;
-            console.log(`모델 과부하 감지, ${delay/1000}초 후 재시도...`);
-            await new Promise(r => setTimeout(r, delay));
-            continue;
-          }
-        }
-        if (attempts >= maxAttempts) {
-          throw new Error('2단계: 스토리보드 컨셉 생성 실패 - Gemini API 최대 재시도 초과');
-        }
-      }
-    }
-  } catch (error) {
-    console.error('2단계 스토리보드 컨셉 생성 오류:', error);
-    throw new Error(`2단계 실패: ${error.message}`);
-  }
 }
 
-/**
- * 3단계: 원본 로직 복제 (프롬프트 추출 로직 동일)
- */
-async function generateImagePrompts(model, storyboardConcepts, formData) {
-  try {
-    const thirdPromptTemplate = `Role: You are an expert video director and VFX supervisor specializing in creating high-quality, professional video ads. Generate detailed image prompts for each scene that can be consumed by a text-to-image API.
+// 3단계 프롬프트
+function buildImagePromptsPrompt(storyboardConcepts, formData) {
+  const thirdPromptTemplate = `Role: You are an expert video director and VFX supervisor specializing in creating high-quality, professional video ads. Generate detailed image prompts for each scene that can be consumed by a text-to-image API.
 
 ### Output Requirements
 For each scene, provide:
@@ -246,7 +250,7 @@ For each scene, provide:
 - **Image Prompt**: [...]
 Continue for all scenes...`;
 
-    const combinedPrompt = `
+  return `
 다음은 2단계에서 생성된 ${formData.brandName}의 스토리보드 컨셉입니다:
 
 ${storyboardConcepts}
@@ -262,38 +266,6 @@ Video Length: ${formData.videoLength}
 Target Audience: ${formData.coreTarget}
 Key Differentiation: ${formData.coreDifferentiation}
 `;
-
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts) {
-      try {
-        attempts++;
-        console.log(`3단계 Gemini API 시도 ${attempts}/${maxAttempts}...`);
-        const result = await model.generateContent(combinedPrompt);
-        const imagePromptsText = result.response.text();
-        console.log('3단계: Freepik용 이미지 프롬프트 생성 완료');
-        const extractedPrompts = extractImagePromptsFromResponse(imagePromptsText);
-        return extractedPrompts;
-      } catch (geminiError) {
-        console.error(`3단계 Gemini API 시도 ${attempts} 실패:`, geminiError.message);
-        if (geminiError.status === 503 || (geminiError.message || '').includes('overloaded')) {
-          if (attempts < maxAttempts) {
-            const delay = Math.pow(2, attempts) * 1000;
-            console.log(`모델 과부하 감지, ${delay/1000}초 후 재시도...`);
-            await new Promise(r => setTimeout(r, delay));
-            continue;
-          }
-        }
-        if (attempts >= maxAttempts) {
-          throw new Error('3단계: 이미지 프롬프트 생성 실패 - Gemini API 최대 재시도 초과');
-        }
-      }
-    }
-  } catch (error) {
-    console.error('3단계 이미지 프롬프트 생성 오류:', error);
-    throw new Error(`3단계 실패: ${error.message}`);
-  }
 }
 
 // 원본과 동일한 패턴으로 이미지 프롬프트 추출
@@ -311,19 +283,15 @@ function extractImagePromptsFromResponse(responseText) {
   }
   if (prompts.length === 0) {
     console.warn('Gemini 응답에서 이미지 프롬프트를 추출할 수 없어 기본 프롬프트 사용');
-    return generateFallbackImagePrompts();
+    return [
+      { sceneNumber: 1, prompt: "professional commercial photography, brand introduction scene, high quality, cinematic lighting, 16:9 aspect ratio", title: "Scene 1", duration: 6 },
+      { sceneNumber: 2, prompt: "professional product showcase, commercial photography, clean background, studio lighting, high detail, 16:9 aspect ratio", title: "Scene 2", duration: 6 },
+      { sceneNumber: 3, prompt: "lifestyle photography, people using product, natural lighting, authentic moment, commercial style, 16:9 aspect ratio", title: "Scene 3", duration: 6 },
+      { sceneNumber: 4, prompt: "close-up product detail, macro photography, professional lighting, high resolution, commercial quality, 16:9 aspect ratio", title: "Scene 4", duration: 6 },
+      { sceneNumber: 5, prompt: "customer satisfaction scene, happy people, positive emotions, lifestyle photography, commercial style, 16:9 aspect ratio", title: "Scene 5", duration: 6 },
+      { sceneNumber: 6, prompt: "brand logo finale, professional branding, clean design, corporate style, call to action, 16:9 aspect ratio", title: "Scene 6", duration: 6 }
+    ];
   }
   console.log(`${prompts.length}개의 이미지 프롬프트 추출 완료`);
   return prompts;
-}
-
-function generateFallbackImagePrompts() {
-  return [
-    { sceneNumber: 1, prompt: "professional commercial photography, brand introduction scene, high quality, cinematic lighting, 16:9 aspect ratio", title: "Scene 1", duration: 6 },
-    { sceneNumber: 2, prompt: "professional product showcase, commercial photography, clean background, studio lighting, high detail, 16:9 aspect ratio", title: "Scene 2", duration: 6 },
-    { sceneNumber: 3, prompt: "lifestyle photography, people using product, natural lighting, authentic moment, commercial style, 16:9 aspect ratio", title: "Scene 3", duration: 6 },
-    { sceneNumber: 4, prompt: "close-up product detail, macro photography, professional lighting, high resolution, commercial quality, 16:9 aspect ratio", title: "Scene 4", duration: 6 },
-    { sceneNumber: 5, prompt: "customer satisfaction scene, happy people, positive emotions, lifestyle photography, commercial style, 16:9 aspect ratio", title: "Scene 5", duration: 6 },
-    { sceneNumber: 6, prompt: "brand logo finale, professional branding, clean design, corporate style, call to action, 16:9 aspect ratio", title: "Scene 6", duration: 6 }
-  ];
 }
