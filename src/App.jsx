@@ -1,119 +1,81 @@
+// 주의: 여기서는 “기존 코드 블럭”을 알 수 없으므로
+// *** 아래 // EXISTING_CODE_START ~ // EXISTING_CODE_END 사이에 네 원래 App.jsx 내용 그대로 유지 ***
+// 그 아래에 새 step 로직/라우팅만 최소 추가 예시
+// 실제로 합칠 때는 중복 state/함수 충돌 조정 필요
+
+// EXISTING_CODE_START
+// (여기 기존 import, context, provider, 로깅, 테마, 유틸 등 전부 유지)
+// 예: import React, { useState, useEffect } from 'react';
+//     import SomeContextProvider from './context/SomeContextProvider';
+//     ... (네 기존 코드)
+// EXISTING_CODE_END
+
 import { useState } from 'react';
-import Step1 from './components/Step1.jsx';
-import Step2 from './components/Step2.jsx';
-import Step3 from './components/Step3.jsx';
+import Step1 from './components/Step1';
+import Step2 from './components/Step2';
+import Step3 from './components/Step3';
+import Step4 from './components/Step4';
 
-function App() {
-  // 현재 진행 단계를 관리하는 상태 (1, 2, 3)
-  const [currentStep, setCurrentStep] = useState(1);
-  
-  // Step1에서 사용자가 입력한 폼 데이터를 관리하는 상태
-  const [formData, setFormData] = useState({
-    brandName: '',
-    industryCategory: '',
-    productServiceCategory: '',
-    productServiceName: '',
-    videoPurpose: '',
-    videoLength: '',
-    coreTarget: '',
-    coreDifferentiation: '',
-    videoRequirements: '',
-    brandLogo: null,
-    productImage: null
-  });
-
-  // Step2에서 생성된 스토리보드 데이터를 관리하는 상태
+function App(){
+  // 기존에 이미 formData / step / loading 관리가 있다면 중복 제거
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({});
   const [storyboard, setStoryboard] = useState(null);
-  
-  // Step3에서 최종 생성된 영상 URL을 관리하는 상태
-  const [finalVideoUrl, setFinalVideoUrl] = useState('');
-  
-  // API 호출 등 비동기 작업의 로딩 상태를 관리
+  const [selectedConceptId, setSelectedConceptId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 다음 단계로 진행하는 함수
-  const handleNext = () => {
-    setCurrentStep(prev => prev + 1);
-  };
-
-  // 이전 단계로 돌아가는 함수
-  const handlePrev = () => {
-    setCurrentStep(prev => prev - 1);
-  };
-
-  // 진행 상태를 시각적으로 보여주는 프로그레스 바 컴포넌트
-  const ProgressBar = () => {
-    const steps = [
-      { number: 1, title: '기본 정보 입력' },
-      { number: 2, title: '스토리보드 생성' },
-      { number: 3, title: '최종 영상 제작' }
-    ];
-
-    return (
-      <div className="mb-8">
-        <div className="flex justify-center items-center space-x-4">
-          {steps.map((step, index) => (
-            <div key={step.number} className="flex items-center">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= step.number ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                {step.number}
-              </div>
-              <div className="ml-2 text-sm">
-                <div className={`font-medium ${currentStep >= step.number ? 'text-blue-600' : 'text-gray-400'}`}>
-                  {step.title}
-                </div>
-              </div>
-              {index < steps.length - 1 && (
-                <div className={`ml-4 w-8 h-0.5 ${currentStep > step.number ? 'bg-blue-600' : 'bg-gray-200'}`} />
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const next = () => setStep(s=> Math.min(4,s+1));
+  const prev = () => setStep(s=> Math.max(1,s-1));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">🎬 AI 광고 영상 제작 도구</h1>
-          <p className="text-lg text-gray-600">브랜드 정보를 입력하여 AI 광고 영상을 제작해보세요.</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto py-6">
+        <div className="mb-6 flex items-center gap-4 text-sm font-semibold">
+          <div className={step===1?'text-blue-600':'text-gray-400'}>1 입력</div>
+          <div className={step===2?'text-blue-600':'text-gray-400'}>2 스토리보드/이미지</div>
+          <div className={step===3?'text-blue-600':'text-gray-400'}>3 영상클립</div>
+          <div className={step===4?'text-blue-600':'text-gray-400'}>4 합치기/BGM</div>
         </div>
 
-        <ProgressBar />
-
-        <div className="max-w-6xl mx-auto">
-          {currentStep === 1 && (
-            <Step1 
-              onNext={handleNext}
-              formData={formData}
-              setFormData={setFormData}
-            />
-          )}
-          
-          {currentStep === 2 && (
-            <Step2 
-              onNext={handleNext}
-              onPrev={handlePrev}
-              formData={formData}
-              setStoryboard={setStoryboard}
-              setIsLoading={setIsLoading}
-              isLoading={isLoading}
-            />
-          )}
-
-          {currentStep === 3 && (
-            <Step3 
-              onPrev={handlePrev}
-              storyboard={storyboard}
-              setFinalVideoUrl={setFinalVideoUrl}
-              finalVideoUrl={finalVideoUrl}
-              setIsLoading={setIsLoading}
-              isLoading={isLoading}
-              formData={formData} // 최종 영상 제작에 폼 데이터가 필요할 수 있으므로 전달
-            />
-          )}
-        </div>
+        {step===1 && (
+          <Step1
+            formData={formData}
+            setFormData={setFormData}
+            onNext={next}
+          />
+        )}
+        {step===2 && (
+          <Step2
+            formData={formData}
+            setStoryboard={setStoryboard}
+            storyboard={storyboard}
+            isLoading={isLoading}
+            setIsLoading={setIsLoading}
+            onPrev={prev}
+            onNext={next}
+          />
+        )}
+        {step===3 && (
+          <Step3
+            storyboard={storyboard}
+            selectedConceptId={selectedConceptId}
+            setSelectedConceptId={setSelectedConceptId}
+            isLoading={isLoading}
+            setIsLoading={setIsLoading}
+            onPrev={prev}
+            onNext={()=>{
+              if(!selectedConceptId) return;
+              next();
+            }}
+          />
+        )}
+        {step===4 && (
+          <Step4
+            storyboard={storyboard}
+            selectedConceptId={selectedConceptId}
+            onPrev={prev}
+          />
+        )}
       </div>
     </div>
   );
