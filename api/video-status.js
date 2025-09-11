@@ -1,4 +1,5 @@
-// Check Freepik Image-to-Video task statuses with simple in-memory cache.
+// Poll only pending tasks; cache results; return both completedByStatus and ready counts.
+
 const TASK_CACHE = new Map(); // taskId -> { status, videoUrl, sceneNumber, updatedAt }
 
 export default async function handler(req, res) {
@@ -23,25 +24,32 @@ export default async function handler(req, res) {
       process.env.VITE_FREEPIK_API_KEY;
     if (!freepikApiKey) throw new Error('Freepik API key not found');
 
-    const checked = [];
+    const pending = [];
+    const seeded = [];
+
+    // Use cache first; only poll tasks still in progress/unknown/no-url
     for (const t of tasks) {
       const taskId = t?.taskId;
-      if (!taskId) {
-        checked.push({
-          sceneNumber: t?.sceneNumber ?? null,
-          title: t?.title ?? null,
-          taskId: null,
-          status: 'error',
-          videoUrl: null,
-          duration: t?.duration ?? null,
-          error: 'Missing taskId',
-        });
-        continue;
-      }
-
-      // 기본 캐시
+      if (!taskId) continue;
       const cached = TASK_CACHE.get(taskId);
+      if (cached && cached.status === 'completed' && cached.videoUrl) {
+        seeded.push({
+          sceneNumber: cached.sceneNumber ?? t?.sceneNumber ?? null,
+          title: t?.title ?? null,
+          taskId,
+          status: 'completed',
+          videoUrl: cached.videoUrl,
+          duration: t?.duration ?? null,
+          providerStatus: 'CACHED',
+        });
+      } else {
+        pending.push(t);
+      }
+    }
 
+    const fetched = [];
+    for (const t of pending) {
+      const taskId = t.taskId;
       try {
         const r = await fetch(
           `https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p/${taskId}`,
@@ -55,62 +63,57 @@ export default async function handler(req, res) {
         );
 
         if (!r.ok) {
-          // 5xx면 캐시가 있으면 캐시로 대체해 플럭추에이션 완화
-          if (r.status >= 500 && cached) {
-            checked.push({
-              sceneNumber: cached.sceneNumber ?? t?.sceneNumber ?? null,
-              title: t?.title ?? null,
+          const text = await r.text();
+          console.error(`[video-status] status check ${taskId} 실패 (${r.status}):`, text);
+          // fallback to previous cache if any
+          const cached = TASK_CACHE.get(taskId);
+          if (cached) {
+            fetched.push({
+              sceneNumber: cached.sceneNumber ?? t.sceneNumber ?? null,
+              title: t.title ?? null,
               taskId,
               status: cached.status,
               videoUrl: cached.videoUrl ?? null,
-              duration: t?.duration ?? null,
+              duration: t.duration ?? null,
               providerStatus: 'CACHED_AFTER_5XX',
             });
             continue;
           }
-          const text = await r.text();
-          console.error(`[video-status] status check ${taskId} 실패 (${r.status}):`, text);
-          checked.push({
-            sceneNumber: t?.sceneNumber ?? null,
-            title: t?.title ?? null,
+          fetched.push({
+            sceneNumber: t.sceneNumber ?? null,
+            title: t.title ?? null,
             taskId,
             status: 'error',
             videoUrl: null,
-            duration: t?.duration ?? null,
+            duration: t.duration ?? null,
             error: `Status check failed: ${r.status}`,
           });
           continue;
         }
 
         const json = await r.json();
-        const providerStatus = json?.data?.status || 'UNKNOWN';
-        const upper = String(providerStatus).toUpperCase();
+        const providerStatus = String(json?.data?.status || 'UNKNOWN').toUpperCase();
 
         let status = 'in_progress';
-        if (upper === 'COMPLETED') status = 'completed';
-        else if (upper === 'FAILED' || upper === 'ERROR') status = 'failed';
-        else if (upper === 'UNKNOWN') status = 'unknown';
+        if (providerStatus === 'COMPLETED') status = 'completed';
+        else if (providerStatus === 'FAILED' || providerStatus === 'ERROR') status = 'failed';
+        else if (providerStatus === 'UNKNOWN') status = 'unknown';
 
         const videoUrl =
           Array.isArray(json?.data?.result) && json.data.result[0]?.url
             ? json.data.result[0].url
             : null;
-        const duration =
-          Array.isArray(json?.data?.result) && json.data.result[0]?.duration
-            ? json.data.result[0].duration
-            : t?.duration ?? null;
 
         const item = {
-          sceneNumber: t?.sceneNumber ?? null,
-          title: t?.title ?? null,
+          sceneNumber: t.sceneNumber ?? null,
+          title: t.title ?? null,
           taskId,
           status,
           videoUrl,
-          duration,
+          duration: t.duration ?? null,
           providerStatus,
         };
 
-        // 캐시 업데이트
         TASK_CACHE.set(taskId, {
           status: item.status,
           videoUrl: item.videoUrl,
@@ -118,52 +121,52 @@ export default async function handler(req, res) {
           updatedAt: Date.now(),
         });
 
-        checked.push(item);
+        fetched.push(item);
       } catch (err) {
         console.error(`[video-status] status check ${taskId} 예외:`, err.message);
+        const cached = TASK_CACHE.get(taskId);
         if (cached) {
-          checked.push({
-            sceneNumber: cached.sceneNumber ?? t?.sceneNumber ?? null,
-            title: t?.title ?? null,
+          fetched.push({
+            sceneNumber: cached.sceneNumber ?? t.sceneNumber ?? null,
+            title: t.title ?? null,
             taskId,
             status: cached.status,
             videoUrl: cached.videoUrl ?? null,
-            duration: t?.duration ?? null,
+            duration: t.duration ?? null,
             providerStatus: 'CACHED_AFTER_EXCEPTION',
           });
         } else {
-          checked.push({
-            sceneNumber: t?.sceneNumber ?? null,
-            title: t?.title ?? null,
+          fetched.push({
+            sceneNumber: t.sceneNumber ?? null,
+            title: t.title ?? null,
             taskId,
             status: 'error',
             videoUrl: null,
-            duration: t?.duration ?? null,
+            duration: t.duration ?? null,
             error: err.message,
           });
         }
       }
     }
 
-    const completedByStatus = checked.filter((s) => s.status === 'completed').length;
-    const ready = checked.filter((s) => s.status === 'completed' && s.videoUrl).length;
-    const failed = checked.filter((s) => s.status === 'failed' || s.status === 'error').length;
-    const inProgress = checked.filter((s) => s.status === 'in_progress' || s.status === 'unknown').length;
+    const merged = [...seeded, ...fetched];
 
-    const payload = {
+    const completedByStatus = merged.filter((s) => s.status === 'completed').length;
+    const ready = merged.filter((s) => s.status === 'completed' && s.videoUrl).length;
+    const failed = merged.filter((s) => s.status === 'failed' || s.status === 'error').length;
+    const inProgress = merged.filter((s) => s.status === 'in_progress' || s.status === 'unknown').length;
+
+    res.status(200).json({
       success: true,
       summary: {
-        total: checked.length,
-        completed: ready,             // 하위호환: 기존 completed는 "URL까지 준비된" 개수
-        completedByStatus,            // 추가: 상태 기준 완료
-        ready,                        // 추가: URL까지 준비된 개수
+        total: merged.length,
+        completedByStatus,
+        ready,
         inProgress,
         failed,
       },
-      segments: checked,
-    };
-
-    return res.status(200).json(payload);
+      segments: merged,
+    });
   } catch (error) {
     console.error('[video-status] 전체 오류:', error);
     res.status(500).json({ success: false, error: error.message });
