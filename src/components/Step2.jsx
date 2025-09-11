@@ -232,16 +232,29 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         />
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className={`px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'} `}
-          onClick={onPrev}
-          disabled={isBusy}
-          title={isBusy ? '생성 중에는 이전 단계로 이동할 수 없습니다.' : '이전 단계로 이동'}
-        >
-          이전 단계
-        </button>
+      {/* 액션 바: 새로 시작(왼쪽), 이전(왼쪽), 생성(오른쪽) */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className={`px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}`}
+            onClick={() => window.location.reload()}
+            disabled={isBusy}
+            title={isBusy ? '생성 중에는 새로 시작할 수 없습니다.' : '초기 상태로 새로 시작'}
+          >
+            새로 시작
+          </button>
+
+          <button
+            type="button"
+            className={`px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'} `}
+            onClick={onPrev}
+            disabled={isBusy}
+            title={isBusy ? '생성 중에는 이전 단계로 이동할 수 없습니다.' : '이전 단계로 이동'}
+          >
+            이전 단계
+          </button>
+        </div>
 
         <button
           type="button"
@@ -252,19 +265,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         >
           {isBusy ? '생성 중...' : '스토리보드 생성'}
         </button>
-
-        <button
-          type="button"
-          className={`ml-auto px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}`}
-          onClick={() => window.location.reload()}
-          disabled={isBusy}
-          title={isBusy ? '생성 중에는 새로 시작할 수 없습니다.' : '초기 상태로 새로 시작'}
-        >
-          새로 시작
-        </button>
       </div>
 
-      {/* 오버레이: 함수가 아닌 JSX로 직접 렌더 */}
+      {/* 오버레이 */}
       {isBusy && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
