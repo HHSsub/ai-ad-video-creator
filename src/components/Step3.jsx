@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-const [overallPercent, setOverallPercent] = useState(0);
 
 const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
   // 방어: 배열/객체 모두 지원
   const styles = Array.isArray(storyboard) ? storyboard : (storyboard?.storyboard ?? []);
+  const [overallPercent, setOverallPercent] = useState(0);
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
   const [videoProject, setVideoProject] = useState(null);
@@ -97,83 +97,84 @@ const Step3 = ({ formData, storyboard, onPrev, setIsLoading, isLoading }) => {
 
   // 기존 startVideoPolling 함수 전체 교체
   const startVideoPolling = async (videoSegments) => {
-    // 서버 요구 스펙: tasks 배열
-    const tasks = videoSegments
-      .filter(segment => segment?.taskId)
-      .map(segment => ({
-        taskId: segment.taskId,
-        sceneNumber: segment.sceneNumber,
-        duration: segment.duration,
-        title: segment.originalImage?.title || `Segment ${segment.sceneNumber}`
-      }));
-  
-    if (tasks.length === 0) {
-      console.log('폴링할 task가 없습니다.');
-      setIsGeneratingVideo(false);
-      setIsLoading?.(false);
-      return;
-    }
-  
-    // 총 세그먼트 수는 tasks 길이 기준
-    setTotalSegments(tasks.length);
-  
-    let pollTimer = null;
-  
-    const tick = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/video-status`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tasks }) // ▶ 여기 핵심 수정
-        });
-  
-        if (!response.ok) {
-          // 400이면 서버가 "tasks array is required" 등 반환 → 진행 갱신 중단됨
-          const txt = await response.text().catch(() => '');
-          console.warn('비디오 상태 조회 실패:', response.status, txt);
-          return;
-        }
-  
-        const result = await response.json();
-        const segments = Array.isArray(result?.segments) ? result.segments : [];
-  
-        // 진행률 계산
-        const total = result?.summary?.total ?? tasks.length;
-        const completed = result?.summary?.completed ?? segments.filter(s => s.status === 'completed' && s.videoUrl).length;
-  
-        setOverallPercent(total ? Math.round((completed / total) * 100) : 0);
-  
-        // 씬별 상태 맵
-        const map = {};
-        for (const s of segments) {
-          map[s.sceneNumber] = s.status;
-        }
-        setVideoProgress(map);
-        setCompletedSegments(completed);
-  
-        // 모두 완료되면 종료
-        if (completed === total) {
-          clearInterval(pollTimer);
-          setIsGeneratingVideo(false);
-          setIsLoading?.(false);
-        }
-      } catch (e) {
-        console.warn('폴링 예외:', e?.message || e);
+  // 서버 요구 스펙: tasks 배열
+  const tasks = (videoSegments || [])
+    .filter(segment => segment?.taskId)
+    .map(segment => ({
+      taskId: segment.taskId,
+      sceneNumber: segment.sceneNumber,
+      duration: segment.duration,
+      title: segment.originalImage?.title || `Segment ${segment.sceneNumber}`
+    }));
+
+  if (tasks.length === 0) {
+    console.log('폴링할 task가 없습니다.');
+    setIsGeneratingVideo(false);
+    setIsLoading?.(false);
+    return;
+  }
+
+  // 총 세그먼트 수
+  setTotalSegments(tasks.length);
+
+  let pollTimer = null;
+
+  const tick = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/video-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks }) // ▶ 핵심: { tasks } 로 보냄
+      });
+
+      if (!response.ok) {
+        const txt = await response.text().catch(() => '');
+        console.warn('비디오 상태 조회 실패:', response.status, txt);
+        return;
       }
-    };
-  
-    // 즉시 1회 실행 후 3초마다 폴링
-    await tick();
-    pollTimer = setInterval(tick, 3000);
-  
-    // 10분 타임아웃
-    setTimeout(() => {
-      if (pollTimer) clearInterval(pollTimer);
-      setIsGeneratingVideo(false);
-      setIsLoading?.(false);
-      console.log('폴링 타임아웃');
-    }, 10 * 60 * 1000);
+
+      const result = await response.json();
+      const segments = Array.isArray(result?.segments) ? result.segments : [];
+
+      // 씬별 상태 맵
+      const map = {};
+      let completedCount = 0;
+      for (const s of segments) {
+        map[s.sceneNumber] = s.status;
+        if (s.status === 'completed' && s.videoUrl) completedCount++;
+      }
+      setVideoProgress(map);
+
+      // 진행률 계산
+      const total = result?.summary?.total ?? tasks.length;
+      const completed = result?.summary?.completed ?? completedCount;
+      setCompletedSegments(completed);
+      const pct = total ? Math.round((completed / total) * 100) : 0;
+      setOverallPercent(pct);
+
+      // 모두 완료되면 종료
+      if (completed === total) {
+        clearInterval(pollTimer);
+        setIsGeneratingVideo(false);
+        setIsLoading?.(false);
+      }
+    } catch (e) {
+      console.warn('폴링 예외:', e?.message || e);
+    }
   };
+
+  // 즉시 1회 실행 후 3초마다 폴링
+  await tick();
+  pollTimer = setInterval(tick, 3000);
+
+  // 10분 타임아웃
+  setTimeout(() => {
+    if (pollTimer) clearInterval(pollTimer);
+    setIsGeneratingVideo(false);
+    setIsLoading?.(false);
+    console.log('폴링 타임아웃');
+  }, 10 * 60 * 1000);
+};
 
   const isBusy = isGeneratingVideo || isLoading;
   const noData = !Array.isArray(styles) || styles.length === 0;
