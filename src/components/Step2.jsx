@@ -1,304 +1,79 @@
+// 스타일별 이미지 개수 = (영상길이 ÷ 2). public/*.txt 기반 3단계 결과 사용.
 import { useState } from 'react';
-import PropTypes from 'prop-types';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''; // 예: https://api.yourdomain.com 또는 http://EC2:3000
-
-const Spinner = () => (
-  <div className="flex flex-col justify-center items-center text-center">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-    <p className="mt-4 text-lg text-white/90">스토리보드를 생성하는 중입니다...</p>
-    <p className="text-sm text-white/70 mt-2">
-      Gemini가 브리프/프롬프트를 만들고, Freepik이 이미지를 생성 중입니다.
-    </p>
-  </div>
-);
-
-const PLACEHOLDERS = [
-  `https://placehold.co/800x450/3B82F6/FFFFFF?text=${encodeURIComponent('Business Professional')}`,
-  `https://placehold.co/800x450/10B981/FFFFFF?text=${encodeURIComponent('Product Showcase')}`,
-  `https://placehold.co/800x450/F59E0B/FFFFFF?text=${encodeURIComponent('Lifestyle Scene')}`,
-  `https://placehold.co/800x450/EF4444/FFFFFF?text=${encodeURIComponent('Call To Action')}`,
-  `https://placehold.co/800x450/8B5CF6/FFFFFF?text=${encodeURIComponent('Brand Identity')}`,
-  `https://placehold.co/800x450/06B6D4/FFFFFF?text=${encodeURIComponent('Customer Happy')}`,
-];
-
-function getImageCountByVideoLength(videoLength) {
-  const map = { '10초': 5, '30초': 15, '60초': 30 };
-  return map[videoLength] || 15;
+function imagesPerStyle(videoLength) {
+  const n = Math.max(1, Math.floor(Number(videoLength || 10) / 2));
+  return n;
 }
 
-async function runWithConcurrency(tasks, limit, onProgress) {
-  let i = 0;
-  let completed = 0;
-  const results = new Array(tasks.length);
-  const workers = new Array(Math.min(limit, tasks.length)).fill(0).map(async () => {
-    while (true) {
-      const current = i++;
-      if (current >= tasks.length) break;
-      try {
-        results[current] = await tasks[current]();
-      } catch (e) {
-        results[current] = { ok: false, error: e?.message || 'unknown error' };
-      } finally {
-        completed++;
-        onProgress?.(completed, tasks.length);
-      }
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) => {
+export default function Step2({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) {
   const [error, setError] = useState(null);
-  const [debugInfo, setDebugInfo] = useState(null);
-  const [currentPhase, setCurrentPhase] = useState('idle'); // idle | generating | done
   const [progress, setProgress] = useState(0);
-
-  const isBusy = isLoading || currentPhase === 'generating';
-
-  const updatePhase = (phase, p) => {
-    setCurrentPhase(phase);
-    if (typeof p === 'number') {
-      const clamped = Math.max(0, Math.min(100, Math.round(p)));
-      setProgress(clamped);
-    }
-  };
 
   const handleGenerateStoryboard = async () => {
     setIsLoading?.(true);
-    setError(null);
-    setDebugInfo(null);
-    setProgress(0);
-    updatePhase('generating', 1);
+    setError(null); setProgress(0);
 
     try {
-      // 1) Init 호출
-      const initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
+      const r = await fetch(`${API_BASE}/api/storyboard-init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ formData })
       });
+      if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error || `init ${r.status}`);
 
-      if (!initRes.ok) {
-        const err = await initRes.json().catch(() => null);
-        throw new Error(err?.error || `storyboard-init 실패: ${initRes.status}`);
-      }
+      const { imagePrompts, styles, metadata } = await r.json();
+      const perStyle = imagesPerStyle(formData.videoLength);
+      const promptsToUse = (imagePrompts || []).slice(0, perStyle);
 
-      const initData = await initRes.json();
-      if (!initData?.success) {
-        throw new Error(initData?.error || '브리프/프롬프트 생성 실패');
-      }
-
-      const styles = initData.styles || [];
-      const imagePrompts = initData.imagePrompts || [];
-      const imageCountPerStyle =
-        initData?.metadata?.imageCountPerStyle || getImageCountByVideoLength(formData.videoLength);
-
-      if (!styles.length || !imagePrompts.length) {
-        throw new Error('초기 데이터가 올바르지 않습니다. (styles/imagePrompts 없음)');
-      }
-
-      setDebugInfo({
-        totalStyles: styles.length,
-        imageCountPerStyle,
-        geminiModel: initData?.metadata?.geminiModel || 'n/a',
-        fallbackModel: initData?.metadata?.fallbackGeminiModel || '',
-        modelChain: initData?.metadata?.geminiModelChain || []
-      });
-      updatePhase('generating', 10);
-
-      // 2) 이미지 생성
-      const promptsToUse = imagePrompts.slice(0, imageCountPerStyle);
-      const totalImages = styles.length * promptsToUse.length;
-      let produced = 0;
-
-      const storyboardArray = []; // Step3가 기대하는: 배열
-
+      const storyboard = [];
       for (const style of styles) {
-        const tasks = promptsToUse.map((p, idx) => async () => {
-          const body = {
-            prompt: p?.prompt,
-            styleName: style.name,           // 서버 요구 필드
-            sceneNumber: p?.sceneNumber,
-            title: p?.title
-          };
+        const images = [];
+        const tasks = promptsToUse.map((p, i) => async () => {
+          const compositePrompt = [
+            p.prompt,
+            `style: ${style.name}`,
+            style.description,
+            style.colorPalette && `palette: ${style.colorPalette}`,
+          ].filter(Boolean).join(', ');
 
-          try {
-            const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body)
+          const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: compositePrompt, styleName: style.name, sceneNumber: p.sceneNumber, title: p.title })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            images.push({
+              id: `${style.name}-${i + 1}`,
+              title: p.title, url: data.url, thumbnail: data.url,
+              prompt: compositePrompt, duration: p.duration, sceneNumber: p.sceneNumber
             });
-
-            let url = '';
-            if (res.ok) {
-              const data = await res.json();
-              url = data?.url || '';
-            }
-
-            if (!url) {
-              url = PLACEHOLDERS[idx % PLACEHOLDERS.length]; // 실패 시 플레이스홀더
-            }
-
-            produced++;
-            const pctCore = 10 + (produced / totalImages) * 80; // 10 → 90
-            updatePhase('generating', pctCore);
-
-            return {
-              id: `${style.name.toLowerCase().replace(/\s+/g, '-')}-${idx + 1}`,
-              title: p?.title || `Scene ${p?.sceneNumber || idx + 1}`,
-              url,
-              thumbnail: url,
-              prompt: `${p?.prompt || ''}, ${style.description}`,
-              duration: p?.duration,
-              sceneNumber: p?.sceneNumber || idx + 1
-            };
-          } catch (_e) {
-            produced++;
-            const pctCore = 10 + (produced / totalImages) * 80;
-            updatePhase('generating', pctCore);
-
-            const ph = PLACEHOLDERS[idx % PLACEHOLDERS.length];
-            return {
-              id: `${style.name.toLowerCase().replace(/\s+/g, '-')}-${idx + 1}`,
-              title: p?.title || `Scene ${p?.sceneNumber || idx + 1}`,
-              url: ph,
-              thumbnail: ph,
-              prompt: `${p?.prompt || ''}, ${style.description}`,
-              duration: p?.duration,
-              sceneNumber: p?.sceneNumber || idx + 1
-            };
           }
+          setProgress(prev => Math.min(100, prev + (100 / (styles.length * promptsToUse.length))));
         });
-
-        const images = await runWithConcurrency(tasks, 3, () => {});
-        images.sort((a, b) => (a.sceneNumber || 0) - (b.sceneNumber || 0));
-
-        storyboardArray.push({
-          style: style.name,                 // Step3가 읽는 필드명
-          description: style.description,
-          colorPalette: style.colorPalette,
-          images,
-          searchQuery: `${formData.brandName} ${formData.industryCategory} advertisement`,
-          status: images.length > 0 ? 'success' : 'fallback'
-        });
+        // 간단한 병렬(4)
+        let idx = 0; const workers = Array.from({ length: 4 }, async () => { while (idx < tasks.length) { const i = idx++; await tasks[i](); }});
+        await Promise.all(workers);
+        images.sort((a,b)=>a.sceneNumber-b.sceneNumber);
+        storyboard.push({ style: style.name, description: style.description, colorPalette: style.colorPalette, images });
       }
 
-      // 배열만 넘김: Step3의 storyboard.map 정상 작동
-      setStoryboard?.(storyboardArray);
-
-      updatePhase('done', 100);
+      setStoryboard?.({ storyboard, imagePrompts, metadata: { ...metadata, perStyle } });
+      setIsLoading?.(false);
       onNext?.();
     } catch (e) {
-      console.error('스토리보드 생성 오류:', e);
-      setError(e?.message || '스토리보드 생성 중 오류가 발생했습니다.');
-      updatePhase('idle', 0);
-    } finally {
+      setError(e.message);
       setIsLoading?.(false);
     }
   };
 
   return (
-    <div className="w-full">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold">2단계: 스토리보드 생성</h2>
-        <p className="text-gray-600 mt-1">
-          제공한 정보로 AI가 스토리보드와 이미지를 자동 생성합니다.
-        </p>
-      </div>
-
-      {debugInfo && (
-        <div className="mb-4 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded p-3">
-          <div>스타일 개수: {debugInfo.totalStyles}</div>
-          <div>스타일당 이미지 수: {debugInfo.imageCountPerStyle}</div>
-          <div>
-            Gemini 모델: {debugInfo.geminiModel}{' '}
-            {debugInfo.fallbackModel ? `(fallback: ${debugInfo.fallbackModel})` : ''}
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded p-3">
-          {error}
-        </div>
-      )}
-
-      <div className="w-full h-2 bg-gray-200 rounded overflow-hidden mb-4">
-        <div
-          className="h-2 bg-blue-600 transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      {/* 액션 바: 새로 시작(왼쪽), 이전(왼쪽), 생성(오른쪽) */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className={`px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}`}
-            onClick={() => window.location.reload()}
-            disabled={isBusy}
-            title={isBusy ? '생성 중에는 새로 시작할 수 없습니다.' : '초기 상태로 새로 시작'}
-          >
-            새로 시작
-          </button>
-
-          <button
-            type="button"
-            className={`px-4 py-2 rounded border ${isBusy ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white hover:bg-gray-50'} `}
-            onClick={onPrev}
-            disabled={isBusy}
-            title={isBusy ? '생성 중에는 이전 단계로 이동할 수 없습니다.' : '이전 단계로 이동'}
-          >
-            이전 단계
-          </button>
-        </div>
-
-        <button
-          type="button"
-          className={`px-4 py-2 rounded text-white ${isBusy ? 'bg-blue-300 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'}`}
-          onClick={handleGenerateStoryboard}
-          disabled={isBusy}
-          title={isBusy ? '생성 중입니다...' : '스토리보드 자동 생성 시작'}
-        >
-          {isBusy ? '생성 중...' : '스토리보드 생성'}
-        </button>
-      </div>
-
-      {/* 오버레이 */}
-      {isBusy && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]"
-          role="alert"
-          aria-live="assertive"
-        >
-          <div className="w-full max-w-md p-6">
-            <Spinner />
-            <div className="mt-6 w-full h-2 bg-white/20 rounded overflow-hidden">
-              <div
-                className="h-2 bg-white transition-all duration-300"
-                style={{ width: `${Math.max(5, progress)}%` }}
-              />
-            </div>
-            <p className="mt-3 text-center text-white/80 text-sm">
-              진행률 {Math.max(5, Math.round(progress))}%
-            </p>
-          </div>
-        </div>
-      )}
+    <div>
+      <button onClick={handleGenerateStoryboard} disabled={isLoading}>스토리보드 생성</button>
+      {!!progress && <div>진행률 {Math.round(progress)}%</div>}
+      {error && <div className="text-red-600">{error}</div>}
     </div>
   );
-};
-
-Step2.propTypes = {
-  onNext: PropTypes.func,
-  onPrev: PropTypes.func,
-  formData: PropTypes.object.isRequired,
-  setStoryboard: PropTypes.func,
-  setIsLoading: PropTypes.func,
-  isLoading: PropTypes.bool
-};
-
-export default Step2;
+}
