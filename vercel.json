@@ -5,10 +5,7 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-
-    // 옵션: 앱이 /ai-ad-video-creator/favicon.ico를 요청한다면 /favicon.ico로 매핑해 404 제거
-    { "source": "/ai-ad-video-creator/favicon.ico", "destination": "/favicon.ico" }
+    { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "headers": [
     {
