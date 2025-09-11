@@ -8,16 +8,62 @@ const Spinner = () => (
       AI를 활용하여 스토리보드를 생성하는 중입니다.
     </p>
     <p className="text-sm text-gray-500 mt-2">
-      Gemini AI가 브리프를 작성하고, Freepik API가 이미지를 생성합니다.
+      Gemini AI가 브리프/프롬프트를 만들고, Freepik API가 이미지를 생성합니다.
     </p>
   </div>
 );
+
+const PLACEHOLDERS = [
+  'https://via.placeholder.com/800x450/3B82F6/FFFFFF?text=Business+Professional',
+  'https://via.placeholder.com/800x450/10B981/FFFFFF?text=Product+Showcase',
+  'https://via.placeholder.com/800x450/F59E0B/FFFFFF?text=Lifestyle+Scene',
+  'https://via.placeholder.com/800x450/EF4444/FFFFFF?text=Call+To+Action',
+  'https://via.placeholder.com/800x450/8B5CF6/FFFFFF?text=Brand+Identity',
+  'https://via.placeholder.com/800x450/06B6D4/FFFFFF?text=Customer+Happy'
+];
+
+function getImageCountByVideoLength(videoLength) {
+  const map = { '10초': 5, '30초': 15, '60초': 30 };
+  return map[videoLength] || 15;
+}
+
+async function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// 간단한 병렬 실행기 (동시성 제한)
+async function runWithConcurrency(tasks, limit, onProgress) {
+  let i = 0;
+  let completed = 0;
+  const results = new Array(tasks.length);
+  const workers = new Array(Math.min(limit, tasks.length)).fill(0).map(async () => {
+    while (true) {
+      const current = i++;
+      if (current >= tasks.length) break;
+      try {
+        results[current] = await tasks[current]();
+      } catch (e) {
+        results[current] = { ok: false, error: e?.message || 'unknown error' };
+      } finally {
+        completed++;
+        onProgress?.(completed, tasks.length);
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) => {
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
   const [currentPhase, setCurrentPhase] = useState('');
   const [progress, setProgress] = useState(0);
+
+  const updatePhase = (phase, p) => {
+    setCurrentPhase(phase);
+    if (typeof p === 'number') setProgress(Math.max(0, Math.min(100, Math.round(p))));
+  };
 
   const handleGenerateStoryboard = async () => {
     setIsLoading(true);
@@ -26,91 +72,177 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     setProgress(0);
 
     try {
-      console.log('=== 스토리보드 생성 시작 ===');
-      setCurrentPhase('브리프 생성 중...');
-      setProgress(10);
+      // 1) 빠른 프리페치: 브리프, 컨셉, 이미지 프롬프트, 스타일 목록
+      updatePhase('브리프/프롬프트 생성 준비...', 5);
 
-      // API 엔드포인트 호출
-      const response = await fetch('/api/storyboard', {
+      const initRes = await fetch('/api/storyboard-init', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ formData }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ formData })
       });
 
-      setProgress(30);
-      setCurrentPhase('서버 응답 처리 중...');
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error || 
-          `서버 오류: ${response.status} ${response.statusText}`
-        );
+      if (!initRes.ok) {
+        const err = await initRes.json().catch(() => null);
+        throw new Error(err?.error || `storyboard-init 실패: ${initRes.status}`);
       }
 
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || '스토리보드 생성에 실패했습니다.');
+      const initData = await initRes.json();
+      if (!initData?.success) {
+        throw new Error(initData?.error || '브리프/프롬프트 생성 실패');
       }
 
-      setProgress(70);
-      setCurrentPhase('스토리보드 데이터 처리 중...');
+      const styles = initData.styles || [];
+      const imagePrompts = initData.imagePrompts || [];
+      const imageCountPerStyle =
+        initData?.metadata?.imageCountPerStyle || getImageCountByVideoLength(formData.videoLength);
 
-      // 응답 데이터 검증
-      if (!data.storyboard || !Array.isArray(data.storyboard)) {
-        throw new Error('잘못된 스토리보드 데이터입니다.');
+      if (!styles.length || !imagePrompts.length) {
+        throw new Error('초기 데이터가 올바르지 않습니다. (styles/imagePrompts 없음)');
       }
 
-      console.log('스토리보드 생성 완료:', {
-        총스타일: data.storyboard.length,
-        성공: data.metadata?.successCount || 0,
-        대체이미지: data.metadata?.fallbackCount || 0
-      });
-
-      // 디버그 정보 설정
       setDebugInfo({
-        totalStyles: data.storyboard.length,
-        successCount: data.metadata?.successCount || 0,
-        fallbackCount: data.metadata?.fallbackCount || 0,
-        creativeBrief: data.creativeBrief ? '생성됨' : '없음'
+        totalStyles: styles.length,
+        imageCountPerStyle,
+        geminiModel: initData?.metadata?.geminiModel || 'n/a',
+        fallbackModel: initData?.metadata?.fallbackGeminiModel || ''
       });
+      updatePhase('브리프/프롬프트 생성 완료', 20);
 
-      setProgress(90);
-      setCurrentPhase('최종 처리 중...');
+      // 2) 이미지 생성: 스타일 × 이미지프롬프트 앞 n개
+      const totalImages = styles.length * imageCountPerStyle;
+      let done = 0;
 
-      // 스토리보드 데이터 설정
-      setStoryboard(data.storyboard);
-      
-      setProgress(100);
-      setCurrentPhase('완료!');
+      const makeTask = (styleIndex, imgIndex) => async () => {
+        const style = styles[styleIndex];
+        const ip = imagePrompts[imgIndex];
+        const body = {
+          // 서버의 storyboard-render-image가 받는 필드에 맞춰 최대한 풍부하게 전달
+          prompt: ip?.prompt,
+          sceneNumber: ip?.sceneNumber,
+          duration: ip?.duration,
+          title: ip?.title,
+          style: { name: style?.name, description: style?.description },
+          // 문맥용(필수는 아니지만 서버에서 사용할 수 있음)
+          brandName: formData.brandName,
+          industryCategory: formData.industryCategory,
+          productServiceCategory: formData.productServiceCategory,
+          videoLength: formData.videoLength
+        };
 
-      // 잠시 대기 후 다음 단계로
-      setTimeout(() => {
-        onNext();
-      }, 1000);
+        let attempt = 0;
+        const maxAttempts = 2; // 개별 렌더링 재시도 2회
+        while (attempt < maxAttempts) {
+          attempt++;
+          try {
+            const r = await fetch('/api/storyboard-render-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body)
+            });
+            if (!r.ok) {
+              const t = await r.text().catch(() => '');
+              throw new Error(`HTTP ${r.status} ${t?.slice(0, 200)}`);
+            }
+            const data = await r.json();
+            if (data?.success && data?.url) {
+              return {
+                ok: true,
+                styleIndex,
+                imageIndex: imgIndex,
+                sceneNumber: ip?.sceneNumber,
+                duration: ip?.duration,
+                title: ip?.title,
+                url: data.url,
+                thumbnail: data.thumbnail || data.url,
+                prompt: data.prompt || ip?.prompt,
+              };
+            }
+            throw new Error(data?.error || '이미지 생성 실패');
+          } catch (e) {
+            if (attempt >= maxAttempts) {
+              // 폴백 이미지
+              const ph = PLACEHOLDERS[(imgIndex % PLACEHOLDERS.length)];
+              return {
+                ok: false,
+                styleIndex,
+                imageIndex: imgIndex,
+                sceneNumber: ip?.sceneNumber,
+                duration: ip?.duration,
+                title: ip?.title,
+                url: ph,
+                thumbnail: ph,
+                prompt: ip?.prompt,
+                isFallback: true,
+                error: e?.message || 'unknown'
+              };
+            }
+            // 약간 대기 후 재시도
+            await sleep(1200);
+          }
+        }
+      };
 
-    } catch (error) {
-      console.error('스토리보드 생성 실패:', error);
-      
-      let errorMessage = '스토리보드 생성 중 오류가 발생했습니다.';
-      
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.';
-      } else if (error.message.includes('404')) {
-        errorMessage = '서버 API 엔드포인트가 존재하지 않습니다. 개발자에게 문의하세요.';
-      } else if (error.message.includes('500')) {
-        errorMessage = '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
-      } else if (error.message) {
-        errorMessage = error.message;
+      const tasks = [];
+      for (let s = 0; s < styles.length; s++) {
+        for (let i = 0; i < imageCountPerStyle; i++) {
+          tasks.push(makeTask(s, i));
+        }
       }
 
-      setError(errorMessage);
+      updatePhase('이미지 생성 시작...', 25);
+
+      const results = await runWithConcurrency(tasks, 2, (completed, total) => {
+        done = completed;
+        // 25% → 95% 구간을 이미지 생성 진행률에 매핑
+        const p = 25 + (completed / total) * 70;
+        const curStyle = Math.min(styles.length, Math.floor(completed / imageCountPerStyle) + 1);
+        setCurrentPhase(`이미지 생성 중... (스타일 ${curStyle}/${styles.length}, 전체 ${completed}/${total})`);
+        setProgress(Math.round(p));
+      });
+
+      // 3) 스타일별로 이미지 묶기
+      const storyboard = styles.map((st, idx) => {
+        const imgs = results
+          .filter((r) => r?.styleIndex === idx)
+          .sort((a, b) => (a.imageIndex ?? 0) - (b.imageIndex ?? 0))
+          .map((r, k) => ({
+            id: `${st.name.toLowerCase().replace(/\s+/g, '-')}-${k + 1}`,
+            title: r.title || `Scene ${k + 1}`,
+            url: r.url,
+            thumbnail: r.thumbnail,
+            prompt: r.prompt,
+            duration: r.duration || 6,
+            sceneNumber: r.sceneNumber || (k + 1),
+            isFallback: !!r.isFallback
+          }));
+
+        return {
+          style: st.name,
+          description: st.description,
+          colorPalette: st.colorPalette,
+          images: imgs,
+          status: imgs.some((i) => !i.isFallback) ? 'success' : 'fallback'
+        };
+      });
+
+      setDebugInfo((prev) => ({
+        ...prev,
+        successCount: storyboard.filter((s) => s.status === 'success').length,
+        fallbackCount: storyboard.filter((s) => s.status === 'fallback').length
+      }));
+
+      updatePhase('최종 정리 중...', 98);
+      setStoryboard(storyboard);
+      updatePhase('완료!', 100);
+
+      setTimeout(() => onNext(), 600);
+    } catch (e) {
+      console.error('스토리보드 생성 실패:', e);
+      let msg = '스토리보드 생성 중 오류가 발생했습니다.';
+      if (e?.message) msg = e.message;
+      setError(msg);
       setProgress(0);
       setCurrentPhase('');
-      
     } finally {
       setIsLoading(false);
     }
@@ -120,8 +252,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     return (
       <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
         <Spinner />
-        
-        {/* 진행 상황 표시 */}
         {currentPhase && (
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
             <div className="flex justify-between items-center mb-2">
@@ -129,23 +259,22 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               <span className="text-sm text-blue-600">{progress}%</span>
             </div>
             <div className="w-full bg-blue-200 rounded-full h-2">
-              <div 
+              <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
-              ></div>
+              />
             </div>
           </div>
         )}
-
-        {/* 디버그 정보 */}
         {debugInfo && (
           <div className="mt-4 p-4 bg-green-50 rounded-lg">
             <h4 className="font-medium text-green-800 mb-2">처리 현황</h4>
             <div className="text-sm text-green-700 space-y-1">
               <p>총 스타일: {debugInfo.totalStyles}개</p>
-              <p>성공: {debugInfo.successCount}개</p>
-              <p>대체 이미지: {debugInfo.fallbackCount}개</p>
-              <p>크리에이티브 브리프: {debugInfo.creativeBrief}</p>
+              {debugInfo.imageCountPerStyle && <p>스타일당 이미지: {debugInfo.imageCountPerStyle}개</p>}
+              {typeof debugInfo.successCount === 'number' && <p>성공: {debugInfo.successCount}개</p>}
+              {typeof debugInfo.fallbackCount === 'number' && <p>대체 스타일: {debugInfo.fallbackCount}개</p>}
+              {debugInfo.geminiModel && <p>Gemini 모델: {debugInfo.geminiModel}{debugInfo.fallbackModel ? ` (fallback: ${debugInfo.fallbackModel})` : ''}</p>}
             </div>
           </div>
         )}
@@ -167,38 +296,37 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           </svg>
           입력된 정보 요약
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div className="bg-white p-3 rounded shadow-sm">
-            <strong className="text-gray-700">브랜드명:</strong> 
+            <strong className="text-gray-700">브랜드명:</strong>
             <span className="ml-2 text-gray-900 font-medium">{formData.brandName}</span>
           </div>
           <div className="bg-white p-3 rounded shadow-sm">
-            <strong className="text-gray-700">산업 카테고리:</strong> 
+            <strong className="text-gray-700">산업 카테고리:</strong>
             <span className="ml-2 text-gray-900">{formData.industryCategory}</span>
           </div>
           <div className="bg-white p-3 rounded shadow-sm">
-            <strong className="text-gray-700">제품/서비스:</strong> 
+            <strong className="text-gray-700">제품/서비스:</strong>
             <span className="ml-2 text-gray-900">{formData.productServiceName || formData.productServiceCategory}</span>
           </div>
           <div className="bg-white p-3 rounded shadow-sm">
-            <strong className="text-gray-700">영상 목적:</strong> 
+            <strong className="text-gray-700">영상 목적:</strong>
             <span className="ml-2 text-gray-900">{formData.videoPurpose}</span>
           </div>
           <div className="bg-white p-3 rounded shadow-sm">
-            <strong className="text-gray-700">영상 길이:</strong> 
+            <strong className="text-gray-700">영상 길이:</strong>
             <span className="ml-2 text-gray-900 font-bold text-blue-600">{formData.videoLength}</span>
           </div>
           <div className="bg-white p-3 rounded shadow-sm">
-            <strong className="text-gray-700">핵심 타겟:</strong> 
+            <strong className="text-gray-700">핵심 타겟:</strong>
             <span className="ml-2 text-gray-900">{formData.coreTarget}</span>
           </div>
           <div className="md:col-span-2 bg-white p-3 rounded shadow-sm">
-            <strong className="text-gray-700">핵심 차별점:</strong> 
+            <strong className="text-gray-700">핵심 차별점:</strong>
             <span className="ml-2 text-gray-900">{formData.coreDifferentiation}</span>
           </div>
-          
-          {/* 업로드된 파일 정보 */}
+
           {(formData.brandLogo || formData.productImage) && (
             <div className="md:col-span-2 bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded border border-green-200">
               <strong className="text-green-700">업로드된 파일:</strong>
@@ -225,43 +353,16 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </div>
       </div>
 
-      {/* 생성 과정 설명 */}
-      <div className="text-center mb-8">
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-lg border border-purple-200">
-          <h4 className="text-lg font-semibold text-purple-800 mb-3">🤖 AI 스토리보드 생성 과정</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="bg-white p-4 rounded shadow-sm">
-              <div className="text-2xl mb-2">🧠</div>
-              <div className="font-medium text-gray-800">1. AI 브리프 생성</div>
-              <div className="text-gray-600">Gemini AI가 창의적인 광고 전략을 수립합니다</div>
-            </div>
-            <div className="bg-white p-4 rounded shadow-sm">
-              <div className="text-2xl mb-2">🎨</div>
-              <div className="font-medium text-gray-800">2. 스타일별 이미지</div>
-              <div className="text-gray-600">6가지 스타일로 각각 다른 분위기의 이미지를 생성합니다</div>
-            </div>
-            <div className="bg-white p-4 rounded shadow-sm">
-              <div className="text-2xl mb-2">📋</div>
-              <div className="font-medium text-gray-800">3. 스토리보드 완성</div>
-              <div className="text-gray-600">선택 가능한 완성된 스토리보드를 제공합니다</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 에러 표시 */}
       {error && (
         <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L9.414 10l1.293-1.293a1 1 0 10-1.414-1.414L7.586 8.586 6.293 7.293z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                스토리보드 생성 오류
-              </h3>
+              <h3 className="text-sm font-medium text-red-800">스토리보드 생성 오류</h3>
               <div className="mt-2 text-sm text-red-700">
                 <p>{error}</p>
               </div>
@@ -278,7 +379,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </div>
       )}
 
-      {/* 액션 버튼들 */}
       <div className="flex justify-between items-center">
         <button
           onClick={onPrev}
@@ -291,18 +391,14 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </button>
 
         <div className="text-center">
-          <div className="text-sm text-gray-500 mb-2">
-            예상 소요시간: 2-3분
-          </div>
-          <div className="text-xs text-gray-400">
-            AI 처리 + 이미지 생성 + 스타일 구성
-          </div>
+          <div className="text-sm text-gray-500 mb-2">예상 소요시간: 2~5분</div>
+          <div className="text-xs text-gray-400">AI 처리 + 이미지 생성 (동시 2개)</div>
         </div>
 
         <button
           onClick={handleGenerateStoryboard}
           disabled={isLoading}
-          className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:hover:scale-100"
+          className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
         >
           {isLoading ? (
             <>
@@ -320,7 +416,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         </button>
       </div>
 
-      {/* 참고 사항 */}
       <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <div className="flex items-start">
           <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -329,10 +424,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           <div>
             <h4 className="text-sm font-medium text-yellow-800">참고사항</h4>
             <div className="text-sm text-yellow-700 mt-1 space-y-1">
-              <p>• 업로드한 브랜드 로고와 제품 이미지는 자동으로 스토리보드에 반영됩니다.</p>
-              <p>• API 호출 제한으로 인해 일부 이미지가 대체 이미지로 표시될 수 있습니다.</p>
-              <p>• 생성 과정에서 오류가 발생하면 고품질 대체 이미지를 제공합니다.</p>
-              <p>• 인터넷 연결 상태가 좋지 않으면 생성 시간이 더 오래 걸릴 수 있습니다.</p>
+              <p>• 여러 작업을 나눠 호출 및 병렬작업하여 504 ERROR를 방지합니다.</p>
+              <p>• 일부 이미지는 대체 이미지로 채워질 수 있습니다.</p>
+              <p>• 네트워크 상태/Freepik 대기시간에 따라 시간이 달라질 수 있습니다. (5분 등)</p>
             </div>
           </div>
         </div>
