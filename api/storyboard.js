@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // Freepik API 키 확인
     const freepikApiKey = process.env.FREEPIK_API_KEY || 
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
         totalStyles: storyboardResults.length,
         successCount: storyboardResults.filter(s => s.status === 'success').length,
         fallbackCount: storyboardResults.filter(s => s.status === 'fallback').length,
-        geminiModel: 'gemini-2.5-flash-lite',
+        geminiModel: 'gemini-2.5-flash',
         processSteps: 4
       }
     };
@@ -103,13 +103,131 @@ export default async function handler(req, res) {
   }
 }
 
+// ========== z+ 추가: 스타일별 아트디렉션 프로필(개성 강화) ==========
+const styleProfiles = {
+  'Cinematic Professional': {
+    artDirection: [
+      'cinematic, anamorphic bokeh, dramatic rim lighting, deep contrast, film grain',
+      'teal and orange color grading, shallow depth of field, volumetric haze',
+      'high dynamic range, professional post-production color grading'
+    ],
+    composition: 'classic rule of thirds or centered hero framing, subtle camera vignetting',
+    lighting: 'directional key light with soft fill, motivated practicals, edge lighting',
+    palette: 'teal and orange with neutral skin tones',
+    negative: 'avoid flat lighting, avoid overexposed highlights, avoid washed-out colors'
+  },
+  'Modern Minimalist': {
+    artDirection: [
+      'ultra-clean studio background, generous negative space, minimal props',
+      'high-key lighting, soft shadows, monochrome accents, crisp edges',
+      'product-centric layout, immaculate surfaces'
+    ],
+    composition: 'symmetrical or grid-based composition with balanced spacing',
+    lighting: 'softbox high-key, even diffusion, gentle falloff',
+    palette: 'white, light gray, subtle brand accent colors',
+    negative: 'avoid clutter, avoid textures, avoid busy backgrounds'
+  },
+  'Vibrant Dynamic': {
+    artDirection: [
+      'hyper-saturated color scheme, bold graphic accents, dynamic diagonal lines',
+      'motion streaks implied, dutch tilt, punchy contrast, energetic vibe',
+      'neon accents and pop color blocking'
+    ],
+    composition: 'aggressive angles, off-center subject, sense of momentum',
+    lighting: 'hard specular highlights, colored gels, rim kicks',
+    palette: 'neon magenta, cyber cyan, electric blue, punchy yellow',
+    negative: 'avoid pastel looks, avoid muted tones, avoid flat composition'
+  },
+  'Natural Lifestyle': {
+    artDirection: [
+      'authentic documentary feel, candid moment, environmental context',
+      'natural textures, real-world imperfections, warm earthy vibe',
+      'subtle depth and foreground occlusion'
+    ],
+    composition: 'over-the-shoulder or candid 35mm look, gentle perspective',
+    lighting: 'window daylight, soft ambient bounce, golden hour when applicable',
+    palette: 'warm earthy tones, soft greens, natural skin tones',
+    negative: 'avoid studio backdrop, avoid hard specular highlights, avoid heavy grading'
+  },
+  'Premium Luxury': {
+    artDirection: [
+      'luxurious materials, pristine reflections, immaculate finishes',
+      'black and gold palette, subtle vignette, refined elegance',
+      'premium editorial photography aesthetics'
+    ],
+    composition: 'elegant minimal framing with premium negative space',
+    lighting: 'soft glow, controlled highlights, layered reflections',
+    palette: 'champagne gold, onyx black, ivory',
+    negative: 'avoid plastic feel, avoid fingerprints or smudges, avoid noisy grain'
+  },
+  'Tech Innovation': {
+    artDirection: [
+      'futuristic UI holograms, sleek modern surfaces, glass and chrome',
+      'edge lighting, procedural patterns, cyber aesthetic, depth fog',
+      'high-tech, clean and precise'
+    ],
+    composition: 'central hero with interface overlays, layered depth',
+    lighting: 'cool blue edge lights, subtle neon accents, controlled contrast',
+    palette: 'cool blue, cyan, silver, graphite',
+    negative: 'avoid warm vintage tones, avoid rustic textures, avoid organic clutter'
+  }
+};
+
+function enhancePrompt(basePrompt, styleName, styleDescription) {
+  const p = styleProfiles[styleName];
+  if (!p) return `${basePrompt}, ${styleDescription}`;
+  const ad = p.artDirection.join(', ');
+  return [
+    `${basePrompt}, ${styleDescription}`,
+    `Art direction: ${ad}.`,
+    `Composition: ${p.composition}.`,
+    `Lighting: ${p.lighting}.`,
+    `Color palette: ${p.palette}.`,
+    `Avoid: ${p.negative}.`,
+    'commercial advertising photo, 4K, ultra-detailed, sharp focus, professional grade'
+  ].join(' ');
+}
+
+// ========== z+ 추가: Freepik POST 견고 재시도 ==========
+async function postFreepikWithRetry(body, apiKey) {
+  const url = 'https://api.freepik.com/v1/ai/text-to-image/flux-dev';
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-freepik-api-key': apiKey
+  };
+  const backoff = [0, 2000, 4000, 8000]; // 최대 4회 (0ms 즉시 + 2s + 4s + 8s), 지터 추가
+  let lastStatus = 0;
+  let lastText = '';
+
+  for (let i = 0; i < backoff.length; i++) {
+    if (backoff[i] > 0) {
+      const jitter = Math.floor(Math.random() * 500);
+      await new Promise(r => setTimeout(r, backoff[i] + jitter));
+    }
+
+    const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    lastStatus = resp.status;
+    if (resp.ok) {
+      return await resp.json();
+    }
+    lastText = await resp.text().catch(() => '');
+    console.error(`Freepik POST 실패 (${resp.status}) 시도 ${i + 1}/${backoff.length}:`, lastText?.slice(0, 300));
+
+    // 재시도 대상 상태코드
+    if (![429, 500, 502, 503, 504].includes(resp.status)) break;
+  }
+  const err = new Error(`Freepik API 실패: ${lastStatus}`);
+  err.details = lastText;
+  throw err;
+}
+
 /**
  * 1단계: 내장 프롬프트를 활용한 크리에이티브 브리프 생성 (파일 읽기 없음)
  */
 async function generateCreativeBrief(model, formData) {
   try {
     // Vercel 환경에서 파일 읽기 대신 내장 프롬프트 사용
-    const inputPromptTemplate = `당신은 업계 최상위 크리에이티브 디렉터(Creative Director)이자 브랜드 전략가(Brand Strategist)입니다. 사용자가 제공하는 핵심 정보를 바탕으로 즉시 실행 가능한 수준의 광고 영상 전략 및 크리에이티브 브리프를 생성해야 합니다.
+    const inputPromptTemplate = `당신은 업계 최상위 크리에이티브 디렉터(Creative Director)이자 브랜드 전략가(Brand Strategist)입니다. 사용자가 제공하는 핵심 [...]
 
 다음 정보를 기반으로 6장면의 스토리보드와 각 장면별 이미지 생성을 위한 구체적인 지침을 작성하세요:
 
@@ -188,36 +306,34 @@ async function generateCreativeBrief(model, formData) {
 async function generateStoryboardConcepts(model, creativeBrief, formData) {
   try {
     // Vercel 환경에서 파일 읽기 대신 내장 프롬프트 사용
-    const secondPromptTemplate = `당신은 최고 수준의 광고 영상 스토리보드 기획 전문가입니다. 사용자의 요청을 분석하여 웹 검색, 소셜 미디어(X, 인스타그램, 유튜브), 소비자 데이터, 시장 트렌드 등을 종합적으로 활용해 아래 6가지 고정 컨셉에 대한 기획 및 스토리보드를 작성합니다.
+    const secondPromptTemplate = `당신은 최고 수준의 광고 영상 스토리보드 기획 전문가입니다. 사용자의 요청을 분석하여 웹 검색, 소셜 미디어(X, 인스타[...]
 
 컨셉 기획 및 스토리보드 작성 프로세스:
 아래 6가지 고정 컨셉 각각에 대해 기획 및 스토리보드를 작성합니다.
-- 컨셉 1: 욕망의 시각화: 타겟 오디언스의 심리적 욕구(편리함, 럭셔리, 성공 등)를 분석해 이를 감각적이고 몰입감 높은 장면으로 구현.
-- 컨셉 2: 이질적 조합의 미학: 브랜드 메시지와 관련 없는 이질적인 요소를 결합하여 신선한 충격과 주목도를 유발.
-- 컨셉 3: 핵심 가치의 극대화: 브랜드의 핵심 강점(신선함, 친환경, 빠른 배송 등)을 시각적/감정적으로 과장하여 각인 효과를 극대화.
-- 컨셉 4: 기회비용의 시각화: 제품/서비스를 사용하지 않았을 때 타겟이 겪을 손해(시간 낭비, 품질 저하 등)를 구체적으로 묘사하여 필요성 강조.
-- 컨셉 5: 트렌드 융합: 최신 밈, 숏폼 트렌드, AI 등 바이럴 요소를 브랜드와 자연스럽게 융합하여 친밀감과 화제성 증폭.
-- 컨셉 6: 파격적 반전: 예측 불가능한 스토리라인과 반전 요소를 활용하여 강한 인상과 유머러스한 재미를 선사.
+- 컨셉 1: 욕망의 시각화: ...
+- 컨셉 2: 이질적 조합의 미학: ...
+- 컨셉 3: 핵심 가치의 극대화: ...
+- 컨셉 4: 기회비용의 시각화: ...
+- 컨셉 5: 트렌드 융합: ...
+- 컨셉 6: 파격적 반전: ...
 
 출력 구조:
 # [입력된 브랜드/상황] 광고 영상 스토리보드 기획안
 ---
 ## 1. 컨셉 기획 (총 6가지)
 ### **[컨셉명]**
-- **테마**: [주제/테마 설명]
-- **스토리라인**: [시작 - 전개 - 클라이맥스 - 결론]
-- **타겟 오디언스**: [타겟 연령, 특징, 니즈]
-- **감정/시각적 요소**: [강조할 감정 및 시각적 포인트]
-- **설명**: [컨셉을 제안하게 된 근거 및 전략 설명. 200~400자]
-- **참고 자료**: [데이터 소스]
+- **테마**: ...
+- **스토리라인**: ...
+- **타겟 오디언스**: ...
+- **감정/시각적 요소**: ...
+- **설명**: ...
+- **참고 자료**: ...
 ---
 ## 2. 스토리보드 (총 6가지)
 ### **[컨셉명] (XX초, XX장면)**
-- **장면 1 (0:00-0:02)**: [카메라 앵글, 구도, 동작, **배경**, 대사/내레이션] 효과음: [효과음 지시]
-- **장면 2 (0:02-0:04)**: [카메라 앵글, 구도, 동작, **배경**, 대사/내레이션] 효과음: [효과음 지시]
-- ...
-- **장면 XX (XX-XX)**: [카메라 앵글, 구도, 동작, **배경**, 대사/내레이션] 효과음: [효과음 지시]
-**음향/음악**: [전체적인 음악 톤, 효과음 특징]
+- **장면 1 (0:00-0:02)**: [...]
+- **장면 2 (0:02-0:04)**: [...]
+**음향/음악**: [...]
 ---
 ... (총 6가지 컨셉에 대해 위 형식 반복) ...`;
 
@@ -281,57 +397,14 @@ ${secondPromptTemplate}
 async function generateImagePrompts(model, storyboardConcepts, formData) {
   try {
     // Vercel 환경에서 파일 읽기 대신 내장 프롬프트 사용
-    const thirdPromptTemplate = `Role: You are an expert video director and VFX supervisor specializing in creating high-quality, professional video ads. You will generate a detailed storyboard for a video ad, with a focus on creating image prompts for each scene. Each scene is precisely 2 seconds long. Your goal is to produce visually stunning and coherent storyboard visuals that can be used for pre-production planning.
-
-### Input Details
-- **Storyboard**: A series of scenes with time intervals, subject, action, environment, and an optional style.
-- **Brand/Product Context**: A brief description of the brand/product and its core message.
-- **Character Details** (if applicable):
-  - **Ethnicity**: Specify or infer logically from the environment.
-  - **Gender**: Male, female, non-binary, or infer based on the subject.
-  - **Age**: A range (e.g., young adult) or infer.
-  - **Face Shape**: A specific facial structure (e.g., oval, angular) or infer.
-  - **Expression**: Emotional tone (e.g., determined, serene) or infer.
-  - **Hairstyle/Hair Color**: Style and color or infer.
-  - **Clothing**: Attire tied to the storyboard's atmosphere or infer.
-  - **Action & Pose**: A static action or "frozen moment" that implies motion, with specific details on **direction, pose, and orientation**.
-  - **Location**: The subject's specific position within the scene.
-  - **Environment**: The overall setting.
-- If any details are missing, infer them logically based on the storyboard atmosphere and context.
-
-### Automatic Style Selection
-Based on the Brand/Product Context and Storyboard atmosphere, automatically select the most suitable commercial ad style from the following options:
-- **Clean and Minimalist**: For tech, beauty, luxury brands. Emphasizes product and clean design.
-- **Vibrant and Hyper-Realistic**: For food, beverage, or youth-oriented brands. Emphasizes dynamic visuals and vivid colors.
-- **Cinematic and Story-Driven**: For brand storytelling, automotive, or corporate ads. Emphasizes drama and narrative.
-- **Documentary and Authentic**: For social causes, lifestyle brands, or to build trust. Emphasizes realism and genuine emotion.
-- **Stylized and Artistic**: For creative, unique campaigns. Emphasizes an unconventional visual identity.
-
-### Output Requirements
-For each scene, you must provide a detailed image prompt.
-- **Image Prompt** (70-100 words, English):
-  - **Structure**:
-    - **Camera/Lens**: Specify a professional camera and focal length (e.g., Canon EOS R5 with a 50mm lens).
-    - **Composition**: Camera angle, shot type, and subject position.
-    - **Mise-en-scène**: A detailed description of the subject, environment, and objects in a static, frozen moment. **Crucially, this must include specific pose, direction, and orientation details for both characters and objects.**
-    - **Detail Level**: Explicitly include keywords like **insanely detailed, micro-details, hyper-realistic textures, visible skin pores, stitching on clothing, scratches on metal** to force the AI to render the finest details.
-    - **Lighting/Time**: Time of day and specific lighting style (e.g., golden hour, neon).
-    - **Color Palette**: The primary color tones.
-    - **Style/Tone**: The automatically selected style is applied here (e.g., "Cinematic and Story-Driven, photorealistic, sharp focus").
-    - **Quality/Parameters**: High-quality parameters to ensure a professional output (e.g., 4K, sharp focus, --s 250).
-  - **Focus on Mise-en-scène**: This prompt must describe a still, visually rich image that captures a moment of intense static energy. Use descriptive nouns and adjectives to imply motion and narrative.
-  - **Consistency**: Reuse key descriptions (e.g., character appearance, environment details) for scenes with the same elements to ensure visual continuity.
+    const thirdPromptTemplate = `Role: You are an expert video director and VFX supervisor specializing in creating high-quality, professional video ads. You will generate a detailed storyboard f[...]
 
 ### Output Format
-- Markdown, with each scene clearly labeled.
-
 ##Storyboard Image Prompts
 ### Scene 1 (0:00-0:02)
-- **Image Prompt**: [Detailed prompt here]
-
+- **Image Prompt**: [...]
 ### Scene 2 (0:02-0:04)
-- **Image Prompt**: [Detailed prompt here]
-
+- **Image Prompt**: [...]
 Continue for all scenes...`;
 
     // 스토리보드 컨셉과 함께 세 번째 프롬프트 구성
@@ -531,12 +604,17 @@ async function generateImagesWithFreepik(imagePrompts, freepikApiKey, formData) 
         const imagePrompt = promptsToUse[promptIndex];
         
         try {
-          // 스타일과 이미지 프롬프트 결합
-          const finalPrompt = `${imagePrompt.prompt}, ${style.description}`;
+          // z+ 변경: 스타일과 이미지 프롬프트 결합 시 개성 강화
+          const finalPromptRaw = enhancePrompt(imagePrompt.prompt, style.name, style.description);
+          const finalPrompt = finalPromptRaw
+            .replace(/[^\w\s가-힣,.\-:;()]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .substring(0, 800)
+            .trim();
           
           console.log(`스타일 ${style.name} - 이미지 ${promptIndex + 1} 생성 중...`);
           
-          // Freepik API 호출
+          // Freepik API 호출 (POST 재시도 포함)
           const imageResult = await generateSingleImageWithFreepik(finalPrompt, freepikApiKey);
           
           if (imageResult.success) {
@@ -556,7 +634,7 @@ async function generateImagesWithFreepik(imagePrompts, freepikApiKey, formData) 
           // 개별 이미지 실패는 무시하고 계속 진행
         }
         
-        // API 호출 간격 조정
+        // API 호출 간격 조정 (기존 1초 대기 유지)
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
@@ -607,12 +685,13 @@ function getImageCountByVideoLength(videoLength) {
 
 /**
  * Freepik API로 단일 이미지 생성
+ * - z+: POST 재시도 도입
  */
 async function generateSingleImageWithFreepik(prompt, apiKey) {
   try {
     // 프롬프트 정제 (800자 이내로 제한)
     const cleanPrompt = prompt
-      .replace(/[^\w\s가-힣,.-]/g, '')
+      .replace(/[^\w\s가-힣,.\-:;()]/g, '')
       .replace(/\s+/g, ' ')
       .substring(0, 800)
       .trim();
@@ -621,29 +700,15 @@ async function generateSingleImageWithFreepik(prompt, apiKey) {
       throw new Error('프롬프트가 너무 짧습니다.');
     }
 
-    console.log(`Freepik 이미지 생성 요청: ${cleanPrompt.substring(0, 100)}...`);
+    console.log(`Freepik 이미지 생성 요청: ${cleanPrompt.substring(0, 120)}...`);
 
-    // Freepik Text-to-Image API 호출
-    const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/flux-dev', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-freepik-api-key': apiKey
-      },
-      body: JSON.stringify({
-        prompt: cleanPrompt,
-        num_images: 1,
-        aspect_ratio: 'widescreen_16_9'
-      })
-    });
+    // z+: POST with retry
+    const result = await postFreepikWithRetry({
+      prompt: cleanPrompt,
+      num_images: 1,
+      aspect_ratio: 'widescreen_16_9'
+    }, apiKey);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Freepik API 실패 (${response.status}):`, errorText);
-      throw new Error(`Freepik API 실패: ${response.status}`);
-    }
-
-    const result = await response.json();
     console.log('Freepik API 응답:', result);
     
     if (result.data && result.data.task_id) {
@@ -690,7 +755,8 @@ async function pollForImageResultOptimized(taskId, apiKey) {
       });
 
       if (!response.ok) {
-        console.error(`폴링 실패 (${response.status}):`, await response.text());
+        const t = await response.text().catch(() => '');
+        console.error(`폴링 실패 (${response.status}):`, t?.slice(0, 300));
         
         if (response.status === 500) {
           console.log('500 에러 - 더 긴 대기 후 재시도');
@@ -707,11 +773,8 @@ async function pollForImageResultOptimized(taskId, apiKey) {
       if (result.data && result.data.status === 'COMPLETED') {
         console.log('COMPLETED 응답 전체 구조:', JSON.stringify(result.data, null, 2));
         
-        // Freepik 공식 문서에 따른 정확한 구조
         let imageUrl = null;
-        
         if (result.data.generated && Array.isArray(result.data.generated) && result.data.generated.length > 0) {
-          // generated 배열의 첫 번째 요소가 직접 URL 문자열
           imageUrl = result.data.generated[0];
           console.log('Freepik 공식 구조에서 이미지 URL 추출:', imageUrl);
         }
@@ -721,7 +784,6 @@ async function pollForImageResultOptimized(taskId, apiKey) {
           return imageUrl;
         } else {
           console.log('COMPLETED 상태이지만 generated 배열에 URL 없음. 전체 응답:', result);
-          // COMPLETED인데 URL이 없으면 한 번 더 대기 후 재시도
           await new Promise(resolve => setTimeout(resolve, 2000));
           continue;
         }
