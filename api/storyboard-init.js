@@ -1,86 +1,107 @@
+import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-freepik-api-key');
-  res.setHeader('Access-Control-Max-Age', '86400');
+function readTxt(name) {
+  const p = path.resolve(process.cwd(), 'public', name);
+  return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : null;
 }
 
-// ▶ 재시도 횟수/지연을 환경변수로 제어 (기본 3회)
-const MAX_ATTEMPTS = Math.max(1, Math.min(8, parseInt(process.env.GEMINI_MAX_ATTEMPTS || '3', 10)));
-const BASE_DELAY_MS = Math.max(500, parseInt(process.env.GEMINI_RETRY_BASE_DELAY_MS || '2000', 10));
-const makeDelays = (n) => Array.from({ length: n }, (_, i) => Math.min(16000, BASE_DELAY_MS * Math.pow(2, i)));
+// 1단계/2단계/3단계 프롬프트는 public/*.txt를 “그대로” 사용
+const INPUT_PROMPT = readTxt('input_prompt.txt');
+const SECOND_PROMPT = readTxt('second_prompt.txt');
+const THIRD_PROMPT = readTxt('third_prompt.txt');
 
-async function callGeminiWithRetry(getModel, prompt, stepLabel) {
-  const delays = makeDelays(MAX_ATTEMPTS);
-  const maxAttempts = delays.length;
-
-  const primaryModel = (process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite').trim();
-  const fallbackModel = (process.env.FALLBACK_GEMINI_MODEL || '').trim();
-
-  let lastError;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      console.log(`${stepLabel} Gemini API 시도 ${attempt}/${maxAttempts}... (model=${primaryModel})`);
-      const model = getModel(primaryModel);
-      const result = await model.generateContent(prompt);
-      return result.response.text();
-    } catch (e) {
-      lastError = e;
-      const msg = e?.message || '';
-      const status = e?.status;
-      console.error(`${stepLabel} Gemini API 시도 ${attempt} 실패 (model=${primaryModel}):`, msg);
-
-      // 503/429 등 과부하/레이트리밋만 백오프 재시도
-      if (status === 503 || status === 429 || /overloaded|Service Unavailable|rate/i.test(msg)) {
-        if (attempt < maxAttempts) {
-          const jitter = Math.floor(Math.random() * 1000);
-          const wait = delays[attempt - 1] + jitter;
-          console.log(`모델 과부하/제한 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
-          await new Promise(r => setTimeout(r, wait));
-          continue;
-        }
-      }
-      break;
-    }
-  }
-
-  if (fallbackModel) {
-    console.warn(`${stepLabel}: 기본 모델 실패. 폴백 모델 시도(model=${fallbackModel})`);
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt}/${maxAttempts}... (model=${fallbackModel})`);
-        const model = getModel(fallbackModel);
-        const result = await model.generateContent(prompt);
-        return result.response.text();
-      } catch (e) {
-        lastError = e;
-        const msg = e?.message || '';
-        const status = e?.status;
-        console.error(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt} 실패:`, msg);
-
-        if (status === 503 || status === 429 || /overloaded|Service Unavailable|rate/i.test(msg)) {
-          if (attempt < maxAttempts) {
-            const jitter = Math.floor(Math.random() * 1000);
-            const wait = delays[attempt - 1] + jitter;
-            console.log(`모델 과부하/제한 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
-            await new Promise(r => setTimeout(r, wait));
-            continue;
-          }
-        }
-        break;
-      }
-    }
-  }
-
-  throw new Error(`${stepLabel}: Gemini API 최대 재시도 초과${fallbackModel ? ' (폴백 포함)' : ''} - ${lastError?.message || 'unknown error'}`);
+function scenesPerStyle(totalSeconds) {
+  const n = Math.max(1, Math.floor(Number(totalSeconds || 10) / 2)); // 2초당 1장
+  return n;
 }
 
+function buildFirstPrompt(formData) {
+  if (!INPUT_PROMPT) throw new Error('public/input_prompt.txt 누락');
+  // 사용자가 넣은 값만 치환, 텍스트 본문은 수정하지 않음
+  return INPUT_PROMPT
+    .replaceAll('{{brandName}}', String(formData.brandName || ''))
+    .replaceAll('{{industryCategory}}', String(formData.industryCategory || ''))
+    .replaceAll('{{videoLength}}', String(formData.videoLength || ''))
+    .replaceAll('{{coreTarget}}', String(formData.coreTarget || ''))
+    .replaceAll('{{coreDifferentiation}}', String(formData.coreDifferentiation || ''))
+    .replaceAll('{{videoPurpose}}', String(formData.videoPurpose || ''));
+}
+
+function buildSecondPrompt(firstOutput, formData) {
+  if (!SECOND_PROMPT) throw new Error('public/second_prompt.txt 누락');
+  const nScenes = scenesPerStyle(formData.videoLength);
+  return SECOND_PROMPT
+    .replaceAll('{{firstOutput}}', firstOutput)
+    .replaceAll('{{brandName}}', String(formData.brandName || ''))
+    .replaceAll('{{videoLength}}', String(formData.videoLength || ''))
+    .replaceAll('{{sceneCount}}', String(nScenes));
+}
+
+function buildThirdPrompt(secondOutput, formData) {
+  if (!THIRD_PROMPT) throw new Error('public/third_prompt.txt 누락');
+  const nScenes = scenesPerStyle(formData.videoLength);
+  // third_prompt.txt는 네가 준 형식을 고스란히 사용. 필요한 값만 치환.
+  return THIRD_PROMPT
+    .replaceAll('{{storyboard}}', secondOutput)
+    .replaceAll('{{brandName}}', String(formData.brandName || ''))
+    .replaceAll('{{industryCategory}}', String(formData.industryCategory || ''))
+    .replaceAll('{{productServiceCategory}}', String(formData.productServiceCategory || ''))
+    .replaceAll('{{videoLength}}', String(formData.videoLength || ''))
+    .replaceAll('{{coreTarget}}', String(formData.coreTarget || ''))
+    .replaceAll('{{coreDifferentiation}}', String(formData.coreDifferentiation || ''))
+    .replaceAll('{{sceneCount}}', String(nScenes));
+}
+
+// 3단계 응답에서 이미지 프롬프트 추출(네 형식 강제)
+function extractImagePromptsFromResponse(responseText, formData) {
+  const prompts = [];
+  const sectionIdx = responseText.indexOf('##Storyboard Image Prompts');
+  const text = sectionIdx >= 0 ? responseText.slice(sectionIdx) : responseText;
+
+  // ### Scene X (...) 다음 줄의 - **Image Prompt**: 블록을 강제 파싱
+  const regex = /###\s*Scene\s*(\d+)[^\n]*\n\s*-\s*\*\*Image Prompt\*\*:\s*([\s\S]*?)(?=\n###\s*Scene|\n##|$)/gi;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    const sceneNum = parseInt(m[1], 10);
+    let clean = m[2].replace(/\*\*/g, '').trim();
+    // 최소한의 풍부함 보강(누락 시만 추가)
+    const must = ['insanely detailed', 'micro-details', 'hyper-realistic', 'sharp focus', '4K'];
+    for (const kw of must) {
+      if (!clean.toLowerCase().includes(kw.toLowerCase())) clean += `, ${kw}`;
+    }
+    // 너무 짧으면 보강
+    if (clean.split(/\s+/).length < 60) {
+      clean += ', elaborate mise-en-scène, professional commercial photography, cinematic lighting';
+    }
+
+    prompts.push({
+      sceneNumber: isNaN(sceneNum) ? prompts.length + 1 : sceneNum,
+      title: `Scene ${isNaN(sceneNum) ? prompts.length + 1 : sceneNum}`,
+      prompt: clean,
+      duration: 2 // 스토리보드 기준 2초 슬롯
+    });
+  }
+
+  // 장면 수가 부족하면 마지막 프롬프트 복제해 sceneCount까지 채움
+  const need = scenesPerStyle(formData.videoLength);
+  while (prompts.length < need && prompts.length > 0) {
+    const idx = prompts.length + 1;
+    prompts.push({ ...prompts[prompts.length - 1], sceneNumber: idx, title: `Scene ${idx}` });
+  }
+
+  return prompts;
+}
 
 export default async function handler(req, res) {
-  setCors(res);
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -88,196 +109,54 @@ export default async function handler(req, res) {
     const { formData } = req.body || {};
     if (!formData) return res.status(400).json({ error: 'Form data is required' });
 
-    const geminiApiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!geminiApiKey) throw new Error('Gemini API key not found');
+    const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('Gemini API key not found');
 
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const getModel = (modelName) => genAI.getGenerativeModel({ model: modelName || 'gemini-2.5-flash-lite' });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.0-flash' });
 
-    const creativeBrief = await callGeminiWithRetry(getModel, buildCreativeBriefPrompt(formData), '1단계');
-    const storyboardConcepts = await callGeminiWithRetry(getModel, buildStoryboardPrompt(creativeBrief, formData), '2단계');
-    const imagePromptsText = await callGeminiWithRetry(getModel, buildImagePromptsPrompt(storyboardConcepts, formData), '3단계');
-    const imagePrompts = extractImagePromptsFromResponse(imagePromptsText);
+    // 1단계
+    const firstPrompt = buildFirstPrompt(formData);
+    const firstOut = (await model.generateContent(firstPrompt)).response.text();
 
+    // 2단계
+    const secondPrompt = buildSecondPrompt(firstOut, formData);
+    const secondOut = (await model.generateContent(secondPrompt)).response.text();
+
+    // 3단계
+    const thirdPrompt = buildThirdPrompt(secondOut, formData);
+    const thirdOut = (await model.generateContent(thirdPrompt)).response.text();
+    const imagePrompts = extractImagePromptsFromResponse(thirdOut, formData);
+
+    // 6가지 스타일(이름/설명/팔레트만 제공 — 이미지 생성 시 강하게 주입)
     const styles = [
-      { name: 'Cinematic Professional', description: 'cinematic professional shot dramatic lighting high detail 8k corporate', colorPalette: '#1a365d,#2d3748,#4a5568,#e2e8f0' },
-      { name: 'Modern Minimalist',      description: 'minimalist modern clean background simple composition contemporary',   colorPalette: '#ffffff,#f7fafc,#e2e8f0,#cbd5e0' },
-      { name: 'Vibrant Dynamic',        description: 'vibrant energetic dynamic motion bright colors active lifestyle',     colorPalette: '#e53e3e,#dd6b20,#d69e2e,#38a169' },
-      { name: 'Natural Lifestyle',      description: 'natural lifestyle photorealistic everyday life authentic people',     colorPalette: '#38a169,#68d391,#9ae6b4,#c6f6d5' },
-      { name: 'Premium Luxury',         description: 'luxury premium elegant sophisticated high-end exclusive',             colorPalette: '#744210,#a0845c,#d6b573,#f7e6a3' },
-      { name: 'Tech Innovation',        description: 'technology innovation futuristic digital modern tech startup',        colorPalette: '#2b6cb0,#3182ce,#4299e1,#63b3ed' }
+      { name: 'Cinematic Professional', description: 'cinematic professional, dramatic lighting, filmic color grading', colorPalette: '#1a365d,#2d3748,#e2e8f0' },
+      { name: 'Modern Minimalist',      description: 'minimal, clean, negative space, soft gradients',                 colorPalette: '#ffffff,#f7fafc,#cbd5e0' },
+      { name: 'Vibrant Dynamic',        description: 'vibrant, energetic, punchy contrast, lively motion',             colorPalette: '#ff6b6b,#ffd166,#06d6a0' },
+      { name: 'Natural Lifestyle',      description: 'authentic, lifestyle, natural light, candid',                    colorPalette: '#4caf50,#81c784,#c8e6c9' },
+      { name: 'Premium Luxury',         description: 'luxury, premium, refined, gold accents',                         colorPalette: '#8d6e63,#a1887f,#d7ccc8' },
+      { name: 'Tech Innovation',        description: 'futuristic, tech, neon accents, sleek',                          colorPalette: '#2b6cb0,#4299e1,#63b3ed' }
     ];
-
-    const imageCount = getImageCountByVideoLength(formData.videoLength);
 
     res.status(200).json({
       success: true,
-      creativeBrief,
-      storyboardConcepts,
+      firstOut,
+      secondOut,
       imagePrompts,
       styles,
       metadata: {
         brandName: formData.brandName,
         videoLength: formData.videoLength,
-        videoPurpose: formData.videoPurpose,
-        createdAt: new Date().toISOString(),
-        totalStyles: styles.length,
-        geminiModelChain: [
-          process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
-          ...(process.env.FALLBACK_GEMINI_MODELS
-            ? process.env.FALLBACK_GEMINI_MODELS.split(',').map(s => s.trim()).filter(Boolean)
-            : (process.env.FALLBACK_GEMINI_MODEL ? [process.env.FALLBACK_GEMINI_MODEL] : []))
-        ],
-        processSteps: 3,
-        imageCountPerStyle: getImageCountByVideoLength(formData.videoLength),
-        // ▶ 프런트가 읽는 키 추가 (Step2.jsx에서 사용)
-        geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-        fallbackGeminiModel: process.env.FALLBACK_GEMINI_MODEL || ''
+        sceneCountPerStyle: scenesPerStyle(formData.videoLength),
+        promptFiles: {
+          input: !!INPUT_PROMPT,
+          second: !!SECOND_PROMPT,
+          third: !!THIRD_PROMPT
+        }
       }
     });
-
-  } catch (error) {
-    console.error('storyboard-init 오류:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (e) {
+    console.error('[storyboard-init] error:', e);
+    res.status(500).json({ success: false, error: e.message });
   }
-}
-
-// 원본과 동일 규칙
-function getImageCountByVideoLength(videoLength) {
-  const lengthMap = { '10초': 5, '30초': 15, '60초': 30 };
-  return lengthMap[videoLength] || 15;
-}
-
-function buildCreativeBriefPrompt(formData) {
-  const template = `당신은 업계 최상위 크리에이티브 디렉터(Creative Director)이자 브랜드 전략가(Brand Strategist)입니다. 사용자가 제공하는 핵심 정보에 기반해, 브랜드 목적과 타깃에 최적화된 광고 전략과 메시지를 설계하세요.
-
-다음 정보를 기반으로 6장면의 스토리보드와 각 장면별 이미지 생성을 위한 구체적인 지침을 작성하세요:
-
-{USER_INPUT}
-
-각 장면별로 다음을 포함해야 합니다:
-1. 장면 제목과 설명
-2. 이미지 생성을 위한 구체적인 프롬프트
-3. 장면 지속 시간
-4. 시각적 요소 (색상, 구도, 분위기)
-5. 텍스트 오버레이 내용
-
-결과는 다음 단계에서 활용할 수 있는 형태로 제공해주세요.`;
-  const user = `
-브랜드명: ${formData.brandName}
-산업 카테고리: ${formData.industryCategory}
-제품/서비스 카테고리: ${formData.productServiceCategory}
-제품/서비스명: ${formData.productServiceName || '일반'}
-영상 목적: ${formData.videoPurpose}
-영상 길이: ${formData.videoLength}
-핵심 타겟: ${formData.coreTarget}
-핵심 차별점: ${formData.coreDifferentiation}
-영상 요구사항: ${formData.videoRequirements || '없음'}
-브랜드 로고: ${formData.brandLogo ? '업로드됨 - 영상에 포함 필요' : '없음'}
-제품 이미지: ${formData.productImage ? '업로드됨 - 영상에 포함 필요' : '없음'}
-  `;
-  return template.replace('{USER_INPUT}', user.trim());
-}
-
-function buildStoryboardPrompt(creativeBrief, formData) {
-  const template = `당신은 최고 수준의 광고 영상 스토리보드 기획 전문가입니다. 사용자의 요청을 분석하여 최신 트렌드와 바이럴 요소까지 반영한 6가지 고정 컨셉의 스토리보드를 작성하세요.
-
-컨셉 기획 및 스토리보드 작성 프로세스:
-- 컨셉 1: 욕망의 시각화
-- 컨셉 2: 이질적 조합의 미학
-- 컨셉 3: 핵심 가치의 극대화
-- 컨셉 4: 기회비용의 시각화
-- 컨셉 5: 트렌드 융합
-- 컨셉 6: 파격적 반전
-
-출력 구조:
-# [입력된 브랜드/상황] 광고 영상 스토리보드 기획안
----
-## 1. 컨셉 기획 (총 6가지)
-### **[컨셉명]**
-- **테마**: [주제/테마 설명]
-- **스토리라인**: [시작 - 전개 - 클라이맥스 - 결론]
-- **타겟 오디언스**: [타겟 연령, 특징, 니즈]
-- **감정/시각적 요소**: [강조할 감정 및 시각적 포인트]
-- **설명**: [전략 설명. 200~400자]
-- **참고 자료**: [데이터 소스]
----
-## 2. 스토리보드 (총 6가지)
-### **[컨셉명] (XX초, XX장면)**
-- **장면 1 (0:00-0:02)**: [...]
-- **장면 2 (0:02-0:04)**: [...]
-**음향/음악**: [...]`;
-  return `
-다음은 1단계에서 생성된 ${formData.brandName}의 크리에이티브 브리프입니다:
-
-${creativeBrief}
-
----
-
-이제 위의 크리에이티브 브리프를 바탕으로 아래 지침에 따라 스토리보드를 생성해주세요:
-
-${template}
-
-브랜드/상황: ${formData.brandName} (${formData.industryCategory})
-영상 길이: ${formData.videoLength}
-`;
-}
-
-function buildImagePromptsPrompt(storyboardConcepts, formData) {
-  const template = `Role: You are an expert video director and VFX supervisor specializing in creating high-quality, professional video ads. Generate detailed image prompts for each scene that can be consumed by a text-to-image API.
-
-### Output Requirements
-For each scene, provide:
-- **Image Prompt** (70-100 words, English) including camera/lens, composition, mise-en-scène with pose/direction/orientation, micro-detail keywords, lighting/time, color palette, style/tone, quality flags.
-
-### Output Format
-##Storyboard Image Prompts
-### Scene 1 (0:00-0:02)
-- **Image Prompt**: [...]
-### Scene 2 (0:02-0:04)
-- **Image Prompt**: [...]
-Continue for all scenes...`;
-  return `
-다음은 2단계에서 생성된 ${formData.brandName}의 스토리보드 컨셉입니다:
-
-${storyboardConcepts}
-
----
-
-이제 위의 스토리보드를 바탕으로 아래 지침에 따라 Freepik API용 이미지 프롬프트를 생성해주세요:
-
-${template}
-
-Brand/Product Context: ${formData.brandName} - ${formData.industryCategory} - ${formData.productServiceCategory}
-Video Length: ${formData.videoLength}
-Target Audience: ${formData.coreTarget}
-Key Differentiation: ${formData.coreDifferentiation}
-`;
-}
-
-function extractImagePromptsFromResponse(responseText) {
-  const prompts = [];
-  const pattern = /\*\*Image Prompt\*\*:(.+?)(?=###|$)/gs;
-  const matches = responseText.match(pattern);
-  if (matches?.length) {
-    matches.forEach((m, i) => {
-      const clean = m.replace(/\*\*Image Prompt\*\*:/g, '').replace(/\*\*/g, '').trim();
-      if (clean.length > 50) {
-        prompts.push({ sceneNumber: i + 1, prompt: clean, title: `Scene ${i + 1}`, duration: 6 });
-      }
-    });
-  }
-  if (!prompts.length) {
-    console.warn('Gemini 응답에서 이미지 프롬프트를 추출할 수 없어 기본 프롬프트 사용');
-    return [
-      { sceneNumber: 1, prompt: "professional commercial photography, brand introduction scene, high quality, cinematic lighting, 16:9 aspect ratio", title: "Scene 1", duration: 6 },
-      { sceneNumber: 2, prompt: "professional product showcase, commercial photography, clean background, studio lighting, high detail, 16:9 aspect ratio", title: "Scene 2", duration: 6 },
-      { sceneNumber: 3, prompt: "lifestyle photography, people using product, natural lighting, authentic moment, commercial style, 16:9 aspect ratio", title: "Scene 3", duration: 6 },
-      { sceneNumber: 4, prompt: "close-up product detail, macro photography, professional lighting, high resolution, commercial quality, 16:9 aspect ratio", title: "Scene 4", duration: 6 },
-      { sceneNumber: 5, prompt: "customer satisfaction scene, happy people, positive emotions, lifestyle photography, commercial style, 16:9 aspect ratio", title: "Scene 5", duration: 6 },
-      { sceneNumber: 6, prompt: "brand logo finale, professional branding, clean design, corporate style, call to action, 16:9 aspect ratio", title: "Scene 6", duration: 6 }
-    ];
-  }
-  console.log(`${prompts.length}개의 이미지 프롬프트 추출 완료`);
-  return prompts;
 }
