@@ -5,7 +5,7 @@
   "description": "AI 광고 영상 제작 도구 - Freepik API 및 Gemini AI 통합",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
