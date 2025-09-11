@@ -3,51 +3,24 @@ import PropTypes from 'prop-types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-const SpinnerOverlay = ({ title, percent, lines }) => (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center">
-    <div className="w-full max-w-2xl bg-white/10 rounded p-6 text-white">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <span className="text-sm text-white/80">{percent}%</span>
-      </div>
-      <div className="w-full bg-white/20 rounded h-2 mt-3 overflow-hidden">
-        <div className="bg-white h-2 transition-all duration-300" style={{ width: `${percent}%` }} />
-      </div>
-      <details className="mt-4 text-sm text-white/90" open>
-        <summary className="cursor-pointer select-none">세부 로그</summary>
-        <div className="mt-2 h-40 overflow-auto bg-black/40 rounded p-2 font-mono text-xs whitespace-pre-wrap">
-          {(lines || []).slice(-200).join('\n')}
-        </div>
-      </details>
-    </div>
-  </div>
-);
-
-SpinnerOverlay.propTypes = {
-  title: PropTypes.string,
-  percent: PropTypes.number,
-  lines: PropTypes.arrayOf(PropTypes.string),
-};
-
-function imagesPerStyle(videoLength) {
-  return Math.max(1, Math.floor(Number(videoLength || 10) / 2)); // 2초당 1장
+function imagesTotalFromStyles(styles) {
+  return (styles||[]).reduce((acc,s)=> acc + (s.imagePrompts?.length||0), 0);
 }
 
-async function runWithConcurrency(tasks, limit, onStep) {
-  let i = 0;
-  let done = 0;
+async function runConcurrent(tasks, limit, onProgress) {
+  let i=0, done=0;
   const results = new Array(tasks.length);
-  const workers = new Array(Math.min(limit, tasks.length)).fill(0).map(async () => {
-    while (true) {
-      const cur = i++;
-      if (cur >= tasks.length) break;
+  const workers = new Array(Math.min(limit, tasks.length)).fill(0).map(async ()=>{
+    while(true){
+      const cur=i++;
+      if (cur>=tasks.length) break;
       try {
         results[cur] = await tasks[cur]();
-      } catch (e) {
-        results[cur] = { ok: false, error: e?.message || 'unknown' };
+      } catch(e) {
+        results[cur] = {error: e.message};
       } finally {
         done++;
-        onStep?.(done, tasks.length);
+        onProgress?.(done, tasks.length);
       }
     }
   });
@@ -56,152 +29,76 @@ async function runWithConcurrency(tasks, limit, onStep) {
 }
 
 const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) => {
+  const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
   const [percent, setPercent] = useState(0);
-  const [logs, setLogs] = useState([]);
-  const [imagesDone, setImagesDone] = useState(0);
-  const [imagesFail, setImagesFail] = useState(0);
-  const [imagesTotal, setImagesTotal] = useState(0);
-  const [debugInfo, setDebugInfo] = useState(null);
+  const [styles, setStyles] = useState([]);
+  const [imgDone, setImgDone] = useState(0);
+  const [imgFail, setImgFail] = useState(0);
+  const [imgTotal, setImgTotal] = useState(0);
 
-  const isBusy = isLoading;
+  const log = (m)=> setLogs(prev=> [...prev, `[${new Date().toLocaleTimeString()}] ${m}`]);
 
-  const log = (msg) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-
-  const handleGenerateStoryboard = async () => {
+  const handleGenerate = async () => {
+    if (isLoading) return;
     setIsLoading?.(true);
     setError(null);
     setLogs([]);
     setPercent(0);
-    setImagesDone(0);
-    setImagesFail(0);
-    setImagesTotal(0);
-    setDebugInfo(null);
+    setImgDone(0);
+    setImgFail(0);
+    setImgTotal(0);
+    setStyles([]);
 
     try {
-      // 1) 서버에 스토리보드 요청
-      log('1/2 스토리보드(프롬프트 체인) 시작');
+      log('1/2 스토리보드(6컨셉) 생성 시작');
       setPercent(5);
+      const r = await fetch(`${API_BASE}/api/storyboard-init`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ formData })
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(()=> '');
+        throw new Error(`storyboard-init 실패 ${r.status} ${txt}`);
+      }
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error || '스토리보드 실패');
 
-      const initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formData }),
+      const fetchedStyles = data.styles || [];
+      setStyles(fetchedStyles);
+      const totalImages = imagesTotalFromStyles(fetchedStyles);
+      setImgTotal(totalImages);
+      log(`스토리보드 완료: 컨셉 6개, 총 이미지 ${totalImages}개`);
+      setPercent(15);
+
+      // 2) 이미지 생성
+      log('2/2 Freepik 이미지 생성 시작');
+      const tasks = [];
+      fetchedStyles.forEach(style=>{
+        style.images = [];
+        (style.imagePrompts||[]).forEach(p=>{
+          tasks.push(()=> generateOne(style, p));
+        });
       });
 
-      if (!initRes.ok) {
-        const err = await initRes.json().catch(() => ({}));
-        log(`스토리보드 실패: ${initRes.status} ${err?.error || ''}`);
-        throw new Error(err?.error || `init failed: ${initRes.status}`);
-      }
-
-      const initData = await initRes.json();
-      const { imagePrompts, styles, metadata } = initData;
-
-      const perStyle = imagesPerStyle(formData.videoLength);
-      const promptsToUse = (imagePrompts || []).slice(0, perStyle);
-      const totalImages = (styles?.length || 0) * (promptsToUse?.length || 0);
-      setImagesTotal(totalImages);
-
-      setDebugInfo({
-        stylesCount: styles?.length || 0,
-        perStyleScenes: perStyle,
-        videoLength: formData.videoLength,
+      const concurrency = 6; // 필요시 조정
+      await runConcurrent(tasks, concurrency, (done,total)=>{
+        const prog = 15 + Math.round((done/total)*80);
+        setPercent(Math.min(99, prog));
       });
 
-      log(`스토리보드 완료: 스타일 ${styles.length}개, 스타일당 장면 ${perStyle}개, 총 이미지 ${totalImages}개`);
-      setPercent(20);
-
-      // 2) 이미지 생성(프롬프트 그대로 전달)
-      log('2/2 이미지 생성 시작');
-      const storyboard = [];
-
-      for (const style of styles) {
-        const images = [];
-        let localDone = 0;
-
-        const tasks = promptsToUse.map((p, idx) => async () => {
-          const promptToSend = p.prompt;
-
-          try {
-            log(`이미지 생성 요청: [${style.name}] Scene ${p.sceneNumber}`);
-            const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                prompt: promptToSend,
-                sceneNumber: p.sceneNumber,
-                title: p.title,
-              }),
-            });
-
-            if (!res.ok) {
-              const txt = await res.text().catch(() => '');
-              setImagesFail((f) => f + 1);
-              localDone++;
-              const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
-              setPercent(cur);
-              log(`이미지 생성 실패: [${style.name}] Scene ${p.sceneNumber} - ${res.status} ${txt}`);
-              return;
-            }
-
-            const data = await res.json();
-            images.push({
-              id: `${style.name?.toLowerCase?.().replace(/\s+/g, '-') || 'style'}-${idx + 1}`,
-              title: p.title,
-              url: data.url,
-              thumbnail: data.url,
-              prompt: promptToSend,
-              duration: p.duration,
-              sceneNumber: p.sceneNumber,
-            });
-            setImagesDone((d) => d + 1);
-            localDone++;
-            const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
-            setPercent(cur);
-            log(`이미지 생성 완료: [${style.name}] Scene ${p.sceneNumber} -> ${data.url}`);
-          } catch (e) {
-            setImagesFail((f) => f + 1);
-            localDone++;
-            const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
-            setPercent(cur);
-            log(`이미지 생성 예외: [${style.name}] Scene ${p.sceneNumber} - ${e?.message || e}`);
-          }
-        });
-
-        await runWithConcurrency(tasks, 4, (done, total) => {
-          const cur = Math.min(100, Math.round(20 + ((imagesDone + imagesFail + done) / totalImages) * 80));
-          setPercent(cur);
-        });
-
-        images.sort((a, b) => a.sceneNumber - b.sceneNumber);
-
-        storyboard.push({
-          style: style.name,
-          description: style.description,
-          colorPalette: style.colorPalette,
-          images,
-        });
-      }
-
-      // 완료
       setPercent(100);
-      log(`이미지 생성 완료: 성공 ${imagesDone} / 실패 ${imagesFail} / 총 ${imagesTotal}`);
+      log(`이미지 생성 완료 성공=${imgDone} 실패=${imgFail} / 전체=${imgTotal}`);
 
       setStoryboard?.({
-        success: true,
-        storyboard,
-        imagePrompts,
-        metadata: {
-          ...metadata,
-          perStyleCount: perStyle,
-          createdAt: new Date().toISOString(),
-        },
+        styles: fetchedStyles,
+        metadata: data.metadata
       });
 
       setIsLoading?.(false);
       onNext?.();
-    } catch (e) {
+    } catch(e) {
       console.error('Step2 오류:', e);
       log(`오류: ${e.message}`);
       setError(e.message);
@@ -210,52 +107,98 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     }
   };
 
+  const generateOne = async (style, promptObj) => {
+    try {
+      log(`생성: [${style.style}] Scene ${promptObj.sceneNumber}`);
+      const r = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          prompt: promptObj.prompt,
+            sceneNumber: promptObj.sceneNumber,
+          conceptId: style.concept_id,
+          style: style.style
+        })
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(()=> '');
+        log(`실패: [${style.style}] Scene ${promptObj.sceneNumber} ${r.status}`);
+        setImgFail(f=>f+1);
+        return;
+      }
+      const json = await r.json();
+      style.images.push({
+        id: `${style.concept_id}-${promptObj.sceneNumber}`,
+        sceneNumber: promptObj.sceneNumber,
+        title: promptObj.title,
+        duration: promptObj.duration,
+        url: json.url,
+        thumbnail: json.url,
+        prompt: promptObj.prompt
+      });
+      setImgDone(d=>d+1);
+      log(`완료: [${style.style}] Scene ${promptObj.sceneNumber}`);
+    } catch(e) {
+      setImgFail(f=>f+1);
+      log(`예외: [${style.style}] Scene ${promptObj.sceneNumber} - ${e.message}`);
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto p-6 relative">
-      {isBusy && <SpinnerOverlay title="스토리보드/이미지 생성 중..." percent={percent} lines={logs} />}
-
-      <div className={`bg-white rounded-lg shadow-lg p-6 ${isBusy ? 'pointer-events-none opacity-50' : ''}`}>
-        <div className="mb-6">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">2단계: 스토리보드 생성</h2>
-          <p className="text-gray-600">
-            public/input_prompt.txt, second_prompt.txt, third_prompt.txt를 그대로 사용해 스토리보드를 만들고,
-            장면당 이미지를 생성합니다. 장면 수 = 영상길이 ÷ 2초.
-          </p>
+    <div className="max-w-7xl mx-auto p-6">
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center">
+          <div className="bg-white/10 backdrop-blur p-6 rounded text-white w-full max-w-xl">
+            <h3 className="text-lg font-semibold">생성 중...</h3>
+            <div className="mt-3 w-full bg-white/25 h-2 rounded overflow-hidden">
+              <div className="bg-white h-2 transition-all" style={{width:`${percent}%`}} />
+            </div>
+            <div className="mt-2 text-sm">진행률 {percent}% · 성공 {imgDone} 실패 {imgFail} / {imgTotal}</div>
+            <details className="mt-4" open>
+              <summary className="cursor-pointer">로그</summary>
+              <div className="mt-2 h-48 overflow-auto text-xs font-mono whitespace-pre-wrap">
+                {logs.slice(-300).join('\n')}
+              </div>
+            </details>
+          </div>
         </div>
-
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded p-3">
-            {error}
-          </div>
-        )}
-
-        {debugInfo && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-700 rounded p-3 text-sm">
-            스타일 수: {debugInfo.stylesCount} · 스타일당 장면 수: {debugInfo.perStyleScenes} · 전체 이미지: {imagesTotal}
-            <br />
-            진행(실시간): 성공 {imagesDone} · 실패 {imagesFail}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onPrev}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              이전 단계
-            </button>
-          </div>
-
+      )}
+      <div className={`bg-white rounded shadow p-6 ${isLoading?'opacity-50 pointer-events-none':''}`}>
+        <h2 className="text-2xl font-bold mb-4">2단계: 6개 컨셉 스토리보드 & 이미지 생성</h2>
+        {error && <div className="mb-4 bg-red-100 text-red-700 p-3 rounded">{error}</div>}
+        <p className="text-gray-600 mb-6">
+          Gemini 3회 호출(브리프→컨셉JSON→6컨셉 멀티 스토리보드) 후 모든 컨셉 이미지를 Freepik으로 생성합니다.
+        </p>
+        <div className="flex justify-between">
+          <button onClick={onPrev} className="px-5 py-2 border rounded">이전</button>
           <button
-            onClick={handleGenerateStoryboard}
-            disabled={isBusy}
-            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+            onClick={handleGenerate}
+            className="px-6 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow hover:from-purple-700 hover:to-pink-700"
+            disabled={isLoading}
           >
-            스토리보드 생성 시작
+            생성 시작
           </button>
         </div>
       </div>
+
+      {styles.length>0 && (
+        <div className="mt-8 grid md:grid-cols-3 gap-5">
+          {styles.map(s=>(
+            <div key={s.concept_id} className="border rounded p-3">
+              <div className="font-semibold mb-1">{s.style}</div>
+              <div className="text-xs text-gray-500 mb-2 line-clamp-3">{s.summary}</div>
+              <div className="grid grid-cols-3 gap-2">
+                {(s.images||[]).slice(0,6).map(img=>(
+                  <img key={img.id} src={img.thumbnail||img.url} className="w-full h-20 object-cover rounded" />
+                ))}
+              </div>
+              <div className="mt-2 text-xs text-gray-600">
+                Scenes: {s.imagePrompts?.length} · Images Done: {(s.images||[]).length}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -266,7 +209,7 @@ Step2.propTypes = {
   formData: PropTypes.object,
   setStoryboard: PropTypes.func,
   setIsLoading: PropTypes.func,
-  isLoading: PropTypes.bool,
+  isLoading: PropTypes.bool
 };
 
 export default Step2;
