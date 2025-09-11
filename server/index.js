@@ -2,11 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 
-// 기존 핸들러 가져와서 그대로 바인딩
 import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
-// 호환을 위해 기존 단일 엔드포인트도 유지하고 싶으면 주석 해제
-// import storyboard from '../api/storyboard.js';
+import generateVideo from '../api/generate-video.js';
+import videoStatus from '../api/video-status.js';
+// 필요시 다른 API도 차례로 바인딩
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,10 +14,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({ origin: '*', methods: ['GET','POST','OPTIONS'] }));
 app.use(bodyParser.json({ limit: '10mb' }));
 
-// 헬스체크
 app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
 
-// 공통 바인더
 const bind = (path, handler, methods = ['POST']) => {
   app.options(path, (req, res) => handler(req, res));
   methods.forEach((m) => app[m.toLowerCase()](path, (req, res) => handler(req, res)));
@@ -25,8 +23,9 @@ const bind = (path, handler, methods = ['POST']) => {
 
 bind('/api/storyboard-init', storyboardInit, ['POST']);
 bind('/api/storyboard-render-image', storyboardRenderImage, ['POST']);
-// bind('/api/storyboard', storyboard, ['POST']); // 필요시 유지
+bind('/api/generate-video', generateVideo, ['POST']);
+bind('/api/video-status', videoStatus, ['POST']);
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`API server running on http://0.0.0.0:${PORT}`);
 });
