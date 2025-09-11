@@ -7,36 +7,61 @@ function setCors(res) {
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
-// 다중 모델 체인(기본 + 폴백들)으로 견고 재시도
+// ▶ 재시도 횟수/지연을 환경변수로 제어 (기본 3회)
+const MAX_ATTEMPTS = Math.max(1, Math.min(8, parseInt(process.env.GEMINI_MAX_ATTEMPTS || '3', 10)));
+const BASE_DELAY_MS = Math.max(500, parseInt(process.env.GEMINI_RETRY_BASE_DELAY_MS || '2000', 10));
+const makeDelays = (n) => Array.from({ length: n }, (_, i) => Math.min(16000, BASE_DELAY_MS * Math.pow(2, i)));
+
 async function callGeminiWithRetry(getModel, prompt, stepLabel) {
-  const delays = [2000, 4000, 8000, 16000, 16000, 16000, 16000, 16000]; // 최대 8회
+  const delays = makeDelays(MAX_ATTEMPTS);
   const maxAttempts = delays.length;
 
-  const primary = (process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite').trim();
-  const fallbacks = (process.env.FALLBACK_GEMINI_MODELS || process.env.FALLBACK_GEMINI_MODEL || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  const modelsToTry = [primary, ...fallbacks];
+  const primaryModel = (process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite').trim();
+  const fallbackModel = (process.env.FALLBACK_GEMINI_MODEL || '').trim();
 
   let lastError;
 
-  for (const modelName of modelsToTry) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`${stepLabel} Gemini API 시도 ${attempt}/${maxAttempts}... (model=${primaryModel})`);
+      const model = getModel(primaryModel);
+      const result = await model.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      lastError = e;
+      const msg = e?.message || '';
+      const status = e?.status;
+      console.error(`${stepLabel} Gemini API 시도 ${attempt} 실패 (model=${primaryModel}):`, msg);
+
+      // 503/429 등 과부하/레이트리밋만 백오프 재시도
+      if (status === 503 || status === 429 || /overloaded|Service Unavailable|rate/i.test(msg)) {
+        if (attempt < maxAttempts) {
+          const jitter = Math.floor(Math.random() * 1000);
+          const wait = delays[attempt - 1] + jitter;
+          console.log(`모델 과부하/제한 감지, ${(wait / 1000).toFixed(1)}초 후 재시도...`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+      }
+      break;
+    }
+  }
+
+  if (fallbackModel) {
+    console.warn(`${stepLabel}: 기본 모델 실패. 폴백 모델 시도(model=${fallbackModel})`);
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        console.log(`${stepLabel} Gemini API 시도 ${attempt}/${maxAttempts}... (model=${modelName})`);
-        const model = getModel(modelName);
+        console.log(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt}/${maxAttempts}... (model=${fallbackModel})`);
+        const model = getModel(fallbackModel);
         const result = await model.generateContent(prompt);
         return result.response.text();
       } catch (e) {
         lastError = e;
         const msg = e?.message || '';
         const status = e?.status;
-        console.error(`${stepLabel} Gemini API 시도 ${attempt} 실패 (model=${modelName}):`, msg);
+        console.error(`${stepLabel} Gemini API(FALLBACK) 시도 ${attempt} 실패:`, msg);
 
-        // 과부하/레이트리밋 재시도
-        if (status === 503 || status === 429 || msg.includes('overloaded') || msg.includes('Service Unavailable') || msg.match(/rate/i)) {
+        if (status === 503 || status === 429 || /overloaded|Service Unavailable|rate/i.test(msg)) {
           if (attempt < maxAttempts) {
             const jitter = Math.floor(Math.random() * 1000);
             const wait = delays[attempt - 1] + jitter;
@@ -45,15 +70,14 @@ async function callGeminiWithRetry(getModel, prompt, stepLabel) {
             continue;
           }
         }
-        // 그 외 오류는 다음 모델로 폴백
         break;
       }
     }
-    console.warn(`${stepLabel}: 모델 실패, 다음 폴백 모델 시도 -> ${modelsToTry[modelsToTry.indexOf(modelName) + 1] || '(없음)'}`);
   }
 
-  throw new Error(`${stepLabel}: Gemini API 최대 재시도 초과(모든 폴백 포함) - ${lastError?.message || 'unknown error'}`);
+  throw new Error(`${stepLabel}: Gemini API 최대 재시도 초과${fallbackModel ? ' (폴백 포함)' : ''} - ${lastError?.message || 'unknown error'}`);
 }
+
 
 export default async function handler(req, res) {
   setCors(res);
