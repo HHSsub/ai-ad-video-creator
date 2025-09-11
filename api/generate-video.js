@@ -52,7 +52,13 @@ export default async function handler(req, res) {
 
       try {
         if (!image.url) throw new Error('Image URL is required for video generation');
-        const videoPrompt = generateVideoPrompt(image, formData);
+        const videoPromptRaw = generateVideoPrompt(image, formData);
+        const videoPrompt = clampPrompt(videoPromptRaw, 1900); // Freepik limit <= 2000
+
+        console.log('[generate-video] 프롬프트 길이:', {
+          scene: image.sceneNumber || i + 1,
+          promptLength: videoPrompt.length
+        });
 
         const response = await fetch(
           'https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p',
@@ -156,7 +162,7 @@ export default async function handler(req, res) {
       compilationGuide: {
         tool: 'FFmpeg',
         command:
-          'No completed videos available for compilation (server-side merge is handled by /api/compile-videos).',
+          'Server-side merge is handled by /api/compile-videos.',
         instruction:
           'Call /api/video-status to collect completed video URLs, then POST them to /api/compile-videos to get a merged video URL.',
         resolution: '1920x1080',
@@ -189,10 +195,11 @@ export default async function handler(req, res) {
 
 /**
  * Build a motion-oriented prompt for image-to-video.
+ * Note: We keep it concise and clamp under API limit.
  */
 function generateVideoPrompt(image, formData) {
-  const basePrompt =
-    image.prompt || image.title || 'commercial advertisement scene';
+  const baseRaw = String(image.prompt || image.title || 'commercial advertisement scene');
+  const basePrompt = baseRaw.slice(0, 800); // base 자체가 너무 길면 1차 컷
 
   const motionKeywords = [
     'smooth camera movement',
@@ -218,11 +225,21 @@ function generateVideoPrompt(image, formData) {
   const totalDuration = parseInt(formData?.videoLength || 30, 10);
   let pacingKeywords = [];
   if (totalDuration <= 15) pacingKeywords = ['fast paced', 'quick cuts', 'dynamic'];
-  else if (totalDuration <= 30)
-    pacingKeywords = ['medium paced', 'smooth transitions'];
+  else if (totalDuration <= 30) pacingKeywords = ['medium paced', 'smooth transitions'];
   else pacingKeywords = ['slow paced', 'cinematic', 'detailed'];
 
-  const finalPrompt = [
+  // 중복 제거 후, 순차 누적해서 2000자 이하가 되도록 빌드
+  const unique = (arr) => {
+    const seen = new Set();
+    return arr.filter((x) => {
+      const k = x.toLowerCase().trim();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  };
+
+  const parts = unique([
     basePrompt,
     ...motionKeywords,
     ...brandElements,
@@ -232,9 +249,36 @@ function generateVideoPrompt(image, formData) {
     'no text overlay',
     'professional lighting',
     '1920x1080 resolution',
-  ]
-    .filter(Boolean)
-    .join(', ');
+  ]);
 
-  return finalPrompt;
+  return joinUntil(parts, 1900); // 최종 클램프
+}
+
+/**
+ * Join array with ", " until reaching maxLen
+ */
+function joinUntil(parts, maxLen) {
+  const sep = ', ';
+  let out = '';
+  for (let i = 0; i < parts.length; i++) {
+    const piece = String(parts[i]).trim();
+    if (!piece) continue;
+    const tryAdd = out ? out + sep + piece : piece;
+    if (tryAdd.length > maxLen) break;
+    out = tryAdd;
+  }
+  return out;
+}
+
+/**
+ * Clamp raw prompt as last safety
+ */
+function clampPrompt(text, maxLen) {
+  if (!text) return '';
+  if (text.length <= maxLen) return text;
+  // 우선 쉼표 단위로 줄이고, 그래도 길면 하드컷
+  const parts = text.split(',');
+  let out = joinUntil(parts.map((s) => s.trim()), maxLen);
+  if (out.length > maxLen) out = out.slice(0, maxLen);
+  return out;
 }
