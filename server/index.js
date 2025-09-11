@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
@@ -6,7 +7,6 @@ import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
 import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
-// 필요시 다른 API도 차례로 바인딩
 
 const app = express();
 const PORT = process.env.PORT || 3000;
