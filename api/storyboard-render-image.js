@@ -79,15 +79,27 @@ function enhancePrompt(basePrompt, styleName, styleDescription) {
   const p = styleProfiles[styleName];
   if (!p) return `${basePrompt}, ${styleDescription}`;
   const ad = p.artDirection.join(', ');
+
+  // ▶ 스타일 키워드 가중치(반복) + 강제 구도/렌즈/조명 키워드 강화
+  const boost = (s) => `${s}, ${s}, ${s}`;
+
   return [
-    `${basePrompt}, ${styleDescription}`,
-    `Art direction: ${ad}.`,
-    `Composition: ${p.composition}.`,
-    `Lighting: ${p.lighting}.`,
-    `Color palette: ${p.palette}.`,
-    `Avoid: ${p.negative}.`,
+    `${basePrompt}`,
+    boost(`Style: ${styleName}`),
+    boost(`Art direction: ${ad}`),
+    boost(`Composition: ${p.composition}`),
+    boost(`Lighting: ${p.lighting}`),
+    `Color palette: ${p.palette}`,
+    `Avoid: ${p.negative}`,
+    // 카메라/렌즈 강제 앵커
+    styleName === 'Cinematic Professional' ? 'anamorphic lens, 50mm, filmic color grading, letterboxed 2.39:1 look' : '',
+    styleName === 'Modern Minimalist' ? 'studio cyclorama, high-key light, 85mm prime, ultra-clean background' : '',
+    styleName === 'Vibrant Dynamic' ? 'wide 24mm, dutch angle, motion blur, neon gel lighting' : '',
+    styleName === 'Natural Lifestyle' ? '35mm environmental portrait, window daylight, candid shot' : '',
+    styleName === 'Premium Luxury' ? 'macro product glam, controlled reflections, black-gold set' : '',
+    styleName === 'Tech Innovation' ? 'glass/chrome surfaces, cyan edge lights, holographic UI overlays' : '',
     'commercial advertising photo, 4K, ultra-detailed, sharp focus, professional grade'
-  ].join(' ');
+  ].filter(Boolean).join(', ');
 }
 
 export default async function handler(req, res) {
