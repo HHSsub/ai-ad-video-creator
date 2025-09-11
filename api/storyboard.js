@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     }
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
     // Freepik API 키 확인
     const freepikApiKey = process.env.FREEPIK_API_KEY || 
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
         totalStyles: storyboardResults.length,
         successCount: storyboardResults.filter(s => s.status === 'success').length,
         fallbackCount: storyboardResults.filter(s => s.status === 'fallback').length,
-        geminiModel: 'gemini-2.5-flash',
+        geminiModel: 'gemini-2.5-flash-lite',
         processSteps: 4
       }
     };
