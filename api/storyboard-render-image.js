@@ -1,63 +1,76 @@
-export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Max-Age', '86400');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+export default async function handler(req,res){
+  res.setHeader('Access-Control-Allow-Origin','*');
+  res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers','Content-Type');
+  res.setHeader('Access-Control-Max-Age','86400');
+  if (req.method==='OPTIONS') return res.status(200).end();
+  if (req.method!=='POST') return res.status(405).json({error:'Method not allowed'});
 
   const t0 = Date.now();
   try {
-    const { prompt, sceneNumber, title } = req.body || {};
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 10) {
-      console.error('[render-image] 잘못된 prompt 입력:', prompt?.length || 0);
-      return res.status(400).json({ error: 'prompt is required (>=10 chars)' });
-    }
+    const { prompt, sceneNumber, conceptId, style } = req.body || {};
+    if (!prompt || prompt.length<15) return res.status(400).json({error:'prompt too short'});
+    const apiKey = process.env.FREEPIK_API_KEY ||
+                   process.env.VITE_FREEPIK_API_KEY ||
+                   process.env.REACT_APP_FREEPIK_API_KEY;
+    if (!apiKey) throw new Error('FREEPIK_API_KEY missing');
 
-    const apiKey =
-      process.env.FREEPIK_API_KEY ||
-      process.env.REACT_APP_FREEPIK_API_KEY ||
-      process.env.VITE_FREEPIK_API_KEY;
-    if (!apiKey) throw new Error('Freepik API key not found');
+    // Freepik Text-to-Image
+    const body = {
+      prompt,
+      negative_prompt: 'blurry, distorted, low quality, watermark, text, logo',
+      guidance_scale: 7,
+      seed: Math.floor(Math.random()*1000000),
+      num_images: 1,
+      image: { size: 'square_1_1' },
+      filter_nsfw: true
+    };
 
-    console.log(`[render-image] 요청 수신: scene=${sceneNumber ?? '-'} title="${title ?? ''}" promptLen=${prompt.length}`);
+    console.log(`[render-image] concept=${conceptId} scene=${sceneNumber} 요청 (len=${prompt.length})`);
 
-    // 프롬프트 “그대로” 전달 (주입/변형 금지)
-    const r = await fetch('https://api.freepik.com/v1/ai/text-to-image/minimax-hailuo-02-1024p', {
+    const r = await fetch('https://api.freepik.com/v1/ai/text-to-image', {
       method: 'POST',
       headers: {
         'x-freepik-api-key': apiKey,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(body)
     });
 
     if (!r.ok) {
-      const text = await r.text().catch(() => '');
-      console.error(`[render-image] Freepik 실패: ${r.status} ${text}`);
-      return res.status(r.status).json({ error: text || `Freepik image error ${r.status}` });
+      const txt = await r.text().catch(()=> '');
+      console.error(`[render-image] 실패 status=${r.status} body=${txt.slice(0,300)}`);
+      return res.status(r.status).json({error: txt || `freepik error ${r.status}`});
     }
 
     const json = await r.json();
-    const url = Array.isArray(json?.data?.result) && json.data.result[0]?.url ? json.data.result[0].url : null;
-
-    if (!url) {
-      console.error('[render-image] Freepik 응답에 URL 없음');
-      return res.status(502).json({ error: 'No image URL returned' });
+    const b64 = json?.data?.[0]?.base64;
+    if (!b64) {
+      return res.status(502).json({error:'No base64 image in response'});
     }
 
-    console.log(`[render-image] 성공: scene=${sceneNumber ?? '-'} (${Date.now() - t0}ms) url=${url}`);
+    const buf = Buffer.from(b64, 'base64');
+    const tmpDir = process.env.VIDEO_TMP_DIR || path.resolve(process.cwd(), 'tmp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const fileName = `img_${conceptId}_${sceneNumber}_${crypto.randomBytes(6).toString('hex')}.png`;
+    const filePath = path.join(tmpDir, fileName);
+    fs.writeFileSync(filePath, buf);
+    // 단순 로컬 경로; 실제 배포에서는 CDN/S3 업로드 권장
+    const publicUrl = `/tmp/${fileName}`; // static 서빙 설정 필요 (예: express.static)
+
+    console.log(`[render-image] 완료 concept=${conceptId} scene=${sceneNumber} (${Date.now()-t0}ms)`);
 
     res.status(200).json({
-      success: true,
-      url,
-      meta: { sceneNumber, title },
+      success:true,
+      url: publicUrl,
+      meta:{ conceptId, sceneNumber, style }
     });
-  } catch (e) {
+  } catch(e) {
     console.error('[render-image] 오류:', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({error:e.message});
   }
 }
