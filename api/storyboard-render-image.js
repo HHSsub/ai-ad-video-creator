@@ -1,5 +1,3 @@
-// Freepik 1장 생성 전용 엔드포인트 (원본 단일 이미지 로직 그대로 복제)
-
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -19,6 +17,7 @@ export default async function handler(req, res) {
     const freepikApiKey = process.env.FREEPIK_API_KEY || process.env.REACT_APP_FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
     if (!freepikApiKey) throw new Error('Freepik API key not found');
 
+    // 원본 styles 설명 그대로(설정값 변경 없음)
     const styles = [
       { name: 'Cinematic Professional', description: 'cinematic professional shot dramatic lighting high detail 8k corporate' },
       { name: 'Modern Minimalist',      description: 'minimalist modern clean background simple composition contemporary'   },
@@ -31,11 +30,8 @@ export default async function handler(req, res) {
     if (!style) return res.status(400).json({ error: `Unknown styleName: ${styleName}` });
 
     const finalPrompt = `${prompt}, ${style.description}`;
-
     const imageResult = await generateSingleImageWithFreepik(finalPrompt, freepikApiKey);
-    if (!imageResult.success) {
-      return res.status(502).json({ success: false, error: imageResult.error });
-    }
+    if (!imageResult.success) return res.status(502).json({ success: false, error: imageResult.error });
 
     res.status(200).json({
       success: true,
@@ -44,7 +40,6 @@ export default async function handler(req, res) {
       sceneNumber: sceneNumber ?? null,
       title: title ?? null
     });
-
   } catch (error) {
     console.error('storyboard-render-image 오류:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -85,10 +80,8 @@ async function generateSingleImageWithFreepik(prompt, apiKey) {
     console.log('Freepik API 응답:', result);
 
     if (result.data && result.data.task_id) {
-      const imageUrl = await pollForImageResultOptimized(result.data.task_id, apiKey);
-      if (imageUrl) {
-        return { success: true, url: imageUrl, taskId: result.data.task_id };
-      }
+      const url = await pollForImageResultOptimized(result.data.task_id, apiKey);
+      if (url) return { success: true, url, taskId: result.data.task_id };
     }
 
     throw new Error('이미지 생성 실패: 유효한 결과를 받지 못함');
@@ -118,7 +111,7 @@ async function pollForImageResultOptimized(taskId, apiKey) {
       if (!response.ok) {
         console.error(`폴링 실패 (${response.status}):`, await response.text());
         if (response.status === 500) {
-          await new Promise(resolve => setTimeout(resolve, interval * 2));
+          await new Promise(r => setTimeout(r, interval * 2));
           continue;
         }
         throw new Error(`Status check failed: ${response.status}`);
@@ -128,26 +121,20 @@ async function pollForImageResultOptimized(taskId, apiKey) {
       console.log(`폴링 결과 ${attempt + 1}:`, result.data?.status);
 
       if (result.data && result.data.status === 'COMPLETED') {
-        let imageUrl = null;
-        if (result.data.generated && Array.isArray(result.data.generated) && result.data.generated.length > 0) {
-          imageUrl = result.data.generated[0];
-        }
-        if (imageUrl && typeof imageUrl === 'string') {
-          return imageUrl;
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
-        }
+        const generated = Array.isArray(result.data.generated) ? result.data.generated[0] : null;
+        if (generated && typeof generated === 'string') return generated;
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
       } else if (result.data && result.data.status === 'FAILED') {
         throw new Error('Image generation failed');
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      await new Promise(r => setTimeout(r, interval));
 
     } catch (error) {
       console.error(`폴링 시도 ${attempt + 1} 실패:`, error.message);
       if (attempt < maxAttempts - 1) {
-        await new Promise(resolve => setTimeout(resolve, interval));
+        await new Promise(r => setTimeout(r, interval));
         continue;
       }
       throw error;
