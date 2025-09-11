@@ -1,207 +1,114 @@
-// Generate videos from selected images via Freepik Image-to-Video API
-// Parallel dispatch with bounded concurrency, optional webhook, prompt clamp.
-
-function clampPrompt(s, max) {
-  if (!s) return '';
-  if (s.length <= max) return s;
-  return s.slice(0, max - 20) + '...';
-}
+// 병렬 디스패치 + 6초로 생성(제공사 제약) → 나중에 FFmpeg에서 2초로 컷/머지
+function clamp(s, max) { return s && s.length > max ? s.slice(0, max - 20) + '…' : (s || ''); }
 
 function buildVideoPrompt(image, formData) {
   const base = [
-    image.title ? `Title: ${image.title}` : null,
-    formData?.brandName ? `Brand: ${formData.brandName}` : null,
-    formData?.industryCategory ? `Category: ${formData.industryCategory}` : null,
-    'High-quality cinematic motion, gentle camera parallax, natural easing',
-    'Keep subject identity consistent across frames; avoid distortions',
+    image.title && `Title: ${image.title}`,
+    formData?.brandName && `Brand: ${formData.brandName}`,
+    'gentle camera parallax, natural easing, maintain subject integrity',
   ].filter(Boolean).join('. ');
-  return base + '. ' + (image.prompt || '');
+  return `${base}. ${image.prompt || ''}`;
 }
 
-async function runPool(items, limit, worker) {
-  const results = new Array(items.length);
-  let i = 0;
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
-      const idx = i++;
-      if (idx >= items.length) break;
-      results[idx] = await worker(items[idx], idx);
-    }
+async function runPool(arr, limit, worker) {
+  let i = 0; const res = new Array(arr.length);
+  const runners = Array.from({ length: Math.min(limit, arr.length) }, async () => {
+    while (true) { const idx = i++; if (idx >= arr.length) break; res[idx] = await worker(arr[idx], idx); }
   });
   await Promise.all(runners);
-  return results;
+  return res;
 }
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Max-Age', '86400');
-
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const {
-      selectedStyle,
-      selectedImages,
-      formData,
-      targetTotalDuration,
-      concurrency = 3, // new: bounded parallelism
-    } = req.body || {};
-
+    const { selectedStyle, selectedImages, formData, concurrency = 3 } = req.body || {};
     if (!selectedStyle || !Array.isArray(selectedImages) || selectedImages.length === 0) {
       return res.status(400).json({ error: 'Selected style and images are required' });
     }
 
-    const freepikApiKey =
+    const apiKey =
       process.env.FREEPIK_API_KEY ||
       process.env.REACT_APP_FREEPIK_API_KEY ||
       process.env.VITE_FREEPIK_API_KEY;
-    if (!freepikApiKey) throw new Error('Freepik API key not found');
+    if (!apiKey) throw new Error('Freepik API key not found');
 
-    const webhookUrl = process.env.FREEPIK_WEBHOOK_URL || null; // optional
+    // 제공사 제약: 6 또는 10초. 성능 위해 6초 사용 → 이후 2초로 컷
+    const providerDuration = 6;
 
-    // Freepik supports 6s or 10s only. We choose the lowest viable for throughput.
-    const totalSeconds = parseInt(targetTotalDuration || formData?.videoLength || 30, 10);
-    const imageCount = selectedImages.length;
-    const desiredPerSegment = Math.max(2, Math.floor(totalSeconds / imageCount));
-    const segmentDuration = desiredPerSegment >= 6 ? 10 : 6; // provider constraint
+    const inputs = selectedImages.map((image, i) => ({ image, i }));
+    const segments = [];
+    const failed = [];
 
-    console.log('[generate-video] 요청 수신', {
-      style: selectedStyle,
-      imageCount,
-      targetDuration: totalSeconds,
-      perSegmentDesired: desiredPerSegment,
-      providerSegment: segmentDuration,
-      brandName: formData?.brandName,
-      concurrency,
-      webhookUrl: !!webhookUrl,
-    });
-
-    const videoSegments = [];
-    const failedSegments = [];
-
-    const tasksInput = selectedImages.map((image, i) => ({ image, i }));
-
-    await runPool(tasksInput, concurrency, async ({ image, i }) => {
+    await runPool(inputs, concurrency, async ({ image, i }) => {
       try {
-        if (!image.url) throw new Error('Image URL is required for video generation');
+        if (!image.url) throw new Error('Image URL is required');
+        const prompt = clamp(buildVideoPrompt(image, formData), 1900);
 
-        const videoPromptRaw = buildVideoPrompt(image, formData);
-        const videoPrompt = clampPrompt(videoPromptRaw, 1900);
-
-        console.log('[generate-video] 프롬프트 길이:', {
-          scene: image.sceneNumber || i + 1,
-          promptLength: videoPrompt.length,
+        const r = await fetch('https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-freepik-api-key': apiKey },
+          body: JSON.stringify({ prompt, first_frame_image: image.url, duration: providerDuration, webhook_url: null })
         });
 
-        const response = await fetch(
-          'https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-freepik-api-key': freepikApiKey,
-            },
-            body: JSON.stringify({
-              prompt: videoPrompt,
-              first_frame_image: image.url,
-              duration: segmentDuration, // 6 or 10 only
-              webhook_url: webhookUrl,   // optional push
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[generate-video] Freepik API 오류 (${response.status}):`, errorText);
-          throw new Error(`Video API failed: ${response.status}`);
+        if (!r.ok) {
+          const t = await r.text(); console.error('[generate-video] Freepik 오류', r.status, t);
+          throw new Error(`Video API failed ${r.status}`);
         }
+        const j = await r.json();
+        const taskId = j?.data?.task_id;
+        if (!taskId) throw new Error('no task_id');
 
-        const result = await response.json();
-        const taskId = result?.data?.task_id;
-        if (!taskId) throw new Error('Invalid video generation response (no task_id)');
-
-        videoSegments[i] = {
+        segments[i] = {
           segmentId: `segment-${i + 1}`,
           sceneNumber: image.sceneNumber || i + 1,
           originalImage: { url: image.url, title: image.title || null },
           taskId,
           videoUrl: null,
           status: 'in_progress',
-          duration: segmentDuration,
-          prompt: videoPrompt,
+          duration: providerDuration,
+          prompt,
           createdAt: new Date().toISOString(),
         };
-      } catch (err) {
-        console.error(`[generate-video] 비디오 ${i + 1} 생성 실패:`, err.message);
-        failedSegments[i] = {
+      } catch (e) {
+        failed[i] = {
           segmentId: `segment-${i + 1}`,
           sceneNumber: i + 1,
           originalImage: selectedImages[i],
-          error: err.message,
+          error: e.message,
           status: 'failed',
-          duration: segmentDuration,
+          duration: providerDuration
         };
       }
     });
 
-    const okSegments = videoSegments.filter(Boolean);
-    const actualTotalDuration = okSegments.reduce((sum, s) => sum + s.duration, 0);
-    const projectId = `project-${Date.now()}`;
+    const ok = segments.filter(Boolean);
+    const tasks = ok.map(s => ({ taskId: s.taskId, sceneNumber: s.sceneNumber, duration: s.duration, title: s.originalImage?.title || `Segment ${s.sceneNumber}` }));
 
-    // Return tasks; frontend should poll only the ones not yet ready
-    const tasks = okSegments.map((s) => ({
-      taskId: s.taskId,
-      sceneNumber: s.sceneNumber,
-      duration: s.duration,
-      title: s.originalImage?.title || `Segment ${s.sceneNumber}`,
-    }));
-
-    const responsePayload = {
+    res.status(200).json({
       success: true,
       videoProject: {
-        projectId,
-        brandName: formData?.brandName || 'Unknown',
+        projectId: `project-${Date.now()}`,
         selectedStyle,
         totalSegments: selectedImages.length,
-        successfulSegments: okSegments.length,
-        failedSegments: failedSegments.filter(Boolean).length,
-        requestedDuration: totalSeconds,
-        actualDuration: actualTotalDuration,
-        segmentDuration,
-        status:
-          okSegments.length === 0 ? 'failed' : 'in_progress',
-        createdAt: new Date().toISOString(),
+        successfulSegments: ok.length,
+        failedSegments: failed.filter(Boolean).length,
+        requestedDuration: Number(formData?.videoLength || 10),
+        providerSegmentDuration: providerDuration,
+        status: ok.length ? 'in_progress' : 'failed',
       },
-      videoSegments: okSegments,
-      failedSegments: failedSegments.filter(Boolean),
-      tasks,
-      durationInfo: {
-        requested: totalSeconds,
-        actual: actualTotalDuration,
-        perSegmentProvider: segmentDuration,
-        perSegmentDesired: desiredPerSegment,
-        segments: selectedImages.length,
-      },
-      metadata: {
-        webhookEnabled: !!webhookUrl,
-        provider: 'freepik/minimax-hailuo-02-768p',
-      },
-    };
-
-    console.log('[generate-video] 프로젝트 생성 완료', {
-      projectId,
-      총세그먼트: selectedImages.length,
-      성공요청수: okSegments.length,
-      실패요청수: failedSegments.filter(Boolean).length,
+      videoSegments: ok,
+      failedSegments: failed.filter(Boolean),
+      tasks
     });
-
-    return res.status(200).json(responsePayload);
-  } catch (error) {
-    console.error('[generate-video] 전체 오류:', error);
-    res.status(500).json({ success: false, error: error.message });
+  } catch (e) {
+    console.error('[generate-video] error:', e);
+    res.status(500).json({ success: false, error: e.message });
   }
 }
