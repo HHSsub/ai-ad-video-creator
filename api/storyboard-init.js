@@ -1,4 +1,4 @@
-// api/storyboard-init.js - 2025년 최신 Gemini 2.5 사용
+// api/storyboard-init.js - 2025년 최신 Gemini 2.5 사용 (완전 수정)
 
 import 'dotenv/config';
 import fs from 'fs';
@@ -29,10 +29,7 @@ function isRetryable(error) {
   const status = error?.status;
   const message = (error?.message || '').toLowerCase();
   
-  // HTTP 상태코드 기반
   if ([429, 500, 502, 503, 504].includes(status)) return true;
-  
-  // 메시지 기반
   if (message.includes('overload') || message.includes('overloaded')) return true;
   if (message.includes('quota') || message.includes('rate limit')) return true;
   if (message.includes('timeout') || message.includes('503')) return true;
@@ -84,9 +81,8 @@ async function callGemini2_5(genAI, prompt, label) {
         
         const startTime = Date.now();
         
-        // 타임아웃 설정
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 90000); // 90초
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
         
         const result = await Promise.race([
           model.generateContent(prompt),
@@ -115,13 +111,11 @@ async function callGemini2_5(genAI, prompt, label) {
       } catch (error) {
         console.warn(`[${label}] ❌ 실패 model=${modelName} 시도=${modelAttempt}: ${error.message}`);
         
-        // 503 과부하면 즉시 다음 모델로
         if (error.message.includes('503') || error.message.includes('overload')) {
           console.log(`[${label}] 🔄 과부하 감지, 다음 모델로 즉시 전환`);
           break;
         }
         
-        // 재시도 가능하면 잠시 대기 후 같은 모델로 재시도
         if (isRetryable(error) && modelAttempt < 3) {
           const delay = BASE_BACKOFF * modelAttempt + Math.random() * 1000;
           console.log(`[${label}] ⏳ ${delay}ms 후 같은 모델로 재시도`);
@@ -130,7 +124,6 @@ async function callGemini2_5(genAI, prompt, label) {
       }
     }
     
-    // 다음 모델로 넘어가기 전 잠시 대기
     const modelIndex = MODEL_CHAIN.indexOf(modelName);
     if (modelIndex < MODEL_CHAIN.length - 1) {
       console.log(`[${label}] 🔄 모델 ${modelName} 완전 실패, 다음 모델로 전환`);
@@ -141,12 +134,130 @@ async function callGemini2_5(genAI, prompt, label) {
   throw new Error(`${label} 완전 실패: 모든 모델 (${MODEL_CHAIN.join(', ')}) 시도 완료`);
 }
 
+// 원본 프롬프트 파일들 로드 함수
+function loadPromptFile(filename) {
+  const filePath = path.resolve(process.cwd(), 'public', filename);
+  if (!fs.existsSync(filePath)) {
+    console.error(`프롬프트 파일 없음: ${filename}`);
+    throw new Error(`프롬프트 파일 없음: ${filename}`);
+  }
+  return fs.readFileSync(filePath, 'utf-8');
+}
+
+// 브리프 생성 프롬프트 (input_prompt.txt 그대로 사용)
+function buildBriefPrompt(formData) {
+  try {
+    const inputPrompt = loadPromptFile('input_prompt.txt');
+    return inputPrompt
+      .replaceAll('{{brandName}}', String(formData.brandName || ''))
+      .replaceAll('{{industryCategory}}', String(formData.industryCategory || ''))
+      .replaceAll('{{videoLength}}', String(parseVideoLengthSeconds(formData.videoLength)))
+      .replaceAll('{{coreTarget}}', String(formData.coreTarget || ''))
+      .replaceAll('{{coreDifferentiation}}', String(formData.coreDifferentiation || ''))
+      .replaceAll('{{videoPurpose}}', String(formData.videoPurpose || ''));
+  } catch (error) {
+    console.error('input_prompt.txt 로드 실패:', error);
+    return `당신은 전문 크리에이티브 디렉터입니다. 다음 브랜드 정보를 바탕으로 광고 전략을 수립하세요:
+브랜드명: ${formData.brandName || ''}
+산업분야: ${formData.industryCategory || ''}
+영상 목적: ${formData.videoPurpose || ''}
+영상 길이: ${formData.videoLength || ''}
+핵심 타겟: ${formData.coreTarget || ''}
+차별점: ${formData.coreDifferentiation || ''}
+위 정보를 바탕으로 창의적인 광고 전략과 방향성을 제시하세요.`;
+  }
+}
+
+// 컨셉 생성 프롬프트 (second_prompt.txt 그대로 사용)
+function buildConceptsPrompt(brief, formData) {
+  try {
+    const secondPrompt = loadPromptFile('second_prompt.txt');
+    return secondPrompt
+      .replaceAll('{{brief}}', brief)
+      .replaceAll('{{brandName}}', String(formData.brandName || ''))
+      .replaceAll('{{videoLength}}', String(parseVideoLengthSeconds(formData.videoLength)))
+      .replaceAll('{{videoPurpose}}', String(formData.videoPurpose || ''));
+  } catch (error) {
+    console.error('second_prompt.txt 로드 실패:', error);
+    return `다음은 브리프입니다: ${brief}
+
+아래 6가지 고정 컨셉을 JSON 배열로만 응답하세요:
+
+[
+  {
+    "concept_id": 1,
+    "concept_name": "욕망의 시각화",
+    "summary": "타겟 오디언스의 심리적 욕구를 감각적이고 몰입감 높은 장면으로 구현하는 컨셉",
+    "keywords": ["감각적", "몰입", "욕구충족", "심리적", "시각화"]
+  },
+  {
+    "concept_id": 2,
+    "concept_name": "이질적 조합의 미학",
+    "summary": "브랜드와 관련 없는 이질적 요소를 결합하여 신선한 충격과 주목도를 유발하는 컨셉",
+    "keywords": ["이질적", "충격", "주목도", "창의적", "의외성"]
+  },
+  {
+    "concept_id": 3,
+    "concept_name": "핵심 가치의 극대화",
+    "summary": "브랜드의 핵심 강점을 시각적/감정적으로 과장하여 각인 효과를 극대화하는 컨셉",
+    "keywords": ["핵심가치", "과장", "각인", "강점", "브랜드"]
+  },
+  {
+    "concept_id": 4,
+    "concept_name": "기회비용의 시각화",
+    "summary": "제품/서비스 미사용시 손해를 구체적으로 묘사하여 필요성을 강조하는 컨셉",
+    "keywords": ["기회비용", "손해", "필요성", "구체적", "위험"]
+  },
+  {
+    "concept_id": 5,
+    "concept_name": "트렌드 융합",
+    "summary": "최신 트렌드와 바이럴 요소를 브랜드와 융합하여 친밀감과 화제성을 증폭하는 컨셉",
+    "keywords": ["트렌드", "바이럴", "융합", "친밀감", "화제성"]
+  },
+  {
+    "concept_id": 6,
+    "concept_name": "파격적 반전",
+    "summary": "예측 불가능한 스토리와 반전 요소로 강한 인상과 재미를 선사하는 컨셉",
+    "keywords": ["반전", "예측불가", "인상적", "재미", "병맛"]
+  }
+]`;
+  }
+}
+
+// 멀티 스토리보드 생성 프롬프트 (third_prompt.txt 그대로 사용)
+function buildMultiStoryboardPrompt(brief, conceptsJson, sceneCount, videoSec) {
+  try {
+    const thirdPrompt = loadPromptFile('third_prompt.txt');
+    return thirdPrompt
+      .replaceAll('{{brief}}', brief)
+      .replaceAll('{{concepts_json}}', conceptsJson)
+      .replaceAll('{{scene_count}}', String(sceneCount))
+      .replaceAll('{{video_length_seconds}}', String(videoSec));
+  } catch (error) {
+    console.error('third_prompt.txt 로드 실패:', error);
+    return `다음 브리프와 컨셉들을 바탕으로 각 컨셉별로 ${sceneCount}개의 씬을 가진 스토리보드를 생성하세요:
+
+브리프: ${brief}
+
+컨셉들: ${conceptsJson}
+
+각 컨셉에 대해 다음 형식으로 작성하세요:
+
+### Concept 1: [컨셉명]
+#### Scene 1 (0:00-0:02)
+- **Image Prompt**: [상세한 이미지 생성 프롬프트]
+#### Scene 2 (0:02-0:04)  
+- **Image Prompt**: [상세한 이미지 생성 프롬프트]
+
+총 ${sceneCount}개 씬, 영상 길이 ${videoSec}초에 맞춰 작성하세요.`;
+  }
+}
+
 // 강화된 컨셉 파싱 (JSON 구조 복구)
 function parseConceptsRobust(text) {
   console.log('[parseConceptsRobust] 파싱 시작, 텍스트 길이:', text.length);
   
   try {
-    // 1차: 완전한 JSON 배열 추출 시도
     const jsonArrayPattern = /\[\s*\{[\s\S]*?\}\s*\]/;
     const jsonMatch = text.match(jsonArrayPattern);
     
@@ -156,7 +267,6 @@ function parseConceptsRobust(text) {
         if (Array.isArray(parsed) && parsed.length >= 4) {
           console.log('[parseConceptsRobust] ✅ JSON 배열 파싱 성공:', parsed.length);
           
-          // 6개로 정규화
           const normalized = parsed.slice(0, 6);
           while (normalized.length < 6) {
             normalized.push(createFallbackConcept(normalized.length + 1));
@@ -175,14 +285,12 @@ function parseConceptsRobust(text) {
       }
     }
     
-    // 2차: 라인별 패턴 매칭으로 복구
     const concepts = new Map();
     const lines = text.split('\n');
     
     for (const line of lines) {
       const trimmed = line.trim();
       
-      // concept_id 패턴
       const idMatch = trimmed.match(/["\']?concept_id["\']?\s*:\s*(\d+)/i);
       if (idMatch) {
         const id = parseInt(idMatch[1]);
@@ -191,17 +299,14 @@ function parseConceptsRobust(text) {
         }
       }
       
-      // concept_name 패턴
       const nameMatch = trimmed.match(/["\']?concept_name["\']?\s*:\s*["\']([^"']+)["\']?/i);
       if (nameMatch) {
-        // 가장 최근 ID에 매핑
         const lastId = Math.max(...Array.from(concepts.keys()));
         if (concepts.has(lastId)) {
           concepts.get(lastId).concept_name = nameMatch[1];
         }
       }
       
-      // summary 패턴
       const summaryMatch = trimmed.match(/["\']?summary["\']?\s*:\s*["\']([^"']+)["\']?/i);
       if (summaryMatch) {
         const lastId = Math.max(...Array.from(concepts.keys()));
@@ -210,7 +315,6 @@ function parseConceptsRobust(text) {
         }
       }
       
-      // keywords 배열 패턴
       const keywordsMatch = trimmed.match(/["\']?keywords["\']?\s*:\s*\[(.*?)\]/i);
       if (keywordsMatch) {
         const keywordStr = keywordsMatch[1];
@@ -228,7 +332,6 @@ function parseConceptsRobust(text) {
     
     console.log('[parseConceptsRobust] 라인 파싱 결과:', concepts.size);
     
-    // 6개 컨셉으로 정규화
     const result = [];
     for (let i = 1; i <= 6; i++) {
       if (concepts.has(i) && concepts.get(i).concept_name && concepts.get(i).summary) {
@@ -303,114 +406,6 @@ function createFallbackConcepts() {
   return Array.from({ length: 6 }, (_, i) => createFallbackConcept(i + 1));
 }
 
-// 비디오 길이 파싱
-function parseVideoLengthSeconds(raw) {
-  if (raw == null) return 10;
-  if (typeof raw === 'number') return Math.max(10, Math.min(60, raw));
-  
-  const str = String(raw);
-  const numMatch = str.match(/(\d+)/);
-  if (!numMatch) return 10;
-  
-  const num = parseInt(numMatch[1], 10);
-  return Math.max(10, Math.min(60, isNaN(num) ? 10 : num));
-}
-
-// 씬 개수 계산 (2초당 1씬)
-function calcSceneCount(videoSeconds) {
-  const count = Math.floor(videoSeconds / 2);
-  return Math.max(3, Math.min(15, count)); // 최소 3개, 최대 15개 씬
-}
-
-// 브리프 생성 프롬프트
-function buildBriefPrompt(formData) {
-  return `당신은 세계적으로 유명한 광고 크리에이티브 디렉터입니다. 다음 브랜드 정보를 바탕으로 창의적이고 전략적인 광고 브리프를 작성해주세요.
-
-브랜드 정보:
-- 브랜드명: ${formData.brandName || '미정'}
-- 산업분야: ${formData.industryCategory || '일반'}
-- 제품/서비스: ${formData.productServiceCategory || '미정'}
-- 영상 목적: ${formData.videoPurpose || '브랜드 인지도 향상'}
-- 영상 길이: ${formData.videoLength || '30초'}
-- 핵심 타겟: ${formData.coreTarget || '일반 소비자'}
-- 핵심 차별점: ${formData.coreDifferentiation || '미정'}
-- 추가 요구사항: ${formData.videoRequirements || '없음'}
-
-이 정보를 바탕으로 브랜드의 핵심 가치, 타겟 고객의 인사이트, 경쟁 환경 분석, 그리고 창의적 방향성을 포함한 종합적인 광고 전략 브리프를 작성해주세요. 실제 광고 제작에 바로 활용할 수 있을 정도로 구체적이고 실용적으로 작성해주세요.`;
-}
-
-뜻하고 진정성 있는 이야기 중심 접근 방식",
-    "keywords": ["감성", "스토리", "공감", "진정성", "경험"]
-  },
-  {
-    "concept_id": 2,
-    "concept_name": "제품 중심 쇼케이스",
-    "summary": "제품의 핵심 기능과 차별화된 장점을 명확하고 직관적으로 부각하는 방식",
-    "keywords": ["기능", "품질", "성능", "차별화", "전문성"]
-  },
-  {
-    "concept_id": 3,
-    "concept_name": "라이프스타일 통합",
-    "summary": "일상 속에서 자연스럽게 녹아드는 브랜드 경험과 라이프스타일 연출",
-    "keywords": ["일상", "자연스러움", "라이프스타일", "편리함", "통합"]
-  },
-  {
-    "concept_id": 4,
-    "concept_name": "프리미엄 포지셔닝",
-    "summary": "고급스럽고 세련된 이미지로 브랜드의 프리미엄 가치를 극대화",
-    "keywords": ["고급", "세련", "프리미엄", "품격", "가치"]
-  },
-  {
-    "concept_id": 5,
-    "concept_name": "혁신적 비전",
-    "summary": "미래지향적이고 창의적인 브랜드 철학과 혁신 기술력을 강조",
-    "keywords": ["혁신", "미래", "기술", "창의", "비전"]
-  },
-  {
-    "concept_id": 6,
-    "concept_name": "신뢰와 전문성",
-    "summary": "전문성과 신뢰성을 바탕으로 한 권위있고 안정적인 브랜드 이미지",
-    "keywords": ["신뢰", "전문성", "안정", "권위", "신용"]
-  }
-]`;
-}
-
-// 멀티 스토리보드 생성 프롬프트
-function buildMultiStoryboardPrompt(brief, conceptsJson, sceneCount, videoSec) {
-  return `다음 광고 브리프와 6개 컨셉을 바탕으로, 각 컨셉별로 ${sceneCount}개의 씬을 가진 상세한 스토리보드를 생성해주세요.
-
-광고 브리프:
-${brief}
-
-컨셉들:
-${conceptsJson}
-
-총 영상 길이: ${videoSec}초 (각 씬 약 2초)
-
-각 컨셉에 대해 다음과 같은 정확한 형식으로 작성해주세요:
-
-### Concept 1: 감성적 스토리텔링
-#### Scene 1 (0:00-0:02)
-- **Image Prompt**: A warm, emotional scene showing a family gathering around a dinner table, soft golden hour lighting streaming through windows, professional commercial photography, high quality, detailed faces showing genuine happiness, 4K resolution, cinematic composition
-
-#### Scene 2 (0:02-0:04)  
-- **Image Prompt**: Close-up of hands preparing food with care and attention, natural kitchen lighting, steam rising from freshly cooked meal, professional food photography, warm color palette, detailed textures, commercial quality
-
-(${sceneCount}개 씬까지 계속...)
-
-### Concept 2: 제품 중심 쇼케이스
-#### Scene 1 (0:00-0:02)
-- **Image Prompt**: Product hero shot on clean white background, professional studio lighting, sharp focus on product details, commercial photography, premium presentation, 4K quality, minimal composition
-
-(각 컨셉마다 ${sceneCount}개씩 총 6개 컨셉 작성)
-
-중요사항:
-- 각 Image Prompt는 영어로 작성하고 70-100단어 길이로 상세하게
-- 상업적 광고 촬영에 적합한 구체적 지시사항 포함
-- professional, commercial, high quality, detailed, 4K 등 품질 키워드 필수 포함
-- 각 씬은 정확히 2초 분량으로 계획`;
-}
-
 // 스토리보드 파싱 (다중 컨셉)
 function parseMultiStoryboards(rawText, sceneCount) {
   console.log('[parseMultiStoryboards] 파싱 시작, sceneCount:', sceneCount);
@@ -422,7 +417,6 @@ function parseMultiStoryboards(rawText, sceneCount) {
   }
 
   try {
-    // 각 컨셉 블록 추출
     const conceptPattern = /#{1,3}\s*Concept\s+(\d+)[\s\S]*?(?=#{1,3}\s*Concept\s+\d+|$)/gi;
     const conceptMatches = [...rawText.matchAll(conceptPattern)];
     
@@ -433,13 +427,11 @@ function parseMultiStoryboards(rawText, sceneCount) {
       const conceptId = parseInt(conceptMatch[1], 10);
       const blockContent = conceptMatch[0];
       
-      // 컨셉명 추출
       const nameMatch = blockContent.match(/Concept\s+\d+:\s*([^\n]+)/i);
       const conceptName = nameMatch ? nameMatch[1].trim() : `Concept ${conceptId}`;
       
       console.log('[parseMultiStoryboards] 처리 중:', conceptId, conceptName);
       
-      // 씬들 추출
       const scenes = [];
       const scenePattern = /#{1,4}\s*Scene\s+(\d+)[^#]*?\*\*Image Prompt\*\*:\s*([\s\S]*?)(?=#{1,4}\s*Scene|\n#{1,3}\s*Concept|$)/gi;
       const sceneMatches = [...blockContent.matchAll(scenePattern)];
@@ -451,14 +443,12 @@ function parseMultiStoryboards(rawText, sceneCount) {
         let prompt = sceneMatch[2] ? sceneMatch[2].trim() : '';
         
         if (sceneNumber <= sceneCount && sceneNumber > 0) {
-          // 프롬프트 정제
           prompt = prompt
             .replace(/\*\*/g, '')
             .replace(/\n+/g, ' ')
             .replace(/\s+/g, ' ')
             .trim();
           
-          // 너무 짧으면 기본 키워드 추가
           if (prompt.split(' ').length < 15) {
             prompt += `, professional commercial photography, high quality, detailed, 4K resolution, cinematic lighting`;
           }
@@ -472,7 +462,6 @@ function parseMultiStoryboards(rawText, sceneCount) {
         }
       }
       
-      // 부족한 씬 보완
       while (scenes.length < sceneCount) {
         const sceneNumber = scenes.length + 1;
         scenes.push({
@@ -483,7 +472,6 @@ function parseMultiStoryboards(rawText, sceneCount) {
         });
       }
       
-      // 씬 정렬 및 개수 제한
       scenes.sort((a, b) => a.sceneNumber - b.sceneNumber);
       scenes.splice(sceneCount);
       
@@ -494,7 +482,6 @@ function parseMultiStoryboards(rawText, sceneCount) {
       });
     }
     
-    // 부족한 컨셉 보완
     while (results.length < 6) {
       const conceptId = results.length + 1;
       results.push(generateFallbackStoryboard(conceptId, sceneCount));
@@ -543,8 +530,26 @@ function generateFallbackStoryboards(sceneCount) {
   return Array.from({ length: 6 }, (_, i) => generateFallbackStoryboard(i + 1, sceneCount));
 }
 
+// 비디오 길이 파싱
+function parseVideoLengthSeconds(raw) {
+  if (raw == null) return 10;
+  if (typeof raw === 'number') return Math.max(10, Math.min(60, raw));
+  
+  const str = String(raw);
+  const numMatch = str.match(/(\d+)/);
+  if (!numMatch) return 10;
+  
+  const num = parseInt(numMatch[1], 10);
+  return Math.max(10, Math.min(60, isNaN(num) ? 10 : num));
+}
+
+// 씬 개수 계산 (2초당 1씬)
+function calcSceneCount(videoSeconds) {
+  const count = Math.floor(videoSeconds / 2);
+  return Math.max(3, Math.min(15, count));
+}
+
 export default async function handler(req, res) {
-  // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -566,7 +571,6 @@ export default async function handler(req, res) {
     
     console.log(`[storyboard-init] 🎬 시작 - 비디오=${videoSec}초, 씬=${sceneCount}개, 모델체인=[${MODEL_CHAIN.join(', ')}]`);
 
-    // API 키 확인
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
       console.error('[storyboard-init] ❌ Gemini API 키 없음');
@@ -577,20 +581,17 @@ export default async function handler(req, res) {
     
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    // 1단계: 크리에이티브 브리프 생성
     console.log('[storyboard-init] 🎯 1단계: 크리에이티브 브리프 생성');
     const briefPrompt = buildBriefPrompt(formData);
     const briefOut = await callGemini2_5(genAI, briefPrompt, '1-brief');
     console.log(`[storyboard-init] ✅ 1단계 완료, 브리프 길이: ${briefOut.length}자`);
     
-    // 2단계: 6개 컨셉 생성
     console.log('[storyboard-init] 🎨 2단계: 6개 컨셉 생성');
     const conceptsPrompt = buildConceptsPrompt(briefOut, formData);
     const conceptsOut = await callGemini2_5(genAI, conceptsPrompt, '2-concepts');
     const conceptsArr = parseConceptsRobust(conceptsOut);
     console.log(`[storyboard-init] ✅ 2단계 완료, 컨셉: ${conceptsArr.length}개`);
     
-    // 3단계: 멀티 스토리보드 생성
     console.log('[storyboard-init] 📝 3단계: 멀티 스토리보드 생성');
     let parsedStoryboards = [];
     try {
@@ -631,7 +632,7 @@ export default async function handler(req, res) {
         summary: concept.summary,
         keywords: concept.keywords,
         imagePrompts: imagePrompts,
-        images: [] // 이미지는 다음 단계에서 생성
+        images: []
       };
     });
 
