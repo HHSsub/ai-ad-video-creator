@@ -21,9 +21,10 @@ function mapUserAspectRatio(value) {
 
 const MODEL_CHAIN = [
   process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-  process.env.FALLBACK_GEMINI_MODEL || 'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
-  'gemini-2.5-flash-lite'
+  'gemini-2.5-flash',
+  'gemini-2.5-flash',
+  process.env.FALLBACK_GEMINI_MODEL || 'gemini-2.5-flash-lite'
 ].filter(Boolean);
 
 const MAX_ATTEMPTS = 16;
@@ -85,6 +86,9 @@ async function callGemini2_5(genAI, prompt, label) {
         const text = result.response.text();
         const duration = Date.now() - startTime;
         console.log(`[${label}] ✅ 성공 model=${modelName} 시간=${duration}ms 길이=${text.length}자`);
+        if (modelName === 'gemini-2.5-flash-lite') {
+          console.warn(`[${label}] 🚨🚨🚨 경고: gemini-2.5-flash-lite 모델이 사용되었습니다! 🚨🚨🚨`);
+        }
 
         if (label === '1-brief') {
           const preview = text.replace(/\s+/g, ' ').slice(0, 70);
@@ -99,7 +103,7 @@ async function callGemini2_5(genAI, prompt, label) {
           console.log(`[${label}] 🔄 과부하 감지, 다음 모델로 즉시 전환`);
           break;
         }
-        if (isRetryable(error) && modelAttempt < 3) {
+        if (isRetryable(error) && modelAttempt < (modelName === 'gemini-2.5-flash' ? 5 : 3)) {
           const delay = BASE_BACKOFF * modelAttempt + Math.random() * 1000;
           console.log(`[${label}] ⏳ ${delay}ms 후 같은 모델로 재시도`);
           await sleep(delay);
