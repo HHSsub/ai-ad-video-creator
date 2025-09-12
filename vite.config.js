@@ -10,8 +10,24 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:3000',
-        changeOrigin: true
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.log('[proxy error]', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('[proxy req]', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('[proxy res]', proxyRes.statusCode, req.url);
+          });
+        }
       }
     }
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets'
   }
 });
