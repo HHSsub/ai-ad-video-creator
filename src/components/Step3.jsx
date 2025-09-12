@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
 const Step3 = ({
   storyboard,
   selectedConceptId,
@@ -18,12 +16,9 @@ const Step3 = ({
   const [polling, setPolling] = useState(false);
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState(null);
-
   const selected = styles.find(s => s.concept_id === selectedConceptId) || null;
-
   const log = (m) =>
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${m}`]);
-
   const startGeneration = async () => {
     if (!selected) return;
     if (isLoading) return;
@@ -35,8 +30,45 @@ const Step3 = ({
     log(`영상 task 생성 시작: ${selected.style}`);
 
     try {
-      const newTasks = [];
+      // Freepik 이미지 생성 API 호출 추가 부분
+      const updatedImages = [];
       for (const img of (selected.images || [])) {
+        try {
+          log(`이미지 생성 요청 scene=${img.sceneNumber}`);
+          const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imagePrompt: img.image_prompt,
+              sceneNumber: img.sceneNumber,
+              conceptId: selected.concept_id
+            })
+          });
+          if (!response.ok) {
+            const txt = await response.text().catch(() => '');
+            log(`이미지 생성 실패 scene=${img.sceneNumber} ${response.status} ${txt.slice(0, 80)}`);
+            continue;
+          }
+          const data = await response.json();
+          if (!data.success || !data.url) {
+            log(`이미지 생성 응답 이상 scene=${img.sceneNumber}`);
+            continue;
+          }
+          updatedImages.push({
+            ...img,
+            url: data.url,
+            thumbnail: data.url
+          });
+          log(`이미지 생성 성공 scene=${img.sceneNumber}`);
+        } catch (e) {
+          log(`이미지 생성 예외 scene=${img.sceneNumber} ${e.message}`);
+        }
+      }
+      if (!updatedImages.length) throw new Error('생성된 이미지가 없습니다');
+
+      // 기존 영상 생성 API 호출 부분 (image-to-video)
+      const newTasks = [];
+      for (const img of updatedImages) {
         try {
           const r = await fetch(`${API_BASE}/api/image-to-video`, {
             method: 'POST',
@@ -56,17 +88,17 @@ const Step3 = ({
             continue;
           }
           const j = await r.json();
-          if (!j.taskId) {
+          if (!j.task?.taskId) {
             log(`Task 응답 이상 scene=${img.sceneNumber}`);
             continue;
           }
           newTasks.push({
-            taskId: j.taskId,
+            taskId: j.task.taskId,
             sceneNumber: img.sceneNumber,
             duration: img.duration || 2,
             title: img.title
           });
-          log(`Task 생성 성공 scene=${img.sceneNumber} task=${j.taskId}`);
+          log(`Task 생성 성공 scene=${img.sceneNumber} task=${j.task.taskId}`);
         } catch (e) {
           log(`예외 scene=${img.sceneNumber} ${e.message}`);
         }
@@ -77,13 +109,12 @@ const Step3 = ({
     } catch (e) {
       setError(e.message);
       setIsLoading(false);
+      log(`전체 생성 실패: ${e.message}`);
     }
   };
-
   useEffect(() => {
     if (!polling || tasks.length === 0) return;
     let cancelled = false;
-
     const poll = async () => {
       if (cancelled) return;
       try {
@@ -99,7 +130,6 @@ const Step3 = ({
           log('모든 영상 완료');
           return;
         }
-
         const r = await fetch(`${API_BASE}/api/video-status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -121,7 +151,6 @@ const Step3 = ({
           log(`status error: ${j.error}`);
           return;
         }
-
         let completedCount = 0;
         for (const seg of j.segments || []) {
           if (seg.status === 'completed' && seg.videoUrl) {
@@ -147,7 +176,6 @@ const Step3 = ({
         log(`status 예외: ${e.message}`);
       }
     };
-
     poll();
     const intv = setInterval(poll, 5000);
     return () => {
@@ -155,18 +183,15 @@ const Step3 = ({
       clearInterval(intv);
     };
   }, [polling, tasks, selected, isLoading, setIsLoading]);
-
   const allDone =
     tasks.length > 0 &&
     tasks.every(t => selected?.images?.find(i => i.sceneNumber === t.sceneNumber && i.videoUrl));
-
   return (
     <div className="max-w-7xl mx-auto p-6">
       <h2 className="text-2xl font-bold mb-4">3단계: 컨셉 선택 & 영상 클립 생성</h2>
       {error && (
         <div className="bg-red-100 text-red-700 p-3 mb-4 rounded">{error}</div>
       )}
-
       <div className="grid md:grid-cols-3 gap-5 mb-6">
         {styles.map(s => (
           <div
@@ -197,7 +222,6 @@ const Step3 = ({
           </div>
         ))}
       </div>
-
       {selected && (
         <div className="mb-6">
           <h3 className="font-semibold mb-2">{selected.style} - Scene 상태</h3>
@@ -233,19 +257,17 @@ const Step3 = ({
           </div>
         </div>
       )}
-
       {isLoading && (
         <div className="mb-4">
           <div className="w-full bg-gray-200 h-2 rounded overflow-hidden">
             <div
-              className="h-2 bg-gradient-to-r from-indigo-500 to-pink-500 transition-all"
+              className="h-2 bg-gradient-to-r from-indigo-500 to-pink-600 transition-all"
               style={{ width: `${percent}%` }}
             />
           </div>
           <div className="text-xs text-gray-600 mt-1">{percent}%</div>
         </div>
       )}
-
       <div className="flex justify-between pt-4 border-t">
         <button onClick={onPrev} className="px-5 py-2 border rounded">
           이전
@@ -271,7 +293,6 @@ const Step3 = ({
           </button>
         )}
       </div>
-
       <details className="mt-6">
         <summary className="cursor-pointer font-semibold">로그</summary>
         <div className="mt-2 h-48 overflow-auto bg-gray-900 text-green-300 p-3 text-xs font-mono whitespace-pre-wrap rounded">
@@ -281,7 +302,6 @@ const Step3 = ({
     </div>
   );
 };
-
 Step3.propTypes = {
   storyboard: PropTypes.object,
   selectedConceptId: PropTypes.number,
@@ -291,5 +311,4 @@ Step3.propTypes = {
   isLoading: PropTypes.bool,
   setIsLoading: PropTypes.func
 };
-
 export default Step3;
