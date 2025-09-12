@@ -1,50 +1,62 @@
 [2단계 - JSON ONLY OUTPUT]
 
-ROLE: You are an expert video director & VFX supervisor. Convert the strategic natural-language plan (Phase 1 output) into a machine-consumable JSON storyboard for image + image-to-video generation.
+ROLE: You are an expert video director & VFX supervisor. Convert the strategic natural-language plan (Phase 1 output) into a STRICT, MACHINE-VALID SINGLE JSON.
 
-CONTEXT INPUT (PHASE 1 RAW, INPUT DETAILS):
+PHASE 1 RAW CONTEXT:
 {phase1_output}
 
-PROJECT INPUT VARIABLES:
+INPUT VARIABLES:
 brandName: {brandName}
 industryCategory: {industryCategory}
 productServiceCategory: {productServiceCategory}
 productServiceName: {productServiceName}
 coreTarget: {coreTarget}
 videoPurpose: {videoPurpose}
-videoLength: {videoLength}
+videoLengthRaw: {videoLength}
+videoLengthSeconds: {videoLengthSeconds}
+targetSceneCount: {targetSceneCount}
 coreDifferentiation: {coreDifferentiation}
 videoRequirements: {videoRequirements}
 brandLogoProvided: {brandLogo}
 productImageProvided: {productImage}
 aspectRatioCode: {aspectRatioCode}
 
-OBJECTIVE:
-Return ONLY ONE JSON object (no markdown fences, no commentary, no prose outside JSON).
-This JSON will directly drive generation steps. All prompts must be in ENGLISH except brand/product proper nouns.
+ABSOLUTE FORMAT RULES (CRITICAL):
+- OUTPUT MUST BE A SINGLE RAW JSON OBJECT ONLY.
+- DO NOT wrap in markdown, DO NOT use ```json fences, DO NOT add commentary.
+- Every object property (except the last inside its scope) MUST end with a comma.
+- All string values MUST be valid JSON strings (escape internal quotes if any).
+- Use double quotes for all keys & string values (standard JSON).
+- No trailing commas after the last property in an object or array.
 
-SCENE COUNT LOGIC:
-- Derive total scenes by floor(video_length_seconds / 2). Minimum 3, maximum 60.
-- Each scene duration_seconds = 2 (unless last scene needs 1~2s adjustment to not exceed length; keep it simple: still 2).
-- Generate continuous timecode segments: 00:00-00:02, 00:02-00:04, etc.
+SCENE LOGIC:
+- Total scenes = {targetSceneCount}.
+- Each scene duration_seconds = 2.
+- Sequential timecodes: 00:00-00:02, 00:02-00:04, ...
+- If total time would exceed {videoLengthSeconds}, still keep the scene count (we will trim downstream).
 
 IMAGE PROMPT RULES:
-- Provide high-fidelity descriptive prompt (70-110 words) describing a single frozen frame.
-- Begin with camera angle & shot type (e.g., "Extreme close-up," "Bust shot," "Wide shot").
-- Include subject pose, orientation, micro actions, environment depth, lighting/time-of-day, color palette, mood.
-- Include product or product context referencing {productServiceName} or {productServiceCategory} naturally.
-- Mandatory fidelity tokens if missing: insanely detailed, micro-details, hyper-realistic textures, visible skin pores, stitching on clothing, 4K, sharp focus.
-- If brandLogoProvided == '업로드됨' integrate subtle early logo presence (scene 1 or 2).
-- If productImageProvided == '업로드됨' ensure tactile handling or functional usage appears in multiple scenes.
-- Conclude prompt with: "Shot by [generic professional cinema camera] with a [50mm or 85mm] lens."
-- Negative prompt EXACT fixed string: "blurry, low quality, watermark, cartoon, distorted"
-- image.image.size = "{aspectRatioCode}"
+- Field path: scenes[n].image_prompt.prompt
+- 70–110 English words. Begin with camera angle & shot type (e.g. "Extreme close-up," "Wide shot," "Medium shot," etc.).
+- Must mention product or category context naturally.
+- MUST contain high-fidelity tokens (if missing, add them): insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus.
+- End with EXACT pattern: Shot by <professional cinema camera> with a <50mm or 85mm> lens.
+- Negative prompt EXACT: "blurry, low quality, watermark, cartoon, distorted"
+- size: "{aspectRatioCode}"
+- Seed: 5-digit integer (10000–99999).
 
 MOTION PROMPT RULES:
-- 1~3 concise English sentences describing motion from the still: subject micro-movements, camera moves (push-in, dolly, parallax), environmental animations.
-- Avoid repeating static description verbatim; focus on dynamic evolution.
+- 1–3 concise sentences in English.
+- Only describe motion evolution (subject / camera / environment).
+- No redundant repetition of static description phrases.
 
-JSON SCHEMA (STRICT KEYS, NO EXTRA TOP-LEVEL KEYS):
+ASSET FLAGS:
+- logo_provided = true if {brandLogo} == '업로드됨', else false.
+- product_image_provided = true if {productImage} == '업로드됨', else false.
+- If logo_provided true → integrate subtle logo presence in one early scene.
+- If product_image_provided true → at least 2 scenes show interaction/visual of product.
+
+JSON SCHEMA (NO EXTRA TOP-LEVEL KEYS):
 {
   "project_meta": {
     "brand": "...",
@@ -53,7 +65,7 @@ JSON SCHEMA (STRICT KEYS, NO EXTRA TOP-LEVEL KEYS):
     "target": "...",
     "purpose": "...",
     "differentiation": "...",
-    "video_length_seconds": <integer>,
+    "video_length_seconds": {videoLengthSeconds},
     "aspect_ratio": "{aspectRatioCode}",
     "logo_provided": <true|false>,
     "product_image_provided": <true|false>
@@ -62,30 +74,30 @@ JSON SCHEMA (STRICT KEYS, NO EXTRA TOP-LEVEL KEYS):
     {
       "scene_number": 1,
       "timecode": "00:00-00:02",
-      "concept_reference": "텍스트 (원하면 Phase1 컨셉 명칭 중 하나)",
+      "concept_reference": "선택적으로 Phase1 개념 중 하나",
       "image_prompt": {
-        "prompt": "ENGLISH 70-110 words ... ends with Shot by ... lens.",
+        "prompt": "70-110 words ... Shot by ARRI Alexa Mini with a 50mm lens.",
         "negative_prompt": "blurry, low quality, watermark, cartoon, distorted",
         "num_images": 1,
         "image": { "size": "{aspectRatioCode}" },
         "styling": { "style": "photo", "color": "color", "lighting": "natural" },
         "guidance_scale": 7.5,
-        "seed": <5-digit integer>,
+        "seed": 12345,
         "filter_nsfw": true
       },
       "motion_prompt": {
-        "prompt": "Concise ENGLISH motion description"
+        "prompt": "Concise motion description."
       },
       "duration_seconds": 2,
-      "notes": "Optional brief production note"
+      "notes": "Optional"
     }
   ]
 }
 
 RESPONSE REQUIREMENTS:
-- Output ONLY the JSON object described (no code fences, no explanation, no markdown headers).
-- Ensure all scene image_prompt.prompt end with a camera line: 'Shot by ... lens.'
-- Provide realistic variation in scenes while maintaining narrative & visual coherence appropriate to {videoPurpose} and {coreTarget}.
-- Use aspect_ratio value "{aspectRatioCode}" consistently in every image_prompt.image.size.
-- Convert logo_provided / product_image_provided to true/false (NOT strings) using provided inputs ({brandLogo} / {productImage} where '업로드됨' -> true else false).
-- If you cannot confidently fill something, still produce a syntactically valid JSON with best-effort content (no placeholders like TODO).
+- Output ONLY the JSON (no fences, no Korean outside concept_reference if not needed).
+- Every image_prompt.prompt MUST end with 'Shot by ... lens.'
+- All scenes must have size = "{aspectRatioCode}".
+- Provide varied but coherent progression.
+- No placeholder tokens like TODO / FILL / <>.
+- Ensure strict valid JSON.
