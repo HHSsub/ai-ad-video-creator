@@ -143,40 +143,54 @@ async function generateImageWithFreepik(prompt, apiKey) {
   try {
     const result = await safeFreepikCall(endpoint, options, 'text-to-image');
     
-    console.log('[generateImageWithFreepik] 전체 응답:', JSON.stringify(result, null, 2));
+    // 응답 로깅 (base64는 너무 길어서 줄임)
+    const logResult = JSON.parse(JSON.stringify(result));
+    if (logResult.data && Array.isArray(logResult.data)) {
+      logResult.data.forEach((item, index) => {
+        if (item.base64 && item.base64.length > 100) {
+          logResult.data[index] = { ...item, base64: `[BASE64_DATA_${item.base64.length}_CHARS]` };
+        }
+      });
+    }
+    console.log('[generateImageWithFreepik] 응답 구조:', JSON.stringify(logResult, null, 2));
     
-    // 2025년 Freepik 응답에서 이미지 URL 추출
+    // 2025년 Freepik API는 base64로 이미지를 반환함
     let imageUrl = null;
     
-    // 다양한 응답 구조 대응
-    if (result.data) {
-      if (Array.isArray(result.data) && result.data.length > 0) {
-        imageUrl = result.data[0]; // 직접 URL 배열
-      } else if (result.data.url) {
-        imageUrl = result.data.url; // 객체 안의 url
-      } else if (result.data.image_url) {
-        imageUrl = result.data.image_url; // image_url 필드
-      } else if (result.data.images && Array.isArray(result.data.images) && result.data.images.length > 0) {
-        imageUrl = result.data.images[0].url || result.data.images[0]; // images 배열
+    if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+      const firstItem = result.data[0];
+      
+      // base64 데이터가 있는 경우 data URL로 변환
+      if (firstItem.base64) {
+        console.log('[generateImageWithFreepik] Base64 데이터 감지, Data URL로 변환 중...');
+        
+        // base64 데이터를 data URL로 변환
+        // JPEG 형식으로 가정 (Freepik 기본값)
+        imageUrl = `data:image/jpeg;base64,${firstItem.base64}`;
+        
+        console.log('[generateImageWithFreepik] Data URL 생성 완료 (길이: ' + imageUrl.length + ' chars)');
+        
+      } else if (firstItem.url) {
+        // URL이 직접 제공되는 경우
+        imageUrl = firstItem.url;
+        console.log('[generateImageWithFreepik] 직접 URL 사용:', imageUrl);
+        
+      } else if (typeof firstItem === 'string' && firstItem.startsWith('http')) {
+        // 첫 번째 아이템이 직접 URL인 경우
+        imageUrl = firstItem;
+        console.log('[generateImageWithFreepik] 배열 첫 번째 요소가 URL:', imageUrl);
       }
     } else if (result.url) {
-      imageUrl = result.url; // 최상위 url
-    } else if (result.image_url) {
-      imageUrl = result.image_url; // 최상위 image_url
+      // 최상위 레벨에 URL이 있는 경우
+      imageUrl = result.url;
     }
     
-    if (!imageUrl || typeof imageUrl !== 'string') {
-      console.error('[generateImageWithFreepik] 이미지 URL 추출 실패:', result);
-      throw new Error('응답에서 유효한 이미지 URL을 찾을 수 없음');
+    if (!imageUrl) {
+      console.error('[generateImageWithFreepik] 이미지 데이터 추출 실패. 응답 구조:', logResult);
+      throw new Error('응답에서 이미지 데이터(base64 또는 URL)를 찾을 수 없음');
     }
     
-    // URL 유효성 검사
-    if (!imageUrl.startsWith('http')) {
-      console.error('[generateImageWithFreepik] 잘못된 URL 형식:', imageUrl);
-      throw new Error('유효하지 않은 이미지 URL 형식');
-    }
-    
-    console.log('[generateImageWithFreepik] 이미지 URL 추출 성공:', imageUrl);
+    console.log('[generateImageWithFreepik] 이미지 데이터 추출 성공 (타입: ' + (imageUrl.startsWith('data:') ? 'Data URL' : 'HTTP URL') + ')');
     
     return {
       success: true,
