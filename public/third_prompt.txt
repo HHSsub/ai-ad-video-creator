@@ -21,6 +21,28 @@ Based on the `Brand/Product Context` and `Storyboard` atmosphere, automatically 
 - **Cinematic and Story-Driven**: For brand storytelling, automotive, or corporate ads. Emphasizes drama and narrative.
 - **Documentary and Authentic**: For social causes, lifestyle brands, or to build trust. Emphasizes realism and genuine emotion.
 - **Stylized and Artistic**: For creative, unique campaigns (e.g., Pop-Art, 3D Render). Emphasizes an unconventional visual identity.
+
+### Z+ CRITICAL ADDITION: USER CONTEXT PRIORITIZATION ###
+🔥 MANDATORY: Before generating any image prompt, ANALYZE the user's brand/industry/target context:
+
+**Context Analysis Protocol:**
+1. **Brand Industry**: What business category? (mobile games, food, beauty, automotive, etc.)
+2. **Target Audience**: What age/demographic? (seniors, young adults, families, etc.) 
+3. **Product/Service**: What specific offering? (puzzle games, skincare, electric cars, etc.)
+
+**Example Transformations:**
+❌ BAD: "Canon EOS R5, 50mm lens, professional photography of a person"
+✅ GOOD: "A cheerful 65-year-old grandmother comfortably playing a puzzle game on her tablet while sitting in her favorite armchair, warm home lighting, Samsung Galaxy branding visible, easy-to-see game interface, relaxed and accomplished expression, cozy living room setting, high-quality commercial photography style"
+
+❌ BAD: "Professional camera setup capturing subject in studio lighting"  
+✅ GOOD: "Young Korean couple in their 20s laughing while sharing Korean fried chicken at a trendy Seoul restaurant, golden crispy chicken pieces visible on wooden table, casual modern clothing, warm evening lighting through large windows, authentic social dining atmosphere"
+
+**CONTEXT-FIRST RULES:**
+- Show the ACTUAL target audience using/enjoying the product
+- Use REAL scenarios where the product/service makes sense
+- Match visual style to industry standards (gaming≠luxury cars≠senior care)
+- Avoid generic stock photography that ignores user's business context
+
 ### Output Requirements
 For each scene, you must provide a detailed image prompt.
 - **Image Prompt** (70-100 words, English):
@@ -83,6 +105,16 @@ For EACH concept_id (1..6):
   - NEVER mix or merge details between different concepts.
   - DO NOT output additional explanation, commentary, JSON, or lists outside this exact Markdown pattern.
   - DO NOT exceed {{scene_count}} scenes per concept.
+
+### Z++ CONTEXT VERIFICATION CHECKLIST ###
+🔥 For EVERY image prompt, verify:
+1. ✅ Does this show the user's ACTUAL target demographic? 
+2. ✅ Is the user's product/service clearly represented?
+3. ✅ Does this match the user's industry context?
+4. ✅ Would someone from the target audience recognize themselves?
+
+**CRITICAL**: If user input = "mobile game, 60+ seniors, Samsung" → Show 60+ people using Samsung devices playing games, NOT generic camera equipment.
+
 Output order: Concept 1 .. Concept 6 in ascending concept_id.
 Insert a single heading at top:
 ## Multi-Concept Storyboards
@@ -94,4 +126,3 @@ INPUT CONCEPTS JSON (verbatim):
 {{concepts_json}}
 
 Generate now.
-----------------------------------------------------------------
