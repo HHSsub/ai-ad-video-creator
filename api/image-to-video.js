@@ -1,96 +1,63 @@
-// 2025년 최신 Freepik Image-to-Video API (MiniMax Hailuo-02) 정확한 연동
+// api/image-to-video.js - Freepik image-to-video 변환 + 영상 비율(aspect_ratio) & 브랜드/제품 이미지 플래그 반영 확장 버전
+
+import 'dotenv/config';
+
+// 간단한 재시도 유틸
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const MAX_RETRY = 5;
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000;
 
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// 에러 재시도 가능 여부 판단
-function isRetryableError(statusCode, errorMessage) {
-  if ([429, 500, 502, 503, 504].includes(statusCode)) return true;
-  const msg = (errorMessage || '').toLowerCase();
-  return msg.includes('timeout') || 
-         msg.includes('overloaded') || 
-         msg.includes('rate limit') ||
-         msg.includes('quota');
+// ======================= 영상 비율 매핑 함수 =======================
+function mapUserAspectRatio(value) {
+  if (!value) return 'widescreen_16_9';
+  if (typeof value !== 'string') return 'widescreen_16_9';
+  if (value.includes('16:9') || value.includes('가로')) return 'widescreen_16_9';
+  if (value.includes('9:16') || value.includes('세로')) return 'vertical_9_16';
+  if (value.includes('1:1') || value.includes('정사각')) return 'square_1_1';
+  return 'widescreen_16_9';
 }
 
-// 안전한 API 호출 (재시도 로직)
-async function safeFreepikCall(url, options, label = 'API') {
-  let lastError;
-  
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+// 비디오용 프롬프트 최적화 (간단 텍스트 클린)
+function optimizeVideoPrompt(prompt) {
+  if (!prompt) return 'natural smooth motion';
+  let p = prompt
+    .replace(/\*\*/g, '')
+    .replace(/[`"]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (p.length < 20) p += ' high quality cinematic smooth motion';
+  return p.slice(0, 1800);
+}
+
+// Freepik API 안전 호출
+async function safeFreepikCall(url, options, label) {
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     try {
-      console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES}: ${url}`);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90초 타임아웃
-      
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        let errorText = '';
-        try {
-          errorText = await response.text();
-          console.error(`[${label}] HTTP ${response.status}:`, errorText);
-        } catch (e) {
-          errorText = `HTTP ${response.status}`;
-        }
-        
-        if (isRetryableError(response.status, errorText) && attempt < MAX_RETRIES) {
-          const delay = RETRY_DELAY * attempt;
-          console.log(`[${label}] ${delay}ms 후 재시도...`);
-          await sleep(delay);
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.error(`[${label}] HTTP ${res.status} 응답:`, text.slice(0, 200));
+        if ([429, 500, 502, 503, 504].includes(res.status) && attempt < MAX_RETRY) {
+          const wait = 1000 * attempt;
+            console.log(`[${label}] 재시도 대기 ${wait}ms`);
+          await sleep(wait);
           continue;
         }
-        
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`[${label}] HTTP ${res.status}: ${text}`);
       }
-      
-      const data = await response.json();
-      console.log(`[${label}] 성공 (시도 ${attempt})`);
-      return data;
-      
-    } catch (error) {
-      lastError = error;
-      console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
-      
-      if (isRetryableError(null, error.message) && attempt < MAX_RETRIES) {
-        const delay = RETRY_DELAY * attempt;
-        console.log(`[${label}] ${delay}ms 후 재시도...`);
-        await sleep(delay);
+      return await res.json();
+    } catch (e) {
+      lastErr = e;
+      console.error(`[${label}] 시도 ${attempt} 실패:`, e.message);
+      if (attempt < MAX_RETRY) {
+        await sleep(800 * attempt);
         continue;
       }
-      
       break;
     }
   }
-  
-  throw lastError || new Error(`${label} 최대 재시도 초과`);
-}
-
-// 프롬프트 최적화
-function optimizeVideoPrompt(prompt) {
-  let optimized = prompt.trim();
-  
-  // 비디오 특화 키워드 추가 (사용자 컨텍스트 보존하면서)
-  if (!optimized.toLowerCase().includes('motion') && 
-      !optimized.toLowerCase().includes('movement') &&
-      !optimized.toLowerCase().includes('animation')) {
-    optimized += ', smooth natural motion, realistic movement';
-  }
-  
-  // Freepik 제한 (1000자)
-  if (optimized.length > 950) {
-    optimized = optimized.substring(0, 900) + '...';
-  }
-  
-  return optimized;
+  throw lastErr;
 }
 
 export default async function handler(req, res) {
@@ -98,32 +65,42 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Max-Age', '86400');
-  
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const startTime = Date.now();
 
   try {
-    const { 
-      imageUrl, 
+    const {
+      imageUrl,
       prompt, 
       duration = 6, 
       sceneNumber, 
       conceptId, 
-      title 
+      title,
+      formData = {}
     } = req.body || {};
     
     if (!imageUrl) {
       return res.status(400).json({ error: 'imageUrl required' });
     }
     
+    // 영상 비율 매핑
+    const aspectRatioCode = mapUserAspectRatio(formData.videoAspectRatio);
+    const brandLogoProvided = !!(formData.brandLogoProvided || formData.brandLogo);
+    const productImageProvided = !!(formData.productImageProvided || formData.productImage);
+
     console.log('[image-to-video] 시작:', {
       sceneNumber,
       conceptId,
       duration,
       title,
-      imageUrl: imageUrl.substring(0, 50) + '...'
+      imageUrl: imageUrl.substring(0, 60) + '...',
+      aspectRatio: formData.videoAspectRatio,
+      aspectRatioCode,
+      brandLogoProvided,
+      productImageProvided
     });
 
     // API 키 확인
@@ -135,26 +112,31 @@ export default async function handler(req, res) {
       throw new Error('Freepik API 키가 설정되지 않았습니다');
     }
 
-    // 2025년 정확한 Freepik MiniMax Hailuo-02 엔드포인트
+    // 엔드포인트
     const endpoint = `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-768p`;
     
-    // 프롬프트 최적화 (사용자 컨텍스트 유지)
-    const optimizedPrompt = optimizeVideoPrompt(prompt || 'natural smooth motion');
-    
-    // 2025년 공식 API 스펙에 맞는 요청 본문
+    // 프롬프트 최적화 + 플래그 부가
+    const basePrompt = optimizeVideoPrompt(prompt || 'natural smooth motion');
+    const enrichedPrompt = `${basePrompt}
+${brandLogoProvided ? 'Brand logo must appear at least briefly (non-destructive overlay planned).' : ''}
+${productImageProvided ? 'Product presence continuity expected.' : ''}`.trim();
+
+    // Freepik 제한: 6 or 10초
     const validDuration = [6, 10].includes(duration) ? duration : 6;
     const requestBody = {
-      prompt: optimizedPrompt,
+      prompt: enrichedPrompt,
       first_frame_image: imageUrl,
-      duration: validDuration, // 6 or 10초 제한
-      prompt_optimizer: true, // 자동 프롬프트 최적화
-      webhook_url: null // 선택적 웹훅
+      duration: validDuration,
+      prompt_optimizer: true,
+      aspect_ratio: aspectRatioCode,
+      webhook_url: null
     };
 
     console.log('[image-to-video] API 요청 파라미터:', {
       endpoint,
-      prompt: optimizedPrompt.substring(0, 100) + '...',
+      prompt: enrichedPrompt.substring(0, 140) + (enrichedPrompt.length > 140 ? '...' : ''),
       duration: requestBody.duration,
+      aspect_ratio: requestBody.aspect_ratio,
       first_frame_image: imageUrl.substring(0, 60) + '...',
       prompt_optimizer: requestBody.prompt_optimizer
     });
@@ -194,43 +176,33 @@ export default async function handler(req, res) {
       처리시간: processingTime + 'ms'
     });
 
-    // 성공 응답 (2025년 표준 형식)
     res.status(200).json({
       success: true,
-      taskId,
-      sceneNumber,
-      conceptId,
-      title,
-      duration: requestBody.duration,
-      processingTime,
-      metadata: {
-        prompt: optimizedPrompt,
-        imageUrl: imageUrl.substring(0, 100) + '...',
-        apiEndpoint: endpoint,
-        apiProvider: 'Freepik MiniMax Hailuo-02',
-        requestId: `${conceptId}-${sceneNumber}-${Date.now()}`
+      task: {
+        taskId,
+        conceptId: conceptId || null,
+        sceneNumber: sceneNumber || null,
+        title: title || null,
+        duration: validDuration,
+        aspectRatio: formData.videoAspectRatio || null,
+        aspectRatioCode,
+        brandLogoProvided,
+        productImageProvided,
+        createdAt: new Date().toISOString()
+      },
+      meta: {
+        processingTime,
+        provider: 'Freepik image-to-video minimax-hailuo-02',
+        rawStatus: result.data.status || null
       }
     });
 
   } catch (error) {
-    console.error('[image-to-video] 오류:', error);
-    
-    const processingTime = Date.now() - startTime;
-    
-    // 에러 응답도 일관된 구조로
+    console.error('[image-to-video] ❌ 오류:', error);
     res.status(500).json({
       success: false,
       error: error.message,
-      sceneNumber: req.body?.sceneNumber,
-      conceptId: req.body?.conceptId,
-      title: req.body?.title,
-      duration: req.body?.duration || 6,
-      processingTime,
-      metadata: {
-        originalError: error.message,
-        imageUrl: req.body?.imageUrl?.substring(0, 100) + '...' || 'N/A',
-        timestamp: new Date().toISOString()
-      }
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
