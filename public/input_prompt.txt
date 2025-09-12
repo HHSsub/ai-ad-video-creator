@@ -71,3 +71,6 @@ BGM: 잔잔한 어쿠스틱 기타나 피아노 연주곡.
 모델/캐스팅 전략: 과장된 연예인보다, 타겟이 공감할 수 있는 진정성 있는 이미지의 일반인/인플루언서 부부 및 아동 모델을 제안.
 
 데이터 소스: [최신 영상 트렌드 분석(Vimeo Staff Picks), Pantone 컬러 트렌드, 음원 라이브러리 분석 등]
+
+[주의사항]
+{brandName}가 {industryCategory}분야에서 {productServiceCategory}의 product를 홍보하기 위한 목적성이라는 것을 절대 잊지 말고 리서치를 진행해야함
