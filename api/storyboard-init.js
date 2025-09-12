@@ -1,9 +1,19 @@
-// api/storyboard-init.js - 2025년 최신 Gemini 2.5 사용 (완전 수정 + 로깅 확장)
+// api/storyboard-init.js - 2025년 최신 Gemini 2.5 사용 (브랜드/제품 이미지 플래그 & 영상비율 반영 + 1/2단계 로깅 확장 버전)
 
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// ======================= 새 유틸: 영상 비율 매핑 =======================
+function mapUserAspectRatio(value) {
+  if (!value) return 'widescreen_16_9';
+  if (typeof value !== 'string') return 'widescreen_16_9';
+  if (value.includes('16:9') || value.includes('가로')) return 'widescreen_16_9';
+  if (value.includes('9:16') || value.includes('세로')) return 'vertical_9_16';
+  if (value.includes('1:1') || value.includes('정사각')) return 'square_1_1';
+  return 'widescreen_16_9';
+}
 
 // 2025년 최신 모델 체인 (Gemini 2.5 우선)
 const MODEL_CHAIN = [
@@ -52,19 +62,31 @@ async function callGemini2_5(genAI, prompt, label) {
       
       try {
         const model = genAI.getGenerativeModel({ 
-            model: modelName,
-            generationConfig: {
-              temperature: 0.7,
-              topK: 40,
-              topP: 0.8,
-              maxOutputTokens: 8192,
+          model: modelName,
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.8,
+            maxOutputTokens: 8192,
+          },
+          safetySettings: [
+            {
+              category: 'HARM_CATEGORY_HARASSMENT',
+              threshold: 'BLOCK_NONE',
             },
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-            ],
+            {
+              category: 'HARM_CATEGORY_HATE_SPEECH',
+              threshold: 'BLOCK_NONE',
+            },
+            {
+              category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+              threshold: 'BLOCK_NONE',
+            },
+            {
+              category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+              threshold: 'BLOCK_NONE',
+            },
+          ],
         });
         
         const startTime = Date.now();
@@ -90,13 +112,10 @@ async function callGemini2_5(genAI, prompt, label) {
         
         console.log(`[${label}] ✅ 성공 model=${modelName} 시간=${duration}ms 길이=${text.length}자`);
         
-        // (수정됨) 1번째 프롬프트(브리프) 전체 내용 출력
+        // 1번째 프롬프트(브리프) 응답 앞 70자 프리뷰 로깅
         if (label === '1-brief') {
-          const lineCount = text.split('\n').length;
-          console.log(`[${label}] 🔍 전체 브리프 출력 시작 (줄수=${lineCount}, 길이=${text.length})`);
-          console.log('-----[BRIEF_FULL_START]-----');
-          console.log(text);
-            console.log('-----[BRIEF_FULL_END]-----');
+          const preview = text.replace(/\s+/g, ' ').slice(0, 70);
+          console.log(`[${label}] 🔍 응답 프리뷰(앞70자): ${preview}${text.length > 70 ? '...' : ''}`);
         }
 
         if (!text || text.length < 20) {
@@ -335,10 +354,10 @@ function parseConceptsRobust(text) {
         const concept = concepts.get(i);
         result.push({
           concept_id: i,
-            concept_name: concept.concept_name,
+          concept_name: concept.concept_name,
             summary: concept.summary,
-            keywords: concept.keywords.length > 0 ? concept.keywords : 
-                     [`키워드${i}-1`, `키워드${i}-2`, `키워드${i}-3`, `키워드${i}-4`, `키워드${i}-5`]
+          keywords: concept.keywords.length > 0 ? concept.keywords : 
+                   [`키워드${i}-1`, `키워드${i}-2`, `키워드${i}-3`, `키워드${i}-4`, `키워드${i}-5`]
         });
       } else {
         result.push(createFallbackConcept(i));
@@ -563,10 +582,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'formData required' });
     }
 
+    // 브랜드/제품 이미지 플래그 및 영상 비율 매핑
+    formData.brandLogoProvided = !!(formData.brandLogoProvided || formData.brandLogo);
+    formData.productImageProvided = !!(formData.productImageProvided || formData.productImage);
+    formData.aspectRatioCode = mapUserAspectRatio(formData.videoAspectRatio);
+
     const videoSec = parseVideoLengthSeconds(formData.videoLength);
     const sceneCount = calcSceneCount(videoSec);
     
     console.log(`[storyboard-init] 🎬 시작 - 비디오=${videoSec}초, 씬=${sceneCount}개, 모델체인=[${MODEL_CHAIN.join(', ')}]`);
+    console.log('[storyboard-init] 입력 플래그:', {
+      brandLogoProvided: formData.brandLogoProvided,
+      productImageProvided: formData.productImageProvided,
+      videoAspectRatio: formData.videoAspectRatio,
+      aspectRatioCode: formData.aspectRatioCode
+    });
     
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
@@ -580,13 +610,30 @@ export default async function handler(req, res) {
 
     // 1단계: 브리프
     console.log('[storyboard-init] 🎯 1단계: 크리에이티브 브리프 생성');
-    const briefPrompt = buildBriefPrompt(formData);
+    let briefPrompt = buildBriefPrompt(formData);
+    briefPrompt += `
+
+---
+(Flags)
+Brand Logo Provided: ${formData.brandLogoProvided}
+Product Image Provided: ${formData.productImageProvided}
+Target Video Aspect Ratio: ${formData.videoAspectRatio || '미입력'} => ${formData.aspectRatioCode}
+(지침) 로고/제품 이미지가 제공되었다면 장면 설명과 향후 이미지 프롬프트에서 자연스럽게 시각적 등장 요소로 반드시 반영하도록 설계.`;
+
     const briefOut = await callGemini2_5(genAI, briefPrompt, '1-brief');
     console.log(`[storyboard-init] ✅ 1단계 완료, 브리프 길이: ${briefOut.length}자`);
 
     // 2단계: 컨셉 JSON 생성
     console.log('[storyboard-init] 🎨 2단계: 6개 컨셉 생성');
-    const conceptsPrompt = buildConceptsPrompt(briefOut, formData);
+    let conceptsPrompt = buildConceptsPrompt(briefOut, formData);
+    conceptsPrompt += `
+
+---
+(Flags)
+Brand Logo Provided: ${formData.brandLogoProvided}
+Product Image Provided: ${formData.productImageProvided}
+Target Video Aspect Ratio: ${formData.videoAspectRatio || '미입력'} => ${formData.aspectRatioCode}
+(지침) JSON 컨셉 요약과 키워드가 로고/제품 활용 가능성도 암시하도록 할 것.`;
 
     // 2단계 입력 전체 로그
     console.log('[Gemini-2nd][INPUT_START]');
@@ -600,7 +647,7 @@ export default async function handler(req, res) {
     console.log(conceptsOut);
     console.log('[Gemini-2nd][RAW_OUTPUT_END]');
 
-    // 2단계 JSON 파싱 시도(원시 배열 추출)
+    // 2단계 JSON 파싱 시도
     try {
       const jsonMatch = conceptsOut.match(/\[\s*\{[\s\S]*?\}\s*\]/);
       if (jsonMatch) {
@@ -622,7 +669,25 @@ export default async function handler(req, res) {
     console.log('[storyboard-init] 📝 3단계: 멀티 스토리보드 생성');
     let parsedStoryboards = [];
     try {
-      const multiPrompt = buildMultiStoryboardPrompt(briefOut, JSON.stringify(conceptsArr, null, 2), sceneCount, videoSec);
+      let multiPrompt = buildMultiStoryboardPrompt(
+        briefOut,
+        JSON.stringify(conceptsArr, null, 2),
+        sceneCount,
+        videoSec
+      );
+
+      multiPrompt += `
+
+---
+(Flags)
+Brand Logo Provided: ${formData.brandLogoProvided}
+Product Image Provided: ${formData.productImageProvided}
+Target Video Aspect Ratio: ${formData.videoAspectRatio || '미입력'} => ${formData.aspectRatioCode}
+(지침)
+1) 제공된 이미지가 있다면 각 컨셉의 씬 중 최소 1회 이상 등장하는 장면을 설계
+2) 이미지 프롬프트에서 'brand logo visible' 또는 제품 형태 시각 언급
+3) 향후 후처리(overlay)가 용이하도록 로고/제품 배치 위치(예: 좌상단, 중앙 책상 위)를 간단히 포함 (텍스트)`;
+
       const multiOut = await callGemini2_5(genAI, multiPrompt, '3-multi-storyboards');
       parsedStoryboards = parseMultiStoryboards(multiOut, sceneCount);
       console.log(`[storyboard-init] ✅ 3단계 완료, 스토리보드: ${parsedStoryboards.length}개`);
@@ -676,7 +741,11 @@ export default async function handler(req, res) {
         storyboardsGenerated: parsedStoryboards.length,
         totalImagePrompts: styles.reduce((sum, s) => sum + s.imagePrompts.length, 0),
         geminiVersion: '2.5-flash',
-        apiProvider: 'Google Gemini 2.5'
+        apiProvider: 'Google Gemini 2.5',
+        brandLogoProvided: formData.brandLogoProvided,
+        productImageProvided: formData.productImageProvided,
+        videoAspectRatio: formData.videoAspectRatio || null,
+        aspectRatioCode: formData.aspectRatioCode
       }
     };
 
