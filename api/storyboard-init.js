@@ -1,4 +1,4 @@
-// api/storyboard-init.js - 2025년 최신 Gemini 2.5 사용 (완전 수정)
+// api/storyboard-init.js - 2025년 최신 Gemini 2.5 사용 (완전 수정 + 로깅 확장)
 
 import 'dotenv/config';
 import fs from 'fs';
@@ -102,6 +102,12 @@ async function callGemini2_5(genAI, prompt, label) {
         
         console.log(`[${label}] ✅ 성공 model=${modelName} 시간=${duration}ms 길이=${text.length}자`);
         
+        // 1번째 프롬프트(브리프) 응답 앞 70자 프리뷰 로깅
+        if (label === '1-brief') {
+            const preview = text.replace(/\s+/g, ' ').slice(0, 70);
+            console.log(`[${label}] 🔍 응답 프리뷰(앞70자): ${preview}${text.length > 70 ? '...' : ''}`);
+        }
+
         if (!text || text.length < 20) {
           throw new Error('응답이 너무 짧음');
         }
@@ -118,8 +124,8 @@ async function callGemini2_5(genAI, prompt, label) {
         
         if (isRetryable(error) && modelAttempt < 3) {
           const delay = BASE_BACKOFF * modelAttempt + Math.random() * 1000;
-          console.log(`[${label}] ⏳ ${delay}ms 후 같은 모델로 재시도`);
-          await sleep(delay);
+            console.log(`[${label}] ⏳ ${delay}ms 후 같은 모델로 재시도`);
+            await sleep(delay);
         }
       }
     }
@@ -220,7 +226,7 @@ function buildConceptsPrompt(brief, formData) {
     "summary": "예측 불가능한 스토리와 반전 요소로 강한 인상과 재미를 선사하는 컨셉",
     "keywords": ["반전", "예측불가", "인상적", "재미", "병맛"]
   }
-]`;
+ ]`;
   }
 }
 
@@ -272,7 +278,7 @@ function parseConceptsRobust(text) {
             normalized.push(createFallbackConcept(normalized.length + 1));
           }
           
-          return normalized.map((item, index) => ({
+            return normalized.map((item, index) => ({
             concept_id: item.concept_id || (index + 1),
             concept_name: item.concept_name || `컨셉 ${index + 1}`,
             summary: item.summary || `컨셉 ${index + 1} 설명`,
@@ -570,7 +576,7 @@ export default async function handler(req, res) {
     const sceneCount = calcSceneCount(videoSec);
     
     console.log(`[storyboard-init] 🎬 시작 - 비디오=${videoSec}초, 씬=${sceneCount}개, 모델체인=[${MODEL_CHAIN.join(', ')}]`);
-
+    
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
       console.error('[storyboard-init] ❌ Gemini API 키 없음');
@@ -581,17 +587,47 @@ export default async function handler(req, res) {
     
     const genAI = new GoogleGenerativeAI(apiKey);
 
+    // 1단계: 브리프
     console.log('[storyboard-init] 🎯 1단계: 크리에이티브 브리프 생성');
     const briefPrompt = buildBriefPrompt(formData);
     const briefOut = await callGemini2_5(genAI, briefPrompt, '1-brief');
     console.log(`[storyboard-init] ✅ 1단계 완료, 브리프 길이: ${briefOut.length}자`);
-    
+
+    // 2단계: 컨셉 JSON 생성
     console.log('[storyboard-init] 🎨 2단계: 6개 컨셉 생성');
     const conceptsPrompt = buildConceptsPrompt(briefOut, formData);
+
+    // 2단계 입력 전체 로그
+    console.log('[Gemini-2nd][INPUT_START]');
+    console.log(conceptsPrompt);
+    console.log('[Gemini-2nd][INPUT_END]');
+
     const conceptsOut = await callGemini2_5(genAI, conceptsPrompt, '2-concepts');
+
+    // 2단계 원시 출력 전체 로그
+    console.log('[Gemini-2nd][RAW_OUTPUT_START]');
+    console.log(conceptsOut);
+    console.log('[Gemini-2nd][RAW_OUTPUT_END]');
+
+    // 2단계 JSON 파싱 시도(원시 배열 추출)
+    try {
+      const jsonMatch = conceptsOut.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        console.log('[Gemini-2nd][PARSED_JSON_START]');
+        console.log(JSON.stringify(parsed, null, 2));
+        console.log('[Gemini-2nd][PARSED_JSON_END]');
+      } else {
+        console.warn('[Gemini-2nd] JSON 배열 패턴을 찾지 못했습니다.');
+      }
+    } catch (e) {
+      console.warn('[Gemini-2nd] JSON 파싱 실패:', e.message);
+    }
+
     const conceptsArr = parseConceptsRobust(conceptsOut);
     console.log(`[storyboard-init] ✅ 2단계 완료, 컨셉: ${conceptsArr.length}개`);
     
+    // 3단계: 멀티 스토리보드
     console.log('[storyboard-init] 📝 3단계: 멀티 스토리보드 생성');
     let parsedStoryboards = [];
     try {
@@ -655,7 +691,7 @@ export default async function handler(req, res) {
 
     const processingTime = Date.now() - startTime;
     console.log(`[storyboard-init] 🎉 전체 완료! 시간=${processingTime}ms, 컨셉=${styles.length}개, 총프롬프트=${response.metadata.totalImagePrompts}개`);
-
+    
     res.status(200).json(response);
 
   } catch (error) {
