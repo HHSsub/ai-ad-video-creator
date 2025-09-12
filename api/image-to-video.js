@@ -1,4 +1,4 @@
-// 2025년 최신 Freepik Image-to-Video API 연동
+// 2025년 최신 Freepik Image-to-Video API (MiniMax Hailuo-02) 정확한 연동
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
@@ -6,51 +6,61 @@ const RETRY_DELAY = 2000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // 에러 재시도 가능 여부 판단
-function isRetryableError(error, statusCode) {
+function isRetryableError(statusCode, errorMessage) {
   if ([429, 500, 502, 503, 504].includes(statusCode)) return true;
-  const message = error?.message?.toLowerCase() || '';
-  return message.includes('timeout') || 
-         message.includes('network') || 
-         message.includes('fetch') ||
-         message.includes('overload');
+  const msg = (errorMessage || '').toLowerCase();
+  return msg.includes('timeout') || 
+         msg.includes('overloaded') || 
+         msg.includes('rate limit') ||
+         msg.includes('quota');
 }
 
-// Freepik API 호출 (재시도 로직)
-async function callFreepikVideoAPI(url, options, label = 'VideoAPI') {
+// 안전한 API 호출 (재시도 로직)
+async function safeFreepikCall(url, options, label = 'API') {
   let lastError;
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES}: ${url}`);
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90초 타임아웃
+      
       const response = await fetch(url, {
         ...options,
-        timeout: 60000 // 비디오는 더 긴 타임아웃
+        signal: controller.signal
       });
       
-      const data = await response.json();
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
-        console.warn(`[${label}] HTTP ${response.status}:`, data);
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          console.error(`[${label}] HTTP ${response.status}:`, errorText);
+        } catch (e) {
+          errorText = `HTTP ${response.status}`;
+        }
         
-        if (isRetryableError(data, response.status) && attempt < MAX_RETRIES) {
+        if (isRetryableError(response.status, errorText) && attempt < MAX_RETRIES) {
           const delay = RETRY_DELAY * attempt;
           console.log(`[${label}] ${delay}ms 후 재시도...`);
           await sleep(delay);
           continue;
         }
         
-        throw new Error(`HTTP ${response.status}: ${data.message || data.error || 'Unknown error'}`);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
+      const data = await response.json();
       console.log(`[${label}] 성공 (시도 ${attempt})`);
-      return { success: true, data };
+      return data;
       
     } catch (error) {
       lastError = error;
       console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
       
-      if (isRetryableError(error, null) && attempt < MAX_RETRIES) {
+      if (isRetryableError(null, error.message) && attempt < MAX_RETRIES) {
         const delay = RETRY_DELAY * attempt;
         console.log(`[${label}] ${delay}ms 후 재시도...`);
         await sleep(delay);
@@ -61,26 +71,23 @@ async function callFreepikVideoAPI(url, options, label = 'VideoAPI') {
     }
   }
   
-  throw lastError || new Error(`${label} 최대 재시도 횟수 초과`);
+  throw lastError || new Error(`${label} 최대 재시도 초과`);
 }
 
 // 프롬프트 최적화
 function optimizeVideoPrompt(prompt) {
   let optimized = prompt.trim();
   
-  // 비디오 특화 키워드 추가
-  const videoKeywords = ['smooth motion', 'cinematic', 'professional'];
-  const hasVideoKeywords = videoKeywords.some(keyword => 
-    optimized.toLowerCase().includes(keyword.toLowerCase())
-  );
-  
-  if (!hasVideoKeywords) {
-    optimized += ', smooth motion, cinematic movement, professional video';
+  // 비디오 특화 키워드 추가 (사용자 컨텍스트 보존하면서)
+  if (!optimized.toLowerCase().includes('motion') && 
+      !optimized.toLowerCase().includes('movement') &&
+      !optimized.toLowerCase().includes('animation')) {
+    optimized += ', smooth natural motion, realistic movement';
   }
   
-  // Freepik 비디오 프롬프트 제한 (2000자)
-  if (optimized.length > 2000) {
-    optimized = optimized.substring(0, 1950) + '...';
+  // Freepik 제한 (1000자)
+  if (optimized.length > 950) {
+    optimized = optimized.substring(0, 900) + '...';
   }
   
   return optimized;
@@ -121,35 +128,34 @@ export default async function handler(req, res) {
 
     // API 키 확인
     const apiKey = process.env.FREEPIK_API_KEY || 
-                   process.env.VITE_FREEPIK_API_KEY;
+                   process.env.VITE_FREEPIK_API_KEY ||
+                   process.env.REACT_APP_FREEPIK_API_KEY;
     
     if (!apiKey) {
       throw new Error('Freepik API 키가 설정되지 않았습니다');
     }
 
-    // 2025 Freepik Image-to-Video API 엔드포인트
-    const endpoint = `${FREEPIK_API_BASE}/ai/image-to-video`;
+    // 2025년 정확한 Freepik MiniMax Hailuo-02 엔드포인트
+    const endpoint = `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-768p`;
     
-    // 프롬프트 최적화
-    const optimizedPrompt = optimizeVideoPrompt(prompt || 'High quality cinematic video');
+    // 프롬프트 최적화 (사용자 컨텍스트 유지)
+    const optimizedPrompt = optimizeVideoPrompt(prompt || 'natural smooth motion');
     
-    // API 요청 본문 (2025년 최신 스펙)
+    // 2025년 공식 API 스펙에 맞는 요청 본문
     const requestBody = {
       prompt: optimizedPrompt,
       first_frame_image: imageUrl,
       duration: Math.min(Math.max(duration, 2), 10), // 2-10초 제한
-      aspect_ratio: 'widescreen_16_9',
-      fps: 24,
-      motion_strength: 'medium',
-      seed: Math.floor(Math.random() * 1000000),
-      enhance_prompt: true
+      prompt_optimizer: true, // 자동 프롬프트 최적화
+      webhook_url: null // 선택적 웹훅
     };
 
-    console.log('[image-to-video] API 요청:', {
+    console.log('[image-to-video] API 요청 파라미터:', {
+      endpoint,
       prompt: optimizedPrompt.substring(0, 100) + '...',
       duration: requestBody.duration,
-      aspect_ratio: requestBody.aspect_ratio,
-      motion_strength: requestBody.motion_strength
+      first_frame_image: imageUrl.substring(0, 60) + '...',
+      prompt_optimizer: requestBody.prompt_optimizer
     });
 
     const options = {
@@ -157,19 +163,27 @@ export default async function handler(req, res) {
       headers: {
         'Content-Type': 'application/json',
         'x-freepik-api-key': apiKey,
-        'User-Agent': 'AI-Ad-Creator/1.0'
+        'User-Agent': 'AI-Ad-Creator/2025'
       },
       body: JSON.stringify(requestBody)
     };
 
-    // API 호출
-    const result = await callFreepikVideoAPI(endpoint, options, 'image-to-video');
+    // API 호출 (재시도 로직 포함)
+    const result = await safeFreepikCall(endpoint, options, 'image-to-video');
     
-    if (!result.success || !result.data.data?.task_id) {
+    console.log('[image-to-video] API 응답 구조:', {
+      hasData: !!result.data,
+      dataKeys: result.data ? Object.keys(result.data) : [],
+      hasTaskId: !!(result.data?.task_id),
+      status: result.data?.status || 'unknown'
+    });
+    
+    if (!result.data || !result.data.task_id) {
+      console.error('[image-to-video] 응답에 task_id 없음:', JSON.stringify(result, null, 2));
       throw new Error('비디오 생성 태스크 ID를 받지 못했습니다');
     }
     
-    const taskId = result.data.data.task_id;
+    const taskId = result.data.task_id;
     const processingTime = Date.now() - startTime;
     
     console.log('[image-to-video] 성공:', {
@@ -179,7 +193,7 @@ export default async function handler(req, res) {
       처리시간: processingTime + 'ms'
     });
 
-    // 성공 응답
+    // 성공 응답 (2025년 표준 형식)
     res.status(200).json({
       success: true,
       taskId,
@@ -192,6 +206,7 @@ export default async function handler(req, res) {
         prompt: optimizedPrompt,
         imageUrl: imageUrl.substring(0, 100) + '...',
         apiEndpoint: endpoint,
+        apiProvider: 'Freepik MiniMax Hailuo-02',
         requestId: `${conceptId}-${sceneNumber}-${Date.now()}`
       }
     });
@@ -201,8 +216,8 @@ export default async function handler(req, res) {
     
     const processingTime = Date.now() - startTime;
     
-    // 에러 응답이지만 클라이언트에서 처리할 수 있도록 구조화
-    res.status(200).json({
+    // 에러 응답도 일관된 구조로
+    res.status(500).json({
       success: false,
       error: error.message,
       sceneNumber: req.body?.sceneNumber,
@@ -210,10 +225,10 @@ export default async function handler(req, res) {
       title: req.body?.title,
       duration: req.body?.duration || 6,
       processingTime,
-      fallback: true,
       metadata: {
         originalError: error.message,
-        imageUrl: req.body?.imageUrl?.substring(0, 100) + '...' || 'N/A'
+        imageUrl: req.body?.imageUrl?.substring(0, 100) + '...' || 'N/A',
+        timestamp: new Date().toISOString()
       }
     });
   }
