@@ -1,4 +1,4 @@
-// 향상된 영상 합치기 시스템 (FFmpeg 기반)
+// 향상된 영상 합치기 시스템 (FFmpeg 기반) - 정적 파일 서빙 수정
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
@@ -77,11 +77,10 @@ function runFFmpeg(args, label = 'ffmpeg', workingDir = null) {
       const output = data.toString();
       stderr += output;
       
-      // 진행률 파싱 (선택적)
+      // 진행률 파싱
       if (output.includes('time=')) {
         const timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2})/);
         if (timeMatch) {
-          // 진행률 로깅 (필요시 웹소켓으로 클라이언트에 전송 가능)
           console.log(`[${label}] 진행: ${timeMatch[0]}`);
         }
       }
@@ -169,7 +168,6 @@ export default async function handler(req, res) {
   let tempDir = null;
 
   try {
-    // 요청 파라미터 파싱
     let body;
     if (req.body) {
       body = req.body;
@@ -185,7 +183,7 @@ export default async function handler(req, res) {
       fps = 30,
       scale = '1920:1080',
       jsonMode = false,
-      targetDuration = null // 전체 영상 목표 길이
+      targetDuration = null
     } = body;
 
     if (!Array.isArray(segments) || !segments.length) {
@@ -218,27 +216,23 @@ export default async function handler(req, res) {
       }
 
       try {
-        // 원본 비디오 다운로드
         const originalFileName = `original_${i + 1}.mp4`;
         const originalPath = path.join(tempDir, originalFileName);
         
         console.log(`[compile-videos] 다운로드 ${i + 1}/${segments.length}: ${segment.videoUrl.substring(0, 50)}...`);
         await downloadWithRetry(segment.videoUrl, originalPath);
 
-        // 비디오 메타데이터 확인
         const metadata = await getVideoMetadata(originalPath);
         totalOriginalDuration += metadata.duration;
         
         console.log(`[compile-videos] 세그먼트 ${i + 1} 원본 길이: ${metadata.duration}초`);
 
-        // 클립 길이 조정 (2초로 자르기)
         const trimmedFileName = `trimmed_${i + 1}.mp4`;
         const trimmedPath = path.join(tempDir, trimmedFileName);
         
         console.log(`[compile-videos] 세그먼트 ${i + 1} 트림: ${metadata.duration}초 → ${clipDurationSec}초`);
         await trimVideo(originalPath, trimmedPath, clipDurationSec);
 
-        // 스케일링 및 표준화
         const finalFileName = `final_${i + 1}.mp4`;
         const finalPath = path.join(tempDir, finalFileName);
         
@@ -267,7 +261,6 @@ export default async function handler(req, res) {
 
       } catch (error) {
         console.error(`[compile-videos] 세그먼트 ${i + 1} 처리 실패:`, error.message);
-        // 개별 세그먼트 실패는 전체 실패로 이어지지 않음
       }
     }
 
@@ -280,7 +273,6 @@ export default async function handler(req, res) {
     // 2단계: 비디오 합치기
     console.log('[compile-videos] 2단계: 비디오 합치기');
     
-    // concat 파일 리스트 생성
     const listContent = processedClips.map(clipPath => 
       `file '${path.basename(clipPath)}'`
     ).join('\n');
@@ -290,7 +282,6 @@ export default async function handler(req, res) {
     
     console.log('[compile-videos] Concat 리스트 생성:', processedClips.length, '개 파일');
 
-    // FFmpeg concat으로 합치기
     const outputFileName = `compiled_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.mp4`;
     const outputPath = path.join(tempDir, outputFileName);
 
@@ -311,28 +302,49 @@ export default async function handler(req, res) {
     const compiledDuration = processedClips.length * clipDurationSec;
     
     if (jsonMode) {
-      // JSON 모드: 파일을 공개 디렉토리로 이동
-      const publicDir = path.resolve(process.cwd(), 'tmp', 'compiled');
-      fs.mkdirSync(publicDir, { recursive: true });
+      // 🔥 JSON 모드: 프로젝트 루트의 tmp/compiled로 이동 (상대 경로 수정)
+      const projectRoot = process.cwd();
+      const publicDir = path.resolve(projectRoot, 'tmp', 'compiled'); // resolve로 절대경로 확실히
       
-      const publicFileName = `compiled_${Date.now()}_${Math.random().toString(36).slice(2)}.mp4`;
+      // 디렉토리가 없으면 생성
+      if (!fs.existsSync(publicDir)) {
+        fs.mkdirSync(publicDir, { recursive: true });
+        console.log('[compile-videos] 공개 디렉토리 생성:', publicDir);
+      }
+      
+      // 🔥 기존 파일명 재사용 (타임스탬프 중복 방지)
+      const publicFileName = outputFileName; // compiled_1757644992541_4656c51c.mp4 그대로 사용
       const publicPath = path.join(publicDir, publicFileName);
       
+      // 파일 복사 (이동 아닌 복사로 안전하게)
       fs.copyFileSync(outputPath, publicPath);
-
-      console.log('[debug] outputPath:', outputPath);
-      console.log('[debug] publicDir:', publicDir);
-      console.log('[debug] publicPath:', publicPath);
+      console.log('[compile-videos] 파일 복사 완료:', outputPath, '→', publicPath);
+      
+      // 파일 권한 설정 (읽기 가능하도록)
+      try {
+        fs.chmodSync(publicPath, 0o644);
+        console.log('[compile-videos] 파일 권한 설정 완료: 644');
+      } catch (e) {
+        console.warn('[compile-videos] 권한 설정 실패:', e.message);
+      }
       
       const publicUrl = `/tmp/compiled/${publicFileName}`;
       
+      // 🔥 파일 존재 확인
+      const fileExists = fs.existsSync(publicPath);
+      const fileSize = fileExists ? fs.statSync(publicPath).size : 0;
+      
       console.log('[compile-videos] JSON 모드 완료:', {
         publicUrl,
+        publicPath,
+        fileExists,
+        fileSize: `${(fileSize / 1024 / 1024).toFixed(2)} MB`,
         duration: compiledDuration,
         처리시간: processingTime + 'ms'
       });
       
-      return res.status(200).json({
+      // 🔥 성공 응답에 디버그 정보 추가
+      const response = {
         success: true,
         compiledVideoUrl: publicUrl,
         metadata: {
@@ -342,9 +354,34 @@ export default async function handler(req, res) {
           clipDurationSec,
           processingTime,
           scale,
-          fps
+          fps,
+          // 🔥 디버그 정보 추가
+          debug: {
+            publicPath,
+            fileExists,
+            fileSize,
+            publicDir,
+            outputFileName,
+            publicFileName
+          }
         }
-      });
+      };
+      
+      // 🔥 임시 디렉토리 정리를 응답 후로 지연
+      setTimeout(() => {
+        try {
+          console.log('[compile-videos] 지연된 임시 디렉토리 정리:', tempDir);
+          const files = fs.readdirSync(tempDir);
+          for (const file of files) {
+            fs.unlinkSync(path.join(tempDir, file));
+          }
+          fs.rmdirSync(tempDir);
+        } catch (error) {
+          console.error('[compile-videos] 지연된 정리 실패:', error.message);
+        }
+      }, 5000); // 5초 후 정리
+      
+      return res.status(200).json(response);
       
     } else {
       // 바이너리 모드: 직접 스트리밍
@@ -375,8 +412,8 @@ export default async function handler(req, res) {
       });
     }
   } finally {
-    // 임시 디렉토리 정리
-    if (tempDir) {
+    // JSON 모드가 아닌 경우에만 즉시 정리 (JSON 모드는 위에서 지연 정리)
+    if (tempDir && !req.body?.jsonMode) {
       try {
         console.log('[compile-videos] 임시 디렉토리 정리:', tempDir);
         const files = fs.readdirSync(tempDir);
