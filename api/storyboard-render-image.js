@@ -1,28 +1,28 @@
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
+// api/storyboard-render-image.js - 2025년 최신 Freepik API 사용
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000;
+const RETRY_DELAY = 3000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-function isRetryableError(error, statusCode) {
+// 재시도 가능한 에러 판단
+function isRetryableError(statusCode, errorMessage) {
   if ([429, 500, 502, 503, 504].includes(statusCode)) return true;
-  const message = error?.message?.toLowerCase() || '';
-  return message.includes('timeout') || 
-         message.includes('network') || 
-         message.includes('fetch') ||
-         message.includes('overload');
+  const msg = (errorMessage || '').toLowerCase();
+  return msg.includes('timeout') || 
+         msg.includes('overloaded') || 
+         msg.includes('rate limit') ||
+         msg.includes('quota');
 }
 
-async function callFreepikAPI(url, options, label = 'API') {
+// 안전한 API 호출
+async function safeFreepikCall(url, options, label = 'API') {
   let lastError;
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES}: ${url}`);
+      console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES}`);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -34,35 +34,34 @@ async function callFreepikAPI(url, options, label = 'API') {
       
       clearTimeout(timeoutId);
       
-      const responseText = await response.text();
-      console.log(`[${label}] HTTP ${response.status} 응답:`, responseText.substring(0, 300));
-      
       if (!response.ok) {
-        if (isRetryableError({ message: responseText }, response.status) && attempt < MAX_RETRIES) {
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          console.error(`[${label}] HTTP ${response.status}:`, errorText);
+        } catch (e) {
+          errorText = `HTTP ${response.status}`;
+        }
+        
+        if (isRetryableError(response.status, errorText) && attempt < MAX_RETRIES) {
           const delay = RETRY_DELAY * attempt;
           console.log(`[${label}] ${delay}ms 후 재시도...`);
           await sleep(delay);
           continue;
         }
         
-        throw new Error(`HTTP ${response.status}: ${responseText}`);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error(`JSON 파싱 실패: ${responseText}`);
-      }
-      
+      const data = await response.json();
       console.log(`[${label}] 성공 (시도 ${attempt})`);
-      return { success: true, data };
+      return data;
       
     } catch (error) {
       lastError = error;
       console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
       
-      if (isRetryableError(error, null) && attempt < MAX_RETRIES) {
+      if (isRetryableError(null, error.message) && attempt < MAX_RETRIES) {
         const delay = RETRY_DELAY * attempt;
         console.log(`[${label}] ${delay}ms 후 재시도...`);
         await sleep(delay);
@@ -73,219 +72,144 @@ async function callFreepikAPI(url, options, label = 'API') {
     }
   }
   
-  throw lastError || new Error(`${label} 최대 재시도 횟수 초과`);
+  throw lastError || new Error(`${label} 최대 재시도 초과`);
 }
 
-// Classic API (올바른 파라미터)
-async function generateImageClassic(prompt, apiKey) {
-  const url = `${FREEPIK_API_BASE}/ai/text-to-image`;
-  
-  const optimizedPrompt = optimizePrompt(prompt);
-  
-  // 올바른 Classic API 파라미터
-  const requestBody = {
-    prompt: optimizedPrompt,
-    negative_prompt: "blurry, distorted, low quality, watermark, text, logo, oversaturated, noise",
-    guidance_scale: 7.5,
-    seed: Math.floor(Math.random() * 1000000),
-    num_images: 1,
-    image: {
-      size: "widescreen_16_9"
-    },
-    styling: {
-      style: "photo" // 올바른 스타일 값
-    },
-    filter_nsfw: true
-  };
-  
-  console.log('[generateImageClassic] 요청:', {
-    prompt: optimizedPrompt.substring(0, 100) + '...',
-    style: requestBody.styling.style,
-    size: requestBody.image.size
-  });
-  
-  const options = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-freepik-api-key': apiKey,
-      'User-Agent': 'AI-Ad-Creator/1.0'
-    },
-    body: JSON.stringify(requestBody)
-  };
-  
-  const result = await callFreepikAPI(url, options, 'generateImageClassic');
-  
-  console.log('[generateImageClassic] 전체 응답:', JSON.stringify(result.data, null, 2));
-  
-  // Classic API 응답 구조 처리
-  if (result.data && result.data.data && Array.isArray(result.data.data) && result.data.data.length > 0) {
-    const imageUrl = result.data.data[0];
-    console.log('[generateImageClassic] 이미지 URL:', imageUrl);
-    return {
-      success: true,
-      imageUrl: imageUrl,
-      method: 'classic'
-    };
-  } else {
-    throw new Error('Classic API에서 이미지 URL을 찾을 수 없음');
-  }
-}
-
-// Imagen3 API (올바른 파라미터)
-async function generateImageImagen3(prompt, apiKey) {
-  const url = `${FREEPIK_API_BASE}/ai/text-to-image/imagen3`;
-  
-  const optimizedPrompt = optimizePrompt(prompt);
-  
-  // 올바른 Imagen3 파라미터
-  const requestBody = {
-    prompt: optimizedPrompt,
-    num_images: 1,
-    aspect_ratio: "widescreen_16_9",
-    styling: {
-      style: "photo" // photo, digital-art, 3d 등 유효한 값
-    },
-    person_generation: "allow_adult",
-    safety_settings: "block_low_and_above"
-  };
-  
-  console.log('[generateImageImagen3] 요청:', {
-    prompt: optimizedPrompt.substring(0, 100) + '...',
-    style: requestBody.styling.style,
-    aspect_ratio: requestBody.aspect_ratio
-  });
-  
-  const options = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-freepik-api-key': apiKey,
-      'User-Agent': 'AI-Ad-Creator/1.0'
-    },
-    body: JSON.stringify(requestBody)
-  };
-  
-  const result = await callFreepikAPI(url, options, 'generateImageImagen3');
-  
-  if (result.data && result.data.task_id) {
-    console.log('[generateImageImagen3] Task ID:', result.data.task_id);
-    return {
-      success: true,
-      taskId: result.data.task_id,
-      method: 'imagen3'
-    };
-  } else {
-    throw new Error('Imagen3 Task ID를 받지 못했습니다');
-  }
-}
-
-// Imagen3 상태 확인
-async function checkImagen3Status(taskId, apiKey) {
-  const url = `${FREEPIK_API_BASE}/ai/text-to-image/imagen3/${taskId}`;
-  
-  const options = {
-    method: 'GET',
-    headers: {
-      'x-freepik-api-key': apiKey,
-      'User-Agent': 'AI-Ad-Creator/1.0'
-    }
-  };
-  
-  const result = await callFreepikAPI(url, options, `checkImagen3-${taskId.substring(0, 8)}`);
-  
-  console.log('[checkImagen3Status] 응답:', result.data);
-  
-  if (result.data.task_status === 'COMPLETED' && result.data.generated && result.data.generated.length > 0) {
-    return {
-      success: true,
-      imageUrl: result.data.generated[0],
-      status: 'completed'
-    };
-  } else if (result.data.task_status === 'FAILED') {
-    throw new Error('Imagen3 이미지 생성 실패');
-  } else {
-    return {
-      success: true,
-      status: result.data.task_status || 'IN_PROGRESS'
-    };
-  }
-}
-
+// 프롬프트 최적화 (2025년 기준)
 function optimizePrompt(prompt) {
   let optimized = prompt.trim();
   
-  if (optimized.length > 800) {
-    optimized = optimized.substring(0, 750) + '...';
+  // 길이 제한 (Freepik 2025 제한: 1000자)
+  if (optimized.length > 900) {
+    optimized = optimized.substring(0, 850) + '...';
   }
   
-  const qualityKeywords = ['high quality', 'professional', 'detailed', '4K'];
-  const hasQuality = qualityKeywords.some(keyword => 
-    optimized.toLowerCase().includes(keyword.toLowerCase())
+  // 필수 품질 키워드 추가
+  const qualityTerms = ['high quality', 'professional', 'detailed', '4K', 'commercial'];
+  const hasQuality = qualityTerms.some(term => 
+    optimized.toLowerCase().includes(term.toLowerCase())
   );
   
   if (!hasQuality) {
-    optimized += ', high quality, professional photography, detailed';
+    optimized += ', high quality, professional, commercial photography, 4K, detailed';
+  }
+  
+  // 부정적 요소 제거를 위한 키워드
+  if (!optimized.includes('sharp focus')) {
+    optimized += ', sharp focus, clean composition';
   }
   
   return optimized;
 }
 
-async function saveImageLocally(imageUrl, conceptId, sceneNumber) {
+// 2025년 최신 Freepik Text-to-Image API 호출
+async function generateImageWithFreepik(prompt, apiKey) {
+  const optimizedPrompt = optimizePrompt(prompt);
+  
+  console.log('[generateImageWithFreepik] 프롬프트:', optimizedPrompt.substring(0, 100) + '...');
+  
+  // 2025년 최신 엔드포인트 및 파라미터
+  const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image`;
+  
+  const requestBody = {
+    prompt: optimizedPrompt,
+    num_images: 1,
+    image: {
+      size: "widescreen_16_9"
+    },
+    styling: {
+      style: "photo",
+      color: "color",
+      lighting: "natural"
+    },
+    negative_prompt: "blurry, low quality, watermark, text overlay, distorted, ugly, deformed",
+    seed: Math.floor(Math.random() * 999999),
+    enhance_prompt: true,
+    safety_tolerance: "strict"
+  };
+  
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-freepik-api-key': apiKey,
+      'User-Agent': 'AI-Ad-Creator/2025'
+    },
+    body: JSON.stringify(requestBody)
+  };
+  
+  console.log('[generateImageWithFreepik] API 요청 시작');
+  
   try {
-    console.log('[saveImageLocally] 다운로드 시작:', imageUrl);
+    const result = await safeFreepikCall(endpoint, options, 'text-to-image');
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    console.log('[generateImageWithFreepik] 전체 응답:', JSON.stringify(result, null, 2));
     
-    const response = await fetch(imageUrl, { signal: controller.signal });
-    clearTimeout(timeoutId);
+    // 2025년 Freepik 응답에서 이미지 URL 추출
+    let imageUrl = null;
     
-    if (!response.ok) {
-      throw new Error(`이미지 다운로드 실패: ${response.status}`);
+    // 다양한 응답 구조 대응
+    if (result.data) {
+      if (Array.isArray(result.data) && result.data.length > 0) {
+        imageUrl = result.data[0]; // 직접 URL 배열
+      } else if (result.data.url) {
+        imageUrl = result.data.url; // 객체 안의 url
+      } else if (result.data.image_url) {
+        imageUrl = result.data.image_url; // image_url 필드
+      } else if (result.data.images && Array.isArray(result.data.images) && result.data.images.length > 0) {
+        imageUrl = result.data.images[0].url || result.data.images[0]; // images 배열
+      }
+    } else if (result.url) {
+      imageUrl = result.url; // 최상위 url
+    } else if (result.image_url) {
+      imageUrl = result.image_url; // 최상위 image_url
     }
     
-    const buffer = await response.arrayBuffer();
-    const outDir = path.resolve(process.cwd(), 'tmp', 'images');
-    
-    if (!fs.existsSync(outDir)) {
-      fs.mkdirSync(outDir, { recursive: true });
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      console.error('[generateImageWithFreepik] 이미지 URL 추출 실패:', result);
+      throw new Error('응답에서 유효한 이미지 URL을 찾을 수 없음');
     }
     
-    const hash = crypto.randomBytes(8).toString('hex');
-    const fileName = `img_${conceptId}_${sceneNumber}_${hash}.jpg`;
-    const filePath = path.join(outDir, fileName);
+    // URL 유효성 검사
+    if (!imageUrl.startsWith('http')) {
+      console.error('[generateImageWithFreepik] 잘못된 URL 형식:', imageUrl);
+      throw new Error('유효하지 않은 이미지 URL 형식');
+    }
     
-    fs.writeFileSync(filePath, Buffer.from(buffer));
+    console.log('[generateImageWithFreepik] 이미지 URL 추출 성공:', imageUrl);
     
-    const localUrl = `/tmp/images/${fileName}`;
-    console.log('[saveImageLocally] 저장 완료:', localUrl);
-    
-    return localUrl;
+    return {
+      success: true,
+      imageUrl: imageUrl,
+      method: 'freepik-2025'
+    };
     
   } catch (error) {
-    console.error('[saveImageLocally] 저장 실패:', error.message);
-    return imageUrl;
+    console.error('[generateImageWithFreepik] 전체 실패:', error);
+    throw error;
   }
 }
 
+// 폴백 이미지 생성 (더 다양하게)
 function generateFallbackImage(conceptId, sceneNumber) {
-  console.log('[generateFallbackImage] 폴백 이미지 생성');
-  
-  const placeholderImages = [
-    'https://via.placeholder.com/1920x1080/3B82F6/FFFFFF?text=Professional+Scene+1',
-    'https://via.placeholder.com/1920x1080/10B981/FFFFFF?text=Product+Showcase+2', 
-    'https://via.placeholder.com/1920x1080/F59E0B/FFFFFF?text=Lifestyle+Scene+3',
-    'https://via.placeholder.com/1920x1080/EF4444/FFFFFF?text=Action+Scene+4',
-    'https://via.placeholder.com/1920x1080/8B5CF6/FFFFFF?text=Brand+Identity+5',
-    'https://via.placeholder.com/1920x1080/06B6D4/FFFFFF?text=Call+to+Action+6'
+  const themes = [
+    { bg: '2563EB', text: 'FFFFFF', label: 'Professional+Business' },
+    { bg: '059669', text: 'FFFFFF', label: 'Product+Showcase' },
+    { bg: 'DC2626', text: 'FFFFFF', label: 'Lifestyle+Scene' },
+    { bg: '7C2D12', text: 'FFFFFF', label: 'Premium+Brand' },
+    { bg: '4338CA', text: 'FFFFFF', label: 'Innovation+Tech' },
+    { bg: '0891B2', text: 'FFFFFF', label: 'Call+To+Action' }
   ];
   
-  const imageIndex = (sceneNumber - 1) % placeholderImages.length;
-  return placeholderImages[imageIndex];
+  const themeIndex = ((conceptId || 1) - 1) % themes.length;
+  const theme = themes[themeIndex];
+  const scene = sceneNumber || 1;
+  
+  return `https://via.placeholder.com/1920x1080/${theme.bg}/${theme.text}?text=${theme.label}+Scene+${scene}`;
 }
 
 export default async function handler(req, res) {
+  // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -299,146 +223,108 @@ export default async function handler(req, res) {
   try {
     const { prompt, sceneNumber, conceptId, style } = req.body || {};
     
-    if (!prompt) {
-      return res.status(400).json({ error: 'prompt required' });
+    if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 5) {
+      return res.status(400).json({ error: 'Valid prompt required (minimum 5 characters)' });
     }
     
-    console.log('[storyboard-render-image] 시작:', {
+    console.log('[storyboard-render-image] 요청 시작:', {
       conceptId,
       sceneNumber,
       style,
-      promptLength: prompt.length
+      promptLength: prompt.length,
+      promptPreview: prompt.substring(0, 50) + '...'
     });
 
+    // API 키 확인 (우선순위에 따라)
     const apiKey = process.env.FREEPIK_API_KEY ||
                    process.env.VITE_FREEPIK_API_KEY ||
                    process.env.REACT_APP_FREEPIK_API_KEY;
     
     if (!apiKey) {
-      console.error('[storyboard-render-image] API 키 없음');
+      console.error('[storyboard-render-image] Freepik API 키가 없음');
       const fallbackUrl = generateFallbackImage(conceptId, sceneNumber);
       return res.status(200).json({
         success: true,
         url: fallbackUrl,
         fallback: true,
-        message: 'API 키 없음'
+        message: 'API 키 없음',
+        processingTime: Date.now() - startTime,
+        metadata: { error: 'no_api_key' }
       });
     }
 
-    console.log('[storyboard-render-image] API 키 확인됨');
+    console.log('[storyboard-render-image] API 키 확인:', apiKey.substring(0, 10) + '...');
 
-    let finalResult = null;
-
-    // 1. Classic API 시도
     try {
-      console.log('[storyboard-render-image] Classic API 시도');
-      const classicResult = await generateImageClassic(prompt, apiKey);
-      
-      if (classicResult.success) {
-        console.log('[storyboard-render-image] Classic API 성공');
-        finalResult = {
-          imageUrl: classicResult.imageUrl,
-          method: 'classic'
-        };
-      }
-    } catch (classicError) {
-      console.warn('[storyboard-render-image] Classic API 실패:', classicError.message);
-      
-      // 2. Classic 실패시 Imagen3 시도
-      try {
-        console.log('[storyboard-render-image] Imagen3 API 시도');
-        const imagen3Result = await generateImageImagen3(prompt, apiKey);
-        
-        if (imagen3Result.success) {
-          console.log('[storyboard-render-image] Imagen3 폴링 시작');
-          
-          // 폴링으로 완료 대기
-          for (let attempt = 1; attempt <= 10; attempt++) {
-            await sleep(5000); // 5초 대기
-            
-            try {
-              const statusResult = await checkImagen3Status(imagen3Result.taskId, apiKey);
-              
-              if (statusResult.success && statusResult.status === 'completed') {
-                console.log('[storyboard-render-image] Imagen3 완료');
-                finalResult = {
-                  imageUrl: statusResult.imageUrl,
-                  method: 'imagen3',
-                  taskId: imagen3Result.taskId
-                };
-                break;
-              }
-              
-              console.log(`[storyboard-render-image] Imagen3 폴링 ${attempt}/10: ${statusResult.status}`);
-            } catch (pollError) {
-              console.error(`[storyboard-render-image] 폴링 ${attempt} 실패:`, pollError.message);
-            }
-          }
-          
-          if (!finalResult) {
-            throw new Error('Imagen3 폴링 타임아웃');
-          }
-        }
-      } catch (imagen3Error) {
-        console.error('[storyboard-render-image] Imagen3도 실패:', imagen3Error.message);
-        throw imagen3Error;
-      }
-    }
-
-    // 성공한 경우 처리
-    if (finalResult) {
-      let finalUrl = finalResult.imageUrl;
-      
-      // 로컬 저장 시도
-      try {
-        const localUrl = await saveImageLocally(finalResult.imageUrl, conceptId, sceneNumber);
-        if (localUrl !== finalResult.imageUrl) {
-          finalUrl = localUrl;
-        }
-      } catch (saveError) {
-        console.warn('[storyboard-render-image] 로컬 저장 실패:', saveError.message);
-      }
+      // Freepik 2025 이미지 생성 시도
+      const result = await generateImageWithFreepik(prompt, apiKey);
       
       const processingTime = Date.now() - startTime;
       
-      console.log('[storyboard-render-image] 최종 성공:', {
+      console.log('[storyboard-render-image] 성공 완료:', {
         conceptId,
         sceneNumber,
-        method: finalResult.method,
-        처리시간: processingTime + 'ms'
+        imageUrl: result.imageUrl.substring(0, 60) + '...',
+        processingTime: processingTime + 'ms'
       });
       
+      // 로컬 저장하지 않고 직접 Freepik URL 반환
       return res.status(200).json({
         success: true,
-        url: finalUrl,
+        url: result.imageUrl, // 직접 Freepik URL 사용
         processingTime: processingTime,
+        method: result.method,
+        fallback: false,
         metadata: {
           conceptId,
           sceneNumber,
           style,
-          method: finalResult.method,
-          taskId: finalResult.taskId || null,
-          promptUsed: optimizePrompt(prompt).substring(0, 100) + '...'
+          promptUsed: optimizePrompt(prompt).substring(0, 100) + '...',
+          apiProvider: 'Freepik 2025'
+        }
+      });
+      
+    } catch (freepikError) {
+      console.error('[storyboard-render-image] Freepik 호출 실패:', freepikError.message);
+      
+      // Freepik 실패 시 폴백 이미지 사용
+      const fallbackUrl = generateFallbackImage(conceptId, sceneNumber);
+      
+      return res.status(200).json({
+        success: true,
+        url: fallbackUrl,
+        fallback: true,
+        processingTime: Date.now() - startTime,
+        error: freepikError.message,
+        metadata: {
+          conceptId,
+          sceneNumber,
+          style,
+          promptUsed: prompt.substring(0, 100) + '...',
+          apiProvider: 'Fallback',
+          originalError: freepikError.message
         }
       });
     }
     
   } catch (error) {
-    console.error('[storyboard-render-image] 전체 오류:', error);
+    console.error('[storyboard-render-image] 전체 시스템 오류:', error);
+    
+    const fallbackUrl = generateFallbackImage(
+      req.body?.conceptId || 1, 
+      req.body?.sceneNumber || 1
+    );
+    
+    return res.status(200).json({
+      success: true,
+      url: fallbackUrl,
+      fallback: true,
+      processingTime: Date.now() - startTime,
+      error: error.message,
+      metadata: {
+        systemError: true,
+        originalError: error.message
+      }
+    });
   }
-  
-  // 모든 것이 실패한 경우 폴백
-  const fallbackUrl = generateFallbackImage(
-    req.body?.conceptId || 1, 
-    req.body?.sceneNumber || 1
-  );
-  
-  console.log('[storyboard-render-image] 폴백 사용:', fallbackUrl);
-  
-  return res.status(200).json({
-    success: true,
-    url: fallbackUrl,
-    fallback: true,
-    processingTime: Date.now() - startTime
-  });
 }
