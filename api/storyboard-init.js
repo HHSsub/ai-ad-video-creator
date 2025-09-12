@@ -52,31 +52,19 @@ async function callGemini2_5(genAI, prompt, label) {
       
       try {
         const model = genAI.getGenerativeModel({ 
-          model: modelName,
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.8,
-            maxOutputTokens: 8192,
-          },
-          safetySettings: [
-            {
-              category: 'HARM_CATEGORY_HARASSMENT',
-              threshold: 'BLOCK_NONE',
+            model: modelName,
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.8,
+              maxOutputTokens: 8192,
             },
-            {
-              category: 'HARM_CATEGORY_HATE_SPEECH',
-              threshold: 'BLOCK_NONE',
-            },
-            {
-              category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-              threshold: 'BLOCK_NONE',
-            },
-            {
-              category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-              threshold: 'BLOCK_NONE',
-            },
-          ],
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            ],
         });
         
         const startTime = Date.now();
@@ -102,10 +90,13 @@ async function callGemini2_5(genAI, prompt, label) {
         
         console.log(`[${label}] ✅ 성공 model=${modelName} 시간=${duration}ms 길이=${text.length}자`);
         
-        // 1번째 프롬프트(브리프) 응답 앞 70자 프리뷰 로깅
+        // (수정됨) 1번째 프롬프트(브리프) 전체 내용 출력
         if (label === '1-brief') {
-            const preview = text.replace(/\s+/g, ' ').slice(0, 70);
-            console.log(`[${label}] 🔍 응답 프리뷰(앞70자): ${preview}${text.length > 70 ? '...' : ''}`);
+          const lineCount = text.split('\n').length;
+          console.log(`[${label}] 🔍 전체 브리프 출력 시작 (줄수=${lineCount}, 길이=${text.length})`);
+          console.log('-----[BRIEF_FULL_START]-----');
+          console.log(text);
+            console.log('-----[BRIEF_FULL_END]-----');
         }
 
         if (!text || text.length < 20) {
@@ -124,8 +115,8 @@ async function callGemini2_5(genAI, prompt, label) {
         
         if (isRetryable(error) && modelAttempt < 3) {
           const delay = BASE_BACKOFF * modelAttempt + Math.random() * 1000;
-            console.log(`[${label}] ⏳ ${delay}ms 후 같은 모델로 재시도`);
-            await sleep(delay);
+          console.log(`[${label}] ⏳ ${delay}ms 후 같은 모델로 재시도`);
+          await sleep(delay);
         }
       }
     }
@@ -278,7 +269,7 @@ function parseConceptsRobust(text) {
             normalized.push(createFallbackConcept(normalized.length + 1));
           }
           
-            return normalized.map((item, index) => ({
+          return normalized.map((item, index) => ({
             concept_id: item.concept_id || (index + 1),
             concept_name: item.concept_name || `컨셉 ${index + 1}`,
             summary: item.summary || `컨셉 ${index + 1} 설명`,
@@ -344,10 +335,10 @@ function parseConceptsRobust(text) {
         const concept = concepts.get(i);
         result.push({
           concept_id: i,
-          concept_name: concept.concept_name,
-          summary: concept.summary,
-          keywords: concept.keywords.length > 0 ? concept.keywords : 
-                   [`키워드${i}-1`, `키워드${i}-2`, `키워드${i}-3`, `키워드${i}-4`, `키워드${i}-5`]
+            concept_name: concept.concept_name,
+            summary: concept.summary,
+            keywords: concept.keywords.length > 0 ? concept.keywords : 
+                     [`키워드${i}-1`, `키워드${i}-2`, `키워드${i}-3`, `키워드${i}-4`, `키워드${i}-5`]
         });
       } else {
         result.push(createFallbackConcept(i));
