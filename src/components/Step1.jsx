@@ -21,7 +21,7 @@ const Step1 = ({ onNext, formData, setFormData }) => {
     { name: 'industryCategory', label: '산업 카테고리', type: 'text', placeholder: '예: 뷰티, 푸드, 게임, 테크, 카페 등', required: true },
     { name: 'productServiceCategory', label: '제품/서비스 카테고리', type: 'text', placeholder: '예: 스킨케어, 배달음식, 모바일게임, 클라우드서비스 등', required: true },
     { name: 'productServiceName', label: '제품명/서비스명', type: 'text', placeholder: '예: 갤럭시 S24, 쿠팡이츠, 리그오브레전드 등', required: false },
-    { name: 'videoPurpose', label: '영상 목적', type: 'select', options: ['브랜드 인지도 강화', '구매 전환', '신제품 출시', '이벤트 홍보'], required: true },
+    { name: 'videoPurpose', label: '영상 목적', type: 'select', options: ['브랜드 인지도 강화', '구매 전환'], required: true },
     { name: 'videoLength', label: '영상 길이', type: 'select', options: ['10초', '30초', '60초'], required: true },
     { name: 'videoAspectRatio', label: '영상 비율', type: 'select',
       options: ['가로 (16:9)', '세로 (9:16)', '정사각형 (1:1)'], required: true },
