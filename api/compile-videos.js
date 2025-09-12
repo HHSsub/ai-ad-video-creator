@@ -319,6 +319,10 @@ export default async function handler(req, res) {
       const publicPath = path.join(publicDir, publicFileName);
       
       fs.copyFileSync(outputPath, publicPath);
+
+      console.log('[debug] outputPath:', outputPath);
+      console.log('[debug] publicDir:', publicDir);
+      console.log('[debug] publicPath:', publicPath);
       
       const publicUrl = `/tmp/compiled/${publicFileName}`;
       
