@@ -142,10 +142,11 @@ export default async function handler(req, res) {
     const optimizedPrompt = optimizeVideoPrompt(prompt || 'natural smooth motion');
     
     // 2025년 공식 API 스펙에 맞는 요청 본문
+    const validDuration = [6, 10].includes(duration) ? duration : 6;
     const requestBody = {
       prompt: optimizedPrompt,
       first_frame_image: imageUrl,
-      duration: Math.min(Math.max(duration, 2), 10), // 2-10초 제한
+      duration: validDuration, // 6 or 10초 제한
       prompt_optimizer: true, // 자동 프롬프트 최적화
       webhook_url: null // 선택적 웹훅
     };
