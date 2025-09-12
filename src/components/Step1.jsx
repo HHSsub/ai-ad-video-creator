@@ -3,70 +3,31 @@ import { useState } from 'react';
 const Step1 = ({ onNext, formData, setFormData }) => {
   const [errors, setErrors] = useState({});
 
+  // 사용자가 요구한 순서대로 재구성:
+  // 1. 브랜드명 (필수)
+  // 2. 산업 카테고리 (필수)
+  // 3. 제품/서비스 카테고리 (필수)
+  // 4. 제품명/서비스명 (선택)
+  // 5. 영상 목적 (필수 - 드롭다운)
+  // 6. 영상 길이 (필수 - 드롭다운)
+  // 7. 영상 비율 (필수 - 드롭다운: 가로(16:9), 세로(9:16), 정사각형(1:1))
+  // 8. 핵심 타겟 (필수)
+  // 9. 핵심 차별점 (필수)
+  // 10. 영상 요구 사항 (선택)
+  // 11. 브랜드 로고 이미지 (선택)
+  // 12. 제품 이미지 (선택)
   const fields = [
-    { 
-      name: 'brandName', 
-      label: '브랜드명', 
-      type: 'text', 
-      placeholder: '예: 삼성, 쿠팡, 새로운 브랜드',
-      required: true
-    },
-    { 
-      name: 'industryCategory', 
-      label: '산업 카테고리', 
-      type: 'text', 
-      placeholder: '예: 뷰티, 푸드, 게임, 테크, 카페 등',
-      required: true
-    },
-    { 
-      name: 'productServiceCategory', 
-      label: '제품/서비스 카테고리', 
-      type: 'text', 
-      placeholder: '예: 스킨케어, 배달음식, 모바일게임, 클라우드서비스, 원두커피 등',
-      required: true
-    },
-    { 
-      name: 'productServiceName', 
-      label: '제품명/서비스명', 
-      type: 'text', 
-      placeholder: '예: 갤럭시 S24, 쿠팡이츠, 리그오브레전드, AWS, 아메리카노',
-      required: false
-    },
-    {
-      name: 'videoPurpose',
-      label: '영상 목적',
-      type: 'select',
-      options: ['브랜드 인지도 강화', '구매 전환', '신제품 출시', '이벤트 홍보'],
-      required: true
-    },
-    {
-      name: 'videoLength',
-      label: '영상 길이',
-      type: 'select',
-      options: ['10초', '30초', '60초'],
-      required: true
-    },
-    { 
-      name: 'coreTarget', 
-      label: '핵심 타겟', 
-      type: 'text', 
-      placeholder: '예: 사회초년생 재테크에 관심이 많은 20대 후반의 직장인 등 자유롭게 기재',
-      required: true
-    },
-    { 
-      name: 'coreDifferentiation', 
-      label: '핵심 차별점', 
-      type: 'text', 
-      placeholder: '브랜드의 제공하는 독창적이고 차별화된 포인트',
-      required: true
-    },
-    { 
-      name: 'videoRequirements', 
-      label: '영상요구사항', 
-      type: 'textarea', 
-      placeholder: '자유롭게 원하는 컨셉이나 요구사항이 있으면 기재',
-      required: false
-    }
+    { name: 'brandName', label: '브랜드명', type: 'text', placeholder: '예: 삼성, 쿠팡, 새로운 브랜드', required: true },
+    { name: 'industryCategory', label: '산업 카테고리', type: 'text', placeholder: '예: 뷰티, 푸드, 게임, 테크, 카페 등', required: true },
+    { name: 'productServiceCategory', label: '제품/서비스 카테고리', type: 'text', placeholder: '예: 스킨케어, 배달음식, 모바일게임, 클라우드서비스 등', required: true },
+    { name: 'productServiceName', label: '제품명/서비스명', type: 'text', placeholder: '예: 갤럭시 S24, 쿠팡이츠, 리그오브레전드 등', required: false },
+    { name: 'videoPurpose', label: '영상 목적', type: 'select', options: ['브랜드 인지도 강화', '구매 전환', '신제품 출시', '이벤트 홍보'], required: true },
+    { name: 'videoLength', label: '영상 길이', type: 'select', options: ['10초', '30초', '60초'], required: true },
+    { name: 'videoAspectRatio', label: '영상 비율', type: 'select',
+      options: ['가로 (16:9)', '세로 (9:16)', '정사각형 (1:1)'], required: true },
+    { name: 'coreTarget', label: '핵심 타겟', type: 'text', placeholder: '예: 재테크 관심 20대 후반 직장인', required: true },
+    { name: 'coreDifferentiation', label: '핵심 차별점', type: 'text', placeholder: '브랜드 독창적 차별 포인트', required: true },
+    { name: 'videoRequirements', label: '영상 요구 사항', type: 'textarea', placeholder: '원하는 컨셉 / 톤 / 색감 등 자유 기재', required: false }
   ];
 
   const handleInputChange = (name, value) => {
@@ -80,17 +41,17 @@ const Step1 = ({ onNext, formData, setFormData }) => {
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        setFormData(prev => ({ 
-          ...prev, 
-          [name]: {
-            file: file,
-            url: e.target.result,
-            name: file.name
+        setFormData(prev => ({
+          ...prev,
+            [name]: {
+              file,
+              url: e.target.result,
+              name: file.name
           }
         }));
       };
       reader.readAsDataURL(file);
-      
+
       if (errors[name]) {
         setErrors(prev => ({ ...prev, [name]: '' }));
       }
@@ -100,8 +61,11 @@ const Step1 = ({ onNext, formData, setFormData }) => {
   const validateForm = () => {
     const newErrors = {};
     fields.forEach(field => {
-      if (field.required && (!formData[field.name] || formData[field.name].trim() === '')) {
-        newErrors[field.name] = `${field.label}은(는) 필수 입력 항목입니다.`;
+      if (field.required) {
+        const v = formData[field.name];
+        if (!v || (typeof v === 'string' && v.trim() === '')) {
+          newErrors[field.name] = `${field.label}은(는) 필수 입력 항목입니다.`;
+        }
       }
     });
     setErrors(newErrors);
@@ -109,13 +73,20 @@ const Step1 = ({ onNext, formData, setFormData }) => {
   };
 
   const handleNext = () => {
-    if (validateForm()) {
-      onNext();
-    }
+    if (!validateForm()) return;
+
+    // 업로드 여부 플래그를 명확화하여 formData에 저장 (서버에서 바로 활용 가능)
+    setFormData(prev => ({
+      ...prev,
+      brandLogoProvided: !!prev.brandLogo,
+      productImageProvided: !!prev.productImage
+    }));
+
+    onNext();
   };
 
   const removeFile = (name) => {
-    setFormData(prev => ({ ...prev, [name]: null }));
+    setFormData(prev => ({ ...prev, [name]: null, [`${name}Provided`]: false }));
   };
 
   return (
@@ -123,14 +94,14 @@ const Step1 = ({ onNext, formData, setFormData }) => {
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
         1단계: 광고 설정 입력
       </h2>
-      
+
       <div className="space-y-4">
         {fields.map(field => (
           <div key={field.name} className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </label>
-            
+
             {field.type === 'select' ? (
               <select
                 value={formData[field.name] || ''}
@@ -165,7 +136,7 @@ const Step1 = ({ onNext, formData, setFormData }) => {
                 }`}
               />
             )}
-            
+
             {errors[field.name] && (
               <p className="text-red-500 text-sm">{errors[field.name]}</p>
             )}
@@ -175,7 +146,7 @@ const Step1 = ({ onNext, formData, setFormData }) => {
         {/* 브랜드 로고 업로드 */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700">
-            브랜드 로고 업로드
+            브랜드 로고 업로드 (선택)
           </label>
           <div className="border-2 border-dashed border-gray-300 rounded-md p-4 hover:border-blue-400 transition-colors">
             {formData.brandLogo ? (
@@ -210,8 +181,8 @@ const Step1 = ({ onNext, formData, setFormData }) => {
                     <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                       <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <p className="mt-2 text-sm">클릭하여 브랜드 로고를 업로드하세요</p>
-                    <p className="text-xs text-gray-400">PNG, JPG, GIF (최대 10MB)</p>
+                    <p className="mt-2 text-sm">클릭하여 로고 업로드</p>
+                    <p className="text-xs text-gray-400">PNG, JPG (최대 10MB)</p>
                   </div>
                 </label>
               </div>
@@ -222,7 +193,7 @@ const Step1 = ({ onNext, formData, setFormData }) => {
         {/* 제품 이미지 업로드 */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700">
-            제품 이미지 업로드
+            제품 이미지 업로드 (선택)
           </label>
           <div className="border-2 border-dashed border-gray-300 rounded-md p-4 hover:border-blue-400 transition-colors">
             {formData.productImage ? (
@@ -257,8 +228,8 @@ const Step1 = ({ onNext, formData, setFormData }) => {
                     <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                       <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <p className="mt-2 text-sm">클릭하여 제품 이미지를 업로드하세요</p>
-                    <p className="text-xs text-gray-400">PNG, JPG, GIF (최대 10MB)</p>
+                    <p className="mt-2 text-sm">클릭하여 제품 이미지 업로드</p>
+                    <p className="text-xs text-gray-400">PNG, JPG (최대 10MB)</p>
                   </div>
                 </label>
               </div>
