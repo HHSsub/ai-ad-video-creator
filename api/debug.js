@@ -1,27 +1,4 @@
-// api/debug.js - 환경변수 및 API 연결 상태 확인용
-
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-
-  try {
-    const envInfo = {
-      nodeEnv: process.env.NODE_ENV,
-      hasFreepikKey: !!process.env.FREEPIK_API_KEY,
-      hasViteFreepikKey: !!process.env.VITE_FREEPIK_API_KEY,
-      hasReactFreepikKey: !!process.env.REACT_APP_FREEPIK_API_KEY,
-      hasGeminiKey: !!process.env.GEMINI_API_KEY,
-      hasViteGeminiKey: !!process.env.VITE_GEMINI_API_KEY,
-      hasReactGeminiKey: !!process.env.REACT_APP_GEMINI_API_KEY,
-      geminiModel: process.env.GEMINI_MODEL || 'not set',
-      fallbackModel: process.env.FALLBACK_GEMINI_MODEL || 'not set'
-    };
-
-// api/debug.js - 환경변수 및 API 연결 상태 확인용
+// api/debug.js - 환경변수 및 API 연결 상태 확인용 (완전 수정)
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
