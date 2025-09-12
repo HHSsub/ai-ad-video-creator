@@ -16,9 +16,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
  *  - timecode/scene_number 재계산(필요 시)
  *  - fallback JSON 생성
  *  - 단어 수 부족 시 자동 고도화 토큰 추가
+ *  - Freepik API 호환성 개선
  */
 
 //////////////////// Utility ////////////////////
+
 function mapUserAspectRatio(value) {
   if (!value || typeof value !== 'string') return 'widescreen_16_9';
   const v = value.toLowerCase();
@@ -34,6 +36,7 @@ function parseVideoLengthSeconds(raw) {
   const n = m ? parseInt(m[1], 10) : 10;
   return Math.max(6, Math.min(180, isNaN(n) ? 10 : n));
 }
+
 function calcSceneCount(sec) {
   return Math.max(3, Math.min(60, Math.floor(sec / 2)));
 }
@@ -58,12 +61,14 @@ function injectVariables(template, formData, extra = {}) {
 }
 
 //////////////////// Gemini ////////////////////
+
 const MODEL_CHAIN = [
   process.env.GEMINI_MODEL || 'gemini-2.5-flash',
   process.env.FALLBACK_GEMINI_MODEL || 'gemini-2.5-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite'
 ].filter(Boolean);
+
 const BASE_BACKOFF = 2500;
 
 function isRetryable(err) {
@@ -94,12 +99,15 @@ async function callGemini(genAI, prompt, label) {
             { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
           ]
         });
+
         const start = Date.now();
         const result = await model.generateContent(prompt);
         const text = result.response.text();
         console.log(`[${label}] ✅ success len=${text.length} elapsed=${Date.now()-start}ms`);
+        
         if (text.length < 20) throw new Error('응답 너무 짧음');
         return text;
+
       } catch (e) {
         console.warn(`[${label}] fail attempt=${attempt} model=${modelName} : ${e.message}`);
         if (attempt < 3 && isRetryable(e)) {
@@ -122,10 +130,11 @@ function getGeminiApiKey() {
 }
 
 //////////////////// JSON Clean & Parse ////////////////////
+
 function stripCodeFences(raw) {
   return raw
-    .replace(/```json/gi,'```')
-    .replace(/```/g,''); // 제거
+    .replace(/``````')
+    .replace(/```
 }
 
 // 중괄호 균형 기반 JSON 추출
@@ -227,6 +236,24 @@ function ensureHighFidelityTokens(obj) {
   });
 }
 
+// Freepik API 호환성을 위한 파라미터 정리
+function cleanFreepikCompatible(obj) {
+  if (!obj?.scenes) return;
+  obj.scenes.forEach(s => {
+    if (s?.image_prompt) {
+      // Freepik API 호환을 위해 불필요한 파라미터 제거
+      delete s.image_prompt.guidance_scale;
+      delete s.image_prompt.filter_nsfw;
+      
+      // styling 객체 정리 - style만 남기고 나머지 제거
+      if (s.image_prompt.styling) {
+        const { style } = s.image_prompt.styling;
+        s.image_prompt.styling = { style: style || "photo" };
+      }
+    }
+  });
+}
+
 function rebuildTimecodes(obj, videoLengthSeconds) {
   if (!obj?.scenes) return;
   // 신뢰성 보강: scene_number 정렬 후 timecode 재계산
@@ -253,8 +280,8 @@ function tryParseWithCleaning(raw) {
   work = stripCodeFences(work);
   let candidate = extractBalancedJson(work);
   const original = candidate;
-
   const attempts = [];
+  
   const pushAttempt = (label, fn) => {
     try {
       candidate = fn(candidate);
@@ -305,10 +332,8 @@ function buildFallbackJson({ brandName, productServiceName, productServiceCatego
         negative_prompt: "blurry, low quality, watermark, cartoon, distorted",
         num_images: 1,
         image: { size: aspectRatioCode },
-        styling: { style: "photo", color: "color", lighting: "natural" },
-        guidance_scale: 7.5,
-        seed: Math.floor(10000 + Math.random()*90000),
-        filter_nsfw: true
+        styling: { style: "photo" },
+        seed: Math.floor(10000 + Math.random()*90000)
       },
       motion_prompt: {
         prompt: "Subtle push-in as ambient light shifts gently."
@@ -317,6 +342,7 @@ function buildFallbackJson({ brandName, productServiceName, productServiceCatego
       notes: "Fallback generated due to parse error."
     });
   }
+  
   return {
     project_meta: {
       brand: brandName || '',
@@ -335,15 +361,18 @@ function buildFallbackJson({ brandName, productServiceName, productServiceCatego
 }
 
 //////////////////// Handler ////////////////////
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers','Content-Type');
   res.setHeader('Access-Control-Max-Age','86400');
+  
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error:'Method not allowed' });
 
   const started = Date.now();
+
   try {
     const { formData } = req.body || {};
     if (!formData) return res.status(400).json({ error:'formData required' });
@@ -353,7 +382,6 @@ export default async function handler(req, res) {
     const targetSceneCount = calcSceneCount(videoLengthSeconds);
     formData.aspectRatioOriginal = formData.videoAspectRatio || '';
     formData.aspectRatioCode = mapUserAspectRatio(formData.aspectRatioOriginal);
-
     formData.brandLogoProvided = !!(formData.brandLogoProvided || formData.brandLogo);
     formData.productImageProvided = !!(formData.productImageProvided || formData.productImage);
 
@@ -375,6 +403,7 @@ export default async function handler(req, res) {
       videoLengthSeconds,
       targetSceneCount
     });
+
     console.log('[phase1][PROMPT_START]'); console.log(phase1Prompt); console.log('[phase1][PROMPT_END]');
     const phase1Raw = await callGemini(genAI, phase1Prompt, 'phase1');
     console.log('[phase1][OUTPUT_START]'); console.log(phase1Raw); console.log('[phase1][OUTPUT_END]');
@@ -386,12 +415,14 @@ export default async function handler(req, res) {
       videoLengthSeconds,
       targetSceneCount
     });
+
     console.log('[phase2][PROMPT_START]'); console.log(phase2Prompt); console.log('[phase2][PROMPT_END]');
     const phase2Raw = await callGemini(genAI, phase2Prompt, 'phase2');
     console.log('[phase2][OUTPUT_START]'); console.log(phase2Raw); console.log('[phase2][OUTPUT_END]');
 
     let parsedFinal;
     let parseInfo = {};
+
     try {
       const result = tryParseWithCleaning(phase2Raw);
       parsedFinal = result.parsed;
@@ -424,6 +455,7 @@ export default async function handler(req, res) {
     fixSeeds(parsedFinal);
     enforceShotByInObject(parsedFinal);
     ensureHighFidelityTokens(parsedFinal);
+    cleanFreepikCompatible(parsedFinal); // 🔥 Freepik 호환성 정리
     rebuildTimecodes(parsedFinal, videoLengthSeconds);
 
     // scene 개수 조정
