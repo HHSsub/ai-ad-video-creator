@@ -92,12 +92,12 @@ async function callGemini(genAI, prompt, label) {
             topP: 0.85,
             maxOutputTokens: 8192
           },
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-          ]
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+            ]
         });
 
         const start = Date.now();
@@ -131,10 +131,13 @@ function getGeminiApiKey() {
 
 //////////////////// JSON Clean & Parse ////////////////////
 
+// 코드펜스 제거 (``` / ```json 등)
 function stripCodeFences(raw) {
+  if (!raw) return '';
   return raw
-    .replace(/``````')
-    .replace(/```
+    .replace(/```(?:json|javascript|js|ts|txt)?\s*/gi, '')
+    .replace(/```/g, '')
+    .trim();
 }
 
 // 중괄호 균형 기반 JSON 추출
@@ -156,7 +159,6 @@ function extractBalancedJson(raw) {
 }
 
 function fixMissingCommaAfterPrompt(jsonText) {
-  // 패턴: "prompt": " ... lens."\s*"negative_prompt"
   return jsonText.replace(
     /("prompt"\s*:\s*"[^"]*Shot by [^"]+ lens\."\s*)"negative_prompt"/g,
     '$1,"negative_prompt"'
@@ -164,17 +166,14 @@ function fixMissingCommaAfterPrompt(jsonText) {
 }
 
 function ensureShotBy(jsonText) {
-  // prompt 속성 문자열 내부에 Shot by 없음 → 끝부분에 추가
   return jsonText.replace(/("prompt"\s*:\s*")([^"]*?)(?:"\s*,)/g, (m, head, body) => {
     if (/Shot by .* lens\./i.test(body)) return m;
-    // 문장 끝 마침표 없으면 추가
     if (!body.trim().endsWith('.')) body += '.';
     body += ' Shot by professional cinema camera with a 50mm lens.';
     return `${head}${body}",`;
   });
 }
 
-// prompt 뒤 콤마 일반 패턴 (Shot by 문구 없을 수도 있는 상황)
 function genericCommaPatch(jsonText) {
   return jsonText.replace(/("prompt"\s*:\s*"[^"]+")\s*"negative_prompt"/g, '$1,"negative_prompt"');
 }
@@ -227,7 +226,6 @@ function ensureHighFidelityTokens(obj) {
     if (missing.length) {
       s.image_prompt.prompt = ip.replace(/(\.?\s*)$/,'') + ', ' + missing.join(', ') + '.';
     }
-    // 단어 수 체크
     const words = s.image_prompt.prompt.split(/\s+/).filter(Boolean);
     if (words.length < 60) {
       s.image_prompt.prompt = s.image_prompt.prompt.replace(/(\.?\s*)$/,'') +
@@ -236,16 +234,12 @@ function ensureHighFidelityTokens(obj) {
   });
 }
 
-// Freepik API 호환성을 위한 파라미터 정리
 function cleanFreepikCompatible(obj) {
   if (!obj?.scenes) return;
   obj.scenes.forEach(s => {
     if (s?.image_prompt) {
-      // Freepik API 호환을 위해 불필요한 파라미터 제거
       delete s.image_prompt.guidance_scale;
       delete s.image_prompt.filter_nsfw;
-      
-      // styling 객체 정리 - style만 남기고 나머지 제거
       if (s.image_prompt.styling) {
         const { style } = s.image_prompt.styling;
         s.image_prompt.styling = { style: style || "photo" };
@@ -256,7 +250,6 @@ function cleanFreepikCompatible(obj) {
 
 function rebuildTimecodes(obj, videoLengthSeconds) {
   if (!obj?.scenes) return;
-  // 신뢰성 보강: scene_number 정렬 후 timecode 재계산
   const scenes = obj.scenes.slice().sort((a,b)=> (a.scene_number||0)-(b.scene_number||0));
   let t = 0;
   scenes.forEach(s=>{
@@ -292,17 +285,14 @@ function tryParseWithCleaning(raw) {
     }
   };
 
-  // 순차 수정
   candidate = fixMissingCommaAfterPrompt(candidate);
   candidate = genericCommaPatch(candidate);
   candidate = ensureShotBy(candidate);
 
-  // 최종 파싱
   try {
     const parsed = JSON.parse(candidate);
     return { parsed, attempts, original, cleaned: candidate };
   } catch (e) {
-    // 한번 더: 콤마 누락 흔한 패턴 (Shot by 없는 prompt)
     candidate = genericCommaPatch(candidate);
     try {
       const parsed = JSON.parse(candidate);
@@ -315,6 +305,7 @@ function tryParseWithCleaning(raw) {
 
 function buildFallbackJson({ brandName, productServiceName, productServiceCategory, coreTarget, videoPurpose, videoLengthSeconds, aspectRatioCode, sceneCount }) {
   const scenes = [];
+  const safeName = productServiceName || productServiceCategory || 'product';
   for (let i=0;i<Math.min(sceneCount,3);i++) {
     const start = i*2;
     const end = start+2;
@@ -328,7 +319,7 @@ function buildFallbackJson({ brandName, productServiceName, productServiceCatego
       timecode: `${mmss(start)}-${mmss(end)}`,
       concept_reference: "fallback",
       image_prompt: {
-        prompt: `Wide shot, symbolic minimal environment referencing ${productServiceName||productServiceCategory}. Highly descriptive conceptual frame, insanely detailed, micro-details, hyper-realistic textures, 4K, sharp focus. Shot by professional cinema camera with a 50mm lens.`,
+        prompt: `Wide shot, symbolic minimal environment referencing ${safeName}. Highly descriptive conceptual frame, insanely detailed, micro-details, hyper-realistic textures, 4K, sharp focus, cinematic mood, volumetric soft light. Shot by professional cinema camera with a 50mm lens.`,
         negative_prompt: "blurry, low quality, watermark, cartoon, distorted",
         num_images: 1,
         image: { size: aspectRatioCode },
@@ -446,7 +437,6 @@ export default async function handler(req, res) {
       parseInfo = { fallback: true, error: e.message };
     }
 
-    // 보정 작업
     if (!parsedFinal.project_meta) parsedFinal.project_meta = {};
     if (!parsedFinal.project_meta.aspect_ratio) parsedFinal.project_meta.aspect_ratio = formData.aspectRatioCode;
     if (!parsedFinal.project_meta.video_length_seconds) parsedFinal.project_meta.video_length_seconds = videoLengthSeconds;
@@ -455,15 +445,13 @@ export default async function handler(req, res) {
     fixSeeds(parsedFinal);
     enforceShotByInObject(parsedFinal);
     ensureHighFidelityTokens(parsedFinal);
-    cleanFreepikCompatible(parsedFinal); // 🔥 Freepik 호환성 정리
+    cleanFreepikCompatible(parsedFinal);
     rebuildTimecodes(parsedFinal, videoLengthSeconds);
 
-    // scene 개수 조정
     if (Array.isArray(parsedFinal.scenes) && parsedFinal.scenes.length > targetSceneCount) {
       parsedFinal.scenes = parsedFinal.scenes.slice(0, targetSceneCount);
     }
 
-    // 응답용 정규화
     const normScenes = (parsedFinal.scenes || []).map(s=>{
       return {
         scene_number: s.scene_number,
