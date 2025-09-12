@@ -6,6 +6,7 @@ import bodyParser from 'body-parser';
 // API 핸들러 import
 import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
+import imageToVideo from '../api/image-to-video.js'; // 🔥 추가
 import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 import compileVideos from '../api/compile-videos.js';
@@ -14,7 +15,7 @@ import debug from '../api/debug.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS 설정 (AWS EC2 IP 포함)
+// CORS 설정 (모든 origin 허용)
 app.use(cors({ 
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -65,9 +66,10 @@ const bindRoute = (path, handler, methods = ['POST']) => {
   });
 };
 
-// API 라우트 등록
+// 🔥 모든 API 라우트 등록 (image-to-video 포함)
 bindRoute('/api/storyboard-init', storyboardInit, ['POST']);
 bindRoute('/api/storyboard-render-image', storyboardRenderImage, ['POST']);
+bindRoute('/api/image-to-video', imageToVideo, ['POST']); // 🔥 누락된 엔드포인트 추가
 bindRoute('/api/generate-video', generateVideo, ['POST']);
 bindRoute('/api/video-status', videoStatus, ['POST']);
 bindRoute('/api/compile-videos', compileVideos, ['POST']);
@@ -93,7 +95,17 @@ app.use('*', (req, res) => {
     error: 'Not Found',
     path: req.originalUrl,
     method: req.method,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    availableEndpoints: [
+      'GET /health',
+      'GET /api/debug',
+      'POST /api/storyboard-init',
+      'POST /api/storyboard-render-image',
+      'POST /api/image-to-video',
+      'POST /api/generate-video',
+      'POST /api/video-status',
+      'POST /api/compile-videos'
+    ]
   });
 });
 
@@ -123,6 +135,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - GET  /api/debug`);
   console.log(`   - POST /api/storyboard-init`);
   console.log(`   - POST /api/storyboard-render-image`);
+  console.log(`   - POST /api/image-to-video 🔥`); // 추가됨 표시
   console.log(`   - POST /api/generate-video`);
   console.log(`   - POST /api/video-status`);
   console.log(`   - POST /api/compile-videos`);
