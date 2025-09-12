@@ -1,15 +1,19 @@
-[2단계 - JSON ONLY OUTPUT]
+[PHASE 2 — JSON GENERATION ONLY]
 
-ROLE: You are an expert video director & VFX supervisor. Convert the strategic natural-language plan (Phase 1 output) into a STRICT, MACHINE-VALID SINGLE JSON.
+ROLE:
+You are an elite video director & VFX supervisor. You translate a rich strategic + storyboard draft (Phase1) into a machine-consumable, production-grade JSON for image (Freepik-like) and image-to-video generation. You deeply understand cinematography, lighting, lenses, mise-en-scène, product visualization, texture realism, narrative coherence, and ad effectiveness.
 
-PHASE 1 RAW CONTEXT:
+OBJECTIVE:
+Return EXACTLY ONE VALID JSON OBJECT. NO markdown, NO code fences, NO commentary outside pure JSON. ANY extraneous text = FAILURE. This JSON is directly parsed by an automated pipeline.
+
+SOURCE CONTEXT (RAW PHASE1 OUTPUT — may contain Korean):
 {phase1_output}
 
 INPUT VARIABLES:
 brandName: {brandName}
-industryCategory: {industryCategory}
-productServiceCategory: {productServiceCategory}
 productServiceName: {productServiceName}
+productServiceCategory: {productServiceCategory}
+industryCategory: {industryCategory}
 coreTarget: {coreTarget}
 videoPurpose: {videoPurpose}
 videoLengthRaw: {videoLength}
@@ -17,46 +21,45 @@ videoLengthSeconds: {videoLengthSeconds}
 targetSceneCount: {targetSceneCount}
 coreDifferentiation: {coreDifferentiation}
 videoRequirements: {videoRequirements}
+aspectRatioCode: {aspectRatioCode}
 brandLogoProvided: {brandLogo}
 productImageProvided: {productImage}
-aspectRatioCode: {aspectRatioCode}
 
-ABSOLUTE FORMAT RULES (CRITICAL):
-- OUTPUT MUST BE A SINGLE RAW JSON OBJECT ONLY.
-- DO NOT wrap in markdown, DO NOT use ```json fences, DO NOT add commentary.
-- Every object property (except the last inside its scope) MUST end with a comma.
-- All string values MUST be valid JSON strings (escape internal quotes if any).
-- Use double quotes for all keys & string values (standard JSON).
-- No trailing commas after the last property in an object or array.
+NON-NEGOTIABLE GLOBAL RULES:
+1. OUTPUT = SINGLE JSON OBJECT ONLY (UTF-8). No backticks, no prefix/suffix text.
+2. All keys in double quotes; no trailing commas; valid strict JSON.
+3. scene count = {targetSceneCount}. (If logical content < count, still fill with coherent bridging shots.)
+4. Each scene duration_seconds = 2.
+5. Timecodes sequential: 00:00-00:02, 00:02-00:04, ...
+6. image_prompt.prompt length: 70–110 English words.
+7. Each image_prompt.prompt must BEGIN with camera angle & shot type (e.g. "Extreme close-up,", "Wide shot,", "Medium shot, low angle,", etc.).
+8. Must integrate brand/product context naturally (English; keep brand/product proper nouns verbatim even if Korean).
+9. REQUIRED high-fidelity tokens (present somewhere in each prompt; if absent add them): insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus.
+10. END every image_prompt.prompt with EXACT camera syntax: Shot by <professional cinema camera name> with a <50mm or 85mm> lens.
+11. negative_prompt EXACT fixed string: "blurry, low quality, watermark, cartoon, distorted"
+12. image.image.size = "{aspectRatioCode}" for ALL scenes.
+13. seed = 5-digit integer (10000–99999).
+14. If brandLogoProvided == '업로드됨' → incorporate subtle logo presence (reflected, faint overlay, product packaging mark) in at least 1 EARLY scene (scene 1 or 2) and not overwhelming.
+15. If productImageProvided == '업로드됨' → show explicit product usage or tactile interaction in ≥2 scenes (non-redundant compositions).
+16. Maintain coherent continuity for recurring characters / objects / environment (consistent age, gender, lighting progression, time-of-day).
+17. Avoid forbidden placeholders: no TODO, no FILL, no <> brackets, no "Shot by ... lens lens." duplicates.
+18. Motion prompt: 1–3 concise English sentences focusing ONLY on dynamic evolution from the still frame (subject micro-actions, camera movement, light changes, particles, environmental motion). DO NOT restate the entire static description verbs; no bloated adjectives.
 
-SCENE LOGIC:
-- Total scenes = {targetSceneCount}.
-- Each scene duration_seconds = 2.
-- Sequential timecodes: 00:00-00:02, 00:02-00:04, ...
-- If total time would exceed {videoLengthSeconds}, still keep the scene count (we will trim downstream).
+STYLE AUTO-SELECTION (INTERNAL LOGIC – DO NOT OUTPUT SEPARATELY):
+Pick ONE dominant style based on Phase1 & variables:
+- Clean and Minimalist (tech / beauty / luxury emphasis)
+- Vibrant and Hyper-Realistic (food / beverage / youth energy)
+- Cinematic and Story-Driven (narrative / emotional arc)
+- Documentary and Authentic (credibility / realism / trust)
+- Stylized and Artistic (experimental / surreal / unconventional)
+Incorporate subtle style cues into each prompt (color, lens mood, lighting adjectives).
 
-IMAGE PROMPT RULES:
-- Field path: scenes[n].image_prompt.prompt
-- 70–110 English words. Begin with camera angle & shot type (e.g. "Extreme close-up," "Wide shot," "Medium shot," etc.).
-- Must mention product or category context naturally.
-- MUST contain high-fidelity tokens (if missing, add them): insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus.
-- End with EXACT pattern: Shot by <professional cinema camera> with a <50mm or 85mm> lens.
-- Negative prompt EXACT: "blurry, low quality, watermark, cartoon, distorted"
-- size: "{aspectRatioCode}"
-- Seed: 5-digit integer (10000–99999).
+MUST OBEY STRATEGIC THEMES FROM PHASE1:
+- If “single human appearance rule” or constraints appear, respect them.
+- If “80대 할머니 등장” (elderly grandmother appears) → ensure accurate age portrayal (NOT de-aged), respectful, dignified detail.
+- coreDifferentiation emphasis (e.g., 새로움) should appear conceptually or visually (innovation symbols, fresh textures, novel transitions).
 
-MOTION PROMPT RULES:
-- 1–3 concise sentences in English.
-- Only describe motion evolution (subject / camera / environment).
-- No redundant repetition of static description phrases.
-
-ASSET FLAGS:
-- logo_provided = true if {brandLogo} == '업로드됨', else false.
-- product_image_provided = true if {productImage} == '업로드됨', else false.
-- If logo_provided true → integrate subtle logo presence in one early scene.
-- If product_image_provided true → at least 2 scenes show interaction/visual of product.
-
-JSON SCHEMA (NO EXTRA TOP-LEVEL KEYS):
+JSON SCHEMA (STRICT TOP-LEVEL KEYS ONLY):
 {
   "project_meta": {
     "brand": "...",
@@ -74,7 +77,7 @@ JSON SCHEMA (NO EXTRA TOP-LEVEL KEYS):
     {
       "scene_number": 1,
       "timecode": "00:00-00:02",
-      "concept_reference": "선택적으로 Phase1 개념 중 하나",
+      "concept_reference": "OPTIONAL: brief concept label or Phase1 key concept",
       "image_prompt": {
         "prompt": "70-110 words ... Shot by ARRI Alexa Mini with a 50mm lens.",
         "negative_prompt": "blurry, low quality, watermark, cartoon, distorted",
@@ -85,19 +88,18 @@ JSON SCHEMA (NO EXTRA TOP-LEVEL KEYS):
         "seed": 12345,
         "filter_nsfw": true
       },
-      "motion_prompt": {
-        "prompt": "Concise motion description."
-      },
+      "motion_prompt": { "prompt": "Concise motion evolution (1-3 sentences)." },
       "duration_seconds": 2,
-      "notes": "Optional"
+      "notes": "Optional production/meta note (English)."
     }
   ]
 }
 
-RESPONSE REQUIREMENTS:
-- Output ONLY the JSON (no fences, no Korean outside concept_reference if not needed).
-- Every image_prompt.prompt MUST end with 'Shot by ... lens.'
-- All scenes must have size = "{aspectRatioCode}".
-- Provide varied but coherent progression.
-- No placeholder tokens like TODO / FILL / <>.
-- Ensure strict valid JSON.
+VALIDATION REMINDERS:
+- All image_prompt.prompt end with the camera sentence.
+- No scene has empty strings.
+- Variation across scenes: camera angles, composition, subject distance, lighting progression, emotional arc.
+- Maintain narrative logic for the brand purpose: {videoPurpose}.
+- If any uncertainty: still output syntactically valid JSON (best-effort creative fill).
+
+OUTPUT NOW: (REMEMBER → ONLY THE JSON OBJECT; NOTHING ELSE)
