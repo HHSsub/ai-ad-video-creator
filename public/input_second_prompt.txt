@@ -112,7 +112,7 @@ Data Source: 온라인 커뮤니티 유머 게시판, 영화/드라마 반전 �
 III. DETAILED STORYBOARDS (총 6가지)
 [CRITICAL RULE FOR STORYBOARDING]모든 스토리보드는 영상 길이에 관계없이 인물(주인공, 엑스트라 포함)이 단 하나의 씬(Scene)에만 등장하도록 구성해야 합니다. 나머지 씬에서는 제품, 배경, 그래픽, 텍스트 등 비인물 요소를 중심으로 연출합니다. 이는 인물의 등장을 극적으로 만들고, 제품과 메시지에 대한 집중도를 높이기 위한 전략적 연출입니다.
 
-[컨셉명] (영상 길이: {duration}초, 총 {scene_count}씬)
+[컨셉명] (영상 길이: {videoLengthSeconds}초, 총 {targetSceneCount}씬)
 Overall Creative Direction:
 Art & Visual: [전체적인 영상의 미술 컨셉과 시각적 스타일 요약]
 Sound & Music: [BGM의 장르, 템포, 분위기와 핵심 사운드 디자인 컨셉]
