@@ -5,12 +5,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /* =========================================================
    2-STEP CHAIN (input_second_prompt → final_prompt)
-   요구사항 갱신:
-   - STEP1: 6개 컨셉 전략/묘사 산출
-   - STEP2: 6개 컨셉 각각에 대해 (videoLengthSeconds/2) 장면 *독립* 이미지 프롬프트 JSON
-   - 총 6 * sceneCountPerConcept 이미지 프롬프트 (예: 10초 → 5장 → 30개)
-   - 기존 final_prompt.txt 가 단일 scenes JSON을 강제하던 것을
-     프롬프트 후단에 OVERRIDE 지시 추가하여 다중 concepts 출력 강제
+   STEP1: 6개 컨셉 전략/묘사 (템플릿 내부 {duration} {scene_count} 치환)  // Z2M+
+   STEP2: 6개 컨셉 * sceneCountPerConcept 이미지 JSON (OVERRIDE 스키마)
 ========================================================= */
 
 /* ---------------- 텍스트 로더 ---------------- */
@@ -26,7 +22,7 @@ function loadTxt(name){
 }
 
 const INPUT_SECOND_PROMPT = loadTxt('input_second_prompt.txt'); // STEP1
-const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (OVERRIDE 추가)
+const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (OVERRIDE)
 
 /* ---------------- 기본 유틸 ---------------- */
 function parseVideoLengthSeconds(raw){
@@ -98,25 +94,32 @@ async function callGemini(genAI, prompt, label){
 }
 
 /* ---------------- STEP1 프롬프트 ---------------- */
-function buildStep1Prompt(fd){
+function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){ // Z2M+ duration & scene_count 치환
   if(!INPUT_SECOND_PROMPT) throw new Error('input_second_prompt.txt 누락');
-  return INPUT_SECOND_PROMPT
-    .replaceAll('{{brandName}}', String(fd.brandName||''))
-    .replaceAll('{{productServiceName}}', String(fd.productServiceName||''))
-    .replaceAll('{{productServiceCategory}}', String(fd.productServiceCategory||''))
-    .replaceAll('{{industryCategory}}', String(fd.industryCategory||''))
-    .replaceAll('{{coreTarget}}', String(fd.coreTarget||''))
-    .replaceAll('{{coreDifferentiation}}', String(fd.coreDifferentiation||''))
-    .replaceAll('{{videoPurpose}}', String(fd.videoPurpose||''))
-    .replaceAll('{{videoLength}}', String(fd.videoLength||'')) // 그대로
-    .replaceAll('{{videoRequirements}}', String(fd.videoRequirements||''))
-    .replaceAll('{{brandLogo}}', fd.brandLogo ? '업로드됨':'없음')
-    .replaceAll('{{productImage}}', fd.productImage ? '업로드됨':'없음');
+  // 기본 치환
+  let p = INPUT_SECOND_PROMPT
+    .replaceAll('{brandName}', String(fd.brandName||''))                 // 혹시 템플릿이 중괄호 스타일을 쓴 경우 대응
+    .replaceAll('{industryCategory}', String(fd.industryCategory||''))
+    .replaceAll('{productServiceCategory}', String(fd.productServiceCategory||''))
+    .replaceAll('{productServiceName}', String(fd.productServiceName||''))
+    .replaceAll('{videoPurpose}', String(fd.videoPurpose||''))
+    .replaceAll('{videoLength}', String(fd.videoLength|| videoLengthSeconds+'초'))
+    .replaceAll('{coreTarget}', String(fd.coreTarget||''))
+    .replaceAll('{coreDifferentiation}', String(fd.coreDifferentiation||''))
+    .replaceAll('{videoRequirements}', String(fd.videoRequirements||''))
+    .replaceAll('{brandLogo}', fd.brandLogo ? '업로드됨':'없음')
+    .replaceAll('{productImage}', fd.productImage ? '업로드됨':'없음')
+    .replaceAll('{aspectRatioCode}', mapAspectRatio(fd));
+
+  // 사용자 템플릿 안에서 “[컨셉명] (영상 길이: {duration}초, 총 {scene_count}씬)” 같은 패턴 치환
+  p = p
+    .replaceAll('{duration}', String(videoLengthSeconds))
+    .replaceAll('{scene_count}', String(sceneCountPerConcept));
+
+  return p;
 }
 
-/* ---------------- STEP1 컨셉명 & 블록 추출 ----------------
-   패턴: **1. 컨셉: 이름** ... (다음 **2. 컨셉: ...** 전까지)
------------------------------------------------------------ */
+/* ---------------- STEP1 컨셉 블록 추출 ---------------- */
 function extractConceptBlocks(raw){
   if(!raw) return [];
   const headerRe=/\*\*\s*(\d+)\.\s*컨셉:\s*([^\*]+?)\s*\*\*/g;
@@ -129,17 +132,15 @@ function extractConceptBlocks(raw){
     console.warn('[storyboard-init][Z2M] 컨셉 헤더 패턴 미검출');
     return [];
   }
-  // 블록 텍스트 추출
   for(let i=0;i<matches.length;i++){
     const cur=matches[i];
-    const next = matches[i+1];
+    const next=matches[i+1];
     cur.block = raw.slice(cur.start, next? next.start : raw.length).trim();
   }
-  // 1..6 필터 & 정렬
-  const conceptMap = new Map();
+  const conceptMap=new Map();
   for(const c of matches){
     if(c.idx>=1 && c.idx<=6 && !conceptMap.has(c.idx)){
-      conceptMap.set(c.idx, { concept_id:c.idx, concept_name:c.name, raw_block:c.block });
+      conceptMap.set(c.idx,{concept_id:c.idx, concept_name:c.name, raw_block:c.block});
     }
   }
   const out=[];
@@ -147,10 +148,10 @@ function extractConceptBlocks(raw){
     if(conceptMap.has(i)) out.push(conceptMap.get(i));
   }
   if(out.length!==6){
-    console.warn(`[storyboard-init][Z2M] 추출된 컨셉 수 ${out.length}/6 (부족분 placeholder 채움)`);
+    console.warn(`[storyboard-init][Z2M] 추출된 컨셉 수 ${out.length}/6 -> placeholder 채움`);
     for(let i=1;i<=6;i++){
       if(!out.find(o=>o.concept_id===i)){
-        out.push({ concept_id:i, concept_name:`Concept ${i}`, raw_block:'[placeholder concept description]' });
+        out.push({concept_id:i, concept_name:`Concept ${i}`, raw_block:'[placeholder concept description]'});
       }
     }
     out.sort((a,b)=>a.concept_id-b.concept_id);
@@ -160,19 +161,18 @@ function extractConceptBlocks(raw){
   return out;
 }
 
-/* ---------------- STEP2(final) 프롬프트 ----------------
-   기존 final_prompt.txt 는 단일 scenes JSON 요구.
-   → OVERRIDE 지시문을 뒤에 붙여 6개 concepts JSON 요구.
----------------------------------------------------------- */
+/* ---------------- STEP2(final) 프롬프트 ---------------- */
 function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept){
   if(!FINAL_PROMPT) throw new Error('final_prompt.txt 누락');
   const videoLengthSeconds = parseVideoLengthSeconds(fd.videoLength);
   const aspectRatioCode = mapAspectRatio(fd);
 
-  // concept 블록을 간단 리스트로 삽입 (모델이 참조)
-  const conceptsForPrompt = conceptBlocks.map(c=>`- (${c.concept_id}) ${c.concept_name}: ${c.raw_block.slice(0,400)}`).join('\n');
+  const conceptsForPrompt = conceptBlocks
+    .map(c=>`- (${c.concept_id}) ${c.concept_name}: ${c.raw_block.slice(0,400)}`)
+    .join('\n');
 
-  const base = FINAL_PROMPT
+  // 기존 final_prompt 변수를 치환 (targetSceneCount → sceneCountPerConcept)
+  let base = FINAL_PROMPT
     .replaceAll('{phase1_output}', phase1Output)
     .replaceAll('{brandName}', String(fd.brandName||''))
     .replaceAll('{productServiceName}', String(fd.productServiceName||''))
@@ -180,72 +180,71 @@ function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept)
     .replaceAll('{industryCategory}', String(fd.industryCategory||''))
     .replaceAll('{coreTarget}', String(fd.coreTarget||''))
     .replaceAll('{videoPurpose}', String(fd.videoPurpose||''))
-    .replaceAll('{videoLength}', String(fd.videoLength||''))
+    .replaceAll('{videoLength}', String(fd.videoLength|| videoLengthSeconds+'초'))
     .replaceAll('{videoLengthSeconds}', String(videoLengthSeconds))
-    .replaceAll('{targetSceneCount}', String(sceneCountPerConcept)) // ★ per concept count
+    .replaceAll('{targetSceneCount}', String(sceneCountPerConcept))
     .replaceAll('{coreDifferentiation}', String(fd.coreDifferentiation||''))
     .replaceAll('{videoRequirements}', String(fd.videoRequirements||''))
     .replaceAll('{aspectRatioCode}', aspectRatioCode)
     .replaceAll('{brandLogo}', fd.brandLogo ? '업로드됨':'없음')
     .replaceAll('{productImage}', fd.productImage ? '업로드됨':'없음');
 
-  // OVERRIDE JSON Schema 추가
+  // OVERRIDE – 다중 concepts JSON 스키마
   const override = `
-[OVERRIDE OUTPUT SCHEMA – IGNORE PREVIOUS SINGLE "scenes" SCHEMA]
+[OVERRIDE MULTI-CONCEPT JSON OUTPUT – IGNORE ANY PREVIOUS SINGLE "scenes" SPEC]
 
-Return EXACTLY ONE VALID JSON object with this schema (no markdown, no commentary):
+Return EXACTLY ONE VALID JSON object:
 
 {
   "project_meta":{
-    "brand":"string",
-    "product_or_category":"string",
-    "industry":"string",
-    "target":"string",
-    "purpose":"string",
-    "differentiation":"string",
-    "video_length_seconds": ${videoLengthSeconds},
+    "brand":"${fd.brandName||''}",
+    "product_or_category":"${fd.productServiceName||fd.productServiceCategory||''}",
+    "industry":"${fd.industryCategory||''}",
+    "target":"${fd.coreTarget||''}",
+    "purpose":"${fd.videoPurpose||''}",
+    "differentiation":"${fd.coreDifferentiation||''}",
+    "video_length_seconds":${videoLengthSeconds},
     "aspect_ratio":"${aspectRatioCode}",
-    "logo_provided": <true|false>,
-    "product_image_provided": <true|false>
+    "logo_provided": ${fd.brandLogo? 'true':'false'},
+    "product_image_provided": ${fd.productImage? 'true':'false'}
   },
   "concepts":[
     {
       "concept_id":1,
-      "concept_name":"<original concept 1 name>",
+      "concept_name":"<must match original concept 1 name>",
       "image_prompts":[
         {
           "scene_number":1,
           "timecode":"00:00-00:02",
           "image_prompt":{
-            "prompt":"70-110 words ... ends with: Shot by <camera> with a <50mm or 85mm> lens.",
+            "prompt":"70-110 words ... ends with: Shot by <camera name> with a <50mm or 85mm> lens.",
             "negative_prompt":"blurry, low quality, watermark, cartoon, distorted",
             "num_images":1,
             "image":{"size":"${aspectRatioCode}"},
             "styling":{"style":"photo"},
             "seed":12345
           },
-          "motion_prompt":{"prompt":"1-3 short sentences"},
+          "motion_prompt":{"prompt":"1-3 sentences (dynamic evolution only)"},
           "duration_seconds":2,
-          "notes":"optional"
+          "notes":"optional production note"
         }
       ]
     }
-    // concept_id 2..6 동일 형식, each EXACTLY ${sceneCountPerConcept} scenes
+    // concept_id 2..6 EXACT SAME STRUCTURE, each EXACTLY ${sceneCountPerConcept} scenes
   ]
 }
 
-NON-NEGOTIABLE ADDITIONS:
+MANDATORY RULES:
 - EXACTLY 6 concepts.
-- EACH concept has EXACTLY ${sceneCountPerConcept} distinct image_prompts.
-- Each concept's prompts MUST vary (no copy-paste between concepts; camera angle / subject / environment differ).
-- Maintain continuity within a concept across its scenes.
-- Do NOT include any root key other than project_meta and concepts.
-- NO 'scenes' root key.
-- Seeds: 5-digit integers 10000-99999, unique per scene.
-- All prompts obey previous global rules (high fidelity tokens, ending camera sentence, negative prompt, size).
-- OUTPUT ONLY THE JSON OBJECT.
+- EACH concept has EXACTLY ${sceneCountPerConcept} scenes (no more, no less).
+- All scene_number cumulatively inside a concept = 1..${sceneCountPerConcept}.
+- Distinct prompts across concepts (no copy/paste).
+- high-fidelity tokens present; each prompt ends with camera sentence.
+- Seeds: 5-digit (10000-99999) unique per (concept_id, scene_number).
+- Output ONLY the JSON (no markdown/code fences).
+- Root keys ONLY: project_meta, concepts.
 
-CONCEPT REFERENCE MATERIAL (from STEP1):
+REFERENCE CONCEPT MATERIAL:
 ${conceptsForPrompt}
 [END OVERRIDE]`;
 
@@ -261,9 +260,7 @@ function parseMultiConceptJSON(raw){
   const slice = raw.slice(first, last+1);
   try{
     const obj = JSON.parse(slice);
-    if(Array.isArray(obj.concepts) && obj.concepts.length===6){
-      return obj;
-    }
+    if(Array.isArray(obj.concepts) && obj.concepts.length===6) return obj;
     console.warn('[storyboard-init][Z2M] JSON concepts 형식 불완전');
     return obj;
   }catch(e){
@@ -277,18 +274,17 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
   if(!conceptJson?.concepts) return [];
   return conceptJson.concepts.map(c=>{
     let arr = Array.isArray(c.image_prompts)? c.image_prompts : [];
-    // 보정
+    // 부족 보정
     if(arr.length < sceneCountPerConcept && arr.length>0){
       const last = arr[arr.length-1];
       while(arr.length < sceneCountPerConcept){
-        arr.push({...last, scene_number: arr.length+1, timecode:null});
+        arr.push({...last, scene_number: arr.length+1});
       }
     }
     if(arr.length === 0){
       for(let i=1;i<=sceneCountPerConcept;i++){
         arr.push({
           scene_number:i,
-          timecode:null,
           image_prompt:{
             prompt:`${c.concept_name||'Concept'} placeholder scene ${i}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.`,
             negative_prompt:'blurry, low quality, watermark, cartoon, distorted',
@@ -298,12 +294,10 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
             seed: Math.floor(10000 + Math.random()*90000)
           },
           motion_prompt:{ prompt:'Subtle camera drift.'},
-          duration_seconds:2,
-          notes:'fallback'
+          duration_seconds:2
         });
       }
     }
-    // scene sorting
     arr.sort((a,b)=>(a.scene_number||0)-(b.scene_number||0));
     return {
       concept_id: c.concept_id,
@@ -315,7 +309,7 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
         sceneNumber: sc.scene_number,
         title: `Scene ${sc.scene_number}`,
         duration: sc.duration_seconds || 2,
-        prompt: sc.image_prompt?.prompt || 'Missing prompt fallback, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by RED Komodo with a 50mm lens.'
+        prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by RED Komodo with a 50mm lens.'
       }))
     };
   });
@@ -350,7 +344,7 @@ export default async function handler(req,res){
     console.log(`[storyboard-init][Z2M] videoLengthSeconds=${videoLengthSeconds} sceneCountPerConcept=${sceneCountPerConcept}`);
 
     /* STEP1 */
-    const step1Prompt = buildStep1Prompt(formData);
+    const step1Prompt = buildStep1Prompt(formData, videoLengthSeconds, sceneCountPerConcept);
     console.log('[storyboard-init][Z2M] STEP1 promptLen=', step1Prompt.length);
     const step1 = await callGemini(gen, step1Prompt, 'STEP1');
     const phase1_output = step1.text;
@@ -370,7 +364,6 @@ export default async function handler(req,res){
       console.log('[storyboard-init][Z2M] multi-concept JSON 파싱 성공 (6 concepts)');
     } else {
       console.warn('[storyboard-init][Z2M] multi-concept JSON 미구현 → placeholder 구성');
-      // placeholder with conceptBlocks
       styles = conceptBlocks.map(c=>{
         const imagePrompts=[];
         for(let i=1;i<=sceneCountPerConcept;i++){
@@ -398,7 +391,7 @@ export default async function handler(req,res){
       for(let i=1;i<=6;i++){
         if(!existing.has(i)){
           const imagePrompts=[];
-            for(let k=1;k<=sceneCountPerConcept;k++){
+          for(let k=1;k<=sceneCountPerConcept;k++){
             imagePrompts.push({
               sceneNumber:k,
               title:`Scene ${k}`,
@@ -422,8 +415,7 @@ export default async function handler(req,res){
     res.status(200).json({
       success:true,
       styles,
-      // 호환: 옛 Step2가 imagePrompts 사용하므로 첫 컨셉의 프롬프트를 제공
-      imagePrompts: styles[0]?.imagePrompts || [],
+      imagePrompts: styles[0]?.imagePrompts || [], // 호환
       metadata:{
         videoLengthSeconds,
         sceneCountPerConcept,
