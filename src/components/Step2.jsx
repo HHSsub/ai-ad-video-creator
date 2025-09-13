@@ -29,8 +29,15 @@ SpinnerOverlay.propTypes = {
   lines: PropTypes.arrayOf(PropTypes.string),
 };
 
-function imagesPerStyle(videoLength) {
-  return Math.max(1, Math.floor(Number(videoLength || 10) / 2)); // 2초당 1장
+// 문자열 "10초", "10 s" 등 대응
+function imagesPerStyle(videoLength, fallbackCountFromMeta){
+  if(typeof fallbackCountFromMeta === 'number' && fallbackCountFromMeta > 0){
+    return fallbackCountFromMeta;
+  }
+  const digits = String(videoLength||'').match(/\d+/);
+  const sec = digits ? parseInt(digits[0],10) : 10;
+  const n = Math.max(1, Math.floor(sec/2));
+  return n;
 }
 
 async function runWithConcurrency(tasks, limit, onStep) {
@@ -79,7 +86,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     setDebugInfo(null);
 
     try {
-      log('1/2 스토리보드(2단 체인) 요청 시작');
+      log('1/2 스토리보드(2-STEP 체인) 요청 시작');
       setPercent(5);
 
       const initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
@@ -97,123 +104,127 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const initData = await initRes.json();
       const { styles, metadata } = initData;
 
-      const perStyle = imagesPerStyle(formData.videoLength);
-      // styles[0].imagePrompts 길이 = perStyle 기대
-      const promptsToUse = (styles?.[0]?.imagePrompts || []).slice(0, perStyle);
-      const totalImages = (styles?.length || 0) * (promptsToUse?.length || 0);
+      // sceneCountPerConcept 우선 사용
+      const perStyle = imagesPerStyle(formData.videoLength, metadata?.sceneCountPerConcept);
+      // 각 style 의 imagePrompts 길이 보정 (혹시 서버가 덜 준 경우)
+      styles.forEach(s=>{
+        if(!Array.isArray(s.imagePrompts)) s.imagePrompts = [];
+        if(s.imagePrompts.length < perStyle){
+          const last = s.imagePrompts[s.imagePrompts.length-1];
+          while(s.imagePrompts.length < perStyle){
+            const idx = s.imagePrompts.length+1;
+            s.imagePrompts.push(last ? {
+              ...last,
+              sceneNumber: idx,
+              title:`Scene ${idx}`,
+              prompt: last.prompt
+            } : {
+              sceneNumber: idx,
+              title:`Scene ${idx}`,
+              duration:2,
+              prompt:`${s.style} auto-filled scene ${idx}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.`
+            });
+          }
+        } else if(s.imagePrompts.length > perStyle){
+          s.imagePrompts = s.imagePrompts.slice(0, perStyle);
+        }
+      });
+
+      const promptsToUseMap = styles.map(st => st.imagePrompts);
+      const totalImages = styles.length * perStyle;
       setImagesTotal(totalImages);
 
       setDebugInfo({
-        stylesCount: styles?.length || 0,
+        stylesCount: styles.length,
         perStyleScenes: perStyle,
         videoLength: formData.videoLength,
+        expectedTotal: totalImages
       });
 
-      log(`스토리보드 완료: 스타일 ${styles.length}개, 스타일당 장면 ${perStyle}개 (총 이미지 ${totalImages})`);
-      if(styles.length!==6){
-        log('[Z2] 경고: styles 길이 6이 아님 (파싱 실패 가능) 자동 이동 차단');
-      }
-      if(!promptsToUse.length){
-        log('[Z2] 경고: prompts 비어있음 (final JSON scenes 파싱 실패 가능) 자동 이동 차단');
-      }
+      log(`스토리보드 완료: 스타일 ${styles.length}개 · 스타일당 장면 ${perStyle}개 · 총 이미지 ${totalImages}`);
       setPercent(20);
 
-      const storyboard = [];
-      let successImages=0; // Z2: onNext 조건
+      let successImages=0;
+      if(styles.length && perStyle>0){
+        log('2/2 Freepik 이미지 생성 시작');
 
-      if(styles.length && promptsToUse.length){
-        log('2/2 이미지 생성 시작');
-        for (const style of styles) {
-          const images = [];
-          let localDone = 0;
-
-          const tasks = promptsToUse.map((p, idx) => async () => {
-            const promptToSend = p.prompt;
-            try {
-              log(`이미지 생성 요청: [${style.name}] Scene ${p.sceneNumber}`);
-              const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  prompt: promptToSend,
-                  sceneNumber: p.sceneNumber,
-                  title: p.title,
-                }),
-              });
-
-              if (!res.ok) {
-                const txt = await res.text().catch(() => '');
-                setImagesFail((f) => f + 1);
-                localDone++;
-                const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
-                setPercent(cur);
-                log(`이미지 생성 실패: [${style.name}] Scene ${p.sceneNumber} - ${res.status} ${txt}`);
-                return;
+        const tasks = [];
+        styles.forEach((style, styleIdx)=>{
+          (promptsToUseMap[styleIdx]||[]).forEach(p=>{
+            tasks.push(async ()=>{
+              const promptToSend = p.prompt;
+              try {
+                log(`이미지 생성 요청: [${style.style}] Scene ${p.sceneNumber}`);
+                const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    prompt: promptToSend,
+                    sceneNumber: p.sceneNumber,
+                    conceptId: style.concept_id,
+                    title: p.title
+                  }),
+                });
+                if(!res.ok){
+                  const txt = await res.text().catch(()=> '');
+                  setImagesFail(f=>f+1);
+                  log(`이미지 생성 실패: [${style.style}] Scene ${p.sceneNumber} - ${res.status} ${txt.slice(0,120)}`);
+                  return;
+                }
+                const data = await res.json();
+                if(!style.images) style.images=[];
+                style.images.push({
+                  id:`${style.concept_id}-${p.sceneNumber}-${Math.random().toString(36).slice(2,8)}`,
+                  sceneNumber:p.sceneNumber,
+                  title:p.title,
+                  url:data.url,
+                  thumbnail:data.url,
+                  prompt:promptToSend,
+                  duration:p.duration||2
+                });
+                setImagesDone(d=>d+1);
+                successImages++;
+                log(`이미지 생성 완료: [${style.style}] Scene ${p.sceneNumber}`);
+              }catch(e){
+                setImagesFail(f=>f+1);
+                log(`이미지 생성 예외: [${style.style}] Scene ${p.sceneNumber} - ${e.message}`);
+              }finally{
+                const doneCountRef = successImages + imagesFail;
+                setPercent(cur=>{
+                  const base = 20 + Math.round(((doneCountRef)/(totalImages))*80);
+                  return base>99?99:base;
+                });
               }
-
-              const data = await res.json();
-              images.push({
-                id: `${style.name?.toLowerCase?.().replace(/\s+/g, '-') || 'style'}-${idx + 1}`,
-                title: p.title,
-                url: data.url,
-                thumbnail: data.url,
-                prompt: promptToSend,
-                duration: p.duration,
-                sceneNumber: p.sceneNumber,
-              });
-              setImagesDone((d) => d + 1);
-              successImages++;
-              localDone++;
-              const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
-              setPercent(cur);
-              log(`이미지 생성 완료: [${style.name}] Scene ${p.sceneNumber}`);
-            } catch (e) {
-              setImagesFail((f) => f + 1);
-              localDone++;
-              const cur = Math.min(100, Math.round(20 + ((imagesDone + localDone + imagesFail) / totalImages) * 80));
-              setPercent(cur);
-              log(`이미지 생성 예외: [${style.name}] Scene ${p.sceneNumber} - ${e?.message || e}`);
-            }
+            });
           });
+        });
 
-          await runWithConcurrency(tasks, 4, (done, total) => {
-            const cur = Math.min(100, Math.round(20 + ((imagesDone + imagesFail + done) / totalImages) * 80));
-            setPercent(cur);
-          });
-
-          images.sort((a, b) => a.sceneNumber - b.sceneNumber);
-          storyboard.push({
-            style: style.name,
-            description: style.summary,
-            colorPalette: style.keywords?.join(',') || '',
-            images,
-          });
-        }
+        await runWithConcurrency(tasks, 6, ()=>{});
+        setPercent(100);
+        log(`이미지 생성 완료: 성공 ${imagesDone + successImages} / 실패 ${imagesFail} / 총 ${totalImages}`);
       } else {
-        log('[Z2] 이미지 생성 단계 스킵 (styles 또는 prompts 비어있음)');
+        log('이미지 생성 건너뜀: styles 또는 perStyle=0');
+        setPercent(100);
       }
-
-      setPercent(100);
-      log(`이미지 생성 완료: 성공 ${imagesDone} / 실패 ${imagesFail} / 총 ${imagesTotal}`);
 
       setStoryboard?.({
         success: true,
-        storyboard,
-        metadata: {
+        styles,
+        metadata:{
           ...metadata,
           perStyleCount: perStyle,
           createdAt: new Date().toISOString(),
-        },
+        }
       });
 
       setIsLoading?.(false);
 
-      // Z2: 최소 1장 이상 성공시에만 자동 이동
       if(successImages>0){
         onNext?.();
       } else {
-        log('[Z2] 자동 이동 차단: 성공 이미지 0 → 로그 확인 후 재시도');
+        log('성공 이미지 0 → 자동 이동 중단 (프롬프트/파싱 확인 필요)');
       }
+
     } catch (e) {
       console.error('Step2 오류:', e);
       log(`오류: ${e.message}`);
@@ -231,8 +242,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         <div className="mb-6">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">2단계: 스토리보드 생성 (2-STEP 체인)</h2>
           <p className="text-gray-600">
-            input_second_prompt.txt → final_prompt.txt 두 번만 Gemini 호출.  
-            scene 수 = 영상길이 ÷ 2초. 6개 컨셉 고정. (파싱 실패해도 6개 채움)
+            input_second_prompt.txt → final_prompt.txt 두 번만 Gemini 호출. 장면 수 = (영상길이 ÷ 2초). 6개 컨셉 × 장면 수 = 전체 이미지.
           </p>
         </div>
 
@@ -244,9 +254,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
         {debugInfo && (
           <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-700 rounded p-3 text-sm">
-            스타일 수: {debugInfo.stylesCount} · 스타일당 장면 수: {debugInfo.perStyleScenes} · 전체 이미지: {imagesTotal}
-            <br/>
-            진행: 성공 {imagesDone} · 실패 {imagesFail}
+            스타일 수: {debugInfo.stylesCount} · 스타일당 장면 수: {debugInfo.perStyleScenes} · 전체 이미지: {debugInfo.expectedTotal}
+            <br />
+            진행(실시간): 성공 {imagesDone} · 실패 {imagesFail}
           </div>
         )}
 
@@ -255,6 +265,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             <button
               onClick={onPrev}
               className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={isBusy}
             >
               이전 단계
             </button>
