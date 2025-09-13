@@ -5,8 +5,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /* =========================================================
    2-STEP CHAIN (input_second_prompt → final_prompt)
-   STEP1: 6개 컨셉 전략/묘사 (템플릿 내부 {duration} {scene_count} 치환)  // Z2M+
-   STEP2: 6개 컨셉 * sceneCountPerConcept 이미지 JSON (OVERRIDE 스키마)
+   STEP1: 6개 컨셉 전략/묘사 (템플릿 내부 {duration} {scene_count} {videoLengthSeconds} {targetSceneCount} 치환)
+   STEP2: 6개 컨셉 * sceneCountPerConcept 이미지 JSON (혹은 fallback) 생성
+   프롬프트 텍스트 자체 내용(문장) 변경 금지. 변수 치환만 추가.
 ========================================================= */
 
 /* ---------------- 텍스트 로더 ---------------- */
@@ -22,15 +23,16 @@ function loadTxt(name){
 }
 
 const INPUT_SECOND_PROMPT = loadTxt('input_second_prompt.txt'); // STEP1
-const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (OVERRIDE)
+const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (JSON)
 
 /* ---------------- 기본 유틸 ---------------- */
 function parseVideoLengthSeconds(raw){
-  if(raw==null) return 10;
-  if(typeof raw==='number') return raw;
-  const m = String(raw).match(/\d+/g);
+  if(raw == null) return 10;
+  if(typeof raw === 'number') return raw;
+  // 문자열에서 숫자만 추출 (예: "10초", " 10 s", "10s")
+  const m = String(raw).match(/\d+/);
   if(!m) return 10;
-  const n = parseInt(m.join(''),10);
+  const n = parseInt(m[0],10);
   return (isNaN(n)||n<=0)?10:n;
 }
 function calcSceneCountPerConcept(sec){
@@ -94,25 +96,27 @@ async function callGemini(genAI, prompt, label){
 }
 
 /* ---------------- STEP1 프롬프트 ---------------- */
-function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){ // Z2M+ duration & scene_count 치환
+function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
   if(!INPUT_SECOND_PROMPT) throw new Error('input_second_prompt.txt 누락');
-  // 기본 치환
+
+  // 원문 유지 + 변수 치환 (추가: {videoLengthSeconds} {targetSceneCount} {duration} {scene_count})
   let p = INPUT_SECOND_PROMPT
-    .replaceAll('{brandName}', String(fd.brandName||''))                 // 혹시 템플릿이 중괄호 스타일을 쓴 경우 대응
+    .replaceAll('{brandName}', String(fd.brandName||''))
     .replaceAll('{industryCategory}', String(fd.industryCategory||''))
     .replaceAll('{productServiceCategory}', String(fd.productServiceCategory||''))
     .replaceAll('{productServiceName}', String(fd.productServiceName||''))
     .replaceAll('{videoPurpose}', String(fd.videoPurpose||''))
-    .replaceAll('{videoLength}', String(fd.videoLength|| videoLengthSeconds+'초'))
+    .replaceAll('{videoLength}', String(fd.videoLength|| (videoLengthSeconds+'초')))
     .replaceAll('{coreTarget}', String(fd.coreTarget||''))
     .replaceAll('{coreDifferentiation}', String(fd.coreDifferentiation||''))
     .replaceAll('{videoRequirements}', String(fd.videoRequirements||''))
     .replaceAll('{brandLogo}', fd.brandLogo ? '업로드됨':'없음')
     .replaceAll('{productImage}', fd.productImage ? '업로드됨':'없음')
-    .replaceAll('{aspectRatioCode}', mapAspectRatio(fd));
+    .replaceAll('{aspectRatioCode}', mapAspectRatio(fd))
 
-  // 사용자 템플릿 안에서 “[컨셉명] (영상 길이: {duration}초, 총 {scene_count}씬)” 같은 패턴 치환
-  p = p
+    // 추가 치환
+    .replaceAll('{videoLengthSeconds}', String(videoLengthSeconds))
+    .replaceAll('{targetSceneCount}', String(sceneCountPerConcept))
     .replaceAll('{duration}', String(videoLengthSeconds))
     .replaceAll('{scene_count}', String(sceneCountPerConcept));
 
@@ -171,7 +175,7 @@ function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept)
     .map(c=>`- (${c.concept_id}) ${c.concept_name}: ${c.raw_block.slice(0,400)}`)
     .join('\n');
 
-  // 기존 final_prompt 변수를 치환 (targetSceneCount → sceneCountPerConcept)
+  // 기존 final_prompt 변수 치환 (scene count per concept = targetSceneCount)
   let base = FINAL_PROMPT
     .replaceAll('{phase1_output}', phase1Output)
     .replaceAll('{brandName}', String(fd.brandName||''))
@@ -180,7 +184,7 @@ function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept)
     .replaceAll('{industryCategory}', String(fd.industryCategory||''))
     .replaceAll('{coreTarget}', String(fd.coreTarget||''))
     .replaceAll('{videoPurpose}', String(fd.videoPurpose||''))
-    .replaceAll('{videoLength}', String(fd.videoLength|| videoLengthSeconds+'초'))
+    .replaceAll('{videoLength}', String(fd.videoLength|| (videoLengthSeconds+'초')))
     .replaceAll('{videoLengthSeconds}', String(videoLengthSeconds))
     .replaceAll('{targetSceneCount}', String(sceneCountPerConcept))
     .replaceAll('{coreDifferentiation}', String(fd.coreDifferentiation||''))
@@ -189,7 +193,7 @@ function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept)
     .replaceAll('{brandLogo}', fd.brandLogo ? '업로드됨':'없음')
     .replaceAll('{productImage}', fd.productImage ? '업로드됨':'없음');
 
-  // OVERRIDE – 다중 concepts JSON 스키마
+  // 다중 컨셉 JSON 강제 OVERRIDE
   const override = `
 [OVERRIDE MULTI-CONCEPT JSON OUTPUT – IGNORE ANY PREVIOUS SINGLE "scenes" SPEC]
 
@@ -226,7 +230,7 @@ Return EXACTLY ONE VALID JSON object:
           },
           "motion_prompt":{"prompt":"1-3 sentences (dynamic evolution only)"},
           "duration_seconds":2,
-          "notes":"optional production note"
+          "notes":"optional"
         }
       ]
     }
@@ -237,11 +241,11 @@ Return EXACTLY ONE VALID JSON object:
 MANDATORY RULES:
 - EXACTLY 6 concepts.
 - EACH concept has EXACTLY ${sceneCountPerConcept} scenes (no more, no less).
-- All scene_number cumulatively inside a concept = 1..${sceneCountPerConcept}.
-- Distinct prompts across concepts (no copy/paste).
-- high-fidelity tokens present; each prompt ends with camera sentence.
+- All scene_number inside a concept = 1..${sceneCountPerConcept}.
+- Distinct prompts across concepts.
+- high-fidelity tokens; each prompt ends with camera sentence.
 - Seeds: 5-digit (10000-99999) unique per (concept_id, scene_number).
-- Output ONLY the JSON (no markdown/code fences).
+- Output ONLY JSON.
 - Root keys ONLY: project_meta, concepts.
 
 REFERENCE CONCEPT MATERIAL:
@@ -274,7 +278,6 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
   if(!conceptJson?.concepts) return [];
   return conceptJson.concepts.map(c=>{
     let arr = Array.isArray(c.image_prompts)? c.image_prompts : [];
-    // 부족 보정
     if(arr.length < sceneCountPerConcept && arr.length>0){
       const last = arr[arr.length-1];
       while(arr.length < sceneCountPerConcept){
@@ -415,7 +418,7 @@ export default async function handler(req,res){
     res.status(200).json({
       success:true,
       styles,
-      imagePrompts: styles[0]?.imagePrompts || [], // 호환
+      imagePrompts: styles[0]?.imagePrompts || [],
       metadata:{
         videoLengthSeconds,
         sceneCountPerConcept,
