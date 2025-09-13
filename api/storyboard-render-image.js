@@ -45,7 +45,7 @@ async function safeFreepikCall(url, options, label = 'API') {
 
         if (isRetryableError(response.status, errorText) && attempt < MAX_RETRIES) {
           const delay = RETRY_DELAY * attempt;
-          console.log(`[${label}] ${delay}ms 후 재시도...`);
+            console.log(`[${label}] ${delay}ms 후 재시도...`);
           await sleep(delay);
           continue;
         }
@@ -207,20 +207,34 @@ export default async function handler(req, res) {
 
   try {
     // init.js에서 생성된 정확한 형식으로 받음
-    const { imagePrompt, sceneNumber, conceptId } = req.body || {};
+    let { imagePrompt, sceneNumber, conceptId, prompt } = req.body || {};
 
     console.log('[storyboard-render-image] 요청 수신:', {
       sceneNumber,
       conceptId,
       hasImagePrompt: !!imagePrompt,
-      promptPreview: imagePrompt?.prompt?.substring(0, 50) + '...'
+      legacyPrompt: !!prompt,
+      promptPreview: imagePrompt?.prompt?.substring(0, 50) || (prompt?.substring?.(0,50)+'...') || ''
     });
+
+    // ★ Z+: 하위 호환 - 구형 형식 {prompt, sceneNumber, conceptId} 만 온 경우 imagePrompt로 래핑
+    if(!imagePrompt && prompt){
+      imagePrompt = {
+        prompt,
+        negative_prompt: 'blurry, low quality, watermark, cartoon, distorted',
+        image: { size: 'widescreen_16_9' },
+        styling: { style: 'photo' },
+        seed: Math.floor(10000 + Math.random()*90000),
+        num_images: 1
+      };
+      console.log('[storyboard-render-image][Z+] 구형 요청을 imagePrompt로 래핑 적용');
+    }
 
     // imagePrompt 검증 (init.js 결과물 형식)
     if (!imagePrompt || !imagePrompt.prompt || typeof imagePrompt.prompt !== 'string' || imagePrompt.prompt.trim().length < 5) {
       console.error('[storyboard-render-image] 유효하지 않은 imagePrompt:', imagePrompt);
       return res.status(400).json({ 
-        error: 'Valid imagePrompt required from storyboard-init',
+        error: 'Valid imagePrompt required from storyboard-init (or legacy prompt)',
         received: imagePrompt
       });
     }
@@ -267,7 +281,7 @@ export default async function handler(req, res) {
         metadata: {
           sceneNumber,
           conceptId,
-          promptUsed: imagePrompt.prompt.substring(0, 100) + '...',
+            promptUsed: imagePrompt.prompt.substring(0, 100) + '...',
           apiProvider: 'Freepik 2025',
           size: imagePrompt.image?.size,
           style: imagePrompt.styling?.style,
