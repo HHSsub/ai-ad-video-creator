@@ -104,9 +104,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const initData = await initRes.json();
       const { styles, metadata } = initData;
 
-      // sceneCountPerConcept 우선 사용
       const perStyle = imagesPerStyle(formData.videoLength, metadata?.sceneCountPerConcept);
-      // 각 style 의 imagePrompts 길이 보정 (혹시 서버가 덜 준 경우)
       styles.forEach(s=>{
         if(!Array.isArray(s.imagePrompts)) s.imagePrompts = [];
         if(s.imagePrompts.length < perStyle){
@@ -130,7 +128,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         }
       });
 
-      const promptsToUseMap = styles.map(st => st.imagePrompts);
       const totalImages = styles.length * perStyle;
       setImagesTotal(totalImages);
 
@@ -149,8 +146,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         log('2/2 Freepik 이미지 생성 시작');
 
         const tasks = [];
-        styles.forEach((style, styleIdx)=>{
-          (promptsToUseMap[styleIdx]||[]).forEach(p=>{
+        styles.forEach(style=>{
+          style.images = []; // 초기화
+          (style.imagePrompts||[]).forEach(p=>{
             tasks.push(async ()=>{
               const promptToSend = p.prompt;
               try {
@@ -172,16 +170,30 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                   return;
                 }
                 const data = await res.json();
-                if(!style.images) style.images=[];
-                style.images.push({
+                if(!data.success || !data.url){
+                  setImagesFail(f=>f+1);
+                  log(`이미지 생성 응답 이상: [${style.style}] Scene ${p.sceneNumber}`);
+                  return;
+                }
+                const imgObj = {
                   id:`${style.concept_id}-${p.sceneNumber}-${Math.random().toString(36).slice(2,8)}`,
                   sceneNumber:p.sceneNumber,
                   title:p.title,
                   url:data.url,
                   thumbnail:data.url,
                   prompt:promptToSend,
-                  duration:p.duration||2
-                });
+                  duration:p.duration||2,
+                  // image_prompt 객체 저장 (Step3 재사용 대비) ------------- FIX
+                  image_prompt:{
+                    prompt: promptToSend,
+                    negative_prompt: 'blurry, low quality, watermark, cartoon, distorted',
+                    num_images:1,
+                    image:{ size:'widescreen_16_9' },
+                    styling:{ style:'photo' },
+                    seed: Math.floor(10000 + Math.random()*90000)
+                  }
+                };
+                style.images.push(imgObj);
                 setImagesDone(d=>d+1);
                 successImages++;
                 log(`이미지 생성 완료: [${style.style}] Scene ${p.sceneNumber}`);
@@ -199,7 +211,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           });
         });
 
-        await runWithConcurrency(tasks, 6, ()=>{});
+        await runWithConcurrency(tasks, 8, ()=>{});
         setPercent(100);
         log(`이미지 생성 완료: 성공 ${imagesDone + successImages} / 실패 ${imagesFail} / 총 ${totalImages}`);
       } else {
