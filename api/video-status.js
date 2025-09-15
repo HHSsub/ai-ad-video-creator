@@ -1,4 +1,4 @@
-// 향상된 비디오 상태 폴링 시스템 - 2025년 Freepik MiniMax Hailuo-02 API 호환
+// api/video-status.js - Freepik Kling v2.1 Pro 공식문서 기반 폴링 시스템
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const CACHE = new Map(); // taskId -> { status, videoUrl, sceneNumber, updatedAt }
 const MAX_RETRIES = 3;
@@ -6,7 +6,6 @@ const RETRY_DELAY = 1000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// 에러 재시도 가능 여부 판단
 function isRetryableError(error, statusCode) {
   if ([429, 500, 502, 503, 504].includes(statusCode)) return true;
   const message = error?.message?.toLowerCase() || '';
@@ -16,17 +15,14 @@ function isRetryableError(error, statusCode) {
          message.includes('overload');
 }
 
-// 안정적인 API 호출
 async function safeApiCall(url, options, label) {
   let lastError;
-  
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(url, {
         ...options,
         timeout: 30000
       });
-      
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         if (isRetryableError({message: errorText}, response.status) && attempt < MAX_RETRIES) {
@@ -36,13 +32,10 @@ async function safeApiCall(url, options, label) {
         }
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
-      
       return await response.json();
-      
     } catch (error) {
       lastError = error;
       console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
-      
       if (attempt < MAX_RETRIES && isRetryableError(error, null)) {
         await sleep(RETRY_DELAY * attempt);
         continue;
@@ -50,15 +43,14 @@ async function safeApiCall(url, options, label) {
       break;
     }
   }
-  
   throw lastError;
 }
 
-// 단일 태스크 상태 확인 - 2025년 Freepik API 스펙
+// 단일 태스크 상태 확인 - Kling v2.1 Pro API 스펙
 async function checkSingleTaskStatus(taskId, apiKey) {
-  // 🔥 정확한 2025년 Freepik MiniMax Hailuo-02 상태 확인 엔드포인트
-  const url = `${FREEPIK_API_BASE}/ai/image-to-video/kling-1024p/${taskId}`;
-  
+  // Kling 공식 엔드포인트
+  const url = `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1/${taskId}`;
+
   const options = {
     method: 'GET',
     headers: {
@@ -66,47 +58,34 @@ async function checkSingleTaskStatus(taskId, apiKey) {
       'User-Agent': 'AI-Ad-Creator/2025'
     }
   };
-  
+
   try {
     const data = await safeApiCall(url, options, `status-${taskId.substring(0, 8)}`);
-    
+
     console.log(`[checkSingleTaskStatus] ${taskId.substring(0, 8)} 원본 응답:`, JSON.stringify(data, null, 2));
-    
+
     const taskData = data.data || data;
     const status = String(taskData.status || 'UNKNOWN').toUpperCase();
-    
+
     console.log(`[checkSingleTaskStatus] ${taskId.substring(0, 8)}: ${status}`);
-    
-    // 상태 정규화 - 2025년 Freepik API 기준
+
+    // 상태 정규화
     let normalizedStatus;
     let videoUrl = null;
-    
+
     if (status === 'COMPLETED' || status === 'SUCCESS') {
       normalizedStatus = 'completed';
-      
-      // 2025년 Freepik MiniMax Hailuo-02 응답 구조에서 비디오 URL 추출
-      if (taskData.video && taskData.video.url) {
-        videoUrl = taskData.video.url;
-      } else if (taskData.result && Array.isArray(taskData.result) && taskData.result[0]?.url) {
-        videoUrl = taskData.result[0].url;
-      } else if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated[0]) {
+      if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated[0]) {
         videoUrl = taskData.generated[0];
-      } else if (taskData.output && taskData.output.url) {
-        videoUrl = taskData.output.url;
-      } else if (typeof taskData.video === 'string') {
-        videoUrl = taskData.video;
       }
-      
-      console.log(`[checkSingleTaskStatus] ${taskId.substring(0, 8)} 비디오 URL:`, videoUrl);
-      
     } else if (status === 'FAILED' || status === 'ERROR') {
       normalizedStatus = 'failed';
     } else if (['PROCESSING', 'IN_PROGRESS', 'QUEUED', 'PENDING', 'GENERATING'].includes(status)) {
       normalizedStatus = 'in_progress';
     } else {
-      normalizedStatus = 'in_progress'; // 기본값으로 진행 중 처리
+      normalizedStatus = 'in_progress';
     }
-    
+
     return {
       success: true,
       status: normalizedStatus,
@@ -114,11 +93,9 @@ async function checkSingleTaskStatus(taskId, apiKey) {
       providerStatus: status,
       data: taskData
     };
-    
+
   } catch (error) {
     console.error(`[checkSingleTaskStatus] ${taskId.substring(0, 8)} 실패:`, error.message);
-    
-    // 캐시에서 이전 상태 확인
     const cached = CACHE.get(taskId);
     if (cached) {
       console.log(`[checkSingleTaskStatus] 캐시된 상태 사용: ${taskId.substring(0, 8)}`);
@@ -131,7 +108,6 @@ async function checkSingleTaskStatus(taskId, apiKey) {
         fromCache: true
       };
     }
-    
     return {
       success: false,
       status: 'error',
@@ -147,15 +123,13 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Max-Age', '86400');
-  
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const startTime = Date.now();
-
   try {
     const { tasks } = req.body || {};
-    
     if (!Array.isArray(tasks) || !tasks.length) {
       return res.status(400).json({ error: 'tasks array is required' });
     }
@@ -165,14 +139,12 @@ export default async function handler(req, res) {
       taskIds: tasks.map(t => t.taskId?.substring(0, 8)).join(', ')
     });
 
-    // API 키 확인
     const apiKey = process.env.FREEPIK_API_KEY ||
                    process.env.REACT_APP_FREEPIK_API_KEY ||
                    process.env.VITE_FREEPIK_API_KEY;
 
     if (!apiKey) {
       console.error('[video-status] Freepik API 키 없음');
-      // API 키가 없어도 캐시된 상태라도 반환
       const segments = tasks.map(task => {
         const cached = CACHE.get(task.taskId);
         return {
@@ -186,7 +158,6 @@ export default async function handler(req, res) {
           error: 'API 키 없음'
         };
       });
-
       return res.status(200).json({
         success: false,
         error: 'API 키가 설정되지 않았습니다',
@@ -196,11 +167,8 @@ export default async function handler(req, res) {
     }
 
     const segments = [];
-    
-    // 각 태스크 상태 확인 (병렬 처리)
     const statusPromises = tasks.map(async (task) => {
       const { taskId, sceneNumber, title, duration } = task;
-      
       if (!taskId) {
         return {
           sceneNumber: sceneNumber || 1,
@@ -208,15 +176,12 @@ export default async function handler(req, res) {
           taskId: 'NO_TASK_ID',
           status: 'error',
           videoUrl: null,
-          duration: duration || 6,
+          duration: duration || 5,
           providerStatus: 'NO_TASK_ID'
         };
       }
-
       try {
         const result = await checkSingleTaskStatus(taskId, apiKey);
-        
-        // 캐시 업데이트
         if (result.success) {
           CACHE.set(taskId, {
             status: result.status,
@@ -225,38 +190,34 @@ export default async function handler(req, res) {
             updatedAt: Date.now()
           });
         }
-        
         return {
           sceneNumber: sceneNumber || 1,
           title: title || `Scene ${sceneNumber || 1}`,
           taskId,
           status: result.status,
           videoUrl: result.videoUrl,
-          duration: duration || 6,
+          duration: duration || 5,
           providerStatus: result.providerStatus,
           fromCache: result.fromCache || false,
           error: result.error
         };
-        
       } catch (error) {
         console.error(`[video-status] Task ${taskId?.substring(0, 8)} 처리 실패:`, error.message);
-        
         return {
           sceneNumber: sceneNumber || 1,
           title: title || `Scene ${sceneNumber || 1}`,
           taskId,
           status: 'error',
           videoUrl: null,
-          duration: duration || 6,
+          duration: duration || 5,
           providerStatus: 'ERROR',
           error: error.message
         };
       }
     });
 
-    // 모든 상태 확인 완료 대기
     const results = await Promise.allSettled(statusPromises);
-    
+
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         segments.push(result.value);
@@ -269,14 +230,13 @@ export default async function handler(req, res) {
           taskId: task?.taskId || 'UNKNOWN',
           status: 'error',
           videoUrl: null,
-          duration: task?.duration || 6,
+          duration: task?.duration || 5,
           providerStatus: 'PROMISE_REJECTED',
           error: result.reason?.message || 'Promise rejected'
         });
       }
     });
 
-    // 통계 계산
     const completed = segments.filter(s => s.status === 'completed');
     const ready = segments.filter(s => s.status === 'completed' && s.videoUrl);
     const inProgress = segments.filter(s => s.status === 'in_progress');
@@ -292,7 +252,6 @@ export default async function handler(req, res) {
     };
 
     const processingTime = Date.now() - startTime;
-
     console.log('[video-status] 완료:', {
       처리시간: processingTime + 'ms',
       총태스크: summary.total,
@@ -316,21 +275,17 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[video-status] 전체 오류:', error);
-    
     const processingTime = Date.now() - startTime;
-    
-    // 오류 발생시에도 기본 구조 반환
     const fallbackSegments = (req.body?.tasks || []).map((task, index) => ({
       sceneNumber: task?.sceneNumber || index + 1,
       title: task?.title || `Scene ${index + 1}`,
       taskId: task?.taskId || 'ERROR',
       status: 'error',
       videoUrl: null,
-      duration: task?.duration || 6,
+      duration: task?.duration || 5,
       providerStatus: 'HANDLER_ERROR',
       error: error.message
     }));
-
     res.status(200).json({
       success: false,
       error: error.message,
@@ -355,12 +310,11 @@ export default async function handler(req, res) {
 // 캐시 정리 (메모리 관리)
 setInterval(() => {
   const now = Date.now();
-  const maxAge = 24 * 60 * 60 * 1000; // 24시간
-  
+  const maxAge = 24 * 60 * 60 * 1000;
   for (const [taskId, data] of CACHE.entries()) {
     if (now - data.updatedAt > maxAge) {
       CACHE.delete(taskId);
       console.log(`[video-status] 캐시 정리: ${taskId.substring(0, 8)}`);
     }
   }
-}, 60 * 60 * 1000); // 1시간마다 정리
+}, 60 * 60 * 1000);
