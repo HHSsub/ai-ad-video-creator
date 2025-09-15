@@ -1,10 +1,10 @@
-// api/storyboard-render-image.js - 🔥 Freepik API styling.colors 수정 버전
+// api/storyboard-render-image.js - Freepik API styling.colors 수정 버전 (프롬프트 절대 자르지 않음)
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 3000;
-const POLLING_TIMEOUT = 120000; // 2분 타임아웃
-const POLLING_INTERVAL = 3000; // 3초마다 폴링
+const POLLING_TIMEOUT = 120000;
+const POLLING_INTERVAL = 3000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -21,7 +21,6 @@ function isRetryableError(statusCode, errorMessage) {
 // 안전한 API 호출
 async function safeFreepikCall(url, options, label = 'API') {
   let lastError;
-
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES}`);
@@ -77,14 +76,13 @@ async function safeFreepikCall(url, options, label = 'API') {
   throw lastError || new Error(`${label} 최대 재시도 초과`);
 }
 
-// 태스크 상태 폴링 (비동기 완료 대기)
+// 태스크 상태 폴링
 async function pollTaskStatus(taskId, apiKey) {
   const startTime = Date.now();
-  
   while (Date.now() - startTime < POLLING_TIMEOUT) {
     try {
       console.log(`[pollTaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중...`);
-      
+
       const response = await fetch(`${FREEPIK_API_BASE}/ai/text-to-image/flux-dev/${taskId}`, {
         method: 'GET',
         headers: {
@@ -100,15 +98,14 @@ async function pollTaskStatus(taskId, apiKey) {
       }
 
       const result = await response.json();
-      console.log(`[pollTaskStatus] 응답:`, JSON.stringify(result, null, 2));
+      console.log(`[pollTaskStatus] 응답:`, result);
 
-      // 단일 태스크 응답 처리
       if (result.data) {
         const taskData = result.data;
         const status = taskData.status;
-        
+
         console.log(`[pollTaskStatus] 태스크 상태: ${status}`);
-        
+
         if (status === 'COMPLETED') {
           if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated.length > 0) {
             const imageUrl = taskData.generated[0];
@@ -129,47 +126,43 @@ async function pollTaskStatus(taskId, apiKey) {
           continue;
         }
       }
-      
+
       await sleep(POLLING_INTERVAL);
-      
+
     } catch (error) {
       console.error(`[pollTaskStatus] 폴링 오류:`, error.message);
       await sleep(POLLING_INTERVAL);
     }
   }
-  
+
   throw new Error(`태스크 ${taskId} 타임아웃 (${POLLING_TIMEOUT / 1000}초 초과)`);
 }
 
-// 🔥 FIX: Freepik Flux Dev API 호출 + 올바른 styling.colors 설정
+// Freepik Flux Dev API 호출 + 올바른 styling.colors 설정
 async function generateImageWithFreepik(imagePrompt, apiKey) {
   console.log('[generateImageWithFreepik] Flux Dev 모델 사용 + 폴링:', {
-    prompt: imagePrompt.prompt?.substring(0, 100) + '...',
+    prompt: imagePrompt.prompt,
     size: imagePrompt.image?.size,
     style: imagePrompt.styling?.style,
     seed: imagePrompt.seed
   });
 
-  // ✅ 올바른 Flux Dev 엔드포인트
   const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image/flux-dev`;
 
-  // 🔥 FIX: styling.colors 배열에 최소 1개 색상 추가 (validation 오류 해결)
   const requestBody = {
     prompt: imagePrompt.prompt,
     aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
     styling: {
       effects: {},
-      // 🔥 CRITICAL FIX: colors 배열이 비어있으면 validation 오류 발생
-      // 최소 1개 색상 객체 필요 (Freepik API 필수 요구사항)
       colors: [
         {
-          color: "#2563EB", // 기본 파란색
+          color: "#2563EB",
           weight: 0.3
         }
       ]
     },
     seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
-    webhook_url: null // 동기 처리 (폴링 사용)
+    webhook_url: null
   };
 
   const options = {
@@ -184,17 +177,15 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
 
   console.log('[generateImageWithFreepik] API 요청:', {
     endpoint,
-    prompt: requestBody.prompt.substring(0, 100) + '...',
+    prompt: requestBody.prompt,
     aspect_ratio: requestBody.aspect_ratio,
     seed: requestBody.seed,
-    colorsCount: requestBody.styling.colors.length // 🔥 색상 개수 확인
+    colorsCount: requestBody.styling.colors.length
   });
 
   try {
-    // 1. 태스크 생성
     const result = await safeFreepikCall(endpoint, options, 'flux-dev-create');
-    
-    console.log('[generateImageWithFreepik] 태스크 생성 응답:', JSON.stringify(result, null, 2));
+    console.log('[generateImageWithFreepik] 태스크 생성 응답:', result);
 
     if (!result.data || !result.data.task_id) {
       throw new Error('태스크 ID를 받지 못했습니다');
@@ -203,7 +194,6 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
     const taskId = result.data.task_id;
     console.log(`[generateImageWithFreepik] 태스크 생성 완료: ${taskId}`);
 
-    // 2. 태스크 완료까지 폴링
     const imageUrl = await pollTaskStatus(taskId, apiKey);
 
     return {
@@ -237,7 +227,6 @@ function generateFallbackImage(sceneNumber, conceptId) {
 }
 
 export default async function handler(req, res) {
-  // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -256,7 +245,7 @@ export default async function handler(req, res) {
       conceptId,
       hasImagePrompt: !!imagePrompt,
       legacyPrompt: !!prompt,
-      promptPreview: imagePrompt?.prompt?.substring(0, 50) || (prompt?.substring?.(0,50)+'...') || ''
+      prompt: imagePrompt?.prompt || prompt || ''
     });
 
     // 하위 호환 - 구형 형식 지원
@@ -272,7 +261,6 @@ export default async function handler(req, res) {
       console.log('[storyboard-render-image] 구형 요청을 imagePrompt로 래핑');
     }
 
-    // imagePrompt 검증
     if (!imagePrompt || !imagePrompt.prompt || typeof imagePrompt.prompt !== 'string' || imagePrompt.prompt.trim().length < 5) {
       console.error('[storyboard-render-image] 유효하지 않은 imagePrompt:', imagePrompt);
       return res.status(400).json({ 
@@ -281,7 +269,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // API 키 확인
     const apiKey = process.env.FREEPIK_API_KEY ||
                   process.env.VITE_FREEPIK_API_KEY ||
                   process.env.REACT_APP_FREEPIK_API_KEY;
@@ -302,7 +289,6 @@ export default async function handler(req, res) {
     console.log('[storyboard-render-image] API 키 확인:', apiKey.substring(0, 10) + '...');
 
     try {
-      // ✅ 수정된 Freepik API 호출 (styling.colors 수정 포함)
       const result = await generateImageWithFreepik(imagePrompt, apiKey);
 
       const processingTime = Date.now() - startTime;
@@ -310,7 +296,7 @@ export default async function handler(req, res) {
       console.log('[storyboard-render-image] ✅ 성공 완료:', {
         sceneNumber,
         conceptId,
-        imageUrl: result.imageUrl.substring(0, 60) + '...',
+        imageUrl: result.imageUrl,
         processingTime: processingTime + 'ms',
         taskId: result.taskId
       });
@@ -324,20 +310,19 @@ export default async function handler(req, res) {
         metadata: {
           sceneNumber,
           conceptId,
-          promptUsed: imagePrompt.prompt.substring(0, 100) + '...',
+          promptUsed: imagePrompt.prompt, // 절대 자르지 않음
           apiProvider: 'Freepik Flux Dev 2025',
           size: imagePrompt.image?.size,
           style: imagePrompt.styling?.style,
           seed: imagePrompt.seed,
           taskId: result.taskId,
-          colorsFixed: true // 🔥 색상 수정 완료 표시
+          colorsFixed: true
         }
       });
 
     } catch (freepikError) {
       console.error('[storyboard-render-image] Freepik 호출 실패:', freepikError.message);
 
-      // Freepik 실패 시 폴백 이미지 사용
       const fallbackUrl = generateFallbackImage(sceneNumber, conceptId);
 
       return res.status(200).json({
@@ -349,7 +334,7 @@ export default async function handler(req, res) {
         metadata: {
           sceneNumber,
           conceptId,
-          promptUsed: imagePrompt.prompt.substring(0, 100) + '...',
+          promptUsed: imagePrompt.prompt, // 절대 자르지 않음
           apiProvider: 'Fallback',
           originalError: freepikError.message
         }
