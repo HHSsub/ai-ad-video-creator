@@ -1,4 +1,4 @@
-// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반, 엔드포인트/파라미터/로그 100% 일치, duration 오류 완벽 방어 (단 한줄도 생략 없음)
+// api/image-to-video.js - Freepik Kling v2.1 Pro, duration(문자열), 공식필드만, 모든 로그/에러/요청정보 출력
 
 import 'dotenv/config';
 
@@ -7,19 +7,16 @@ const KLING_ENDPOINT = `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRY = 5;
 
-// 금지 카메라 브랜드/패턴
 const CAMERA_BRAND_REGEX = /\b(Canon|Nikon|Sony|Fujifilm|Fuji|Panasonic|Leica|Hasselblad|EOS|Alpha|Lumix|R5|R6|Z6|A7R|A7S|GFX)\b/gi;
 
 function sanitizeCameraSegments(text) {
   if (!text) return '';
   let t = text.replace(CAMERA_BRAND_REGEX, 'professional');
-  // 선두가 Camera: 로 시작하면 후반부로 이동
   const trimmed = t.trim();
   if (/^camera:/i.test(trimmed)) {
     const without = trimmed.replace(/^camera:\s*/i, '');
     t = `${without} (technical: professional focal length framing)`;
   }
-  // 문장 중간 반복 'Camera:' 제거
   t = t.replace(/Camera:\s*/gi, '');
   return t;
 }
@@ -42,10 +39,8 @@ function optimizeVideoPrompt(rawPrompt, formData) {
 
   if (!head) head = 'Commercial brand scenario';
 
-  // base 앞에 붙이되 base에 이미 브랜드/타겟이 있으면 중복 줄임
   const duplicateCheck = new RegExp(formData?.brandName || '', 'i');
   let merged = duplicateCheck.test(base) ? base : `${head}. ${base}`;
-  // 길이 제한
   if (merged.length < 60) merged += ' high quality commercial narrative, product usage clearly visible.';
   merged = merged.slice(0, 1800);
   return merged;
@@ -104,13 +99,12 @@ export default async function handler(req, res) {
       cfg_scale,
       static_mask,
       dynamic_masks,
-      sceneNumber,
-      conceptId,
-      title,
+      // sceneNumber,
+      // conceptId,
+      // title,
       formData = {}
     } = req.body || {};
 
-    // 필수 인자 체크
     if (!imageUrl) {
       console.error('[image-to-video] 필수 imageUrl 없음!');
       return res.status(400).json({ error:'imageUrl required' });
@@ -126,46 +120,29 @@ export default async function handler(req, res) {
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
-    // duration 검증 및 보정 (공식문서: 5 또는 10만 허용)
     let validDuration = parseInt(duration, 10);
     if (![5,10].includes(validDuration)) {
       console.warn('[image-to-video] duration이 5 또는 10이 아님. 기본값 5로 보정');
       validDuration = 5;
     }
 
-    // Kling v2.1 Pro 공식 인자만 포함
+    // 공식문서 기반 인자만 남김 (duration은 반드시 문자열 "5"/"10"로 보냄)
     const requestBody = {
-      webhook_url: null,
       image: imageUrl,
       image_tail: imageTail,
       prompt: optimized,
       negative_prompt: negativePrompt || 'blurry, low quality, watermark, cartoon, distorted',
-      duration: validDuration,
-      cfg_scale,
-      static_mask,
-      dynamic_masks
+      duration: String(validDuration)
     };
-
-    // undefined/null/빈배열 필드 자동 제거
-    Object.keys(requestBody).forEach(key => {
-      if (
-        requestBody[key] === undefined ||
-        requestBody[key] === null ||
-        (Array.isArray(requestBody[key]) && requestBody[key].length === 0)
-      ) {
-        delete requestBody[key];
-      }
-    });
-
-    // 공식문서에 없는 인자(예: aspect_ratio, prompt_optimizer 등) 절대 포함하지 않음
+    if (cfg_scale !== undefined) requestBody.cfg_scale = cfg_scale;
+    if (static_mask !== undefined) requestBody.static_mask = static_mask;
+    if (dynamic_masks !== undefined && Array.isArray(dynamic_masks) && dynamic_masks.length > 0) requestBody.dynamic_masks = dynamic_masks;
 
     console.log('[image-to-video] 최종 요청 파라미터:', JSON.stringify({
       endpoint: KLING_ENDPOINT,
-      ...requestBody,
-      sceneNumber, conceptId, title, formData
+      ...requestBody
     }));
 
-    // API 호출 및 로그 강화
     const result = await safeFreepikCall(
       KLING_ENDPOINT,
       {
@@ -178,7 +155,7 @@ export default async function handler(req, res) {
         body: JSON.stringify(requestBody)
       },
       'image-to-video-kling',
-      {requestBody, sceneNumber, conceptId, title, formData}
+      {requestBody}
     );
 
     if (!result.data?.task_id) {
@@ -190,9 +167,6 @@ export default async function handler(req, res) {
       success:true,
       task:{
         taskId: result.data.task_id,
-        conceptId: conceptId || null,
-        sceneNumber: sceneNumber || null,
-        title: title || null,
         duration: validDuration,
         createdAt: new Date().toISOString()
       },
@@ -204,7 +178,6 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    // 내부 로그에 모든 정보 남기기
     console.error('[image-to-video-kling] 전체 실패:', error);
     res.status(500).json({
       success:false,
