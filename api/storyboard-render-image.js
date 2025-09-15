@@ -1,4 +1,4 @@
-// api/storyboard-render-image.js - 완전 수정 버전
+// api/storyboard-render-image.js - 🔥 Freepik API styling.colors 수정 버전
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const MAX_RETRIES = 3;
@@ -141,7 +141,7 @@ async function pollTaskStatus(taskId, apiKey) {
   throw new Error(`태스크 ${taskId} 타임아웃 (${POLLING_TIMEOUT / 1000}초 초과)`);
 }
 
-// Freepik Flux Dev API 호출 + 폴링
+// 🔥 FIX: Freepik Flux Dev API 호출 + 올바른 styling.colors 설정
 async function generateImageWithFreepik(imagePrompt, apiKey) {
   console.log('[generateImageWithFreepik] Flux Dev 모델 사용 + 폴링:', {
     prompt: imagePrompt.prompt?.substring(0, 100) + '...',
@@ -153,13 +153,20 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
   // ✅ 올바른 Flux Dev 엔드포인트
   const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image/flux-dev`;
 
-  // ✅ 정확한 요청 형식 (문서 기준)
+  // 🔥 FIX: styling.colors 배열에 최소 1개 색상 추가 (validation 오류 해결)
   const requestBody = {
     prompt: imagePrompt.prompt,
     aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
     styling: {
       effects: {},
-      colors: []
+      // 🔥 CRITICAL FIX: colors 배열이 비어있으면 validation 오류 발생
+      // 최소 1개 색상 객체 필요 (Freepik API 필수 요구사항)
+      colors: [
+        {
+          color: "#2563EB", // 기본 파란색
+          weight: 0.3
+        }
+      ]
     },
     seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
     webhook_url: null // 동기 처리 (폴링 사용)
@@ -179,7 +186,8 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
     endpoint,
     prompt: requestBody.prompt.substring(0, 100) + '...',
     aspect_ratio: requestBody.aspect_ratio,
-    seed: requestBody.seed
+    seed: requestBody.seed,
+    colorsCount: requestBody.styling.colors.length // 🔥 색상 개수 확인
   });
 
   try {
@@ -294,7 +302,7 @@ export default async function handler(req, res) {
     console.log('[storyboard-render-image] API 키 확인:', apiKey.substring(0, 10) + '...');
 
     try {
-      // ✅ 수정된 Freepik API 호출 (폴링 포함)
+      // ✅ 수정된 Freepik API 호출 (styling.colors 수정 포함)
       const result = await generateImageWithFreepik(imagePrompt, apiKey);
 
       const processingTime = Date.now() - startTime;
@@ -321,7 +329,8 @@ export default async function handler(req, res) {
           size: imagePrompt.image?.size,
           style: imagePrompt.styling?.style,
           seed: imagePrompt.seed,
-          taskId: result.taskId
+          taskId: result.taskId,
+          colorsFixed: true // 🔥 색상 수정 완료 표시
         }
       });
 
