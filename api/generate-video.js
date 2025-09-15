@@ -1,20 +1,9 @@
-// api/generate-video.js
-// - 여러 장면에 대해 비디오 변환 요청
-// - aspect_ratio, 브랜드/제품/타겟 컨텍스트 우선 반영
-// - 카메라 브랜드 제거 & "Camera:" 선두 제거
+// api/generate-video.js - Freepik Kling v2.1 Pro 공식문서 기반 완전수정
+// 기존 모든 minimax-hailuo-768p, kling-1024p 흔적 완전 제거. 엔드포인트/파라미터 100% 공식문서 일치.
 
 import 'dotenv/config';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-function mapUserAspectRatio(value) {
-  if (!value) return 'widescreen_16_9';
-  if (typeof value !== 'string') return 'widescreen_16_9';
-  if (value.includes('16:9') || value.includes('가로')) return 'widescreen_16_9';
-  if (value.includes('9:16') || value.includes('세로')) return 'vertical_9_16';
-  if (value.includes('1:1') || value.includes('정사각')) return 'square_1_1';
-  return 'widescreen_16_9';
-}
 
 const CAMERA_BRAND_REGEX = /\b(Canon|Nikon|Sony|Fujifilm|Fuji|Panasonic|Leica|Hasselblad|EOS|Alpha|Lumix|R5|R6|Z6|A7R|A7S|GFX)\b/gi;
 
@@ -97,18 +86,15 @@ export default async function handler(req,res) {
 
     formData.brandLogoProvided = !!(formData.brandLogoProvided || formData.brandLogo);
     formData.productImageProvided = !!(formData.productImageProvided || formData.productImage);
-    const aspectRatioCode = mapUserAspectRatio(formData.videoAspectRatio);
 
     console.log('[generate-video] 시작:', {
       style: selectedStyle,
       imageCount: selectedImages.length,
-      aspectRatio: formData.videoAspectRatio,
-      aspectRatioCode,
       brandLogoProvided: formData.brandLogoProvided,
       productImageProvided: formData.productImageProvided
     });
 
-    const providerDuration = 6;
+    const providerDuration = 5; // Kling 공식 기본값
     const inputs = selectedImages.map((image,i)=>({ image,i }));
     const segments = [];
     const failed = [];
@@ -118,21 +104,32 @@ export default async function handler(req,res) {
         if (!image.url) throw new Error('Image URL is required');
         const prompt = buildVideoPrompt(image, formData);
 
+        // Kling v2.1 Pro 공식문서 기반 파라미터
         const payload = {
-          prompt,
-          first_frame_image: image.url,
-          duration: providerDuration,
-            aspect_ratio: aspectRatioCode,
           webhook_url: null,
-          prompt_optimizer: true
+          image: image.url,
+          prompt: prompt,
+          negative_prompt: 'blurry, low quality, watermark, cartoon, distorted',
+          duration: providerDuration,
         };
 
-        console.log(`[generate-video] POST ${i+1}/${selectedImages.length}`, {
-          promptPreview: prompt.slice(0,120)+(prompt.length>120?'...':''),
-          aspect_ratio: aspectRatioCode
+        // undefined/null/빈 배열 자동 제거
+        Object.keys(payload).forEach(key => {
+          if (
+            payload[key] === undefined ||
+            payload[key] === null ||
+            (Array.isArray(payload[key]) && payload[key].length === 0)
+          ) {
+            delete payload[key];
+          }
         });
 
-        const r = await fetch('https://api.freepik.com/v1/ai/image-to-video/kling-1024p',{
+        console.log(`[generate-video] POST ${i+1}/${selectedImages.length}`, {
+          endpoint: 'https://api.freepik.com/v1/ai/image-to-video/kling-v2-1-pro',
+          promptPreview: prompt.slice(0,120)+(prompt.length>120?'...':'')
+        });
+
+        const r = await fetch('https://api.freepik.com/v1/ai/image-to-video/kling-v2-1-pro',{
           method:'POST',
           headers:{ 'Content-Type':'application/json','x-freepik-api-key':apiKey },
           body: JSON.stringify(payload)
@@ -154,8 +151,6 @@ export default async function handler(req,res) {
           status: 'in_progress',
           duration: providerDuration,
           prompt,
-          aspectRatio: formData.videoAspectRatio || null,
-          aspectRatioCode,
           brandLogoProvided: formData.brandLogoProvided,
           productImageProvided: formData.productImageProvided,
           createdAt: new Date().toISOString()
@@ -167,9 +162,7 @@ export default async function handler(req,res) {
           originalImage: selectedImages[i],
           error: e.message,
           status: 'failed',
-          duration: providerDuration,
-          aspectRatio: formData.videoAspectRatio || null,
-          aspectRatioCode
+          duration: providerDuration
         };
       }
     });
@@ -179,9 +172,7 @@ export default async function handler(req,res) {
       taskId: s.taskId,
       sceneNumber: s.sceneNumber,
       duration: s.duration,
-      title: s.originalImage?.title || `Segment ${s.sceneNumber}`,
-      aspectRatio: s.aspectRatio,
-      aspectRatioCode: s.aspectRatioCode
+      title: s.originalImage?.title || `Segment ${s.sceneNumber}`
     }));
 
     res.status(200).json({
@@ -189,8 +180,6 @@ export default async function handler(req,res) {
       videoProject:{
         projectId: `project-${Date.now()}`,
         selectedStyle,
-        aspectRatio: formData.videoAspectRatio || null,
-        aspectRatioCode,
         brandLogoProvided: formData.brandLogoProvided,
         productImageProvided: formData.productImageProvided,
         totalRequested: selectedImages.length,
@@ -200,7 +189,7 @@ export default async function handler(req,res) {
       },
       tasks,
       meta:{
-        provider:'Freepik image-to-video minimax-hailuo-02',
+        provider:'Freepik image-to-video kling-v2-1-pro',
         durationPerSegment: providerDuration,
         concurrency,
         totalSubmitted: ok.length,
