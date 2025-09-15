@@ -6,11 +6,12 @@ import bodyParser from 'body-parser';
 // API 핸들러 import
 import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
-import imageToVideo from '../api/image-to-video.js'; // 🔥 추가
+import imageToVideo from '../api/image-to-video.js';
 import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 import compileVideos from '../api/compile-videos.js';
 import debug from '../api/debug.js';
+import applyBgm from '../api/apply-bgm.js'; // 🔥 BGM API 추가
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,7 +65,7 @@ const bindRoute = (path, handler, methods = ['POST']) => {
   });
 };
 
-// 🔥 모든 API 라우트 등록
+// 모든 API 라우트 등록
 bindRoute('/api/storyboard-init', storyboardInit, ['POST']);
 bindRoute('/api/storyboard-render-image', storyboardRenderImage, ['POST']);
 bindRoute('/api/image-to-video', imageToVideo, ['POST']);
@@ -72,6 +73,7 @@ bindRoute('/api/generate-video', generateVideo, ['POST']);
 bindRoute('/api/video-status', videoStatus, ['POST']);
 bindRoute('/api/compile-videos', compileVideos, ['POST']);
 bindRoute('/api/debug', debug, ['GET']);
+bindRoute('/api/apply-bgm', applyBgm, ['POST']); // 🔥 BGM 추가
 
 // 정적 파일 서빙
 app.use('/tmp', express.static('tmp', {
@@ -102,7 +104,8 @@ app.use('*', (req, res) => {
       'POST /api/image-to-video',
       'POST /api/generate-video',
       'POST /api/video-status',
-      'POST /api/compile-videos'
+      'POST /api/compile-videos',
+      'POST /api/apply-bgm' // 🔥 BGM 추가
     ]
   });
 });
@@ -137,6 +140,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - POST /api/generate-video`);
   console.log(`   - POST /api/video-status`);
   console.log(`   - POST /api/compile-videos`);
+  console.log(`   - POST /api/apply-bgm`);
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
 });
 
