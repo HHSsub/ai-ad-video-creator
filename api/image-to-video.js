@@ -1,6 +1,4 @@
-// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반, 엔드포인트/파라미터 100% 일치, 로그 대폭 강화 (생략없이 전체)
-// 반드시 엔드포인트: /v1/ai/image-to-video/kling-v2-1-pro 사용
-// aspect_ratio, prompt_optimizer 등 공식문서에 없는 파라미터 절대 포함하지 않음
+// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반, 엔드포인트/파라미터/로그 100% 일치, duration 오류 완벽 방어 (단 한줄도 생략 없음)
 
 import 'dotenv/config';
 
@@ -102,7 +100,7 @@ export default async function handler(req, res) {
       imageTail,
       prompt,
       negativePrompt,
-      duration = 5,
+      duration,
       cfg_scale,
       static_mask,
       dynamic_masks,
@@ -128,6 +126,13 @@ export default async function handler(req, res) {
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
+    // duration 검증 및 보정 (공식문서: 5 또는 10만 허용)
+    let validDuration = parseInt(duration, 10);
+    if (![5,10].includes(validDuration)) {
+      console.warn('[image-to-video] duration이 5 또는 10이 아님. 기본값 5로 보정');
+      validDuration = 5;
+    }
+
     // Kling v2.1 Pro 공식 인자만 포함
     const requestBody = {
       webhook_url: null,
@@ -135,7 +140,7 @@ export default async function handler(req, res) {
       image_tail: imageTail,
       prompt: optimized,
       negative_prompt: negativePrompt || 'blurry, low quality, watermark, cartoon, distorted',
-      duration: duration,
+      duration: validDuration,
       cfg_scale,
       static_mask,
       dynamic_masks
@@ -188,7 +193,7 @@ export default async function handler(req, res) {
         conceptId: conceptId || null,
         sceneNumber: sceneNumber || null,
         title: title || null,
-        duration: duration,
+        duration: validDuration,
         createdAt: new Date().toISOString()
       },
       meta:{
