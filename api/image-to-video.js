@@ -1,5 +1,5 @@
-// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반 완전수정
-// 기존 minimax-hailuo-768p → kling-v2-1-pro로 전면교체
+// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반 완전수정 (엔드포인트/파라미터 100%)
+// 비율은 공식문서에 파라미터로 없음 (이미지 자체에서 맞춰야 함)
 
 import 'dotenv/config';
 
@@ -7,7 +7,7 @@ const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRY = 5;
 
-// 금지 카메라 브랜드/패턴
+// 카메라 브랜드/패턴 제거
 const CAMERA_BRAND_REGEX = /\b(Canon|Nikon|Sony|Fujifilm|Fuji|Panasonic|Leica|Hasselblad|EOS|Alpha|Lumix|R5|R6|Z6|A7R|A7S|GFX)\b/gi;
 
 function sanitizeCameraSegments(text) {
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
-    // Kling 공식 API 필드에 맞춰 요청
+    // Kling v2.1 Pro 공식 인자만 포함
     const requestBody = {
       webhook_url: null,
       image: imageUrl,
@@ -128,7 +128,7 @@ export default async function handler(req, res) {
       dynamic_masks
     };
 
-    // undefined/null 필드 자동 제거
+    // undefined/null/빈배열 필드 자동 제거
     Object.keys(requestBody).forEach(key => {
       if (
         requestBody[key] === undefined ||
@@ -138,6 +138,9 @@ export default async function handler(req, res) {
         delete requestBody[key];
       }
     });
+
+    // aspect_ratio 인자 없음 (비율 지정하려면 image/image_tail 자체를 가공해서 넘겨야 함)
+    // 비율 정보는 prompt에 포함하거나, 내부적으로만 관리
 
     console.log('[image-to-video] Kling API 요청 파라미터:', {
       endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`,
