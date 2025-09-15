@@ -1,8 +1,10 @@
-// api/storyboard-render-image.js - 완전 수정된 버전
+// api/storyboard-render-image.js - 완전 수정 버전
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 3000;
+const POLLING_TIMEOUT = 120000; // 2분 타임아웃
+const POLLING_INTERVAL = 3000; // 3초마다 폴링
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -22,7 +24,7 @@ async function safeFreepikCall(url, options, label = 'API') {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES} - ${url}`);
+      console.log(`[${label}] 시도 ${attempt}/${MAX_RETRIES}`);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -75,187 +77,155 @@ async function safeFreepikCall(url, options, label = 'API') {
   throw lastError || new Error(`${label} 최대 재시도 초과`);
 }
 
-// 🔥 다중 엔드포인트 시도로 Flux Realism 찾기
+// 태스크 상태 폴링 (비동기 완료 대기)
+async function pollTaskStatus(taskId, apiKey) {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < POLLING_TIMEOUT) {
+    try {
+      console.log(`[pollTaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중...`);
+      
+      const response = await fetch(`${FREEPIK_API_BASE}/ai/text-to-image/flux-dev/${taskId}`, {
+        method: 'GET',
+        headers: {
+          'x-freepik-api-key': apiKey,
+          'User-Agent': 'AI-Ad-Creator/2025'
+        }
+      });
+
+      if (!response.ok) {
+        console.error(`[pollTaskStatus] 상태 확인 실패: ${response.status}`);
+        await sleep(POLLING_INTERVAL);
+        continue;
+      }
+
+      const result = await response.json();
+      console.log(`[pollTaskStatus] 응답:`, JSON.stringify(result, null, 2));
+
+      // 단일 태스크 응답 처리
+      if (result.data) {
+        const taskData = result.data;
+        const status = taskData.status;
+        
+        console.log(`[pollTaskStatus] 태스크 상태: ${status}`);
+        
+        if (status === 'COMPLETED') {
+          if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated.length > 0) {
+            const imageUrl = taskData.generated[0];
+            console.log(`[pollTaskStatus] ✅ 완료 - 이미지 URL: ${imageUrl.substring(0, 60)}...`);
+            return imageUrl;
+          } else {
+            console.warn(`[pollTaskStatus] COMPLETED 상태이지만 generated 배열이 비어있음`);
+          }
+        } else if (status === 'FAILED') {
+          throw new Error(`태스크 실패: ${taskData.error || 'Unknown error'}`);
+        } else if (['CREATED', 'IN_PROGRESS', 'PROCESSING'].includes(status)) {
+          console.log(`[pollTaskStatus] 진행 중... (${status})`);
+          await sleep(POLLING_INTERVAL);
+          continue;
+        } else {
+          console.warn(`[pollTaskStatus] 알 수 없는 상태: ${status}`);
+          await sleep(POLLING_INTERVAL);
+          continue;
+        }
+      }
+      
+      await sleep(POLLING_INTERVAL);
+      
+    } catch (error) {
+      console.error(`[pollTaskStatus] 폴링 오류:`, error.message);
+      await sleep(POLLING_INTERVAL);
+    }
+  }
+  
+  throw new Error(`태스크 ${taskId} 타임아웃 (${POLLING_TIMEOUT / 1000}초 초과)`);
+}
+
+// Freepik Flux Dev API 호출 + 폴링
 async function generateImageWithFreepik(imagePrompt, apiKey) {
-  console.log('[generateImageWithFreepik] Flux Realism 모델 추적 시작:', {
+  console.log('[generateImageWithFreepik] Flux Dev 모델 사용 + 폴링:', {
     prompt: imagePrompt.prompt?.substring(0, 100) + '...',
     size: imagePrompt.image?.size,
     style: imagePrompt.styling?.style,
     seed: imagePrompt.seed
   });
 
-  // 🔥 가능한 모든 Flux Realism 엔드포인트 (우선순위 순)
-  const endpointAttempts = [
-    // 가장 가능성 높은 Realism 엔드포인트들
-    {
-      url: `${FREEPIK_API_BASE}/ai/text-to-image/flux-realism`,
-      model: 'flux-realism',
-      payload: (imagePrompt) => ({
-        prompt: imagePrompt.prompt,
-        aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
-        styling: { style: imagePrompt.styling?.style || "photo" },
-        seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
-        webhook_url: null
-      })
+  // ✅ 올바른 Flux Dev 엔드포인트
+  const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image/flux-dev`;
+
+  // ✅ 정확한 요청 형식 (문서 기준)
+  const requestBody = {
+    prompt: imagePrompt.prompt,
+    aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
+    styling: {
+      effects: {},
+      colors: []
     },
-    {
-      url: `${FREEPIK_API_BASE}/ai/text-to-image/flux-realistic`,
-      model: 'flux-realistic',
-      payload: (imagePrompt) => ({
-        prompt: imagePrompt.prompt,
-        aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
-        styling: { style: imagePrompt.styling?.style || "photo" },
-        seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
-        webhook_url: null
-      })
+    seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
+    webhook_url: null // 동기 처리 (폴링 사용)
+  };
+
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-freepik-api-key': apiKey,
+      'User-Agent': 'AI-Ad-Creator/2025'
     },
-    {
-      url: `${FREEPIK_API_BASE}/ai/flux-realism`,
-      model: 'flux-realism-alt',
-      payload: (imagePrompt) => ({
-        prompt: imagePrompt.prompt,
-        aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
-        styling: { style: imagePrompt.styling?.style || "photo" },
-        seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000)
-      })
-    },
-    // Freepik의 일반 AI 엔드포인트에 모델 파라미터 추가
-    {
-      url: `${FREEPIK_API_BASE}/ai/text-to-image`,
-      model: 'generic-realism',
-      payload: (imagePrompt) => ({
-        prompt: imagePrompt.prompt,
-        model: 'flux-realism', // 모델 파라미터로 지정
-        aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
-        styling: { style: imagePrompt.styling?.style || "photo" },
-        seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
-        webhook_url: null
-      })
-    },
-    // Flux Dev 폴백 (프리미엄 사용자면 이것도 고품질)
-    {
-      url: `${FREEPIK_API_BASE}/ai/text-to-image/flux-dev`,
-      model: 'flux-dev-fallback',
-      payload: (imagePrompt) => ({
-        prompt: imagePrompt.prompt,
-        aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
-        styling: { style: imagePrompt.styling?.style || "photo" },
-        seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
-        webhook_url: null
-      })
-    },
-    // 일반 Flux 폴백
-    {
-      url: `${FREEPIK_API_BASE}/ai/text-to-image/flux`,
-      model: 'flux-general',
-      payload: (imagePrompt) => ({
-        prompt: imagePrompt.prompt,
-        aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
-        styling: { style: imagePrompt.styling?.style || "photo" },
-        seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
-        webhook_url: null
-      })
+    body: JSON.stringify(requestBody)
+  };
+
+  console.log('[generateImageWithFreepik] API 요청:', {
+    endpoint,
+    prompt: requestBody.prompt.substring(0, 100) + '...',
+    aspect_ratio: requestBody.aspect_ratio,
+    seed: requestBody.seed
+  });
+
+  try {
+    // 1. 태스크 생성
+    const result = await safeFreepikCall(endpoint, options, 'flux-dev-create');
+    
+    console.log('[generateImageWithFreepik] 태스크 생성 응답:', JSON.stringify(result, null, 2));
+
+    if (!result.data || !result.data.task_id) {
+      throw new Error('태스크 ID를 받지 못했습니다');
     }
-  ];
 
-  let lastError = null;
-  
-  for (const attempt of endpointAttempts) {
-    try {
-      console.log(`[generateImageWithFreepik] 엔드포인트 시도: ${attempt.url} (모델: ${attempt.model})`);
-      
-      const requestBody = attempt.payload(imagePrompt);
-      const options = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-freepik-api-key': apiKey,
-          'User-Agent': 'AI-Ad-Creator/2025-Premium'
-        },
-        body: JSON.stringify(requestBody)
-      };
+    const taskId = result.data.task_id;
+    console.log(`[generateImageWithFreepik] 태스크 생성 완료: ${taskId}`);
 
-      console.log(`[generateImageWithFreepik] 요청 페이로드:`, {
-        url: attempt.url,
-        prompt: requestBody.prompt.substring(0, 100) + '...',
-        aspect_ratio: requestBody.aspect_ratio,
-        model: attempt.model
-      });
+    // 2. 태스크 완료까지 폴링
+    const imageUrl = await pollTaskStatus(taskId, apiKey);
 
-      const result = await safeFreepikCall(attempt.url, options, `${attempt.model}`);
-      
-      // 🔥 응답에서 이미지 URL 추출 (모든 가능한 구조 처리)
-      let imageUrl = null;
-      
-      // 방법 1: data.generated 배열 (최신 API)
-      if (result.data && result.data.generated && Array.isArray(result.data.generated)) {
-        imageUrl = result.data.generated[0];
-        console.log(`[generateImageWithFreepik] ✅ ${attempt.model} 성공 - generated 배열에서 URL 추출`);
-      }
-      // 방법 2: data 배열 (이전 버전)
-      else if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-        const firstItem = result.data[0];
-        if (firstItem.base64) {
-          imageUrl = `data:image/jpeg;base64,${firstItem.base64}`;
-          console.log(`[generateImageWithFreepik] ✅ ${attempt.model} 성공 - Base64 변환`);
-        } else if (firstItem.url) {
-          imageUrl = firstItem.url;
-          console.log(`[generateImageWithFreepik] ✅ ${attempt.model} 성공 - 직접 URL`);
-        }
-      }
-      // 방법 3: 직접 URL (가장 단순한 구조)
-      else if (result.url) {
-        imageUrl = result.url;
-        console.log(`[generateImageWithFreepik] ✅ ${attempt.model} 성공 - 루트 URL`);
-      }
-      // 방법 4: 중첩된 구조들
-      else if (result.image && result.image.url) {
-        imageUrl = result.image.url;
-        console.log(`[generateImageWithFreepik] ✅ ${attempt.model} 성공 - image.url`);
-      }
+    return {
+      success: true,
+      imageUrl: imageUrl,
+      method: 'freepik-flux-dev-polling',
+      taskId: taskId
+    };
 
-      if (imageUrl) {
-        console.log(`[generateImageWithFreepik] 🎉 최종 성공! 모델: ${attempt.model}, URL 타입: ${imageUrl.startsWith('data:') ? 'Data URL' : 'HTTP URL'}`);
-        
-        return {
-          success: true,
-          imageUrl: imageUrl,
-          method: `freepik-${attempt.model}-2025`,
-          endpoint: attempt.url,
-          modelUsed: attempt.model
-        };
-      } else {
-        console.warn(`[generateImageWithFreepik] ${attempt.model} 응답에서 이미지 URL 없음:`, JSON.stringify(result, null, 2));
-        continue; // 다음 엔드포인트 시도
-      }
-      
-    } catch (error) {
-      console.log(`[generateImageWithFreepik] ${attempt.model} 실패: ${error.message}`);
-      lastError = error;
-      continue; // 다음 엔드포인트 시도
-    }
+  } catch (error) {
+    console.error('[generateImageWithFreepik] 전체 실패:', error);
+    throw error;
   }
-
-  // 모든 엔드포인트 실패
-  console.error('[generateImageWithFreepik] 🚨 모든 Flux 엔드포인트 실패!');
-  throw lastError || new Error('모든 Freepik Flux 엔드포인트 실패');
 }
 
-// 폴백 이미지 생성 (더 정교한 테마)
+// 폴백 이미지 생성
 function generateFallbackImage(sceneNumber, conceptId) {
   const themes = [
-    { bg: '1e40af', text: 'FFFFFF', label: 'Professional+Scene' },
-    { bg: '059669', text: 'FFFFFF', label: 'Product+Focus' },
-    { bg: 'dc2626', text: 'FFFFFF', label: 'Dynamic+Action' },
-    { bg: '7c2d12', text: 'FFFFFF', label: 'Premium+Brand' },
-    { bg: '4338ca', text: 'FFFFFF', label: 'Tech+Innovation' },
-    { bg: '0891b2', text: 'FFFFFF', label: 'Call+To+Action' }
+    { bg: '2563EB', text: 'FFFFFF', label: 'Professional+Business' },
+    { bg: '059669', text: 'FFFFFF', label: 'Product+Showcase' },
+    { bg: 'DC2626', text: 'FFFFFF', label: 'Lifestyle+Scene' },
+    { bg: '7C2D12', text: 'FFFFFF', label: 'Premium+Brand' },
+    { bg: '4338CA', text: 'FFFFFF', label: 'Innovation+Tech' },
+    { bg: '0891B2', text: 'FFFFFF', label: 'Call+To+Action' }
   ];
 
   const themeIndex = ((sceneNumber || 1) - 1) % themes.length;
   const theme = themes[themeIndex];
 
-  return `https://via.placeholder.com/1920x1080/${theme.bg}/${theme.text}?text=${theme.label}+Concept+${conceptId || 1}+Scene+${sceneNumber || 1}`;
+  return `https://via.placeholder.com/1920x1080/${theme.bg}/${theme.text}?text=${theme.label}+Scene+${sceneNumber || 1}`;
 }
 
 export default async function handler(req, res) {
@@ -273,7 +243,7 @@ export default async function handler(req, res) {
   try {
     let { imagePrompt, sceneNumber, conceptId, prompt } = req.body || {};
 
-    console.log('[storyboard-render-image] 🚀 프리미엄 Flux Realism 요청:', {
+    console.log('[storyboard-render-image] 요청 수신:', {
       sceneNumber,
       conceptId,
       hasImagePrompt: !!imagePrompt,
@@ -296,9 +266,9 @@ export default async function handler(req, res) {
 
     // imagePrompt 검증
     if (!imagePrompt || !imagePrompt.prompt || typeof imagePrompt.prompt !== 'string' || imagePrompt.prompt.trim().length < 5) {
-      console.error('[storyboard-render-image] ❌ 유효하지 않은 imagePrompt:', imagePrompt);
+      console.error('[storyboard-render-image] 유효하지 않은 imagePrompt:', imagePrompt);
       return res.status(400).json({ 
-        error: 'Valid imagePrompt required from storyboard-init',
+        error: 'Valid imagePrompt required',
         received: imagePrompt
       });
     }
@@ -309,32 +279,32 @@ export default async function handler(req, res) {
                   process.env.REACT_APP_FREEPIK_API_KEY;
 
     if (!apiKey) {
-      console.error('[storyboard-render-image] ❌ Freepik API 키가 없음');
+      console.error('[storyboard-render-image] Freepik API 키가 없음');
       const fallbackUrl = generateFallbackImage(sceneNumber, conceptId);
       return res.status(200).json({
         success: true,
         url: fallbackUrl,
         fallback: true,
-        message: 'API 키 없음 - 플레이스홀더 사용',
+        message: 'API 키 없음',
         processingTime: Date.now() - startTime,
         metadata: { error: 'no_api_key' }
       });
     }
 
-    console.log('[storyboard-render-image] ✅ API 키 확인:', apiKey.substring(0, 10) + '...');
+    console.log('[storyboard-render-image] API 키 확인:', apiKey.substring(0, 10) + '...');
 
     try {
-      // 🔥 다중 엔드포인트 Flux Realism 시도
+      // ✅ 수정된 Freepik API 호출 (폴링 포함)
       const result = await generateImageWithFreepik(imagePrompt, apiKey);
 
       const processingTime = Date.now() - startTime;
 
-      console.log('[storyboard-render-image] 🎉 최종 성공:', {
+      console.log('[storyboard-render-image] ✅ 성공 완료:', {
         sceneNumber,
         conceptId,
-        modelUsed: result.modelUsed,
-        endpoint: result.endpoint,
-        processingTime: processingTime + 'ms'
+        imageUrl: result.imageUrl.substring(0, 60) + '...',
+        processingTime: processingTime + 'ms',
+        taskId: result.taskId
       });
 
       return res.status(200).json({
@@ -347,19 +317,18 @@ export default async function handler(req, res) {
           sceneNumber,
           conceptId,
           promptUsed: imagePrompt.prompt.substring(0, 100) + '...',
-          apiProvider: 'Freepik Premium Multi-Endpoint',
-          modelUsed: result.modelUsed,
-          endpointUsed: result.endpoint,
+          apiProvider: 'Freepik Flux Dev 2025',
           size: imagePrompt.image?.size,
           style: imagePrompt.styling?.style,
-          seed: imagePrompt.seed
+          seed: imagePrompt.seed,
+          taskId: result.taskId
         }
       });
 
     } catch (freepikError) {
-      console.error('[storyboard-render-image] 🚨 모든 Freepik 엔드포인트 실패:', freepikError.message);
+      console.error('[storyboard-render-image] Freepik 호출 실패:', freepikError.message);
 
-      // 최후의 폴백 이미지 사용
+      // Freepik 실패 시 폴백 이미지 사용
       const fallbackUrl = generateFallbackImage(sceneNumber, conceptId);
 
       return res.status(200).json({
@@ -372,15 +341,14 @@ export default async function handler(req, res) {
           sceneNumber,
           conceptId,
           promptUsed: imagePrompt.prompt.substring(0, 100) + '...',
-          apiProvider: 'Fallback - All Endpoints Failed',
-          originalError: freepikError.message,
-          attemptedEndpoints: 'flux-realism, flux-realistic, flux-dev, flux-general'
+          apiProvider: 'Fallback',
+          originalError: freepikError.message
         }
       });
     }
 
   } catch (error) {
-    console.error('[storyboard-render-image] 🚨 전체 시스템 오류:', error);
+    console.error('[storyboard-render-image] 전체 시스템 오류:', error);
 
     const fallbackUrl = generateFallbackImage(
       req.body?.sceneNumber || 1,
