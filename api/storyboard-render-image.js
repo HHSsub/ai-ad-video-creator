@@ -85,7 +85,7 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
   });
 
   // 2025년 최신 엔드포인트 - /v1 추가 필수
-  const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image`;
+  const endpoint = `${FREEPIK_API_BASE}/ai/flux-realism`;
 
   // init.js에서 생성된 정확한 형식 그대로 사용
   const requestBody = {
