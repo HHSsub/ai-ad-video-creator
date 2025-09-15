@@ -1,4 +1,5 @@
 // api/storyboard-render-image.js - Freepik API styling.colors 수정 버전 (프롬프트 절대 자르지 않음)
+// Mystic 모델로 전체 전환
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const MAX_RETRIES = 3;
@@ -76,14 +77,15 @@ async function safeFreepikCall(url, options, label = 'API') {
   throw lastError || new Error(`${label} 최대 재시도 초과`);
 }
 
-// 태스크 상태 폴링
+// 태스크 상태 폴링 (Mystic 버전으로 엔드포인트 변경)
 async function pollTaskStatus(taskId, apiKey) {
   const startTime = Date.now();
   while (Date.now() - startTime < POLLING_TIMEOUT) {
     try {
       console.log(`[pollTaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중...`);
 
-      const response = await fetch(`${FREEPIK_API_BASE}/ai/text-to-image/flux-dev/${taskId}`, {
+      // flux-dev -> mystic 모델 엔드포인트로 변경
+      const response = await fetch(`${FREEPIK_API_BASE}/ai/text-to-image/mystic/${taskId}`, {
         method: 'GET',
         headers: {
           'x-freepik-api-key': apiKey,
@@ -138,16 +140,17 @@ async function pollTaskStatus(taskId, apiKey) {
   throw new Error(`태스크 ${taskId} 타임아웃 (${POLLING_TIMEOUT / 1000}초 초과)`);
 }
 
-// Freepik Flux Dev API 호출 + 올바른 styling.colors 설정
+// Freepik Mystic API 호출 + 올바른 styling.colors 설정
 async function generateImageWithFreepik(imagePrompt, apiKey) {
-  console.log('[generateImageWithFreepik] Flux Dev 모델 사용 + 폴링:', {
+  console.log('[generateImageWithFreepik] Mystic 모델 사용 + 폴링:', {
     prompt: imagePrompt.prompt,
     size: imagePrompt.image?.size,
     style: imagePrompt.styling?.style,
     seed: imagePrompt.seed
   });
 
-  const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image/flux-dev`;
+  // flux-dev -> mystic 모델 엔드포인트로 변경
+  const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image/mystic`;
 
   const requestBody = {
     prompt: imagePrompt.prompt,
@@ -184,7 +187,7 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
   });
 
   try {
-    const result = await safeFreepikCall(endpoint, options, 'flux-dev-create');
+    const result = await safeFreepikCall(endpoint, options, 'mystic-create');
     console.log('[generateImageWithFreepik] 태스크 생성 응답:', result);
 
     if (!result.data || !result.data.task_id) {
@@ -199,7 +202,7 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
     return {
       success: true,
       imageUrl: imageUrl,
-      method: 'freepik-flux-dev-polling',
+      method: 'freepik-mystic-polling',
       taskId: taskId
     };
 
@@ -311,7 +314,7 @@ export default async function handler(req, res) {
           sceneNumber,
           conceptId,
           promptUsed: imagePrompt.prompt, // 절대 자르지 않음
-          apiProvider: 'Freepik Flux Dev 2025',
+          apiProvider: 'Freepik Mystic 2025',
           size: imagePrompt.image?.size,
           style: imagePrompt.styling?.style,
           seed: imagePrompt.seed,
