@@ -1,23 +1,11 @@
-// api/image-to-video.js
-// - aspect_ratio 반영
-// - 브랜드/제품/타겟 컨텍스트 우선
-// - 카메라 브랜드/Camera: 선두 제거 & 재배치
-// - prompt sanitizer 강화
+// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반 완전수정
+// 기존 minimax-hailuo-768p → kling-v2-1-pro로 전면교체
 
 import 'dotenv/config';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRY = 5;
-
-function mapUserAspectRatio(value) {
-  if (!value) return 'widescreen_16_9';
-  if (typeof value !== 'string') return 'widescreen_16_9';
-  if (value.includes('16:9') || value.includes('가로')) return 'widescreen_16_9';
-  if (value.includes('9:16') || value.includes('세로')) return 'vertical_9_16';
-  if (value.includes('1:1') || value.includes('정사각')) return 'square_1_1';
-  return 'widescreen_16_9';
-}
 
 // 금지 카메라 브랜드/패턴
 const CAMERA_BRAND_REGEX = /\b(Canon|Nikon|Sony|Fujifilm|Fuji|Panasonic|Leica|Hasselblad|EOS|Alpha|Lumix|R5|R6|Z6|A7R|A7S|GFX)\b/gi;
@@ -36,7 +24,6 @@ function sanitizeCameraSegments(text) {
   return t;
 }
 
-// 컨텍스트 삽입 + 길이/기술 정보 정리
 function optimizeVideoPrompt(rawPrompt, formData) {
   const base = sanitizeCameraSegments(
     (rawPrompt || '')
@@ -106,8 +93,13 @@ export default async function handler(req, res) {
   try {
     const {
       imageUrl,
+      imageTail, // Kling 공식 필드
       prompt,
-      duration = 6,
+      negativePrompt,
+      duration = 5,
+      cfg_scale = 0.5,
+      static_mask,
+      dynamic_masks,
       sceneNumber,
       conceptId,
       title,
@@ -116,10 +108,6 @@ export default async function handler(req, res) {
 
     if (!imageUrl) return res.status(400).json({ error:'imageUrl required' });
 
-    const aspectRatioCode = mapUserAspectRatio(formData.videoAspectRatio);
-    const brandLogoProvided = !!(formData.brandLogoProvided || formData.brandLogo);
-    const productImageProvided = !!(formData.productImageProvided || formData.productImage);
-
     const apiKey = process.env.FREEPIK_API_KEY ||
                    process.env.VITE_FREEPIK_API_KEY ||
                    process.env.REACT_APP_FREEPIK_API_KEY;
@@ -127,31 +115,38 @@ export default async function handler(req, res) {
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
-    // Freepik 지원: 6 또는 10초
-    const validDuration = [6,10].includes(duration) ? duration : 6;
-
+    // Kling 공식 API 필드에 맞춰 요청
     const requestBody = {
+      webhook_url: null,
+      image: imageUrl,
+      image_tail: imageTail,
       prompt: optimized,
-      first_frame_image: imageUrl,
-      duration: validDuration,
-      prompt_optimizer: true,
-      aspect_ratio: aspectRatioCode,
-      webhook_url: null
+      negative_prompt: negativePrompt || 'blurry, low quality, watermark, cartoon, distorted',
+      duration: duration,
+      cfg_scale,
+      static_mask,
+      dynamic_masks
     };
 
-    console.log('[image-to-video] API 요청 파라미터:', {
-      endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/kling-1024p`,
-      prompt: optimized.slice(0,140) + (optimized.length>140?'...':''),
-      duration: validDuration,
-      aspect_ratio: aspectRatioCode,
-      first_frame_image: imageUrl.substring(0,60)+'...',
-      prompt_optimizer: true,
-      brandLogoProvided,
-      productImageProvided
+    // undefined/null 필드 자동 제거
+    Object.keys(requestBody).forEach(key => {
+      if (
+        requestBody[key] === undefined ||
+        requestBody[key] === null ||
+        (Array.isArray(requestBody[key]) && requestBody[key].length === 0)
+      ) {
+        delete requestBody[key];
+      }
+    });
+
+    console.log('[image-to-video] Kling API 요청 파라미터:', {
+      endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`,
+      ...requestBody,
+      prompt: optimized.slice(0,140) + (optimized.length>140?'...':'')
     });
 
     const result = await safeFreepikCall(
-      `${FREEPIK_API_BASE}/ai/image-to-video/kling-1024p`,
+      `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`,
       {
         method: 'POST',
         headers: {
@@ -161,11 +156,11 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify(requestBody)
       },
-      'image-to-video'
+      'image-to-video-kling'
     );
 
     if (!result.data?.task_id) {
-      console.error('[image-to-video] task_id 없음:', JSON.stringify(result,null,2));
+      console.error('[image-to-video-kling] task_id 없음:', JSON.stringify(result,null,2));
       throw new Error('비디오 생성 태스크 ID를 받지 못했습니다');
     }
 
@@ -176,22 +171,18 @@ export default async function handler(req, res) {
         conceptId: conceptId || null,
         sceneNumber: sceneNumber || null,
         title: title || null,
-        duration: validDuration,
-        aspectRatio: formData.videoAspectRatio || null,
-        aspectRatioCode,
-        brandLogoProvided,
-        productImageProvided,
+        duration: duration,
         createdAt: new Date().toISOString()
       },
       meta:{
         processingTime: Date.now() - startTime,
-        provider:'Freepik image-to-video minimax-hailuo-02',
+        provider:'Freepik image-to-video kling-v2-1-pro',
         rawStatus: result.data.status || null
       }
     });
 
   } catch (error) {
-    console.error('[image-to-video] 오류:', error);
+    console.error('[image-to-video-kling] 오류:', error);
     res.status(500).json({
       success:false,
       error: error.message
