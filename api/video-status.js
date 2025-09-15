@@ -57,7 +57,7 @@ async function safeApiCall(url, options, label) {
 // 단일 태스크 상태 확인 - 2025년 Freepik API 스펙
 async function checkSingleTaskStatus(taskId, apiKey) {
   // 🔥 정확한 2025년 Freepik MiniMax Hailuo-02 상태 확인 엔드포인트
-  const url = `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-768p/${taskId}`;
+  const url = `${FREEPIK_API_BASE}/ai/image-to-video/kling-1024p/${taskId}`;
   
   const options = {
     method: 'GET',
