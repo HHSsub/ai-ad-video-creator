@@ -175,25 +175,7 @@ function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept)
     .map(c=>`- (${c.concept_id}) ${c.concept_name}: ${c.raw_block.slice(0,400)}`)
     .join('\n');
 
-  // 기존 final_prompt 변수 치환 (scene count per concept = targetSceneCount)
-  let base = FINAL_PROMPT
-    .replaceAll('{phase1_output}', phase1Output)
-    .replaceAll('{brandName}', String(fd.brandName||''))
-    .replaceAll('{productServiceName}', String(fd.productServiceName||''))
-    .replaceAll('{productServiceCategory}', String(fd.productServiceCategory||''))
-    .replaceAll('{industryCategory}', String(fd.industryCategory||''))
-    .replaceAll('{coreTarget}', String(fd.coreTarget||''))
-    .replaceAll('{videoPurpose}', String(fd.videoPurpose||''))
-    .replaceAll('{videoLength}', String(fd.videoLength|| (videoLengthSeconds+'초')))
-    .replaceAll('{videoLengthSeconds}', String(videoLengthSeconds))
-    .replaceAll('{targetSceneCount}', String(sceneCountPerConcept))
-    .replaceAll('{coreDifferentiation}', String(fd.coreDifferentiation||''))
-    .replaceAll('{videoRequirements}', String(fd.videoRequirements||''))
-    .replaceAll('{aspectRatioCode}', aspectRatioCode)
-    .replaceAll('{brandLogo}', fd.brandLogo ? '업로드됨':'없음')
-    .replaceAll('{productImage}', fd.productImage ? '업로드됨':'없음');
-
-  // 다중 컨셉 JSON 강제 OVERRIDE
+  // final_prompt.txt에서 Flux 규칙, styling, motion_prompt, seed, etc.를 모두 강제
   const override = `
 [OVERRIDE MULTI-CONCEPT JSON OUTPUT – IGNORE ANY PREVIOUS SINGLE "scenes" SPEC]
 
@@ -221,17 +203,23 @@ Return EXACTLY ONE VALID JSON object:
           "scene_number":1,
           "timecode":"00:00-00:02",
           "image_prompt":{
-            "prompt":"70-110 words ... ends with: Shot by <camera name> with a <50mm or 85mm> lens.",
-            "negative_prompt":"blurry, low quality, watermark, cartoon, distorted",
+            "prompt":"[English, 7-part Flux Engine format, ends with camera sentence]",
+            "negative_prompt":"blurry, low quality, watermark, logo, text, cartoon, distorted",
             "num_images":1,
             "image":{"size":"${aspectRatioCode}"},
-            "styling":{"style":"photo"},
-            "seed":12345
+            "styling":{
+              "style":"photo/cinematic/etc.",
+              "color":"color/vibrant/monochrome/etc.",
+              "lighting":"natural/dramatic/soft/etc."
+            },
+            "guidance_scale":7.5,
+            "seed":12345,
+            "filter_nsfw":true
           },
-          "motion_prompt":{"prompt":"1-3 sentences (dynamic evolution only)"},
-          "duration_seconds":2,
-          "notes":"optional"
+          "motion_prompt":{"prompt":"[English, dynamic action only]"},
+          "duration_seconds":2
         }
+        // scene_number 2..${sceneCountPerConcept} 까지
       ]
     }
     // concept_id 2..6 EXACT SAME STRUCTURE, each EXACTLY ${sceneCountPerConcept} scenes
@@ -252,7 +240,7 @@ REFERENCE CONCEPT MATERIAL:
 ${conceptsForPrompt}
 [END OVERRIDE]`;
 
-  return `${base}\n\n${override}`;
+  return `${FINAL_PROMPT}\n\n${override}`;
 }
 
 /* ---------------- STEP2 JSON 파싱 ---------------- */
@@ -264,7 +252,23 @@ function parseMultiConceptJSON(raw){
   const slice = raw.slice(first, last+1);
   try{
     const obj = JSON.parse(slice);
-    if(Array.isArray(obj.concepts) && obj.concepts.length===6) return obj;
+    // 최신 구조: concepts[ { concept_id, concept_name, image_prompts:[{scene_number, image_prompt, motion_prompt, ...}] } ]
+    if(Array.isArray(obj.concepts) && obj.concepts.length===6){
+      // 각 image_prompt/motion_prompt 구조 강제 확인
+      for(const concept of obj.concepts){
+        if(!Array.isArray(concept.image_prompts) || concept.image_prompts.length<1){
+          console.warn('[storyboard-init][Z2M] image_prompts missing in concept', concept.concept_id);
+          return null;
+        }
+        for(const s of concept.image_prompts){
+          if(!s.image_prompt || !s.motion_prompt){
+            console.warn('[storyboard-init][Z2M] image_prompt/motion_prompt missing in scene', s.scene_number);
+            return null;
+          }
+        }
+      }
+      return obj;
+    }
     console.warn('[storyboard-init][Z2M] JSON concepts 형식 불완전');
     return obj;
   }catch(e){
@@ -278,23 +282,29 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
   if(!conceptJson?.concepts) return [];
   return conceptJson.concepts.map(c=>{
     let arr = Array.isArray(c.image_prompts)? c.image_prompts : [];
+    // 씬 개수 보장
     if(arr.length < sceneCountPerConcept && arr.length>0){
       const last = arr[arr.length-1];
       while(arr.length < sceneCountPerConcept){
-        arr.push({...last, scene_number: arr.length+1});
+        // 마지막 씬 복제해 채움 (seed만 변경)
+        arr.push({...last, scene_number: arr.length+1, image_prompt:{...last.image_prompt, seed: Math.floor(10000 + Math.random()*90000)}});
       }
     }
+    // 완전히 비어있으면 placeholder 생성
     if(arr.length === 0){
       for(let i=1;i<=sceneCountPerConcept;i++){
         arr.push({
           scene_number:i,
+          timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
           image_prompt:{
-            prompt:`${c.concept_name||'Concept'} placeholder scene ${i}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.`,
-            negative_prompt:'blurry, low quality, watermark, cartoon, distorted',
+            prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa Mini with a 50mm lens.`,
+            negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
             num_images:1,
             image:{ size:'widescreen_16_9' },
-            styling:{ style:'photo' },
-            seed: Math.floor(10000 + Math.random()*90000)
+            styling:{ style:'photo', color:'color', lighting:'natural' },
+            guidance_scale:7.5,
+            seed: Math.floor(10000 + Math.random()*90000),
+            filter_nsfw:true
           },
           motion_prompt:{ prompt:'Subtle camera drift.'},
           duration_seconds:2
@@ -312,7 +322,15 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
         sceneNumber: sc.scene_number,
         title: `Scene ${sc.scene_number}`,
         duration: sc.duration_seconds || 2,
-        prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by RED Komodo with a 50mm lens.'
+        prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 8K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.',
+        negative_prompt: sc.image_prompt?.negative_prompt || "blurry, low quality, watermark, logo, text, cartoon, distorted",
+        styling: sc.image_prompt?.styling || { style:"photo", color:"color", lighting:"natural" },
+        size: sc.image_prompt?.image?.size || "widescreen_16_9",
+        guidance_scale: sc.image_prompt?.guidance_scale || 7.5,
+        seed: sc.image_prompt?.seed || Math.floor(10000 + Math.random()*90000),
+        filter_nsfw: sc.image_prompt?.filter_nsfw !== undefined ? sc.image_prompt.filter_nsfw : true,
+        motion_prompt: sc.motion_prompt?.prompt || "Subtle camera drift.",
+        timecode: sc.timecode || "",
       }))
     };
   });
@@ -374,7 +392,15 @@ export default async function handler(req,res){
             sceneNumber:i,
             title:`Scene ${i}`,
             duration:2,
-            prompt:`${c.concept_name} placeholder scene ${i}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.`
+            prompt:`${c.concept_name} placeholder scene ${i}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting. Shot by ARRI Alexa Mini with a 50mm lens.`,
+            negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
+            styling:{ style:"photo", color:"color", lighting:"natural" },
+            size:"widescreen_16_9",
+            guidance_scale:7.5,
+            seed: Math.floor(10000 + Math.random()*90000),
+            filter_nsfw:true,
+            motion_prompt:"Subtle camera drift.",
+            timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
           });
         }
         return {
@@ -399,7 +425,15 @@ export default async function handler(req,res){
               sceneNumber:k,
               title:`Scene ${k}`,
               duration:2,
-              prompt:`Concept ${i} auto-filled scene ${k}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by RED Komodo with a 50mm lens.`
+              prompt:`Concept ${i} auto-filled scene ${k}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting. Shot by RED Komodo with a 50mm lens.`,
+              negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
+              styling:{ style:"photo", color:"color", lighting:"natural" },
+              size:"widescreen_16_9",
+              guidance_scale:7.5,
+              seed: Math.floor(10000 + Math.random()*90000),
+              filter_nsfw:true,
+              motion_prompt:"Subtle camera drift.",
+              timecode:`00:${String((k-1)*2).padStart(2,'0')}-00:${String(k*2).padStart(2,'0')}`,
             });
           }
           styles.push({
