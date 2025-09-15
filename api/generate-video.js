@@ -132,7 +132,7 @@ export default async function handler(req,res) {
           aspect_ratio: aspectRatioCode
         });
 
-        const r = await fetch('https://api.freepik.com/v1/ai/image-to-video/minimax-hailuo-02-768p',{
+        const r = await fetch('https://api.freepik.com/v1/ai/image-to-video/kling-1024p',{
           method:'POST',
           headers:{ 'Content-Type':'application/json','x-freepik-api-key':apiKey },
           body: JSON.stringify(payload)
