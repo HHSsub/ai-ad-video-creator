@@ -140,7 +140,7 @@ export default async function handler(req, res) {
     };
 
     console.log('[image-to-video] API 요청 파라미터:', {
-      endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-768p`,
+      endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/kling-1024p`,
       prompt: optimized.slice(0,140) + (optimized.length>140?'...':''),
       duration: validDuration,
       aspect_ratio: aspectRatioCode,
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
     });
 
     const result = await safeFreepikCall(
-      `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-768p`,
+      `${FREEPIK_API_BASE}/ai/image-to-video/kling-1024p`,
       {
         method: 'POST',
         headers: {
