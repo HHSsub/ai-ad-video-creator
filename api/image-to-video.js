@@ -1,5 +1,3 @@
-// api/image-to-video.js - Freepik Kling v2.1 Pro, duration(문자열), 공식필드만, 모든 로그/에러/요청정보 출력
-
 import 'dotenv/config';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
@@ -7,28 +5,13 @@ const KLING_ENDPOINT = `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRY = 5;
 
-const CAMERA_BRAND_REGEX = /\b(Canon|Nikon|Sony|Fujifilm|Fuji|Panasonic|Leica|Hasselblad|EOS|Alpha|Lumix|R5|R6|Z6|A7R|A7S|GFX)\b/gi;
-
 function sanitizeCameraSegments(text) {
   if (!text) return '';
-  let t = text.replace(CAMERA_BRAND_REGEX, 'professional');
-  const trimmed = t.trim();
-  if (/^camera:/i.test(trimmed)) {
-    const without = trimmed.replace(/^camera:\s*/i, '');
-    t = `${without} (technical: professional focal length framing)`;
-  }
-  t = t.replace(/Camera:\s*/gi, '');
-  return t;
+  return text.replace(/\b(Canon|Nikon|Sony|Fujifilm|Fuji|Panasonic|Leica|Hasselblad|EOS|Alpha|Lumix|R5|R6|Z6|A7R|A7S|GFX)\b/gi, 'professional').replace(/Camera:\s*/gi, '');
 }
 
 function optimizeVideoPrompt(rawPrompt, formData) {
-  const base = sanitizeCameraSegments(
-    (rawPrompt || '')
-      .replace(/\*\*/g,'')
-      .replace(/[`"]/g,'')
-      .replace(/\s+/g,' ')
-      .trim()
-  );
+  const base = sanitizeCameraSegments((rawPrompt || '').replace(/\*\*/g,'').replace(/[`"]/g,'').replace(/\s+/g,' ').trim());
   let head = [
     formData?.brandName ? `Brand: ${formData.brandName}` : null,
     formData?.productServiceName ? `Product: ${formData.productServiceName}` : formData?.productServiceCategory ? `Product Category: ${formData.productServiceCategory}` : null,
@@ -36,14 +19,10 @@ function optimizeVideoPrompt(rawPrompt, formData) {
     formData?.videoPurpose ? `Purpose: ${formData.videoPurpose}` : null,
     formData?.coreDifferentiation ? `Differentiation: ${formData.coreDifferentiation}` : null
   ].filter(Boolean).join(', ');
-
   if (!head) head = 'Commercial brand scenario';
-
-  const duplicateCheck = new RegExp(formData?.brandName || '', 'i');
-  let merged = duplicateCheck.test(base) ? base : `${head}. ${base}`;
+  let merged = base.includes(formData?.brandName || '') ? base : `${head}. ${base}`;
   if (merged.length < 60) merged += ' high quality commercial narrative, product usage clearly visible.';
-  merged = merged.slice(0, 1800);
-  return merged;
+  return merged.slice(0, 1800);
 }
 
 async function safeFreepikCall(url, options, label, logObj={}) {
@@ -53,18 +32,19 @@ async function safeFreepikCall(url, options, label, logObj={}) {
       console.log(`[${label}] 시도 ${attempt}/${MAX_RETRY}`);
       console.log(`[${label}] 요청정보`, JSON.stringify(logObj));
       const res = await fetch(url, options);
+      const rawTxt = await res.text();
+      let json = {};
+      try { json = JSON.parse(rawTxt); } catch { json = rawTxt; }
       if (!res.ok) {
-        const text = await res.text().catch(()=> '');
-        console.error(`[${label}] HTTP ${res.status}`, text.slice(0,200));
+        console.error(`[${label}] HTTP ${res.status}`, rawTxt);
         if ([429,500,502,503,504].includes(res.status) && attempt < MAX_RETRY) {
           const wait = attempt * 1200;
           console.log(`[${label}] 재시도 대기: ${wait}ms`);
           await sleep(wait);
           continue;
         }
-        throw new Error(`[${label}] HTTP ${res.status}: ${text}`);
+        throw new Error(`[${label}] HTTP ${res.status}: ${rawTxt}`);
       }
-      const json = await res.json();
       console.log(`[${label}] 응답`, JSON.stringify(json));
       return json;
     } catch (e) {
@@ -99,9 +79,6 @@ export default async function handler(req, res) {
       cfg_scale,
       static_mask,
       dynamic_masks,
-      // sceneNumber,
-      // conceptId,
-      // title,
       formData = {}
     } = req.body || {};
 
@@ -120,28 +97,22 @@ export default async function handler(req, res) {
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
-    let validDuration = parseInt(duration, 10);
-    if (![5,10].includes(validDuration)) {
-      console.warn('[image-to-video] duration이 5 또는 10이 아님. 기본값 5로 보정');
-      validDuration = 5;
-    }
+    // duration은 반드시 "5" 또는 "10" (문자열)만 허용
+    let validDuration = String([5,10].includes(Number(duration)) ? Number(duration) : 5);
 
-    // 공식문서 기반 인자만 남김 (duration은 반드시 문자열 "5"/"10"로 보냄)
+    // 공식문서 기반 인자만 남김
     const requestBody = {
       image: imageUrl,
-      image_tail: imageTail,
       prompt: optimized,
       negative_prompt: negativePrompt || 'blurry, low quality, watermark, cartoon, distorted',
-      duration: String(validDuration)
+      duration: validDuration
     };
+    if (imageTail) requestBody.image_tail = imageTail;
     if (cfg_scale !== undefined) requestBody.cfg_scale = cfg_scale;
     if (static_mask !== undefined) requestBody.static_mask = static_mask;
     if (dynamic_masks !== undefined && Array.isArray(dynamic_masks) && dynamic_masks.length > 0) requestBody.dynamic_masks = dynamic_masks;
 
-    console.log('[image-to-video] 최종 요청 파라미터:', JSON.stringify({
-      endpoint: KLING_ENDPOINT,
-      ...requestBody
-    }));
+    console.log('[image-to-video] 최종 요청 바디:', JSON.stringify(requestBody));
 
     const result = await safeFreepikCall(
       KLING_ENDPOINT,
