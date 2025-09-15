@@ -1,13 +1,15 @@
-// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반 완전수정 (엔드포인트/파라미터 100%)
-// 비율은 공식문서에 파라미터로 없음 (이미지 자체에서 맞춰야 함)
+// api/image-to-video.js - Freepik Kling v2.1 Pro 공식문서 기반, 엔드포인트/파라미터 100% 일치, 로그 대폭 강화 (생략없이 전체)
+// 반드시 엔드포인트: /v1/ai/image-to-video/kling-v2-1-pro 사용
+// aspect_ratio, prompt_optimizer 등 공식문서에 없는 파라미터 절대 포함하지 않음
 
 import 'dotenv/config';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
+const KLING_ENDPOINT = `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRY = 5;
 
-// 카메라 브랜드/패턴 제거
+// 금지 카메라 브랜드/패턴
 const CAMERA_BRAND_REGEX = /\b(Canon|Nikon|Sony|Fujifilm|Fuji|Panasonic|Leica|Hasselblad|EOS|Alpha|Lumix|R5|R6|Z6|A7R|A7S|GFX)\b/gi;
 
 function sanitizeCameraSegments(text) {
@@ -51,10 +53,12 @@ function optimizeVideoPrompt(rawPrompt, formData) {
   return merged;
 }
 
-async function safeFreepikCall(url, options, label) {
+async function safeFreepikCall(url, options, label, logObj={}) {
   let lastErr;
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     try {
+      console.log(`[${label}] 시도 ${attempt}/${MAX_RETRY}`);
+      console.log(`[${label}] 요청정보`, JSON.stringify(logObj));
       const res = await fetch(url, options);
       if (!res.ok) {
         const text = await res.text().catch(()=> '');
@@ -67,7 +71,9 @@ async function safeFreepikCall(url, options, label) {
         }
         throw new Error(`[${label}] HTTP ${res.status}: ${text}`);
       }
-      return await res.json();
+      const json = await res.json();
+      console.log(`[${label}] 응답`, JSON.stringify(json));
+      return json;
     } catch (e) {
       lastErr = e;
       console.error(`[${label}] 시도 ${attempt} 실패:`, e.message);
@@ -93,11 +99,11 @@ export default async function handler(req, res) {
   try {
     const {
       imageUrl,
-      imageTail, // Kling 공식 필드
+      imageTail,
       prompt,
       negativePrompt,
       duration = 5,
-      cfg_scale = 0.5,
+      cfg_scale,
       static_mask,
       dynamic_masks,
       sceneNumber,
@@ -106,12 +112,19 @@ export default async function handler(req, res) {
       formData = {}
     } = req.body || {};
 
-    if (!imageUrl) return res.status(400).json({ error:'imageUrl required' });
+    // 필수 인자 체크
+    if (!imageUrl) {
+      console.error('[image-to-video] 필수 imageUrl 없음!');
+      return res.status(400).json({ error:'imageUrl required' });
+    }
 
     const apiKey = process.env.FREEPIK_API_KEY ||
                    process.env.VITE_FREEPIK_API_KEY ||
                    process.env.REACT_APP_FREEPIK_API_KEY;
-    if (!apiKey) throw new Error('Freepik API 키가 설정되지 않았습니다');
+    if (!apiKey) {
+      console.error('[image-to-video] Freepik API 키 없음!');
+      throw new Error('Freepik API 키가 설정되지 않았습니다');
+    }
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
@@ -139,17 +152,17 @@ export default async function handler(req, res) {
       }
     });
 
-    // aspect_ratio 인자 없음 (비율 지정하려면 image/image_tail 자체를 가공해서 넘겨야 함)
-    // 비율 정보는 prompt에 포함하거나, 내부적으로만 관리
+    // 공식문서에 없는 인자(예: aspect_ratio, prompt_optimizer 등) 절대 포함하지 않음
 
-    console.log('[image-to-video] Kling API 요청 파라미터:', {
-      endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`,
+    console.log('[image-to-video] 최종 요청 파라미터:', JSON.stringify({
+      endpoint: KLING_ENDPOINT,
       ...requestBody,
-      prompt: optimized.slice(0,140) + (optimized.length>140?'...':'')
-    });
+      sceneNumber, conceptId, title, formData
+    }));
 
+    // API 호출 및 로그 강화
     const result = await safeFreepikCall(
-      `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`,
+      KLING_ENDPOINT,
       {
         method: 'POST',
         headers: {
@@ -159,7 +172,8 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify(requestBody)
       },
-      'image-to-video-kling'
+      'image-to-video-kling',
+      {requestBody, sceneNumber, conceptId, title, formData}
     );
 
     if (!result.data?.task_id) {
@@ -185,7 +199,8 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('[image-to-video-kling] 오류:', error);
+    // 내부 로그에 모든 정보 남기기
+    console.error('[image-to-video-kling] 전체 실패:', error);
     res.status(500).json({
       success:false,
       error: error.message
