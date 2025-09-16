@@ -119,6 +119,7 @@ export default async function handler(req, res) {
     console.log(`[apply-bgm] request body:`, req.body);
 
     if (!videoPath || typeof videoPath !== 'string' || videoPath.trim().length < 5) {
+      console.log(`[apply-bgm] videoPath missing or invalid: ${videoPath}`);
       return res.status(400).json({ error: 'videoPath required (서버 로컬 경로 또는 마운트)' });
     }
 
