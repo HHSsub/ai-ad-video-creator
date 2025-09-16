@@ -57,6 +57,7 @@ For each scene, you must provide the following two components in English, adheri
 
 1. Image Prompt (for Static Image Generation)
 Format: Generate the prompt within the following JSON structure. The negative_prompt is fixed and must not be altered. The styling values (style, color, lighting) must be logically derived from the Overall Creative Direction and your Automatic Style Selection.
+※ Each concept must be {targetSceneCount} scenes 
 JSON
 
 JSON SCHEMA (STRICT TOP-LEVEL KEYS ONLY):
