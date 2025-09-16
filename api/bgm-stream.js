@@ -25,12 +25,10 @@ export default async function handler(req, res) {
   try {
     const drive = getDrive();
 
-    // 파일 메타
     const meta = await drive.files.get({ fileId: id, fields:'id,name,mimeType,size' });
     const size = parseInt(meta.data.size || '0',10);
     const mime = meta.data.mimeType || 'audio/mpeg';
 
-    // 전체 스트림 (Range 미세 구현 필요하면 확장)
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Length', size || '');
     res.setHeader('Accept-Ranges', 'bytes');
