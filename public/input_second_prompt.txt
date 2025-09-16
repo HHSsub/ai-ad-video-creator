@@ -49,6 +49,8 @@ Client-Centric Communication: 최종 결과물은 클라이언트가 즉시 이�
 
 [OUTPUT STRUCTURE]
 [{brandName}] 광고 영상 기획 제안서 (by GEMINI-CD)
+※ 반드시 응답 마지막에는 1. 컨셉: 컨셉명(욕망의 시각화 등)...로 시작하는 넘버링으로 6가지 컨셉의 구체적 지시사항을 출력할 것
+※ II. CREATIVE CONCEPT PROPOSAL는 (1)컨셉 넘버링방식, III. DETAILED STORYBOARDS는 1. 컨셉 넘버링방식이어야함 
 
 I. STRATEGIC ANALYSIS SUMMARY
 [PHASE 1의 핵심 분석 내용을 3~4문장으로 요약하여, 이어질 크리에이티브 제안의 논리적 배경을 제시합니다.]
