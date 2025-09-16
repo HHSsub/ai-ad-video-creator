@@ -51,7 +51,7 @@ async function buildBgmStructure() {
   const results = [];
   for (const folder of moodFolders) {
     const tracks = await listAudioFiles(drive, folder.id);
-    console.log(`[BGM] Folder "${folder.name}" (${folder.id}) has ${tracks.length} tracks`);
+    console.log(`[BGM] Folder "${folder.name}" (${folder.id}) has ${tracks.length} tracks: ${tracks.map(t=>t.name).join(', ')}`);
     if (tracks.length === 0) continue;
     results.push({
       name: folder.name,
@@ -94,6 +94,8 @@ export default async function handler(req, res) {
     cache = { fetchedAt: now, data };
 
     res.status(200).json({ success: true, cached: false, ...data });
+    // 로그: API 응답 전체
+    console.log("[BGM] API response:", JSON.stringify({ success: true, cached: false, ...data }, null, 2));
   } catch (e) {
     console.error('[load-bgm-list] error:', e);
     res.status(500).json({ success: false, error: e.message });
