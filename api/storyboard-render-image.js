@@ -1,5 +1,5 @@
-// api/storyboard-render-image.js - Freepik Mystic API 공식문서 기반 완전수정 (프롬프트 절대 자르지 않음)
-// Mystic 모델 공식스펙에 맞춰서 엔드포인트와 파라미터 전면수정
+// api/storyboard-render-image.js - Freepik Flux-Dev API 공식문서 기반 완전수정 (프롬프트 절대 자르지 않음)
+// Flux-Dev 모델 공식스펙에 맞춰서 엔드포인트와 파라미터 전면수정
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const MAX_RETRIES = 3;
@@ -77,14 +77,14 @@ async function safeFreepikCall(url, options, label = 'API') {
   throw lastError || new Error(`${label} 최대 재시도 초과`);
 }
 
-// 태스크 상태 폴링 (Mystic 공식엔드포인트)
+// 태스크 상태 폴링 (Flux-Dev 공식엔드포인트)
 async function pollTaskStatus(taskId, apiKey) {
   const startTime = Date.now();
   while (Date.now() - startTime < POLLING_TIMEOUT) {
     try {
       console.log(`[pollTaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중...`);
-      // 공식문서 Mystic 엔드포인트
-      const response = await fetch(`${FREEPIK_API_BASE}/ai/mystic/${taskId}`, {
+      // Flux-Dev 엔드포인트 (공식문서 기준)
+      const response = await fetch(`${FREEPIK_API_BASE}/ai/flux-dev/${taskId}`, {
         method: 'GET',
         headers: {
           'x-freepik-api-key': apiKey,
@@ -139,24 +139,24 @@ async function pollTaskStatus(taskId, apiKey) {
   throw new Error(`태스크 ${taskId} 타임아웃 (${POLLING_TIMEOUT / 1000}초 초과)`);
 }
 
-// Freepik Mystic API 공식문서 기반 요청생성
+// Freepik Flux-Dev API 공식문서 기반 요청생성
 async function generateImageWithFreepik(imagePrompt, apiKey) {
-  console.log('[generateImageWithFreepik] Mystic 모델 공식스펙 사용 + 폴링:', {
+  console.log('[generateImageWithFreepik] Flux-Dev 모델 공식스펙 사용 + 폴링:', {
     prompt: imagePrompt.prompt,
     size: imagePrompt.image?.size,
     style: imagePrompt.styling?.style,
     seed: imagePrompt.seed
   });
 
-  // 공식엔드포인트
-  const endpoint = `${FREEPIK_API_BASE}/ai/mystic`;
+  // 공식엔드포인트 (Flux-Dev)
+  const endpoint = `${FREEPIK_API_BASE}/ai/flux-dev`;
 
-  // 공식문서 기반 파라미터
+  // Flux-Dev 공식문서 기반 파라미터 (예시, 실제 스펙에 맞게 조정 필요)
   const requestBody = {
     prompt: imagePrompt.prompt,
     aspect_ratio: imagePrompt.image?.size || "widescreen_16_9",
-    resolution: "2k", // 공식문서 예시
-    model: "realism",
+    resolution: "2k",
+    model: "flux-dev",
     engine: "automatic",
     seed: imagePrompt.seed || Math.floor(10000 + Math.random() * 90000),
     num_images: 1,
@@ -181,14 +181,13 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
     }
   };
 
-  // 공식 파라미터 중 undefined/null인 것은 request에서 제거
+  // undefined/null인 것은 제거
   Object.keys(requestBody).forEach(key => {
     if (requestBody[key] === undefined || requestBody[key] === null || requestBody[key] === '') {
       delete requestBody[key];
     }
   });
 
-  // 공식 styling 키도 null/undefined인 경우 제거
   if (requestBody.styling) {
     Object.keys(requestBody.styling).forEach(key => {
       if (
@@ -199,7 +198,6 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
         delete requestBody.styling[key];
       }
     });
-    // 완전히 비어있으면 styling 자체도 제거
     if (Object.keys(requestBody.styling).length === 0) {
       delete requestBody.styling;
     }
@@ -218,7 +216,7 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
   console.log('[generateImageWithFreepik] API 요청:', requestBody);
 
   try {
-    const result = await safeFreepikCall(endpoint, options, 'mystic-create');
+    const result = await safeFreepikCall(endpoint, options, 'flux-dev-create');
     console.log('[generateImageWithFreepik] 태스크 생성 응답:', result);
 
     if (!result.data || !result.data.task_id) {
@@ -233,7 +231,7 @@ async function generateImageWithFreepik(imagePrompt, apiKey) {
     return {
       success: true,
       imageUrl: imageUrl,
-      method: 'freepik-mystic-polling',
+      method: 'freepik-fluxdev-polling',
       taskId: taskId
     };
 
@@ -345,7 +343,7 @@ export default async function handler(req, res) {
           sceneNumber,
           conceptId,
           promptUsed: imagePrompt.prompt, // 절대 자르지 않음
-          apiProvider: 'Freepik Mystic 2025',
+          apiProvider: 'Freepik Flux-Dev 2025',
           size: imagePrompt.image?.size,
           style: imagePrompt.styling?.style,
           seed: imagePrompt.seed,
