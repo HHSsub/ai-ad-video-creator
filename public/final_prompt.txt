@@ -5,16 +5,17 @@ Objective: Your goal is to generate a detailed, production-ready shot list from 
 
 Input Details: (RAW PHASE1 OUTPUT — may contain Korean):
 ※ Each concept has a separate timeline.
-[이 섹션에 사용자가 제공한 영상 광고 기획안을 입력합니다. 아래는 예시입니다.]
+[이 섹션에 사용자가 제공한 III. DETAILED STORYBOARDS 영상 광고 기획안이 입력됩니다. 아래는 예시입니다.]
 참고사항: III. DETAILED STORYBOARDS (총 6가지)
 컨셉: 욕망의 시각화 (영상 길이: 10초, 총 5씬)
+Concept Headline: 거울 속 당신, 마침내 빛나다.
 Overall Creative Direction:
 Art & Visual: 따뜻한 톤의 역광을 활용해 신비로운 느낌을 강조하고, 빛이 반사되는 피부의 텍스처를 클로즈업해 촉촉함을 극대화합니다.
 Sound & Music: 잔잔하고 서정적인 피아노 BGM을 사용하며, 영상 후반부로 갈수록 템포를 살짝 올려 기대감을 고조시킵니다.
 Pacing & Edit: 씬 간의 전환을 부드러운 디졸브로 처리하여 몽환적인 분위기를 연출합니다.
 Scene Breakdown:
-S#1 (0:00-0:02 / 인물 없음): [익스트림 클로즈업] 빛이 미세하게 반사되는 이슬이 맺힌 잎사귀. 배경: 숲 속 아침. 자막/그래픽: [하이드로 필릭 시퀀스] 효과음: 풀잎에 이슬이 맺히는 자연음.
-S#2 (0:02-0:05 / 인물 등장): [바스트샷] 창가에 앉아 차분한 표정으로 창밖을 바라보는 70대 할머니. 얼굴에 역광이 부드럽게 비춰 피부가 맑게 빛납니다. 배경: 햇살이 비추는 거실. 대사/내레이션: ["48시간의 촉촉함이 만든 시간의 흔적."]
+S#1 (0:00-0:02 / 인물 없음): [익스트림 클로즈업] 빛이 미세하게 반사되는 이슬이 맺힌 잎사귀. 배경: 숲 속 아침.
+S#2 (0:02-0:05 / 인물 등장): [바스트샷] 창가에 앉아 차분한 표정으로 창밖을 바라보는 70대 할머니. 얼굴에 역광이 부드럽게 비춰 피부가 맑게 빛납니다. 배경: 햇살이 비추는 거실.
 (이하 생략)
 
 [아래가 실제 전체 영상 광고 기획안입니다.]
@@ -25,13 +26,14 @@ Core Task Instructions
 Your absolute priority is to internalize the Overall Creative Direction. This is the master plan. Every decision regarding lighting, color, style, and mood in your prompts must directly serve this creative vision. Maintain strict consistency across all scenes within the concept.
 2. Data Filtering and Focus:
 From the Scene Breakdown, you will ONLY use the visual descriptions (camera angles, subjects, actions, backgrounds). You must completely IGNORE any information related to [자막/그래픽], [대사/내레이션], and [효과음]. Your sole focus is the visual execution.
-3. Automatic Style Selection (Within Commercial Photorealism):
-Based on the Overall Creative Direction, first, select the most suitable sub-style of Commercial Photorealism. The base is always Flux Photorealism engineered for advertising. Your selection here refines the mood.
-Clean and Minimalist: For tech, beauty, luxury products. High-key lighting, clean backgrounds, product-focused.
-Vibrant and Hyper-Realistic: For food, beverage, dynamic products. Saturated colors, high contrast, capturing motion and energy.
-Cinematic and Story-Driven: For brand storytelling, automotive. Dramatic lighting, shallow depth of field, narrative focus.
-Documentary and Authentic: For lifestyle brands, social causes. Natural lighting, candid poses, capturing genuine emotion.
-Stylized and Artistic: For high-fashion, perfume. Unconventional angles, artistic lighting, more abstract but still photorealistic.
+3. Pre-assigned Style Application:
+You must first identify the 컨셉 name from the Input Details and apply its pre-assigned style to all generated prompts for that concept. This is a fixed rule and allows for no deviation. The styles are defined as follows:
+If Concept is '욕망의 시각화', apply 'Stylized and Artistic' style: Focus on dreamy, surreal, and elegant moods. Use soft diffused light, strong backlighting for halo effects, and a pastel or metallic color palette.
+If Concept is '이질적 조합의 미학', apply 'Clean and Minimalist' style: Focus on intelligent, refined, and witty moods. Use bright, even, high-key lighting with minimal shadows on a monochromatic background to emphasize the subjects.
+If Concept is '핵심 가치의 극대화', apply 'Vibrant and Hyper-Realistic' style: Focus on dynamic, energetic, and powerful moods. Use sharp, hard light to emphasize textures and high-saturation primary colors for impact.
+If Concept is '기회비용의 시각화', apply 'Documentary and Authentic' style: Focus on realistic, sincere, and empathetic moods. Use uncontrolled natural light (e.g., from a window) and a desaturated, filmic color palette to build credibility.
+If Concept is '트렌드 융합', apply 'High-fashion editorial' style: Focus on trendy, bold, and confident moods. Use artificial and experimental lighting (e.g., ring flash, colored lights) to create a high-quality, stylized version of a trend.
+If Concept is '파격적 반전', apply 'Cinematic and Story-Driven' style: Focus on narrative, dramatic, and immersive moods. Use high-contrast lighting (chiaroscuro) and genre-specific color grading to build suspense and deliver a powerful twist.
 4. The Flux Commercial Realism Prompt Engine:
 Every prompt string for image generation must be constructed following this exact 7-part formula. This is non-negotiable.
 Part 1: Composition: Start with camera angle, shot type, and subject position.
@@ -41,26 +43,28 @@ Environment & Objects: Describe the location and atmosphere. Give objects a 'his
 Part 3: Detail Level: Force high-fidelity with keywords that blend realism with perfection.
 General: insanely detailed, hyper-realistic, photorealistic, sharp focus, 8K.
 Specifics: micro-details, hyper-realistic textures, flawless skin with visible pores, pristine product surface with no dust, perfectly placed condensation.
-Part 4: Lighting/Time: Describe the light with emotional intent, specifying professional commercial lighting techniques.
+Part 4: Lighting/Time: Describe the light with emotional intent, specifying professional commercial lighting techniques appropriate to the pre-assigned style.
 Examples: professional studio lighting with a large softbox creating flawless even light, soft, warm backlighting creating a nostalgic and tender feeling, a subtle rim light to create a 'halo' effect.
-Part 5: Color Palette: Specify the dominant color scheme, often referencing commercial or cinematic color grading styles.
+Part 5: Color Palette: Specify the dominant color scheme, often referencing commercial or cinematic color grading styles appropriate to the pre-assigned style.
 Examples: vibrant commercial color grading, clean high-key color palette with dominant whites, luxurious desaturated tones, cinematic teal and orange color grading.
-Part 6: Style/Tone: Incorporate the style you selected in step 3, and add a specific commercial photography genre.
-Examples: Clean and Minimalist, commercial product photography style, Cinematic and Story-Driven, luxury automotive advertising aesthetic, Stylized and Artistic, high-fashion editorial for Vogue.
+Part 6: Style/Tone: Incorporate the pre-assigned style from the Pre-assigned Style Application rule, and add a specific commercial photography genre.
+Examples: Stylized and Artistic, luxury perfume advertising aesthetic, Clean and Minimalist, commercial product photography style, Cinematic and Story-Driven, luxury automotive advertising aesthetic.
 Part 7: Camera Specification: Always conclude the prompt with a high-end professional camera and lens combination known for commercial work.
 Examples: Shot by Phase One XF IQ4 with a 120mm macro lens, Shot by RED V-Raptor with a Zeiss Supreme Prime 85mm T1.5 lens.
-5. Sequential Scene Generation:
-Process each scene (S#1, S#2, etc.) in order. If a character or location appears in multiple scenes, ensure your description is perfectly consistent to maintain visual continuity.
-
+5. Natural Motion Principles for Video Generation:
+For every Image-to-Video Motion Prompt, you must adhere to the following 3 Golden Rules for Natural Motion to prevent unnatural or bizarre animations.
+1. Principle of Minimal Movement: Always minimize motion. Focus on one or two subtle movements for the most important subject. Keep the rest of the scene stable.
+2. Principle of Cause & Effect: All movements must have a logical reason. Instead of "water splashes," specify "A drop of cream gently falls, causing a small, elegant ripple."
+3. Use of Restrictive Commands: Explicitly forbid unwanted motion. Conclude the prompt with a restrictive phrase like, All movements are slow, elegant, and subtle. No sudden, erratic, or exaggerated motions.
+6. Sequential Scene Generation:
+Process each scene (S#1, S#2, etc.) in order. For the designated [PRODUCT COMPOSITING SCENE], use the specialized motion prompt. For all other scenes, apply the Natural Motion Principles.
 Output Requirements
 For each scene, you must provide the following two components in English, adhering strictly to the specified JSON formats and rules.
 
 1. Image Prompt (for Static Image Generation)
-Format: Generate the prompt within the following JSON structure. The negative_prompt is fixed and must not be altered. The styling values (style, color, lighting) must be logically derived from the Overall Creative Direction and your Automatic Style Selection.
+Format: Generate the prompt within the following JSON structure. The negative_prompt is fixed. The styling values must be logically derived from the Overall Creative Direction and the pre-assigned style.
 ※ Each concept must be {targetSceneCount} scenes 
-JSON
-
-JSON SCHEMA (STRICT TOP-LEVEL KEYS ONLY):
+JSON SCHEMA
 {
   "project_meta": {
     "brand": "{brandName}",
@@ -99,7 +103,9 @@ JSON SCHEMA (STRICT TOP-LEVEL KEYS ONLY):
 
 2. Image-to-Video Motion Prompt (for Video Generation)
 Format: Generate the prompt within this simple JSON structure.
-Content Rules: Focus on the dynamic action within the scene's duration. Describe character movements, object animations, and camera motion using active verbs (e.g., The camera slowly pushes in towards her face as she begins to smile faintly., A single dew drop slowly trickles down the leaf's central vein.).
+Content Rules:
+For designated [PRODUCT COMPOSITING SCENE]: Use the standardized 'Anticipatory Motion Prompt': "A very slow, subtle camera dolly pushes in, creating a gentle parallax effect. Soft, out-of-focus light motes drift slowly in the background, adding a sense of depth and life. The main environment remains stable and calm, ready for a hero object to be placed."
+For all other scenes: Generate a prompt that adheres strictly to the 3 Golden Rules for Natural Motion.
 JSON
 
 
@@ -110,6 +116,5 @@ JSON
 
 Final Output Format
 Use Markdown for the final response.
-Clearly label the automatically selected style at the beginning.
-Clearly label each scene (e.g., ### S#1 (0:00-0:02)).
-Present the Image Prompt JSON and Image-to-Video Motion Prompt JSON for each scene clearly.
+First, clearly label the applied pre-assigned style for the concept.
+Then, for each scene (e.g., ### S#1 (0:00-0:02)), present the Concept Headline (if it's the first scene), the Image Prompt JSON, and the Image-to-Video Motion Prompt JSON.
