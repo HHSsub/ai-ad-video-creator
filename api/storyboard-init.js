@@ -492,7 +492,7 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
         sceneNumber: sc.scene_number,
         title: `Scene ${sc.scene_number}`,
         duration: sc.duration_seconds || 2,
-        prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 8K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.'[...],
+        prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 8K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.',
         negative_prompt: sc.image_prompt?.negative_prompt || "blurry, low quality, watermark, logo, text, cartoon, distorted",
         styling: sc.image_prompt?.styling || { style:"photo", color:"color", lighting:"natural" },
         size: sc.image_prompt?.image?.size || "widescreen_16_9",
