@@ -11,17 +11,18 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error:'Method not allowed' });
 
-  // 폴더명: style.mood
-  const folders = fs.readdirSync(BGM_DIR).filter(name => {
-    const fullPath = path.join(BGM_DIR, name);
-    return fs.statSync(fullPath).isDirectory();
-  });
+  // BGM 폴더의 하위 폴더 이름을 모두 읽어서
+  // 폴더명이 style.mood 형태일 때 "mood"만 추출 (중복제거)
+  let moods = new Set();
+  const folders = fs.readdirSync(BGM_DIR, {withFileTypes: true})
+    .filter(dirent => dirent.isDirectory())
+    .map(dirent => dirent.name);
 
-  // mood만 추출 (폴더명에서 . 뒤 부분)
-  const moods = new Set();
   folders.forEach(folder => {
     const parts = folder.split('.');
-    if (parts.length === 2) moods.add(parts[1]);
+    if (parts.length === 2 && parts[1]) {
+      moods.add(parts[1]);
+    }
   });
 
   res.status(200).json({ moods: Array.from(moods) });
