@@ -71,10 +71,15 @@ function retryable(e){
   return false;
 }
 
+// 🔥 수정: callGemini() 완전소진시 flash-lite 강제 fallback
 async function callGemini(genAI, prompt, label){
   let attempt=0;
   const total = Math.max(MODEL_CHAIN.length*2, MAX_ATTEMPTS);
-  while(attempt<total){
+
+  let flashExhausted = false;
+  let lastError = null;
+  // 1차: 기존 모델 순회
+  for(; attempt<total; ){
     for(const model of MODEL_CHAIN){
       for(let local=1; local<=2; local++){
         attempt++;
@@ -87,15 +92,43 @@ async function callGemini(genAI, prompt, label){
           console.log(`[storyboard-init][Z2M] ${label} success model=${model} ${Date.now()-t0}ms (len=${text.length})`);
           return { text, model, took: Date.now()-t0, attempts: attempt };
         }catch(e){
+          lastError = e;
           if(!retryable(e)) throw e;
+          // gemini-2.5-flash가 완전히 소진되는 상황 감지
+          if(model === 'gemini-2.5-flash' && attempt >= total) {
+            flashExhausted = true;
+          }
           const delay = jitter(BASE_BACKOFF*Math.pow(2, Math.floor(attempt/MODEL_CHAIN.length)));
           console.warn(`[storyboard-init][Z2M] ${label} fail model=${model} ${e.message} retry in ${delay}ms`);
           await sleep(delay);
         }
       }
     }
+    // 추가: gemini-2.5-flash 완전소진이면 flash-lite로 단독 시도
+    if (flashExhausted) {
+      try {
+        const fallbackModel = MODEL_CHAIN.includes('gemini-2.5-flash-lite') ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
+        const g = genAI.getGenerativeModel({model: fallbackModel});
+        const t0=Date.now();
+        console.warn(`[storyboard-init][Z2M] ${label} fallback to ${fallbackModel} 단독 시도`);
+        const r = await g.generateContent(prompt);
+        const text = r.response.text();
+        console.log(`[storyboard-init][Z2M] ${label} fallback success model=${fallbackModel} ${Date.now()-t0}ms (len=${text.length})`);
+        return { text, model: fallbackModel, took: Date.now()-t0, attempts: attempt+1 };
+      } catch(e) {
+        lastError = e;
+        if(!retryable(e)) throw e;
+        const delay = jitter(BASE_BACKOFF);
+        console.warn(`[storyboard-init][Z2M] ${label} fallback fail ${e.message} retry in ${delay}ms`);
+        await sleep(delay);
+      }
+      break;
+    }
   }
-  throw new Error(`${label} 실패(모든 모델 소진)`);
+  // 기존: throw new Error(`${label} 실패(모든 모델 소진)`);
+  let errMsg = `${label} 실패(모든 모델 소진)`;
+  if (lastError && lastError.message) errMsg += `: ${lastError.message}`;
+  throw new Error(errMsg);
 }
 
 /* ---------------- 🔥 NEW: PRODUCT COMPOSITING SCENE 감지 함수 ---------------- */
@@ -287,12 +320,12 @@ function generateFallbackConcepts() {
     {
       concept_id: 3,
       concept_name: "핵심 가치의 극대화",
-      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지 과장하여 보여줍니다."
+      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지[...]"
     },
     {
       concept_id: 4,
       concept_name: "기회비용의 시각화",
-      raw_block: "제품/서비스를 사용했을 때의 이점이 아닌, 사용하지 않았을 때 발생하는 손해를 구체적이고 현실감 있게 보여주는 네거티브 접근 방식입니다."
+      raw_block: "제품/서비스를 사용했을 때의 이점이 아닌, 사용하지 않았을 때 발생하는 손해를 구체적이고 현실감 있게 보여주는 네거티브 접근 방식[...]"
     },
     {
       concept_id: 5,
@@ -302,7 +335,7 @@ function generateFallbackConcepts() {
     {
       concept_id: 6,
       concept_name: "파격적 반전",
-      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적으로 전달합니다."
+      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적[...]"
     }
   ];
 }
@@ -434,7 +467,7 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
           scene_number:i,
           timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
           image_prompt:{
-            prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa Mini with a 50mm lens.`,
+            prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa M[...]`,
             negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
             num_images:1,
             image:{ size:'widescreen_16_9' },
@@ -459,7 +492,7 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
         sceneNumber: sc.scene_number,
         title: `Scene ${sc.scene_number}`,
         duration: sc.duration_seconds || 2,
-        prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 8K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.',
+        prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 8K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.'[...],
         negative_prompt: sc.image_prompt?.negative_prompt || "blurry, low quality, watermark, logo, text, cartoon, distorted",
         styling: sc.image_prompt?.styling || { style:"photo", color:"color", lighting:"natural" },
         size: sc.image_prompt?.image?.size || "widescreen_16_9",
