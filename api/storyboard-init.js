@@ -1,17 +1,18 @@
+// api/storyboard-init.js - Nano Banana 연동을 위한 PRODUCT COMPOSITING SCENE 감지 추가
+
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /* =========================================================
-   2-STEP CHAIN (input_second_prompt → final_prompt)
-   🔥 FIX: 컨셉 헤더 패턴 정규식 개선 + 더 관대한 파싱
-   STEP1: 6개 컨셉 전략/묘사 (템플릿 내부 {duration} {scene_count} {videoLengthSeconds} {targetSceneCount} 치환)
-   STEP2: 6개 컨셉 * sceneCountPerConcept 이미지 JSON (혹은 fallback) 생성
-   프롬프트 텍스트 자체 내용(문장) 변경 금지. 변수 치환만 추가.
+   2-STEP CHAIN + PRODUCT COMPOSITING SCENE 감지
+   🔥 NEW: PRODUCT COMPOSITING SCENE 감지 및 합성 정보 추가
+   STEP1: 6개 컨셉 전략/묘사 + PRODUCT COMPOSITING SCENE 지정
+   STEP2: 6개 컨셉 * sceneCountPerConcept 이미지 JSON + 합성 정보
 ========================================================= */
 
-/* ---------------- 텍스트 로더 ---------------- */
+/* ---------------- 기존 코드 유지 (텍스트 로더 등) ---------------- */
 function loadTxt(name){
   const p = path.resolve(process.cwd(),'public',name);
   if(!fs.existsSync(p)){
@@ -26,20 +27,21 @@ function loadTxt(name){
 const INPUT_SECOND_PROMPT = loadTxt('input_second_prompt.txt'); // STEP1
 const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (JSON)
 
-/* ---------------- 기본 유틸 ---------------- */
+/* ---------------- 기존 유틸 함수들 유지 ---------------- */
 function parseVideoLengthSeconds(raw){
   if(raw == null) return 10;
   if(typeof raw === 'number') return raw;
-  // 문자열에서 숫자만 추출 (예: "10초", " 10 s", "10s")
   const m = String(raw).match(/\d+/);
   if(!m) return 10;
   const n = parseInt(m[0],10);
   return (isNaN(n)||n<=0)?10:n;
 }
+
 function calcSceneCountPerConcept(sec){
   const n = Math.floor(sec/2);
   return n<1?1:n;
 }
+
 function mapAspectRatio(formData){
   const v = (formData?.videoAspectRatio || formData?.aspectRatio || '').toString().trim().toLowerCase();
   if(['9:16','vertical','portrait'].includes(v)) return 'vertical_9_16';
@@ -48,7 +50,7 @@ function mapAspectRatio(formData){
   return 'widescreen_16_9';
 }
 
-/* ---------------- 모델 체인 & 재시도 ---------------- */
+/* ---------------- 기존 모델 체인 & 재시도 로직 유지 ---------------- */
 const MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN ||
   process.env.GEMINI_MODEL ||
   'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash,gemini-1.5-flash')
@@ -96,11 +98,68 @@ async function callGemini(genAI, prompt, label){
   throw new Error(`${label} 실패(모든 모델 소진)`);
 }
 
-/* ---------------- STEP1 프롬프트 ---------------- */
+/* ---------------- 🔥 NEW: PRODUCT COMPOSITING SCENE 감지 함수 ---------------- */
+function detectProductCompositingScenes(storyboardText, videoPurpose) {
+  const compositingScenes = [];
+  
+  // [PRODUCT COMPOSITING SCENE] 패턴 직접 검색
+  const explicitPattern = /\[PRODUCT COMPOSITING SCENE\]/gi;
+  const explicitMatches = storyboardText.match(explicitPattern);
+  
+  if (explicitMatches) {
+    console.log(`[detectProductCompositingScenes] 명시적 PRODUCT COMPOSITING SCENE 발견: ${explicitMatches.length}개`);
+    
+    // 각 매치 위치 찾기
+    let searchPos = 0;
+    storyboardText.replace(explicitPattern, (match, offset) => {
+      // 해당 위치 앞의 S# 패턴 찾기
+      const beforeText = storyboardText.slice(0, offset);
+      const sceneMatches = beforeText.match(/S#(\d+)/g);
+      if (sceneMatches && sceneMatches.length > 0) {
+        const lastScene = sceneMatches[sceneMatches.length - 1];
+        const sceneNumber = parseInt(lastScene.replace('S#', ''), 10);
+        compositingScenes.push({
+          sceneNumber,
+          explicit: true,
+          context: 'PRODUCT_COMPOSITING_SCENE'
+        });
+        console.log(`[detectProductCompositingScenes] Scene ${sceneNumber}에서 명시적 합성 지점 발견`);
+      }
+      return match;
+    });
+  } else {
+    // 백업: 영상 목적에 따른 자동 감지
+    console.log(`[detectProductCompositingScenes] 명시적 지점 없음, 영상 목적(${videoPurpose})에 따른 자동 감지`);
+    
+    if (videoPurpose === '구매 전환') {
+      // S#2 자동 지정
+      compositingScenes.push({
+        sceneNumber: 2,
+        explicit: false,
+        context: 'AUTO_PURCHASE_CONVERSION'
+      });
+    } else {
+      // 브랜드 인지도: 마지막 씬 자동 지정 (일반적으로 5씬이라 가정)
+      const sceneMatches = storyboardText.match(/S#(\d+)/g);
+      if (sceneMatches && sceneMatches.length > 0) {
+        const lastSceneMatch = sceneMatches[sceneMatches.length - 1];
+        const lastSceneNumber = parseInt(lastSceneMatch.replace('S#', ''), 10);
+        compositingScenes.push({
+          sceneNumber: lastSceneNumber,
+          explicit: false,
+          context: 'AUTO_BRAND_AWARENESS'
+        });
+      }
+    }
+  }
+  
+  return compositingScenes;
+}
+
+/* ---------------- 기존 STEP1 프롬프트 빌더 유지 ---------------- */
 function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
   if(!INPUT_SECOND_PROMPT) throw new Error('input_second_prompt.txt 누락');
 
-  // 원문 유지 + 변수 치환 (추가: {videoLengthSeconds} {targetSceneCount} {duration} {scene_count})
   let p = INPUT_SECOND_PROMPT
     .replaceAll('{brandName}', String(fd.brandName||''))
     .replaceAll('{industryCategory}', String(fd.industryCategory||''))
@@ -114,8 +173,6 @@ function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
     .replaceAll('{brandLogo}', fd.brandLogo ? '업로드됨':'없음')
     .replaceAll('{productImage}', fd.productImage ? '업로드됨':'없음')
     .replaceAll('{aspectRatioCode}', mapAspectRatio(fd))
-
-    // 추가 치환
     .replaceAll('{videoLengthSeconds}', String(videoLengthSeconds))
     .replaceAll('{targetSceneCount}', String(sceneCountPerConcept))
     .replaceAll('{duration}', String(videoLengthSeconds))
@@ -124,27 +181,25 @@ function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
   return p;
 }
 
-/* ---------------- 🔥 FIX: STEP1 컨셉 블록 추출 - 개선된 정규식 ---------------- */
+/* ---------------- 기존 컨셉 블록 추출 로직 유지 ---------------- */
 function extractConceptBlocks(raw){
   if(!raw) return [];
   
-  // 🔥 더 관대한 컨셉 헤더 패턴 (한글, 숫자, 공백 허용)
   const patterns = [
-    /\*\*\s*(\d+)\.\s*컨셉:\s*([^\*\n]+?)\s*\*\*/g,          // **1. 컨셉: 이름**
-    /\*\*\s*컨셉\s*(\d+):\s*([^\*\n]+?)\s*\*\*/g,            // **컨셉 1: 이름**
-    /\*\*\s*(\d+)\s*\.\s*([^\*\n]+?)\s*\*\*/g,               // **1. 이름**
-    /## \s*(\d+)\.\s*컨셉:\s*([^\n]+)/g,                      // ## 1. 컨셉: 이름
-    /### \s*(\d+)\.\s*컨셉:\s*([^\n]+)/g,                     // ### 1. 컨셉: 이름
-    /(\d+)\.\s*컨셉:\s*([^\n\*]+)/g,                          // 1. 컨셉: 이름 (일반 텍스트)
-    /\*\*\s*(\d+)\s*[\.:]?\s*([가-힣\w\s]+?)\s*\*\*/g        // **1 이름** 또는 **1. 이름**
+    /\*\*\s*(\d+)\.\s*컨셉:\s*([^\*\n]+?)\s*\*\*/g,
+    /\*\*\s*컨셉\s*(\d+):\s*([^\*\n]+?)\s*\*\*/g,
+    /\*\*\s*(\d+)\s*\.\s*([^\*\n]+?)\s*\*\*/g,
+    /## \s*(\d+)\.\s*컨셉:\s*([^\n]+)/g,
+    /### \s*(\d+)\.\s*컨셉:\s*([^\n]+)/g,
+    /(\d+)\.\s*컨셉:\s*([^\n\*]+)/g,
+    /\*\*\s*(\d+)\s*[\.:]?\s*([가-힣\w\s]+?)\s*\*\*/g
   ];
   
   const matches = [];
   
-  // 여러 패턴으로 시도
   for (const pattern of patterns) {
     let m;
-    pattern.lastIndex = 0; // 정규식 상태 초기화
+    pattern.lastIndex = 0;
     
     while ((m = pattern.exec(raw)) !== null) {
       const idx = parseInt(m[1], 10);
@@ -161,7 +216,6 @@ function extractConceptBlocks(raw){
       }
     }
     
-    // 충분한 매치를 찾으면 더 이상 패턴 시도하지 않음
     if (matches.length >= 3) break;
   }
   
@@ -172,17 +226,14 @@ function extractConceptBlocks(raw){
     return generateFallbackConcepts();
   }
   
-  // 시작 위치 순으로 정렬
   matches.sort((a, b) => a.start - b.start);
   
-  // 블록 내용 추출
   for (let i = 0; i < matches.length; i++) {
     const cur = matches[i];
     const next = matches[i + 1];
     cur.block = raw.slice(cur.start, next ? next.start : raw.length).trim();
   }
   
-  // 컨셉 맵 생성 (중복 제거)
   const conceptMap = new Map();
   for (const c of matches) {
     if (c.idx >= 1 && c.idx <= 6 && !conceptMap.has(c.idx)) {
@@ -194,7 +245,6 @@ function extractConceptBlocks(raw){
     }
   }
   
-  // 1-6 순서대로 배열 생성
   const out = [];
   for (let i = 1; i <= 6; i++) {
     if (conceptMap.has(i)) {
@@ -202,7 +252,6 @@ function extractConceptBlocks(raw){
     }
   }
   
-  // 부족한 컨셉은 자동 생성으로 채움
   if (out.length < 6) {
     console.warn(`[extractConceptBlocks] 추출된 컨셉 수 ${out.length}/6 -> 자동 생성으로 채움`);
     const fallbackConcepts = generateFallbackConcepts();
@@ -217,50 +266,48 @@ function extractConceptBlocks(raw){
     }
   }
   
-  // 최종 정렬
   out.sort((a, b) => a.concept_id - b.concept_id);
   
   console.log(`[extractConceptBlocks] 최종 컨셉 수: ${out.length}/6`);
   return out;
 }
 
-/* ---------------- 🔥 FIX: 폴백 컨셉 자동 생성 ---------------- */
 function generateFallbackConcepts() {
   return [
     {
       concept_id: 1,
       concept_name: "욕망의 시각화",
-      raw_block: "타겟 오디언스의 심리 깊숙한 곳에 내재된 근원적 욕구를 감각적이고 상징적인 비주얼로 구현합니다. 제품의 기능적 효용을 넘어, 브랜드를 소유함으로써 욕망이 실현된다는 강력한 감정적 연결고리를 형성합니다."
+      raw_block: "타겟 오디언스의 심리 깊숙한 곳에 내재된 근원적 욕구를 감각적이고 상징적인 비주얼로 구현합니다."
     },
     {
       concept_id: 2,
       concept_name: "이질적 조합의 미학",
-      raw_block: "브랜드나 제품의 속성과 전혀 관련 없어 보이는 시각적, 청각적, 서사적 요소를 의도적으로 충돌시켜 시청자의 예측을 파괴합니다. 이질적인 것들의 결합이 만들어내는 초현실적이고 기묘한 아름다움을 통해 강렬한 인상을 남깁니다."
+      raw_block: "브랜드나 제품의 속성과 전혀 관련 없어 보이는 시각적, 청각적, 서사적 요소를 의도적으로 충돌시켜 시청자의 예측을 파괴합니다."
     },
     {
       concept_id: 3,
       concept_name: "핵심 가치의 극대화",
-      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지 과장하여 보여줍니다. 다른 모든 장점을 포기하더라도 단 하나의 강점만큼은 확실하게 기억시키는 전략입니다."
+      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지 과장하여 보여줍니다."
     },
     {
       concept_id: 4,
       concept_name: "기회비용의 시각화",
-      raw_block: "제품/서비스를 사용했을 때의 이점이 아닌, 사용하지 않았을 때 발생하는 손해를 구체적이고 현실감 있게 보여주는 네거티브 접근 방식입니다. 타겟이 무심코 감수하고 있던 불편함, 시간 낭비, 감정 소모 등을 시각적으로 명확히 제시합니다."
+      raw_block: "제품/서비스를 사용했을 때의 이점이 아닌, 사용하지 않았을 때 발생하는 손해를 구체적이고 현실감 있게 보여주는 네거티브 접근 방식입니다."
     },
     {
       concept_id: 5,
       concept_name: "트렌드 융합",
-      raw_block: "타겟이 열광하는 사회문화적 트렌드(밈, 챌린지, AI 등)를 브랜드 메시지와 자연스럽게 융합합니다. 트렌드를 단순히 흉내 내는 것을 넘어, 브랜드의 오리지널리티를 더해 새로운 콘텐츠로 재창조함으로써 타겟과의 문화적 유대감을 형성합니다."
+      raw_block: "타겟이 열광하는 사회문화적 트렌드(밈, 챌린지, AI 등)를 브랜드 메시지와 자연스럽게 융합합니다."
     },
     {
       concept_id: 6,
       concept_name: "파격적 반전",
-      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적으로 전달합니다. 예측 불가능한 유머를 선사하고, 시청자가 마지막까지 긴장을 놓지 못하게 만듭니다."
+      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적으로 전달합니다."
     }
   ];
 }
 
-/* ---------------- STEP2(final) 프롬프트 ---------------- */
+/* ---------------- 기존 STEP2 프롬프트 빌더 유지 ---------------- */
 function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept){
   if(!FINAL_PROMPT) throw new Error('final_prompt.txt 누락');
   const videoLengthSeconds = parseVideoLengthSeconds(fd.videoLength);
@@ -270,7 +317,6 @@ function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept)
     .map(c=>`- (${c.concept_id}) ${c.concept_name}: ${c.raw_block.slice(0,400)}`)
     .join('\n');
 
-  // final_prompt.txt에서 Flux 규칙, styling, motion_prompt, seed, etc.를 모두 강제
   const override = `
 [OVERRIDE MULTI-CONCEPT JSON OUTPUT – IGNORE ANY PREVIOUS SINGLE "scenes" SPEC]
 
@@ -314,10 +360,8 @@ Return EXACTLY ONE VALID JSON object:
           "motion_prompt":{"prompt":"[English, dynamic action only]"},
           "duration_seconds":2
         }
-        // scene_number 2..${sceneCountPerConcept} 까지
       ]
     }
-    // concept_id 2..6 EXACT SAME STRUCTURE, each EXACTLY ${sceneCountPerConcept} scenes
   ]
 }
 
@@ -338,7 +382,7 @@ ${conceptsForPrompt}
   return `${FINAL_PROMPT}\n\n${override}`;
 }
 
-/* ---------------- STEP2 JSON 파싱 ---------------- */
+/* ---------------- 기존 JSON 파싱 로직 유지 ---------------- */
 function parseMultiConceptJSON(raw){
   if(!raw) return null;
   const first = raw.indexOf('{');
@@ -347,9 +391,7 @@ function parseMultiConceptJSON(raw){
   const slice = raw.slice(first, last+1);
   try{
     const obj = JSON.parse(slice);
-    // 최신 구조: concepts[ { concept_id, concept_name, image_prompts:[{scene_number, image_prompt, motion_prompt, ...}] } ]
     if(Array.isArray(obj.concepts) && obj.concepts.length===6){
-      // 각 image_prompt/motion_prompt 구조 강제 확인
       for(const concept of obj.concepts){
         if(!Array.isArray(concept.image_prompts) || concept.image_prompts.length<1){
           console.warn('[storyboard-init][Z2M] image_prompts missing in concept', concept.concept_id);
@@ -372,20 +414,20 @@ function parseMultiConceptJSON(raw){
   }
 }
 
-/* ---------------- styles 구성 ---------------- */
-function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
+/* ---------------- 🔥 UPDATED: 합성 정보 포함 styles 구성 ---------------- */
+function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositingScenes, formData){
   if(!conceptJson?.concepts) return [];
+  
   return conceptJson.concepts.map(c=>{
     let arr = Array.isArray(c.image_prompts)? c.image_prompts : [];
-    // 씬 개수 보장
+    
     if(arr.length < sceneCountPerConcept && arr.length>0){
       const last = arr[arr.length-1];
       while(arr.length < sceneCountPerConcept){
-        // 마지막 씬 복제해 채움 (seed만 변경)
         arr.push({...last, scene_number: arr.length+1, image_prompt:{...last.image_prompt, seed: Math.floor(10000 + Math.random()*90000)}});
       }
     }
-    // 완전히 비어있으면 placeholder 생성
+    
     if(arr.length === 0){
       for(let i=1;i<=sceneCountPerConcept;i++){
         arr.push({
@@ -406,14 +448,14 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
         });
       }
     }
+    
     arr.sort((a,b)=>(a.scene_number||0)-(b.scene_number||0));
-    return {
-      concept_id: c.concept_id,
-      style: c.concept_name,
-      name: c.concept_name,
-      summary: c.summary || `Generated concept ${c.concept_name}`,
-      keywords: [],
-      imagePrompts: arr.map(sc=>({
+    
+    // 🔥 NEW: 각 이미지 프롬프트에 합성 정보 추가
+    const imagePrompts = arr.map(sc=>{
+      const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === sc.scene_number);
+      
+      return {
         sceneNumber: sc.scene_number,
         title: `Scene ${sc.scene_number}`,
         duration: sc.duration_seconds || 2,
@@ -426,14 +468,29 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept){
         filter_nsfw: sc.image_prompt?.filter_nsfw !== undefined ? sc.image_prompt.filter_nsfw : true,
         motion_prompt: sc.motion_prompt?.prompt || "Subtle camera drift.",
         timecode: sc.timecode || "",
-      }))
+        // 🔥 NEW: 합성 관련 정보 추가
+        isCompositingScene: isCompositingScene,
+        compositingInfo: isCompositingScene ? {
+          needsProductImage: formData.productImageProvided || false,
+          needsBrandLogo: formData.brandLogoProvided || false,
+          compositingContext: compositingScenes.find(cs => cs.sceneNumber === sc.scene_number)?.context || 'unknown'
+        } : null
+      };
+    });
+
+    return {
+      concept_id: c.concept_id,
+      style: c.concept_name,
+      name: c.concept_name,
+      summary: c.summary || `Generated concept ${c.concept_name}`,
+      keywords: [],
+      imagePrompts: imagePrompts
     };
   });
 }
 
-/* ---------------- 핸들러 ---------------- */
+/* ---------------- 메인 핸들러 ---------------- */
 export default async function handler(req,res){
-  // CORS
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers','Content-Type');
@@ -465,6 +522,10 @@ export default async function handler(req,res){
     const step1 = await callGemini(gen, step1Prompt, 'STEP1');
     const phase1_output = step1.text;
 
+    // 🔥 NEW: PRODUCT COMPOSITING SCENE 감지
+    const compositingScenes = detectProductCompositingScenes(phase1_output, formData.videoPurpose);
+    console.log('[storyboard-init][Z2M] 감지된 합성 씬:', compositingScenes);
+
     const conceptBlocks = extractConceptBlocks(phase1_output);
 
     /* STEP2 */
@@ -476,13 +537,15 @@ export default async function handler(req,res){
 
     let styles=[];
     if(mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length===6){
-      styles = buildStylesFromConceptJson(mcJson, sceneCountPerConcept);
+      // 🔥 UPDATED: 합성 정보 포함하여 styles 구성
+      styles = buildStylesFromConceptJson(mcJson, sceneCountPerConcept, compositingScenes, formData);
       console.log('[storyboard-init][Z2M] multi-concept JSON 파싱 성공 (6 concepts)');
     } else {
       console.warn('[storyboard-init][Z2M] multi-concept JSON 미구현 → placeholder 구성');
       styles = conceptBlocks.map(c=>{
         const imagePrompts=[];
         for(let i=1;i<=sceneCountPerConcept;i++){
+          const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === i);
           imagePrompts.push({
             sceneNumber:i,
             title:`Scene ${i}`,
@@ -496,6 +559,13 @@ export default async function handler(req,res){
             filter_nsfw:true,
             motion_prompt:"Subtle camera drift.",
             timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
+            // 🔥 NEW: 합성 정보 추가
+            isCompositingScene: isCompositingScene,
+            compositingInfo: isCompositingScene ? {
+              needsProductImage: formData.productImageProvided || false,
+              needsBrandLogo: formData.brandLogoProvided || false,
+              compositingContext: compositingScenes.find(cs => cs.sceneNumber === i)?.context || 'fallback'
+            } : null
           });
         }
         return {
@@ -516,6 +586,7 @@ export default async function handler(req,res){
         if(!existing.has(i)){
           const imagePrompts=[];
           for(let k=1;k<=sceneCountPerConcept;k++){
+            const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === k);
             imagePrompts.push({
               sceneNumber:k,
               title:`Scene ${k}`,
@@ -529,6 +600,13 @@ export default async function handler(req,res){
               filter_nsfw:true,
               motion_prompt:"Subtle camera drift.",
               timecode:`00:${String((k-1)*2).padStart(2,'0')}-00:${String(k*2).padStart(2,'0')}`,
+              // 🔥 NEW: 합성 정보 추가
+              isCompositingScene: isCompositingScene,
+              compositingInfo: isCompositingScene ? {
+                needsProductImage: formData.productImageProvided || false,
+                needsBrandLogo: formData.brandLogoProvided || false,
+                compositingContext: compositingScenes.find(cs => cs.sceneNumber === k)?.context || 'auto_filled'
+              } : null
             });
           }
           styles.push({
@@ -544,10 +622,19 @@ export default async function handler(req,res){
       styles.sort((a,b)=>a.concept_id-b.concept_id);
     }
 
+    // 🔥 NEW: 응답에 합성 정보 포함
     res.status(200).json({
       success:true,
       styles,
       imagePrompts: styles[0]?.imagePrompts || [],
+      // 🔥 NEW: 합성 관련 메타데이터 추가
+      compositingInfo: {
+        scenes: compositingScenes,
+        hasProductImage: formData.productImageProvided || false,
+        hasBrandLogo: formData.brandLogoProvided || false,
+        productImageData: formData.productImage || null,
+        brandLogoData: formData.brandLogo || null
+      },
       metadata:{
         videoLengthSeconds,
         sceneCountPerConcept,
@@ -559,7 +646,10 @@ export default async function handler(req,res){
         multiConceptJsonParsed: !!(mcJson && mcJson.concepts),
         conceptsDetectedFromStep1: conceptBlocks.length,
         z2multi:true,
-        conceptBlocksGenerated: conceptBlocks.length === 0 ? 'fallback_auto_generated' : 'extracted_from_gemini'
+        conceptBlocksGenerated: conceptBlocks.length === 0 ? 'fallback_auto_generated' : 'extracted_from_gemini',
+        // 🔥 NEW: 합성 관련 메타데이터
+        compositingScenesDetected: compositingScenes.length,
+        compositingEnabled: compositingScenes.length > 0 && (formData.productImageProvided || formData.brandLogoProvided)
       }
     });
 
