@@ -11,12 +11,17 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error:'Method not allowed' });
 
-  // 모든 mood 추출 (중복제거)
-  const files = fs.readdirSync(BGM_DIR);
+  // 폴더명: style.mood
+  const folders = fs.readdirSync(BGM_DIR).filter(name => {
+    const fullPath = path.join(BGM_DIR, name);
+    return fs.statSync(fullPath).isDirectory();
+  });
+
+  // mood만 추출 (폴더명에서 . 뒤 부분)
   const moods = new Set();
-  files.forEach(file => {
-    const match = file.match(/^([^.]+)\.([^.]+)_\d+\.mp3$/);
-    if (match) moods.add(match[2]);
+  folders.forEach(folder => {
+    const parts = folder.split('.');
+    if (parts.length === 2) moods.add(parts[1]);
   });
 
   res.status(200).json({ moods: Array.from(moods) });
