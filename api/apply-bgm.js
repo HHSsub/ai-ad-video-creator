@@ -5,24 +5,46 @@ import { randomUUID } from 'crypto';
 
 const BGM_DIR = path.join(process.cwd(), 'BGM');
 
-// 드롭다운 mood 목록 추출 (style.mood_number.mp3에서 mood만 뽑음)
+// 모든 style.mood 폴더명 반환
+function getStyleMoodFolders() {
+  return fs.readdirSync(BGM_DIR).filter(name => {
+    const fullPath = path.join(BGM_DIR, name);
+    return fs.statSync(fullPath).isDirectory();
+  });
+}
+
+// mood 목록 추출 (폴더명에서 . 뒤 부분)
 function getMoodList() {
-  const files = fs.readdirSync(BGM_DIR);
+  const folders = getStyleMoodFolders();
   const moods = new Set();
-  files.forEach(file => {
-    const match = file.match(/^([^.]+)\.([^.]+)_\d+\.mp3$/);
-    if (match) moods.add(match[2]);
+  folders.forEach(folder => {
+    const parts = folder.split('.');
+    if (parts.length === 2) moods.add(parts[1]);
   });
   return Array.from(moods);
 }
 
-// 특정 mood에 해당하는 모든 파일 반환 (style 관계없이)
+// 특정 mood에 해당하는 모든 .mp3 파일 경로 리스트
 function listBgmFilesForMood(mood) {
-  const files = fs.readdirSync(BGM_DIR);
-  return files.filter(file => {
-    const match = file.match(/^([^.]+)\.([^.]+)_\d+\.mp3$/);
-    return match && match[2] === mood;
+  const folders = getStyleMoodFolders().filter(name => name.split('.')[1] === mood);
+  let files = [];
+  folders.forEach(folder => {
+    const dirPath = path.join(BGM_DIR, folder);
+    const mp3s = fs.readdirSync(dirPath).filter(file => file.endsWith('.mp3'));
+    mp3s.forEach(file => {
+      const match = file.match(/^([^.]+)\.([^.]+)_(\d+)\.mp3$/);
+      if (match && match[2] === mood) {
+        files.push({
+          style: match[1],
+          mood: match[2],
+          number: match[3],
+          name: file,
+          path: path.join(dirPath, file)
+        });
+      }
+    });
   });
+  return files;
 }
 
 // mood에 맞는 파일 중 하나 랜덤 선택
@@ -30,11 +52,7 @@ function pickRandomBgm(mood) {
   const bgmFiles = listBgmFilesForMood(mood);
   if (!bgmFiles.length) throw new Error(`해당 mood의 BGM이 없습니다: ${mood}`);
   const chosen = bgmFiles[Math.floor(Math.random() * bgmFiles.length)];
-  return {
-    name: chosen,
-    path: path.join(BGM_DIR, chosen),
-    mood: mood,
-  };
+  return chosen;
 }
 
 function hasAudioStream(videoPath) {
@@ -91,6 +109,9 @@ export default async function handler(req, res) {
     const { videoPath, mood } = req.body;
     if (!videoPath || typeof videoPath !== 'string' || videoPath.trim().length < 5) {
       return res.status(400).json({ error: 'videoPath required (서버 로컬 경로 또는 마운트)' });
+    }
+    if (!mood || typeof mood !== 'string') {
+      return res.status(400).json({ error: 'mood required' });
     }
 
     const bgmInfo = pickRandomBgm(mood);
