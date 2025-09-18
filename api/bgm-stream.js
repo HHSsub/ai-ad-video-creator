@@ -1,16 +1,9 @@
-import 'dotenv/config';
-import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
 
-const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
+const BGM_DIR = path.join(process.cwd(), 'BGM');
 
-function getDrive() {
-  const email = process.env.GOOGLE_CLIENT_EMAIL;
-  const key = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
-  if (!email || !key) throw new Error('Missing Google credentials');
-  const jwt = new google.auth.JWT(email, null, key, SCOPES);
-  return google.drive({ version: 'v3', auth: jwt });
-}
-
+// GET /api/bgm-stream?mood=따듯한
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Methods','GET, OPTIONS');
@@ -19,33 +12,32 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error:'Method not allowed' });
 
-  const { id } = req.query || {};
-  if (!id) return res.status(400).json({ error:'id query required' });
+  const { mood } = req.query || {};
+  if (!mood) return res.status(400).json({ error: 'mood query required' });
 
-  try {
-    const drive = getDrive();
+  // 모든 style에서 해당 mood mp3 찾기
+  const files = fs.readdirSync(BGM_DIR).filter(file => {
+    // file: style.mood_number.mp3
+    const match = file.match(/^([^.]+)\.([^.]+)_\d+\.mp3$/);
+    return match && match[2] === mood;
+  });
+  if (!files.length) return res.status(404).json({ error: '해당 mood의 BGM 없음' });
 
-    const meta = await drive.files.get({ fileId: id, fields:'id,name,mimeType,size' });
-    const size = parseInt(meta.data.size || '0',10);
-    const mime = meta.data.mimeType || 'audio/mpeg';
+  // 랜덤 하나 선택
+  const chosen = files[Math.floor(Math.random() * files.length)];
+  const filePath = path.join(BGM_DIR, chosen);
 
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Length', size || '');
-    res.setHeader('Accept-Ranges', 'bytes');
+  const stat = fs.statSync(filePath);
+  const size = stat.size;
 
-    const dl = await drive.files.get({ fileId: id, alt: 'media' }, { responseType:'stream' });
-    dl.data.on('error', err => {
-      console.error('Stream error:', err.message);
-      if (!res.headersSent) {
-        res.status(500).end();
-      }
-    });
-    dl.data.pipe(res);
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Content-Length', size);
+  res.setHeader('Accept-Ranges', 'bytes');
 
-  } catch (e) {
-    console.error('[bgm-stream] error:', e);
-    if (!res.headersSent) {
-      res.status(500).json({ error: e.message });
-    }
-  }
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', err => {
+    console.error('Stream error:', err.message);
+    if (!res.headersSent) res.status(500).end();
+  });
+  stream.pipe(res);
 }
