@@ -11,7 +11,12 @@ import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 import compileVideos from '../api/compile-videos.js';
 import debug from '../api/debug.js';
-import applyBgm from '../api/apply-bgm.js'; // 🔥 BGM API 추가
+// 추가: BGM 관련 API 핸들러 import
+import applyBgm from '../api/apply-bgm.js';
+import loadMoodList from '../api/load-mood-list.js';
+import loadBgmList from '../api/load-bgm-list.js';
+import bgmStream from '../api/bgm-stream.js';
+import nanobanaCompose from '../api/nanobanana-compose.js'; // 🔥 NEW: Nano Banana 합성 API
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -73,7 +78,11 @@ bindRoute('/api/generate-video', generateVideo, ['POST']);
 bindRoute('/api/video-status', videoStatus, ['POST']);
 bindRoute('/api/compile-videos', compileVideos, ['POST']);
 bindRoute('/api/debug', debug, ['GET']);
-bindRoute('/api/apply-bgm', applyBgm, ['POST']); // 🔥 BGM 추가
+bindRoute('/api/apply-bgm', applyBgm, ['POST']);
+bindRoute('/api/load-mood-list', loadMoodList, ['GET']); // 🔥 BGM mood 드롭다운용
+bindRoute('/api/load-bgm-list', loadBgmList, ['GET']);   // 🔥 BGM 리스트
+bindRoute('/api/bgm-stream', bgmStream, ['GET']);        // 🔥 BGM 스트림
+bindRoute('/api/nanobanana-compose', nanobanaCompose, ['POST']); // 🔥 NEW: Nano Banana 합성
 
 // 정적 파일 서빙
 app.use('/tmp', express.static('tmp', {
@@ -105,7 +114,11 @@ app.use('*', (req, res) => {
       'POST /api/generate-video',
       'POST /api/video-status',
       'POST /api/compile-videos',
-      'POST /api/apply-bgm' // 🔥 BGM 추가
+      'POST /api/apply-bgm',
+      'POST /api/load-mood-list',
+      'POST /api/load-bgm-list',
+      'POST /api/bgm-stream',
+      'POST /api/nanobanana-compose' // 🔥 NEW
     ]
   });
 });
@@ -141,6 +154,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - POST /api/video-status`);
   console.log(`   - POST /api/compile-videos`);
   console.log(`   - POST /api/apply-bgm`);
+  console.log(`   - POST /api/load-mood-list`);
+  console.log(`   - POST /api/load-bgm-list`);
+  console.log(`   - POST /api/bgm-stream`);
+  console.log(`   - POST /api/nanobanana-compose`); // 🔥 NEW
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
 });
 
