@@ -11,8 +11,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error:'Method not allowed' });
 
-  // BGM 폴더의 하위 폴더 이름을 모두 읽어서
-  // 폴더명이 style.mood 형태일 때 "mood"만 추출 (중복제거)
+  // 하위 폴더명에서 mood만 추출 (폴더명: style.mood)
   let moods = new Set();
   const folders = fs.readdirSync(BGM_DIR, {withFileTypes: true})
     .filter(dirent => dirent.isDirectory())
