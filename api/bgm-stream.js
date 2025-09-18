@@ -15,22 +15,29 @@ export default async function handler(req, res) {
   const { mood } = req.query || {};
   if (!mood) return res.status(400).json({ error: 'mood query required' });
 
-  // 모든 style에서 해당 mood mp3 찾기
-  const files = fs.readdirSync(BGM_DIR).filter(file => {
-    // file: style.mood_number.mp3
-    const match = file.match(/^([^.]+)\.([^.]+)_\d+\.mp3$/);
-    return match && match[2] === mood;
+  // mood에 해당하는 모든 폴더
+  const folders = fs.readdirSync(BGM_DIR).filter(name => {
+    const fullPath = path.join(BGM_DIR, name);
+    return fs.statSync(fullPath).isDirectory() && name.split('.')[1] === mood;
   });
-  if (!files.length) return res.status(404).json({ error: '해당 mood의 BGM 없음' });
+
+  // 모든 mp3파일을 합친 리스트
+  const allFiles = [];
+  folders.forEach(folder => {
+    const files = fs.readdirSync(path.join(BGM_DIR, folder)).filter(file => file.endsWith('.mp3'));
+    files.forEach(file => allFiles.push({folder, file}));
+  });
+
+  if (!allFiles.length) return res.status(404).json({ error: '해당 mood의 BGM 없음' });
 
   // 랜덤 하나 선택
-  const chosen = files[Math.floor(Math.random() * files.length)];
-  const filePath = path.join(BGM_DIR, chosen);
+  const chosen = allFiles[Math.floor(Math.random() * allFiles.length)];
+  const filePath = path.join(BGM_DIR, chosen.folder, chosen.file);
 
   const stat = fs.statSync(filePath);
   const size = stat.size;
 
-  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Content-Type', 'video/mp3');
   res.setHeader('Content-Length', size);
   res.setHeader('Accept-Ranges', 'bytes');
 
