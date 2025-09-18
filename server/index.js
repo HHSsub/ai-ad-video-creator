@@ -79,9 +79,9 @@ bindRoute('/api/video-status', videoStatus, ['POST']);
 bindRoute('/api/compile-videos', compileVideos, ['POST']);
 bindRoute('/api/debug', debug, ['GET']);
 bindRoute('/api/apply-bgm', applyBgm, ['POST']);
-bindRoute('/api/load-mood-list', loadMoodList, ['GET']); // 🔥 BGM mood 드롭다운용
-bindRoute('/api/load-bgm-list', loadBgmList, ['GET']);   // 🔥 BGM 리스트
-bindRoute('/api/bgm-stream', bgmStream, ['GET']);        // 🔥 BGM 스트림
+bindRoute('/api/load-mood-list', loadMoodList, ['GET','POST']); // 🔥 BGM mood 드롭다운용
+bindRoute('/api/load-bgm-list', loadBgmList, ['GET','POST']);   // 🔥 BGM 리스트
+bindRoute('/api/bgm-stream', bgmStream, ['GET','POST']);        // 🔥 BGM 스트림
 bindRoute('/api/nanobanana-compose', nanobanaCompose, ['POST']); // 🔥 NEW: Nano Banana 합성
 
 // 정적 파일 서빙
