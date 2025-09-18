@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     return fs.statSync(fullPath).isDirectory() && name.split('.')[1] === mood;
   });
 
-  // 각 폴더 내부 mp4 파일 목록
+  // 각 폴더 내부 mp3 파일 목록
   const list = [];
   folders.forEach(folder => {
     const files = fs.readdirSync(path.join(BGM_DIR, folder)).filter(file => file.endsWith('.mp3'));
