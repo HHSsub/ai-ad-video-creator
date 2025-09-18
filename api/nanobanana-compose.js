@@ -1,149 +1,225 @@
-// api/nanobanana-compose.js - Gemini Nano Banana를 활용한 이미지 합성
+// api/nanobanana-compose.js - 실제 Gemini 2.5 Flash Image (Nano Banana) API 호출
 
 import 'dotenv/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import fetch from 'node-fetch';
 
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const NANO_BANANA_MODEL = 'gemini-2.5-flash-image-preview';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 
 /**
- * Gemini Nano Banana를 사용한 이미지 합성
- * @param {string} baseImageUrl - 베이스 이미지 URL (Freepik에서 생성된 이미지)
- * @param {string} overlayImageData - 합성할 이미지 데이터 (base64 또는 URL)
- * @param {object} compositingInfo - 합성 정보
- * @param {string} apiKey - Gemini API 키
+ * 이미지 URL을 base64로 변환
  */
-async function composeWithNanoBanana(baseImageUrl, overlayImageData, compositingInfo, apiKey) {
-  console.log('[nanobanana-compose] 합성 시작:', {
-    baseImageUrl: baseImageUrl.substring(0, 80) + '...',
-    hasOverlayData: !!overlayImageData,
-    compositingContext: compositingInfo.compositingContext
-  });
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  
-  // Gemini Pro Vision 모델 사용 (이미지 편집 기능)
-  const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
-
+async function imageUrlToBase64(imageUrl) {
   try {
-    // 베이스 이미지 다운로드
-    const baseImageResponse = await fetch(baseImageUrl);
-    if (!baseImageResponse.ok) {
-      throw new Error(`베이스 이미지 다운로드 실패: ${baseImageResponse.status}`);
+    console.log(`[imageUrlToBase64] 다운로드 시작: ${imageUrl.substring(0, 80)}...`);
+    
+    const response = await fetch(imageUrl, {
+      timeout: 30000,
+      headers: {
+        'User-Agent': 'AI-Ad-Creator/1.0'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`이미지 다운로드 실패: ${response.status} ${response.statusText}`);
     }
-    const baseImageBuffer = await baseImageResponse.arrayBuffer();
-    const baseImageBase64 = Buffer.from(baseImageBuffer).toString('base64');
-
-    // 오버레이 이미지 처리 (base64 형태로 변환)
-    let overlayImageBase64;
-    if (overlayImageData.startsWith('data:')) {
-      // 이미 base64 형태
-      overlayImageBase64 = overlayImageData.split(',')[1];
-    } else if (overlayImageData.startsWith('http')) {
-      // URL 형태 - 다운로드 필요
-      const overlayResponse = await fetch(overlayImageData);
-      if (!overlayResponse.ok) {
-        throw new Error(`오버레이 이미지 다운로드 실패: ${overlayResponse.status}`);
-      }
-      const overlayBuffer = await overlayResponse.arrayBuffer();
-      overlayImageBase64 = Buffer.from(overlayBuffer).toString('base64');
-    } else {
-      throw new Error('지원하지 않는 오버레이 이미지 형식');
-    }
-
-    // 합성 프롬프트 생성
-    const compositionPrompt = generateCompositionPrompt(compositingInfo);
     
-    console.log('[nanobanana-compose] 합성 프롬프트:', compositionPrompt);
-
-    // Gemini에 합성 요청
-    const result = await model.generateContent([
-      {
-        text: compositionPrompt
-      },
-      {
-        inlineData: {
-          data: baseImageBase64,
-          mimeType: "image/jpeg"
-        }
-      },
-      {
-        inlineData: {
-          data: overlayImageBase64,
-          mimeType: "image/jpeg"
-        }
-      }
-    ]);
-
-    const response = await result.response;
-    const text = response.text();
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
     
-    console.log('[nanobanana-compose] Gemini 응답:', text.substring(0, 200) + '...');
-
-    // 실제 구현에서는 Gemini의 이미지 편집 결과를 받아야 하지만,
-    // 현재는 시뮬레이션으로 베이스 이미지를 반환
-    // TODO: 실제 Nano Banana 이미지 편집 결과 처리
+    console.log(`[imageUrlToBase64] 변환 완료: ${(arrayBuffer.byteLength / 1024).toFixed(1)}KB`);
+    return base64;
     
-    return {
-      success: true,
-      composedImageUrl: baseImageUrl, // 임시: 실제로는 편집된 이미지 URL
-      compositionDescription: text,
-      metadata: {
-        originalBaseUrl: baseImageUrl,
-        compositingContext: compositingInfo.compositingContext,
-        prompt: compositionPrompt,
-        timestamp: new Date().toISOString()
-      }
-    };
-
   } catch (error) {
-    console.error('[nanobanana-compose] 오류:', error);
+    console.error('[imageUrlToBase64] 오류:', error.message);
     throw error;
   }
 }
 
 /**
- * 합성 컨텍스트에 따른 프롬프트 생성
+ * base64 데이터에서 실제 base64 문자열만 추출
  */
-function generateCompositionPrompt(compositingInfo) {
+function extractBase64Data(base64Input) {
+  if (base64Input.startsWith('data:')) {
+    // data:image/jpeg;base64,/9j/4AAQ... 형태에서 실제 데이터만 추출
+    return base64Input.split(',')[1];
+  }
+  return base64Input;
+}
+
+/**
+ * 합성 프롬프트 생성 (실제 Nano Banana 최적화)
+ */
+function generateCompositingPrompt(compositingInfo) {
   const { compositingContext, needsProductImage, needsBrandLogo } = compositingInfo;
   
-  let basePrompt = `Please analyze these two images and create a natural composition instruction. `;
+  let prompt = `Please compose these two images seamlessly. `;
+  
+  // 첫 번째 이미지는 배경, 두 번째 이미지는 합성할 대상
+  prompt += `Use the first image as the background scene and naturally integrate elements from the second image. `;
   
   if (needsProductImage && needsBrandLogo) {
-    basePrompt += `The second image contains both a product and a brand logo that need to be seamlessly integrated into the first image (background scene). `;
+    prompt += `The second image contains both a product and brand logo. Place the product prominently in the scene and integrate the logo subtly. `;
   } else if (needsProductImage) {
-    basePrompt += `The second image contains a product that needs to be naturally placed in the first image (background scene). `;
+    prompt += `The second image contains a product. Place it naturally in the background scene as the main focus. `;
   } else if (needsBrandLogo) {
-    basePrompt += `The second image contains a brand logo that needs to be subtly integrated into the first image (background scene). `;
+    prompt += `The second image contains a brand logo. Integrate it elegantly into the background scene. `;
   }
 
   // 컨텍스트별 세부 지침
   switch (compositingContext) {
     case 'PRODUCT_COMPOSITING_SCENE':
-      basePrompt += `This is a designated product compositing scene. The product should be the focal point while maintaining the aesthetic of the background. `;
+    case 'EXPLICIT':
+      prompt += `This is a designated product showcase. Make the product the focal point while maintaining the scene's atmosphere. `;
       break;
     case 'AUTO_PURCHASE_CONVERSION':
-      basePrompt += `This is scene 2 in a purchase conversion video. The product should be prominently displayed as a solution to a problem. `;
+      prompt += `This is for purchase conversion. Position the product prominently as an attractive solution. `;
       break;
     case 'AUTO_BRAND_AWARENESS':
-      basePrompt += `This is the final scene for brand awareness. The composition should create a strong brand impression. `;
+      prompt += `This is for brand awareness. Create a memorable, aesthetically pleasing composition. `;
       break;
-    default:
-      basePrompt += `Please create a natural composition that enhances the overall visual narrative. `;
   }
 
-  basePrompt += `
-  Requirements:
-  - Maintain realistic lighting and shadows
-  - Preserve the original background atmosphere
-  - Ensure the composition looks natural and professional
-  - Keep consistent color temperature
-  - Avoid obvious compositing artifacts
-  
-  Please describe how to optimally compose these elements together.`;
+  prompt += `
+Requirements:
+- Maintain realistic lighting and shadows that match the background
+- Preserve the original background mood and atmosphere
+- Ensure perspective and scale are natural and believable
+- Keep consistent color temperature across the composition
+- Make the integration look professional and seamless
+- Do not add any text, watermarks, or logos beyond what's in the source images
 
-  return basePrompt;
+Create a natural, professional composition where everything looks like it belongs together.`;
+
+  return prompt;
+}
+
+/**
+ * 실제 Gemini 2.5 Flash Image API 호출
+ */
+async function callNanoBananaAPI(baseImageBase64, overlayImageBase64, compositingPrompt, apiKey) {
+  const url = `${GEMINI_API_BASE}/models/${NANO_BANANA_MODEL}:generateContent?key=${apiKey}`;
+  
+  const requestBody = {
+    contents: [
+      {
+        parts: [
+          {
+            text: compositingPrompt
+          },
+          {
+            inline_data: {
+              mime_type: "image/jpeg",
+              data: baseImageBase64
+            }
+          },
+          {
+            inline_data: {
+              mime_type: "image/jpeg", 
+              data: overlayImageBase64
+            }
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      topK: 32,
+      topP: 0.8,
+      maxOutputTokens: 4096,
+    },
+    safetySettings: [
+      {
+        category: "HARM_CATEGORY_HARASSMENT",
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        category: "HARM_CATEGORY_HATE_SPEECH", 
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      },
+      {
+        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+      }
+    ]
+  };
+
+  console.log('[callNanoBananaAPI] Gemini 2.5 Flash Image API 요청 시작');
+  console.log(`[callNanoBananaAPI] URL: ${url}`);
+  console.log(`[callNanoBananaAPI] 프롬프트: ${compositingPrompt.substring(0, 150)}...`);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[callNanoBananaAPI] API 오류:', response.status, errorText);
+    throw new Error(`Gemini API 오류: ${response.status} ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log('[callNanoBananaAPI] API 응답 수신 성공');
+  
+  return result;
+}
+
+/**
+ * Gemini 2.5 Flash Image 응답에서 편집된 이미지 데이터 추출
+ */
+function extractEditedImageFromResponse(geminiResponse) {
+  try {
+    console.log('[extractEditedImageFromResponse] 응답 분석 시작');
+    
+    const candidates = geminiResponse.candidates;
+    if (!candidates || !candidates.length) {
+      throw new Error('Gemini 응답에 candidates 없음');
+    }
+
+    const candidate = candidates[0];
+    if (!candidate.content || !candidate.content.parts) {
+      throw new Error('Gemini 응답에 content.parts 없음');
+    }
+
+    console.log(`[extractEditedImageFromResponse] ${candidate.content.parts.length}개 part 확인 중`);
+
+    // 이미지 데이터가 포함된 part 찾기 (Nano Banana 응답 구조)
+    for (const part of candidate.content.parts) {
+      if (part.inline_data && part.inline_data.data) {
+        const mimeType = part.inline_data.mime_type || 'image/jpeg';
+        const base64Data = part.inline_data.data;
+        
+        console.log(`[extractEditedImageFromResponse] 이미지 발견: ${mimeType}, ${(base64Data.length / 1024).toFixed(1)}KB`);
+        
+        // Data URL 형태로 반환 (브라우저에서 바로 사용 가능)
+        const dataUrl = `data:${mimeType};base64,${base64Data}`;
+        return dataUrl;
+      }
+    }
+
+    // 텍스트 응답도 확인 (디버깅용)
+    for (const part of candidate.content.parts) {
+      if (part.text) {
+        console.log(`[extractEditedImageFromResponse] 텍스트 응답: ${part.text.substring(0, 200)}...`);
+      }
+    }
+
+    throw new Error('Gemini 응답에서 이미지 데이터를 찾을 수 없음');
+    
+  } catch (error) {
+    console.error('[extractEditedImageFromResponse] 오류:', error);
+    throw error;
+  }
 }
 
 /**
@@ -154,17 +230,57 @@ async function safeCompose(baseImageUrl, overlayImageData, compositingInfo, apiK
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[nanobanana-compose] 합성 시도 ${attempt}/${MAX_RETRIES}`);
+      console.log(`[safeCompose] 합성 시도 ${attempt}/${MAX_RETRIES}`);
       
-      return await composeWithNanoBanana(baseImageUrl, overlayImageData, compositingInfo, apiKey);
+      // 1. 베이스 이미지 다운로드 및 변환
+      const baseImageBase64 = await imageUrlToBase64(baseImageUrl);
+      
+      // 2. 오버레이 이미지 처리
+      let overlayImageBase64;
+      if (overlayImageData.startsWith('http')) {
+        // URL 형태 - 다운로드
+        overlayImageBase64 = await imageUrlToBase64(overlayImageData);
+      } else {
+        // 이미 base64 형태 - 데이터만 추출
+        overlayImageBase64 = extractBase64Data(overlayImageData);
+      }
+      
+      // 3. 합성 프롬프트 생성
+      const compositingPrompt = generateCompositingPrompt(compositingInfo);
+      
+      // 4. Gemini API 호출
+      const geminiResponse = await callNanoBananaAPI(
+        baseImageBase64, 
+        overlayImageBase64, 
+        compositingPrompt, 
+        apiKey
+      );
+      
+      // 5. 결과 이미지 추출
+      const composedImageUrl = extractEditedImageFromResponse(geminiResponse);
+      
+      console.log('[safeCompose] ✅ 합성 성공');
+      
+      return {
+        success: true,
+        composedImageUrl: composedImageUrl,
+        metadata: {
+          originalBaseUrl: baseImageUrl,
+          compositingContext: compositingInfo.compositingContext,
+          prompt: compositingPrompt,
+          model: NANO_BANANA_MODEL,
+          timestamp: new Date().toISOString(),
+          attempt: attempt
+        }
+      };
       
     } catch (error) {
       lastError = error;
-      console.error(`[nanobanana-compose] 시도 ${attempt} 실패:`, error.message);
+      console.error(`[safeCompose] 시도 ${attempt} 실패:`, error.message);
       
       if (attempt < MAX_RETRIES) {
         const delay = RETRY_DELAY * attempt;
-        console.log(`[nanobanana-compose] ${delay}ms 후 재시도...`);
+        console.log(`[safeCompose] ${delay}ms 후 재시도...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -236,10 +352,11 @@ export default async function handler(req, res) {
       conceptId,
       hasBaseImage: !!baseImageUrl,
       hasOverlayData: !!overlayImageData,
-      compositingContext: compositingInfo.compositingContext
+      compositingContext: compositingInfo.compositingContext,
+      model: NANO_BANANA_MODEL
     });
 
-    // 합성 실행
+    // 실제 Nano Banana 합성 실행
     const result = await safeCompose(
       baseImageUrl,
       overlayImageData,
@@ -253,7 +370,8 @@ export default async function handler(req, res) {
       sceneNumber,
       conceptId,
       processingTime: processingTime + 'ms',
-      success: result.success
+      success: result.success,
+      hasComposedUrl: !!result.composedImageUrl
     });
 
     return res.status(200).json({
@@ -264,7 +382,8 @@ export default async function handler(req, res) {
         sceneNumber,
         conceptId,
         originalBaseUrl: baseImageUrl,
-        compositingContext: compositingInfo.compositingContext
+        compositingContext: compositingInfo.compositingContext,
+        model: NANO_BANANA_MODEL
       }
     });
 
@@ -280,7 +399,8 @@ export default async function handler(req, res) {
       fallback: {
         // 실패 시 원본 이미지 반환
         composedImageUrl: req.body?.baseImageUrl || null,
-        reason: 'composition_failed'
+        reason: 'composition_failed',
+        details: error.message
       }
     });
   }
