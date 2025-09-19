@@ -494,12 +494,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                     sceneNumber: img.sceneNumber
                   };
                 });
-                  
-                  return { 
-                    success: composedImg.isComposed || false,
-                    attempted: true,
-                    sceneNumber: img.sceneNumber 
-                  };
+    
                 });
               }
             });
