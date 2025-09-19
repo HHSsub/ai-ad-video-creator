@@ -54,10 +54,6 @@
       "api/upload-final-video.js": {
         "runtime": "nodejs18.x",
         "maxDuration": 120
-      },
-      "api/nanobanana-compose.js": {
-        "runtime": "nodejs18.x",
-        "maxDuration": 120
       }
     }
   }
