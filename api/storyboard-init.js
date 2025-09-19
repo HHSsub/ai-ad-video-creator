@@ -1,4 +1,4 @@
-// api/storyboard-init.js - 파일 읽기 문제 해결 + 안정성 강화
+// api/storyboard-init.js - 원본 구조 복구 + 합성 정보 유지
 
 import 'dotenv/config';
 import fs from 'fs';
@@ -6,117 +6,26 @@ import path from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /* =========================================================
-   수정사항:
-   1. 파일 읽기 로직을 인라인 프롬프트로 변경
-   2. 환경변수 로딩 순서 수정
-   3. 에러 핸들링 강화
-   4. fallback 로직 개선
+   2-STEP CHAIN + PRODUCT COMPOSITING SCENE 감지
+   🔥 원본: PRODUCT COMPOSITING SCENE 감지 및 합성 정보 추가
+   STEP1: 6개 컨셉 전략/묘사 + PRODUCT COMPOSITING SCENE 지정
+   STEP2: 6개 컨셉 * sceneCountPerConcept 이미지 JSON + 합성 정보
 ========================================================= */
 
-// 🔥 수정: 외부 파일 대신 인라인 프롬프트 사용
-const INPUT_SECOND_PROMPT = `당신은 업계 최상위 크리에이티브 디렉터(Creative Director)이자 브랜드 전략가(Brand Strategist)입니다. 사용자가 제공하는 핵심 정보를 바탕으로 6가지 창의적 컨셉을 생성하세요.
-
-다음 정보를 기반으로 6장면의 스토리보드와 각 장면별 이미지 생성을 위한 구체적인 지침을 작성하세요:
-
-{USER_INPUT}
-
-출력 구조:
-# {brandName} 광고 영상 기획 제안서
----
-## 1. 컨셉 기획 (총 6가지)
-### **1. 욕망의 시각화**
-- **테마**: 타겟 오디언스의 심리 깊숙한 곳에 내재된 근원적 욕구를 감각적이고 상징적인 비주얼로 구현
-- **스토리라인**: 제품의 핵심 가치와 사용자의 갈망을 연결하는 감성적 서사
-- **타겟 오디언스**: {coreTarget}
-- **감정/시각적 요소**: 따뜻하고 감성적인 톤, 부드러운 조명, 자연스러운 색감
-
-### **2. 이질적 조합의 미학**
-- **테마**: 브랜드나 제품의 속성과 전혀 관련 없어 보이는 시각적 요소를 의도적으로 조합
-- **스토리라인**: 예상치 못한 조합을 통한 독창성과 기억에 남는 임팩트
-- **감정/시각적 요소**: 대비가 강한 시각적 요소, 예상을 뒤엎는 구성
-
-### **3. 핵심 가치의 극대화**
-- **테마**: 브랜드의 가장 강력한 핵심 가치 하나를 선택하여 극단까지 강조
-- **스토리라인**: 핵심 차별점을 중심으로 한 강력한 메시지 전달
-- **감정/시각적 요소**: 명확하고 직관적인 비주얼, 강렬한 색감
-
-### **4. 기회비용의 시각화**
-- **테마**: 제품을 사용하지 않았을 때 발생하는 손해를 구체적으로 시각화
-- **스토리라인**: 문제 상황과 해결책의 극적 대비
-- **감정/시각적 요소**: 문제 상황의 긴장감과 해결 후의 안도감
-
-### **5. 트렌드 융합**
-- **테마**: 타겟이 열광하는 사회문화적 트렌드와 브랜드 메시지의 자연스러운 융합
-- **스토리라인**: 최신 트렌드를 활용한 친근하고 재미있는 접근
-- **감정/시각적 요소**: 현대적이고 트렌디한 비주얼, 활기찬 분위기
-
-### **6. 파격적 반전**
-- **테마**: 시청자의 예상을 완전히 뒤엎는 파격적인 반전을 통한 브랜드 메시지 전달
-- **스토리라인**: 클리셰를 따라가다가 결말에서 모든 예상을 뒤엎는 구조
-- **감정/시각적 요소**: 극적인 전환, 서프라이즈 요소
-
----
-## 2. 스토리보드 (총 6가지)
-각 컨셉별로 {targetSceneCount}개의 장면으로 구성된 상세 스토리보드를 제시하세요.`;
-
-const FINAL_PROMPT = `[PHASE 2 — JSON GENERATION ONLY]
-Role: You are an expert video director and VFX supervisor specializing in creating hyper-realistic, professional video ads using AI. Your primary function is to translate a creative storyboard into a flawless set of machine-readable prompts for the Freepik image generation model.
-
-Objective: Generate a detailed, production-ready shot list from the user-provided Input Details. This involves creating hyper-specific image prompts and corresponding motion prompts for each scene.
-
-# OUTPUT FORMAT
-Return EXACTLY ONE VALID JSON object:
-
-{
-  "project_meta":{
-    "brand":"{brandName}",
-    "product_or_category":"{productServiceCategory}",
-    "industry":"{industryCategory}",
-    "target":"{coreTarget}",
-    "purpose":"{videoPurpose}",
-    "differentiation":"{coreDifferentiation}",
-    "video_length_seconds":{videoLengthSeconds},
-    "aspect_ratio":"{aspectRatioCode}",
-    "logo_provided": {brandLogo},
-    "product_image_provided": {productImage}
-  },
-  "concepts":[
-    {
-      "concept_id":1,
-      "concept_name":"욕망의 시각화",
-      "image_prompts":[
-        {
-          "scene_number":1,
-          "timecode":"00:00-00:02",
-          "image_prompt":{
-            "prompt":"[English, 7-part format, ends with camera sentence]",
-            "negative_prompt":"blurry, low quality, watermark, logo, text, cartoon, distorted",
-            "num_images":1,
-            "image":{"size":"{aspectRatioCode}"},
-            "styling":{
-              "style":"photo/cinematic/etc.",
-              "color":"color/vibrant/monochrome/etc.",
-              "lighting":"natural/dramatic/soft/etc."
-            },
-            "guidance_scale":7.5,
-            "seed":12345,
-            "filter_nsfw":true
-          },
-          "motion_prompt":{"prompt":"[English, dynamic action only]"},
-          "duration_seconds":2
-        }
-      ]
-    }
-  ]
+/* ---------------- 파일 로더 (원본 복구) ---------------- */
+function loadTxt(name){
+  const p = path.resolve(process.cwd(),'public',name);
+  if(!fs.existsSync(p)){
+    console.error(`[storyboard-init][Z2M] 템플릿 누락: ${name} (${p})`);
+    return null;
+  }
+  const txt = fs.readFileSync(p,'utf-8');
+  console.log(`[storyboard-init][Z2M] 템플릿 로드: ${name} (${txt.length} chars)`);
+  return txt;
 }
 
-MANDATORY RULES:
-- EXACTLY 6 concepts.
-- EACH concept has EXACTLY {targetSceneCount} scenes.
-- All scene_number inside a concept = 1..{targetSceneCount}.
-- Seeds: 5-digit (10000-99999) unique per (concept_id, scene_number).
-- Output ONLY JSON.
-- Root keys ONLY: project_meta, concepts.`;
+const INPUT_SECOND_PROMPT = loadTxt('input_second_prompt.txt'); // STEP1
+const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (JSON)
 
 /* ---------------- 기존 유틸 함수들 유지 ---------------- */
 function parseVideoLengthSeconds(raw){
@@ -141,14 +50,6 @@ function mapAspectRatio(formData){
   return 'widescreen_16_9';
 }
 
-/* ---------------- 🔥 수정: 환경변수 로딩 개선 ---------------- */
-function getGeminiApiKey() {
-  // 우선순위: GEMINI_API_KEY > VITE_GEMINI_API_KEY > REACT_APP_GEMINI_API_KEY
-  return process.env.GEMINI_API_KEY || 
-         process.env.VITE_GEMINI_API_KEY || 
-         process.env.REACT_APP_GEMINI_API_KEY;
-}
-
 /* ---------------- 기존 모델 체인 & 재시도 로직 유지 ---------------- */
 const MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN ||
   process.env.GEMINI_MODEL ||
@@ -170,62 +71,60 @@ function retryable(e){
   return false;
 }
 
-// 🔥 수정: callGemini() 에러 핸들링 강화
+// callGemini() 완전소진시 flash-lite 강제 fallback
 async function callGemini(genAI, prompt, label){
   let attempt=0;
   const total = Math.max(MODEL_CHAIN.length*2, MAX_ATTEMPTS);
 
   let flashExhausted = false;
   let lastError = null;
-  
   // 1차: 기존 모델 순회
   for(; attempt<total; ){
     for(const model of MODEL_CHAIN){
       for(let local=1; local<=2; local++){
         attempt++;
-        console.log(`[storyboard-init] ${label} attempt ${attempt}/${total} model=${model}`);
+        console.log(`[storyboard-init][Z2M] ${label} attempt ${attempt}/${total} model=${model}`);
         try{
           const g = genAI.getGenerativeModel({model});
           const t0=Date.now();
           const r = await g.generateContent(prompt);
           const text = r.response.text();
-          console.log(`[storyboard-init] ${label} success model=${model} ${Date.now()-t0}ms (len=${text.length})`);
+          console.log(`[storyboard-init][Z2M] ${label} success model=${model} ${Date.now()-t0}ms (len=${text.length})`);
           return { text, model, took: Date.now()-t0, attempts: attempt };
         }catch(e){
           lastError = e;
-          console.error(`[storyboard-init] ${label} attempt ${attempt} failed:`, e.message);
           if(!retryable(e)) throw e;
-          
+          // gemini-2.5-flash가 완전히 소진되는 상황 감지
           if(model === 'gemini-2.5-flash' && attempt >= total) {
             flashExhausted = true;
           }
           const delay = jitter(BASE_BACKOFF*Math.pow(2, Math.floor(attempt/MODEL_CHAIN.length)));
-          console.log(`[storyboard-init] ${label} retry in ${delay}ms`);
+          console.warn(`[storyboard-init][Z2M] ${label} fail model=${model} ${e.message} retry in ${delay}ms`);
           await sleep(delay);
         }
       }
     }
-    
-    // flash 소진시 fallback
+    // 추가: gemini-2.5-flash 완전소진이면 flash-lite로 단독 시도
     if (flashExhausted) {
       try {
         const fallbackModel = MODEL_CHAIN.includes('gemini-2.5-flash-lite') ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
         const g = genAI.getGenerativeModel({model: fallbackModel});
         const t0=Date.now();
-        console.warn(`[storyboard-init] ${label} fallback to ${fallbackModel}`);
+        console.warn(`[storyboard-init][Z2M] ${label} fallback to ${fallbackModel} 단독 시도`);
         const r = await g.generateContent(prompt);
         const text = r.response.text();
-        console.log(`[storyboard-init] ${label} fallback success model=${fallbackModel} ${Date.now()-t0}ms`);
+        console.log(`[storyboard-init][Z2M] ${label} fallback success model=${fallbackModel} ${Date.now()-t0}ms (len=${text.length})`);
         return { text, model: fallbackModel, took: Date.now()-t0, attempts: attempt+1 };
       } catch(e) {
         lastError = e;
         if(!retryable(e)) throw e;
-        await sleep(jitter(BASE_BACKOFF));
+        const delay = jitter(BASE_BACKOFF);
+        console.warn(`[storyboard-init][Z2M] ${label} fallback fail ${e.message} retry in ${delay}ms`);
+        await sleep(delay);
       }
       break;
     }
   }
-  
   let errMsg = `${label} 실패(모든 모델 소진)`;
   if (lastError && lastError.message) errMsg += `: ${lastError.message}`;
   throw new Error(errMsg);
@@ -245,6 +144,7 @@ function detectProductCompositingScenes(storyboardText, videoPurpose) {
     // 각 매치 위치 찾기
     let searchPos = 0;
     storyboardText.replace(explicitPattern, (match, offset) => {
+      // 해당 위치 앞의 S# 패턴 찾기
       const beforeText = storyboardText.slice(0, offset);
       const sceneMatches = beforeText.match(/S#(\d+)/g);
       if (sceneMatches && sceneMatches.length > 0) {
@@ -264,12 +164,14 @@ function detectProductCompositingScenes(storyboardText, videoPurpose) {
     console.log(`[detectProductCompositingScenes] 명시적 지점 없음, 영상 목적(${videoPurpose})에 따른 자동 감지`);
     
     if (videoPurpose === '구매 전환') {
+      // S#2 자동 지정
       compositingScenes.push({
         sceneNumber: 2,
         explicit: false,
         context: 'AUTO_PURCHASE_CONVERSION'
       });
     } else {
+      // 브랜드 인지도: 마지막 씬 자동 지정 (일반적으로 5씬이라 가정)
       const sceneMatches = storyboardText.match(/S#(\d+)/g);
       if (sceneMatches && sceneMatches.length > 0) {
         const lastSceneMatch = sceneMatches[sceneMatches.length - 1];
@@ -288,6 +190,8 @@ function detectProductCompositingScenes(storyboardText, videoPurpose) {
 
 /* ---------------- 기존 STEP1 프롬프트 빌더 유지 ---------------- */
 function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
+  if(!INPUT_SECOND_PROMPT) throw new Error('input_second_prompt.txt 누락');
+
   let p = INPUT_SECOND_PROMPT
     .replaceAll('{brandName}', String(fd.brandName||''))
     .replaceAll('{industryCategory}', String(fd.industryCategory||''))
@@ -304,20 +208,7 @@ function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
     .replaceAll('{videoLengthSeconds}', String(videoLengthSeconds))
     .replaceAll('{targetSceneCount}', String(sceneCountPerConcept))
     .replaceAll('{duration}', String(videoLengthSeconds))
-    .replaceAll('{scene_count}', String(sceneCountPerConcept))
-    .replaceAll('{USER_INPUT}', `
-브랜드명: ${fd.brandName}
-산업 카테고리: ${fd.industryCategory}
-제품/서비스 카테고리: ${fd.productServiceCategory}
-제품/서비스명: ${fd.productServiceName || '일반'}
-영상 목적: ${fd.videoPurpose}
-영상 길이: ${fd.videoLength}
-핵심 타겟: ${fd.coreTarget}
-핵심 차별점: ${fd.coreDifferentiation}
-영상 요구사항: ${fd.videoRequirements || '없음'}
-브랜드 로고: ${fd.brandLogo ? '업로드됨 - 영상에 포함 필요' : '없음'}
-제품 이미지: ${fd.productImage ? '업로드됨 - 영상에 포함 필요' : '없음'}
-    `.trim());
+    .replaceAll('{scene_count}', String(sceneCountPerConcept));
 
   return p;
 }
@@ -363,7 +254,7 @@ function extractConceptBlocks(raw){
   console.log(`[extractConceptBlocks] 총 ${matches.length}개 컨셉 헤더 발견`);
   
   if (matches.length === 0) {
-    console.warn('[storyboard-init] 🔥 컨셉 헤더 패턴 미검출 - 자동 생성 모드');
+    console.warn('[storyboard-init][Z2M] 🔥 컨셉 헤더 패턴 미검출 - 자동 생성 모드');
     return generateFallbackConcepts();
   }
   
@@ -450,6 +341,7 @@ function generateFallbackConcepts() {
 
 /* ---------------- 기존 STEP2 프롬프트 빌더 유지 ---------------- */
 function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept){
+  if(!FINAL_PROMPT) throw new Error('final_prompt.txt 누락');
   const videoLengthSeconds = parseVideoLengthSeconds(fd.videoLength);
   const aspectRatioCode = mapAspectRatio(fd);
 
@@ -484,7 +376,7 @@ Return EXACTLY ONE VALID JSON object:
           "scene_number":1,
           "timecode":"00:00-00:02",
           "image_prompt":{
-            "prompt":"[English, 7-part format, ends with camera sentence]",
+            "prompt":"[English, 7-part Flux Engine format, ends with camera sentence]",
             "negative_prompt":"blurry, low quality, watermark, logo, text, cartoon, distorted",
             "num_images":1,
             "image":{"size":"${aspectRatioCode}"},
@@ -510,6 +402,7 @@ MANDATORY RULES:
 - EACH concept has EXACTLY ${sceneCountPerConcept} scenes (no more, no less).
 - All scene_number inside a concept = 1..${sceneCountPerConcept}.
 - Distinct prompts across concepts.
+- high-fidelity tokens; each prompt ends with camera sentence.
 - Seeds: 5-digit (10000-99999) unique per (concept_id, scene_number).
 - Output ONLY JSON.
 - Root keys ONLY: project_meta, concepts.
@@ -533,22 +426,22 @@ function parseMultiConceptJSON(raw){
     if(Array.isArray(obj.concepts) && obj.concepts.length===6){
       for(const concept of obj.concepts){
         if(!Array.isArray(concept.image_prompts) || concept.image_prompts.length<1){
-          console.warn('[storyboard-init] image_prompts missing in concept', concept.concept_id);
+          console.warn('[storyboard-init][Z2M] image_prompts missing in concept', concept.concept_id);
           return null;
         }
         for(const s of concept.image_prompts){
           if(!s.image_prompt || !s.motion_prompt){
-            console.warn('[storyboard-init] image_prompt/motion_prompt missing in scene', s.scene_number);
+            console.warn('[storyboard-init][Z2M] image_prompt/motion_prompt missing in scene', s.scene_number);
             return null;
           }
         }
       }
       return obj;
     }
-    console.warn('[storyboard-init] JSON concepts 형식 불완전');
+    console.warn('[storyboard-init][Z2M] JSON concepts 형식 불완전');
     return obj;
   }catch(e){
-    console.warn('[storyboard-init] JSON 파싱 실패:', e.message);
+    console.warn('[storyboard-init][Z2M] JSON 파싱 실패:', e.message);
     return null;
   }
 }
@@ -628,7 +521,7 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
   });
 }
 
-/* ---------------- 메인 핸들러 - 🔥 강화된 에러 처리 ---------------- */
+/* ---------------- 메인 핸들러 ---------------- */
 export default async function handler(req,res){
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
@@ -638,54 +531,38 @@ export default async function handler(req,res){
   if(req.method!=='POST') return res.status(405).json({error:'Method not allowed'});
 
   const t0=Date.now();
-  console.log('================ [storyboard-init] START ================');
+  console.log('================ [storyboard-init][Z2M] START ================');
 
   try{
     const { formData } = req.body || {};
-    if(!formData) {
-      console.error('[storyboard-init] formData 누락');
-      return res.status(400).json({error:'formData required'});
-    }
+    if(!formData) return res.status(400).json({error:'formData required'});
+    if(!INPUT_SECOND_PROMPT) throw new Error('input_second_prompt.txt 누락');
+    if(!FINAL_PROMPT)        throw new Error('final_prompt.txt 누락');
 
-    // 🔥 수정: API 키 확인 강화
-    const apiKey = getGeminiApiKey();
-    if(!apiKey) {
-      console.error('[storyboard-init] Gemini API Key 누락 - 환경변수 확인 필요');
-      console.error('환경변수 상태:', {
-        GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
-        VITE_GEMINI_API_KEY: !!process.env.VITE_GEMINI_API_KEY,
-        REACT_APP_GEMINI_API_KEY: !!process.env.REACT_APP_GEMINI_API_KEY
-      });
-      return res.status(500).json({
-        error: 'Gemini API Key 누락',
-        details: 'GEMINI_API_KEY 환경변수를 설정해주세요'
-      });
-    }
-
-    console.log('[storyboard-init] API 키 확인 완료:', apiKey.substring(0, 10) + '...');
-    
+    const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    if(!apiKey) throw new Error('Gemini API Key 누락');
     const gen = new GoogleGenerativeAI(apiKey);
 
     const videoLengthSeconds = parseVideoLengthSeconds(formData.videoLength);
     const sceneCountPerConcept = calcSceneCountPerConcept(videoLengthSeconds);
 
-    console.log(`[storyboard-init] videoLengthSeconds=${videoLengthSeconds} sceneCountPerConcept=${sceneCountPerConcept}`);
+    console.log(`[storyboard-init][Z2M] videoLengthSeconds=${videoLengthSeconds} sceneCountPerConcept=${sceneCountPerConcept}`);
 
     /* STEP1 */
     const step1Prompt = buildStep1Prompt(formData, videoLengthSeconds, sceneCountPerConcept);
-    console.log('[storyboard-init] STEP1 promptLen=', step1Prompt.length);
+    console.log('[storyboard-init][Z2M] STEP1 promptLen=', step1Prompt.length);
     const step1 = await callGemini(gen, step1Prompt, 'STEP1');
     const phase1_output = step1.text;
 
     // 🔥 NEW: PRODUCT COMPOSITING SCENE 감지
     const compositingScenes = detectProductCompositingScenes(phase1_output, formData.videoPurpose);
-    console.log('[storyboard-init] 감지된 합성 씬:', compositingScenes);
+    console.log('[storyboard-init][Z2M] 감지된 합성 씬:', compositingScenes);
 
     const conceptBlocks = extractConceptBlocks(phase1_output);
 
     /* STEP2 */
     const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, formData, sceneCountPerConcept);
-    console.log('[storyboard-init] STEP2 promptLen=', step2Prompt.length);
+    console.log('[storyboard-init][Z2M] STEP2 promptLen=', step2Prompt.length);
     const step2 = await callGemini(gen, step2Prompt, 'STEP2');
 
     const mcJson = parseMultiConceptJSON(step2.text);
@@ -694,9 +571,9 @@ export default async function handler(req,res){
     if(mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length===6){
       // 🔥 UPDATED: 합성 정보 포함하여 styles 구성
       styles = buildStylesFromConceptJson(mcJson, sceneCountPerConcept, compositingScenes, formData);
-      console.log('[storyboard-init] multi-concept JSON 파싱 성공 (6 concepts)');
+      console.log('[storyboard-init][Z2M] multi-concept JSON 파싱 성공 (6 concepts)');
     } else {
-      console.warn('[storyboard-init] multi-concept JSON 미구현 → placeholder 구성');
+      console.warn('[storyboard-init][Z2M] multi-concept JSON 미구현 → placeholder 구성');
       styles = conceptBlocks.map(c=>{
         const imagePrompts=[];
         for(let i=1;i<=sceneCountPerConcept;i++){
@@ -735,7 +612,7 @@ export default async function handler(req,res){
     }
 
     if(styles.length!==6){
-      console.warn('[storyboard-init] styles length !=6 최종 보정');
+      console.warn('[storyboard-init][Z2M] styles length !=6 최종 보정');
       const existing = new Set(styles.map(s=>s.concept_id));
       for(let i=1;i<=6;i++){
         if(!existing.has(i)){
@@ -809,24 +686,9 @@ export default async function handler(req,res){
     });
 
   }catch(e){
-    console.error('[storyboard-init] 전체 오류:', e);
-    console.error('[storyboard-init] 스택 트레이스:', e.stack);
-    
-    // 🔥 개선된 에러 응답
-    res.status(500).json({
-      success:false,
-      error: e.message || 'Unknown error',
-      details: {
-        errorType: e.constructor.name,
-        errorMessage: e.message,
-        timestamp: new Date().toISOString(),
-        apiKeyConfigured: !!getGeminiApiKey(),
-        modelChain: MODEL_CHAIN,
-        // 개발 환경에서만 스택 트레이스 포함
-        ...(process.env.NODE_ENV === 'development' && { stack: e.stack })
-      }
-    });
+    console.error('[storyboard-init][Z2M] 오류', e);
+    res.status(500).json({success:false,error:e.message});
   }finally{
-    console.log('================ [storyboard-init] END ================');
+    console.log('================ [storyboard-init][Z2M] END ================');
   }
 }
