@@ -105,7 +105,12 @@ function pickRandomBgm(mood) {
 
 // 🔥 수정: 비디오 파일 경로 처리 개선
 function resolveVideoPath(videoPath) {
-  // 상대 경로 처리
+  // URL인 경우 그대로 반환 (이미 public에 있는 파일)
+  if (videoPath.startsWith('http')) {
+    return videoPath;
+  }
+  
+  // /tmp/compiled로 시작하는 경우 프로젝트 루트 기준으로 처리
   if (videoPath.startsWith('/tmp/')) {
     return path.join(process.cwd(), videoPath.substring(1));
   }
@@ -139,12 +144,38 @@ function hasAudioStream(videoPath) {
   });
 }
 
+// 🔥 수정된 비디오 길이 확인 함수
+function getVideoDuration(videoPath) {
+  return new Promise((resolve) => {
+    const resolvedPath = resolveVideoPath(videoPath);
+    
+    if (!fs.existsSync(resolvedPath)) {
+      console.error(`[apply-bgm] 비디오 파일이 존재하지 않음: ${resolvedPath}`);
+      resolve(10); // 기본값 10초
+      return;
+    }
+
+    exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${resolvedPath}"`, 
+      (error, stdout) => {
+        if (error) {
+          console.warn(`[apply-bgm] 비디오 길이 확인 실패: ${error.message}`);
+          resolve(10); // 기본값 10초
+        } else {
+          const duration = parseFloat(stdout.trim()) || 10;
+          console.log(`[apply-bgm] 비디오 길이: ${duration}초`);
+          resolve(duration);
+        }
+      });
+  });
+}
+
+// 🔥 수정된 BGM 합성 함수
 function mergeBgm(videoPath, bgmPath, options = {}) {
   return new Promise(async (resolve, reject) => {
-    const volume = parseFloat(process.env.BGM_VOLUME_DEFAULT || '0.9');
-    const fadeSec = parseFloat(process.env.BGM_FADE_SECONDS || '1.5');
+    const volume = parseFloat(process.env.BGM_VOLUME_DEFAULT || '0.3'); // 볼륨 낮춤
+    const fadeSec = parseFloat(process.env.BGM_FADE_SECONDS || '1.0');
     
-    // 🔥 수정: 출력 디렉토리 안전하게 생성
+    // 출력 디렉토리 생성
     const outDir = path.join(process.cwd(), 'tmp', 'bgm');
     
     try {
@@ -178,33 +209,55 @@ function mergeBgm(videoPath, bgmPath, options = {}) {
     });
 
     try {
+      // 🔥 비디오 길이 확인
+      const videoDuration = await getVideoDuration(resolvedVideoPath);
       const audioPresent = await hasAudioStream(resolvedVideoPath);
-      let filterComplex;
+      
       let cmd;
       
       if (audioPresent) {
-        filterComplex = `[1:a]volume=${volume},afade=t=in:st=0:d=${fadeSec},afade=t=out:st=5:d=${fadeSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`;
-        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -i "${bgmPath}" -filter_complex "${filterComplex}" -map 0:v -map "[aout]" -c:v copy -c:a aac -shortest "${outFile}"`;
+        // 기존 오디오가 있는 경우 - 믹싱
+        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -i "${bgmPath}" ` +
+              `-filter_complex "[1:a]volume=${volume},aloop=loop=-1:size=2e+09[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]" ` +
+              `-map 0:v -map "[aout]" -c:v copy -c:a aac -t ${videoDuration} "${outFile}"`;
       } else {
-        filterComplex = `volume=${volume},afade=t=in:st=0:d=${fadeSec}`;
-        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -i "${bgmPath}" -filter:a "${filterComplex}" -c:v copy -c:a aac -shortest "${outFile}"`;
+        // 기존 오디오가 없는 경우 - BGM만 추가
+        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -i "${bgmPath}" ` +
+              `-filter_complex "[1:a]volume=${volume},aloop=loop=-1:size=2e+09[bgm]" ` +
+              `-map 0:v -map "[bgm]" -c:v copy -c:a aac -t ${videoDuration} "${outFile}"`;
       }
 
-      console.log(`[apply-bgm] FFmpeg 명령어 실행: ${cmd.substring(0, 200)}...`);
+      console.log(`[apply-bgm] FFmpeg 명령어 실행`);
+      console.log(`[apply-bgm] 비디오 길이: ${videoDuration}초, 기존 오디오: ${audioPresent ? '있음' : '없음'}`);
       
-      exec(cmd, {timeout: 60000}, (error, stdout, stderr) => {
+      exec(cmd, {timeout: 120000}, (error, stdout, stderr) => {
         if (error) {
           console.error(`[apply-bgm] FFmpeg 실행 실패:`, error.message);
           console.error(`[apply-bgm] stderr:`, stderr);
           return reject(error);
         }
         
-        console.log(`[apply-bgm] BGM 합성 완료: ${outFile}`);
-        resolve(outFile);
+        // 🔥 결과 파일 검증
+        if (!fs.existsSync(outFile)) {
+          return reject(new Error(`출력 파일이 생성되지 않았습니다: ${outFile}`));
+        }
+        
+        const outputStats = fs.statSync(outFile);
+        if (outputStats.size === 0) {
+          return reject(new Error(`출력 파일이 비어있습니다: ${outFile}`));
+        }
+        
+        console.log(`[apply-bgm] BGM 합성 완료: ${outFile} (${(outputStats.size / 1024 / 1024).toFixed(2)} MB)`);
+        
+        // 🔥 public URL로 변환
+        const publicFileName = path.basename(outFile);
+        const publicUrl = `/tmp/bgm/${publicFileName}`;
+        
+        resolve(publicUrl);
       });
       
     } catch (audioCheckError) {
-      console.error(`[apply-bgm] 오디오 스트림 확인 중 오류:`, audioCheckError.message);
+      console.error(`[apply-bgm] 비디오 분석 중 오류:`, audioCheckError.message);
       reject(audioCheckError);
     }
   });
