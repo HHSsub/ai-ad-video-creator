@@ -482,13 +482,18 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                   const imgIndex = style.images.findIndex(i => i.id === img.id);
                   if (imgIndex >= 0) {
                     style.images[imgIndex] = composedImg;
-                    
-                    if (composedImg.isComposed) {
+                    if (composedImg.isComposed && composedImg.compositionMetadata?.method && !composedImg.compositionMetadata.method.startsWith('fallback')) {
                       log(`✅ 합성 성공: [${style.style}] Scene ${img.sceneNumber} (${composedImg.compositionMetadata?.method || 'unknown'})`);
-                    } else if (composedImg.compositionFailed) {
-                      log(`❌ 합성 실패: [${style.style}] Scene ${img.sceneNumber} - 원본 사용 (${composedImg.compositionError || 'unknown error'})`);
+                    } else {
+                      log(`❌ 합성 실패: [${style.style}] Scene ${img.sceneNumber} - 원본 사용 (${composedImg.compositionError || composedImg.compositionMetadata?.fallbackReason || 'unknown error'})`);
                     }
                   }
+                  return {
+                    success: composedImg.isComposed && composedImg.compositionMetadata?.method && !composedImg.compositionMetadata.method.startsWith('fallback'),
+                    attempted: true,
+                    sceneNumber: img.sceneNumber
+                  };
+                });
                   
                   return { 
                     success: composedImg.isComposed || false,
@@ -507,7 +512,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             let composeFailed = 0;
             
             // 병렬 합성 실행
-            await runSafeWorkerPool(compositionTasks, 3, (completed, failed, total) => {
+            await runSafeWorkerPool(compositionTasks, 2, (completed, failed, total) => {
               composedCount = completed;
               composeFailed = failed;
               const progress = (completed + failed) / total;
