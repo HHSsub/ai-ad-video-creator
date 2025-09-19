@@ -235,7 +235,7 @@ export default async function handler(req, res) {
     let clipDurationSec = 2;
     let limitedSegments = segments.slice(0, sceneCount);
     if (videoLengthSeconds === 30) {
-      clipDurationSec = 5; // 트림 없이 원본 유지
+      clipDurationSec = 2; // 30초도 어차피 이미지15장이니까 무조건 2초로 짜르기 
       limitedSegments = segments.slice(0, 6); // 30초/5초 = 6개
     } else {
       clipDurationSec = Math.floor(videoLengthSeconds / sceneCount);
