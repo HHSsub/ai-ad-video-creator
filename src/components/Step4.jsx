@@ -60,36 +60,41 @@ const Step4 = ({ storyboard, selectedConceptId, onPrev }) => {
     }
   };
 
-  const applyBgm = async () => {
-    if (!compiledUrl) return;
-    if (!bgmMood) return;
-    setErr(null);
-    setLoading(true);
-    try {
-      log('BGM 적용 시작');
-      const r = await fetch(`${API_BASE}/api/apply-bgm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoPath: compiledUrl,    // 백엔드에서 videoPath로 받음
-          mood: bgmMood              // mood만 보내면 style 무관하게 랜덤 선택
-        })
-      });
-      if (!r.ok) {
-        const txt = await r.text().catch(() => '');
-        throw new Error(`apply-bgm 실패 ${r.status} ${txt}`);
-      }
-      const j = await r.json();
-      if (!j.success) throw new Error(j.error || 'apply-bgm 실패');
-      setFinalVideo(j.mergedVideoPath);
-      log('BGM 적용 완료');
-    } catch (e) {
-      setErr(e.message);
-      log(`오류: ${e.message}`);
-    } finally {
-      setLoading(false);
+const applyBgm = async () => {
+  if (!compiledUrl) return;
+  if (!bgmMood) return;
+  setErr(null);
+  setLoading(true);
+  try {
+    log(`BGM 적용 시작: mood=${bgmMood}`);
+    const r = await fetch(`${API_BASE}/api/apply-bgm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoPath: compiledUrl,
+        mood: bgmMood
+      })
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      throw new Error(`apply-bgm 실패 ${r.status} ${txt}`);
     }
-  };
+    const j = await r.json();
+    if (!j.success) throw new Error(j.error || 'apply-bgm 실패');
+    // 🔥 결과 검증
+    if (!j.mergedVideoPath) {
+      throw new Error('BGM 적용 결과 경로가 없습니다');
+    }
+    log(`BGM 적용 완료: ${j.mergedVideoPath}`);
+    log(`사용된 BGM: ${j.bgm?.selectedFrom || 'unknown'}`);
+    setFinalVideo(j.mergedVideoPath);
+  } catch (e) {
+    setErr(`BGM 적용 실패: ${e.message}`);
+    log(`오류: ${e.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (!selected) {
     return (
