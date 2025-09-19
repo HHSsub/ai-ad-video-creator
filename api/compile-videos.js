@@ -202,24 +202,53 @@ export default async function handler(req, res) {
       body = {};
     }
 
+    // 🔥 여기서 Step1에서 넘어온 videoLength를 정확히 반영 
+    // segments: [{videoUrl, ...}], videoLength: '10초' | '20초' | '30초' (문자열)
+    // clipDurationSec은 프론트에서 명시적으로 넘기지 않으므로 여기서 계산
     const {
       segments,
-      clipDurationSec = 2,
       fps = 24, // 🔥 30->24 (처리 속도 향상)
       scale = '1280:720', // 🔥 1920x1080->1280x720 (처리 속도 향상)
       jsonMode = false,
-      targetDuration = null
+      targetDuration = null,
+      videoLength // Step1에서 넘어온 영상 길이 (문자열 '10초' 등)
     } = body;
 
     if (!Array.isArray(segments) || !segments.length) {
       return res.status(400).json({ error: 'segments[] required' });
     }
 
+    // 🔥 videoLength 파싱 (문자열 '10초' 등 → 숫자 초)
+    let videoLengthSeconds = 10;
+    if (typeof videoLength === 'number') {
+      videoLengthSeconds = videoLength;
+    } else if (typeof videoLength === 'string') {
+      const m = videoLength.match(/\d+/);
+      if (m) videoLengthSeconds = parseInt(m[0], 10);
+    }
+    if (![10, 20, 30].includes(videoLengthSeconds)) videoLengthSeconds = 10;
+
+    let sceneCount = Math.floor(videoLengthSeconds / 2);
+    if (sceneCount < 1) sceneCount = 1;
+
+    // 트림 길이 및 세그먼트 개수 계산
+    let clipDurationSec = 2;
+    let limitedSegments = segments.slice(0, sceneCount);
+    if (videoLengthSeconds === 30) {
+      clipDurationSec = 5; // 트림 없이 원본 유지
+      limitedSegments = segments.slice(0, 6); // 30초/5초 = 6개
+    } else {
+      clipDurationSec = Math.floor(videoLengthSeconds / sceneCount);
+      if (clipDurationSec < 1) clipDurationSec = 1;
+    }
+
     console.log('[compile-videos] 🚀 시작 (빠른 모드):', {
       segments: segments.length,
+      limitedSegments: limitedSegments.length,
       clipDuration: clipDurationSec,
       resolution: scale,
-      fps: fps
+      fps: fps,
+      videoLengthSeconds: videoLengthSeconds
     });
 
     // 임시 디렉토리 생성
@@ -228,10 +257,6 @@ export default async function handler(req, res) {
 
     const processedClips = [];
     let totalOriginalDuration = 0;
-
-    // 🔥 세그먼트 수 제한 (5개까지만)
-    const limitedSegments = segments.slice(0, 5);
-    console.log(`[compile-videos] 세그먼트 제한: ${segments.length} -> ${limitedSegments.length}`);
 
     // 1단계: 비디오 다운로드 및 전처리
     console.log('[compile-videos] 1단계: 비디오 다운로드 및 처리');
