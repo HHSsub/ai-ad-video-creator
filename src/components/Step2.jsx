@@ -494,8 +494,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                     sceneNumber: img.sceneNumber
                   };
                 });
-    
-                });
               }
             });
           });
