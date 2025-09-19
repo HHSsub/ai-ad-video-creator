@@ -1,12 +1,109 @@
-// api/nanobanana-compose.js - 실제 Gemini 2.5 Flash Image (Nano Banana) API 호출
+// api/nanobanana-compose.js - Freepik 프록시된 Gemini 2.5 Flash Image 연동 + API 키 풀링
 
 import 'dotenv/config';
 import fetch from 'node-fetch';
 
+// 🔥 NEW: 여러 Gemini API 키 풀 (환경변수로 설정, 없는 키는 자동 필터링)
+const GEMINI_API_KEYS = [
+  process.env.GEMINI_API_KEY,
+  process.env.GEMINI_API_KEY_2,
+  process.env.GEMINI_API_KEY_3,
+  process.env.GEMINI_API_KEY_4,
+  process.env.GEMINI_API_KEY_5
+].filter(Boolean); // 빈 값 자동 제거
+
+// Freepik API 키
+const FREEPIK_API_KEY = process.env.FREEPIK_API_KEY || 
+                        process.env.VITE_FREEPIK_API_KEY;
+
+const FREEPIK_NANO_BANANA_ENDPOINT = 'https://api.freepik.com/v1/ai/text-to-image/google/gemini-2-5-flash-image-preview';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const NANO_BANANA_MODEL = 'gemini-2.5-flash-image-preview';
+
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
+const RATE_LIMIT_DELAY = 3000; // 3초 딜레이로 단축
+
+// 🔥 NEW: 다중 사용자 대응 키 분배 시스템
+class ApiKeyManager {
+  constructor(keys) {
+    this.keys = keys.filter(Boolean);
+    this.usage = new Map(); // keyIndex -> { lastUsed: timestamp, concurrent: count }
+    this.globalIndex = 0;
+    
+    console.log(`[ApiKeyManager] 초기화: ${this.keys.length}개 키 사용 가능`);
+  }
+  
+  // 가장 적게 사용된 키 반환 (다중 사용자 대응)
+  getBestAvailableKey() {
+    if (this.keys.length === 0) return null;
+    if (this.keys.length === 1) return { key: this.keys[0], index: 0 };
+    
+    const now = Date.now();
+    let bestIndex = 0;
+    let minScore = Infinity;
+    
+    // 각 키의 사용 점수 계산 (최근 사용 시간 + 동시 사용 수)
+    for (let i = 0; i < this.keys.length; i++) {
+      const usage = this.usage.get(i) || { lastUsed: 0, concurrent: 0 };
+      const timeSinceLastUse = now - usage.lastUsed;
+      const score = usage.concurrent * 10000 + Math.max(0, 5000 - timeSinceLastUse);
+      
+      if (score < minScore) {
+        minScore = score;
+        bestIndex = i;
+      }
+    }
+    
+    return { key: this.keys[bestIndex], index: bestIndex };
+  }
+  
+  // 키 사용 시작 (동시 사용 카운트 증가)
+  markKeyInUse(keyIndex) {
+    if (!this.usage.has(keyIndex)) {
+      this.usage.set(keyIndex, { lastUsed: Date.now(), concurrent: 0 });
+    }
+    this.usage.get(keyIndex).concurrent++;
+    this.usage.get(keyIndex).lastUsed = Date.now();
+  }
+  
+  // 키 사용 완료 (동시 사용 카운트 감소)
+  markKeyDone(keyIndex) {
+    if (this.usage.has(keyIndex)) {
+      this.usage.get(keyIndex).concurrent = Math.max(0, this.usage.get(keyIndex).concurrent - 1);
+    }
+  }
+  
+  // 디버깅용 사용 현황 출력
+  getUsageStats() {
+    const stats = {};
+    for (let i = 0; i < this.keys.length; i++) {
+      const usage = this.usage.get(i) || { lastUsed: 0, concurrent: 0 };
+      stats[`key_${i}`] = {
+        concurrent: usage.concurrent,
+        lastUsed: usage.lastUsed ? new Date(usage.lastUsed).toISOString() : 'never'
+      };
+    }
+    return stats;
+  }
+}
+
+// 글로벌 키 매니저 인스턴스
+const keyManager = new ApiKeyManager(GEMINI_API_KEYS);
+
+/**
+ * 최적의 Gemini API 키 반환 (다중 사용자 대응)
+ */
+function getOptimalGeminiApiKey() {
+  const result = keyManager.getBestAvailableKey();
+  if (!result) {
+    console.warn('[getOptimalGeminiApiKey] 사용 가능한 Gemini API 키 없음');
+    return null;
+  }
+  
+  console.log(`[getOptimalGeminiApiKey] 키 선택: index=${result.index}, 사용현황:`, keyManager.getUsageStats());
+  return result;
+}
 
 /**
  * 이미지 URL을 base64로 변환
@@ -43,21 +140,19 @@ async function imageUrlToBase64(imageUrl) {
  */
 function extractBase64Data(base64Input) {
   if (base64Input.startsWith('data:')) {
-    // data:image/jpeg;base64,/9j/4AAQ... 형태에서 실제 데이터만 추출
     return base64Input.split(',')[1];
   }
   return base64Input;
 }
 
 /**
- * 합성 프롬프트 생성 (실제 Nano Banana 최적화)
+ * 합성 프롬프트 생성
  */
 function generateCompositingPrompt(compositingInfo) {
   const { compositingContext, needsProductImage, needsBrandLogo } = compositingInfo;
   
   let prompt = `Please compose these two images seamlessly. `;
   
-  // 첫 번째 이미지는 배경, 두 번째 이미지는 합성할 대상
   prompt += `Use the first image as the background scene and naturally integrate elements from the second image. `;
   
   if (needsProductImage && needsBrandLogo) {
@@ -68,7 +163,6 @@ function generateCompositingPrompt(compositingInfo) {
     prompt += `The second image contains a brand logo. Integrate it elegantly into the background scene. `;
   }
 
-  // 컨텍스트별 세부 지침
   switch (compositingContext) {
     case 'PRODUCT_COMPOSITING_SCENE':
     case 'EXPLICIT':
@@ -85,7 +179,7 @@ function generateCompositingPrompt(compositingInfo) {
   prompt += `
 Requirements:
 - Maintain realistic lighting and shadows that match the background
-- Preserve the original background mood and atmosphere
+- Preserve the original background mood and atmosphere  
 - Ensure perspective and scale are natural and believable
 - Keep consistent color temperature across the composition
 - Make the integration look professional and seamless
@@ -97,89 +191,191 @@ Create a natural, professional composition where everything looks like it belong
 }
 
 /**
- * 실제 Gemini 2.5 Flash Image API 호출
+ * Freepik 프록시를 통한 Nano Banana API 호출 (1순위)
  */
-async function callNanoBananaAPI(baseImageBase64, overlayImageBase64, compositingPrompt, apiKey) {
-  const url = `${GEMINI_API_BASE}/models/${NANO_BANANA_MODEL}:generateContent?key=${apiKey}`;
-  
+async function callFreepikNanoBanana(baseImageBase64, overlayImageBase64, compositingPrompt) {
+  if (!FREEPIK_API_KEY) {
+    throw new Error('Freepik API key not configured');
+  }
+
+  console.log('[callFreepikNanoBanana] Freepik 프록시를 통한 Nano Banana 호출 시작');
+
   const requestBody = {
-    contents: [
+    prompt: compositingPrompt,
+    reference_images: [
       {
-        parts: [
-          {
-            text: compositingPrompt
-          },
-          {
-            inline_data: {
-              mime_type: "image/jpeg",
-              data: baseImageBase64
-            }
-          },
-          {
-            inline_data: {
-              mime_type: "image/jpeg", 
-              data: overlayImageBase64
-            }
-          }
-        ]
+        image: baseImageBase64,
+        weight: 0.7 // 베이스 이미지 가중치
+      },
+      {
+        image: overlayImageBase64,
+        weight: 0.3 // 오버레이 이미지 가중치
       }
     ],
-    generationConfig: {
-      temperature: 0.1,
-      topK: 32,
-      topP: 0.8,
-      maxOutputTokens: 4096,
-    },
-    safetySettings: [
-      {
-        category: "HARM_CATEGORY_HARASSMENT",
-        threshold: "BLOCK_MEDIUM_AND_ABOVE"
-      },
-      {
-        category: "HARM_CATEGORY_HATE_SPEECH", 
-        threshold: "BLOCK_MEDIUM_AND_ABOVE"
-      },
-      {
-        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        threshold: "BLOCK_MEDIUM_AND_ABOVE"
-      },
-      {
-        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-        threshold: "BLOCK_MEDIUM_AND_ABOVE"
-      }
-    ]
+    aspect_ratio: "widescreen_16_9",
+    quality: "high",
+    style: "photo"
   };
 
-  console.log('[callNanoBananaAPI] Gemini 2.5 Flash Image API 요청 시작');
-  console.log(`[callNanoBananaAPI] URL: ${url}`);
-  console.log(`[callNanoBananaAPI] 프롬프트: ${compositingPrompt.substring(0, 150)}...`);
-
-  const response = await fetch(url, {
+  const response = await fetch(FREEPIK_NANO_BANANA_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-freepik-api-key': FREEPIK_API_KEY,
+      'User-Agent': 'AI-Ad-Creator/2025'
     },
     body: JSON.stringify(requestBody)
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('[callNanoBananaAPI] API 오류:', response.status, errorText);
-    throw new Error(`Gemini API 오류: ${response.status} ${errorText}`);
+    console.error('[callFreepikNanoBanana] API 오류:', response.status, errorText);
+    throw new Error(`Freepik Nano Banana API 오류: ${response.status} ${errorText}`);
   }
 
   const result = await response.json();
-  console.log('[callNanoBananaAPI] API 응답 수신 성공');
+  console.log('[callFreepikNanoBanana] API 응답 수신 성공');
   
   return result;
 }
 
 /**
- * Gemini 2.5 Flash Image 응답에서 편집된 이미지 데이터 추출
+ * 직접 Gemini API 호출 (2순위, 스마트 키 분배 적용)
  */
-function extractEditedImageFromResponse(geminiResponse) {
+async function callDirectGeminiNanoBanana(baseImageBase64, overlayImageBase64, compositingPrompt) {
+  const keyResult = getOptimalGeminiApiKey();
+  if (!keyResult) {
+    throw new Error('사용 가능한 Gemini API 키가 없습니다');
+  }
+
+  const { key: apiKey, index: keyIndex } = keyResult;
+  
+  // 키 사용 시작 마킹
+  keyManager.markKeyInUse(keyIndex);
+  
   try {
-    console.log('[extractEditedImageFromResponse] 응답 분석 시작');
+    console.log(`[callDirectGeminiNanoBanana] 키 ${keyIndex} 사용 (동시사용: ${keyManager.usage.get(keyIndex)?.concurrent || 0})`);
+
+    // 🔥 NEW: 스마트 딜레이 (키가 여러개면 짧게, 적으면 길게)
+    const dynamicDelay = keyManager.keys.length >= 3 ? 1000 : RATE_LIMIT_DELAY;
+    console.log(`[callDirectGeminiNanoBanana] Rate Limit 방지 딜레이: ${dynamicDelay}ms (총 키: ${keyManager.keys.length}개)`);
+    await new Promise(resolve => setTimeout(resolve, dynamicDelay));
+
+    const url = `${GEMINI_API_BASE}/models/${NANO_BANANA_MODEL}:generateContent?key=${apiKey}`;
+    
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            {
+              text: compositingPrompt
+            },
+            {
+              inline_data: {
+                mime_type: "image/jpeg",
+                data: baseImageBase64
+              }
+            },
+            {
+              inline_data: {
+                mime_type: "image/jpeg", 
+                data: overlayImageBase64
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        topK: 32,
+        topP: 0.8,
+        maxOutputTokens: 4096,
+        responseMimeType: "image/png"
+      },
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH", 
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        }
+      ]
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[callDirectGeminiNanoBanana] 키 ${keyIndex} API 오류:`, response.status, errorText);
+      
+      // Rate Limit 에러인 경우 다른 키로 재시도 표시
+      if (response.status === 429) {
+        throw new Error(`Gemini API Rate Limit (키 ${keyIndex}): ${errorText}`);
+      }
+      
+      throw new Error(`Gemini API 오류: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log(`[callDirectGeminiNanoBanana] 키 ${keyIndex} API 응답 수신 성공`);
+    
+    return { result, keyIndex };
+    
+  } finally {
+    // 키 사용 완료 마킹 (성공/실패 무관하게 실행)
+    keyManager.markKeyDone(keyIndex);
+  }
+}
+
+/**
+ * Freepik 응답에서 이미지 URL 추출
+ */
+function extractImageFromFreepikResponse(freepikResponse) {
+  try {
+    console.log('[extractImageFromFreepikResponse] Freepik 응답 분석 시작');
+    
+    // Freepik API 응답 구조에 따라 조정 필요
+    if (freepikResponse.data && freepikResponse.data.url) {
+      const imageUrl = freepikResponse.data.url;
+      console.log(`[extractImageFromFreepikResponse] 이미지 URL 추출: ${imageUrl.substring(0, 80)}...`);
+      return imageUrl;
+    }
+    
+    if (freepikResponse.url) {
+      console.log(`[extractImageFromFreepikResponse] 직접 URL 발견: ${freepikResponse.url.substring(0, 80)}...`);
+      return freepikResponse.url;
+    }
+
+    throw new Error('Freepik 응답에서 이미지 URL을 찾을 수 없음');
+    
+  } catch (error) {
+    console.error('[extractImageFromFreepikResponse] 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gemini 응답에서 편집된 이미지 데이터 추출
+ */
+function extractEditedImageFromGeminiResponse(geminiResponse) {
+  try {
+    console.log('[extractEditedImageFromGeminiResponse] Gemini 응답 분석 시작');
     
     const candidates = geminiResponse.candidates;
     if (!candidates || !candidates.length) {
@@ -191,33 +387,22 @@ function extractEditedImageFromResponse(geminiResponse) {
       throw new Error('Gemini 응답에 content.parts 없음');
     }
 
-    console.log(`[extractEditedImageFromResponse] ${candidate.content.parts.length}개 part 확인 중`);
-
-    // 이미지 데이터가 포함된 part 찾기 (Nano Banana 응답 구조)
     for (const part of candidate.content.parts) {
       if (part.inline_data && part.inline_data.data) {
         const mimeType = part.inline_data.mime_type || 'image/jpeg';
         const base64Data = part.inline_data.data;
         
-        console.log(`[extractEditedImageFromResponse] 이미지 발견: ${mimeType}, ${(base64Data.length / 1024).toFixed(1)}KB`);
+        console.log(`[extractEditedImageFromGeminiResponse] 이미지 발견: ${mimeType}, ${(base64Data.length / 1024).toFixed(1)}KB`);
         
-        // Data URL 형태로 반환 (브라우저에서 바로 사용 가능)
         const dataUrl = `data:${mimeType};base64,${base64Data}`;
         return dataUrl;
-      }
-    }
-
-    // 텍스트 응답도 확인 (디버깅용)
-    for (const part of candidate.content.parts) {
-      if (part.text) {
-        console.log(`[extractEditedImageFromResponse] 텍스트 응답: ${part.text.substring(0, 200)}...`);
       }
     }
 
     throw new Error('Gemini 응답에서 이미지 데이터를 찾을 수 없음');
     
   } catch (error) {
-    console.error('[extractEditedImageFromResponse] 오류:', error);
+    console.error('[extractEditedImageFromGeminiResponse] 오류:', error);
     throw error;
   }
 }
@@ -225,7 +410,7 @@ function extractEditedImageFromResponse(geminiResponse) {
 /**
  * 재시도 로직을 포함한 안전한 합성 함수
  */
-async function safeCompose(baseImageUrl, overlayImageData, compositingInfo, apiKey) {
+async function safeCompose(baseImageUrl, overlayImageData, compositingInfo) {
   let lastError;
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -238,41 +423,82 @@ async function safeCompose(baseImageUrl, overlayImageData, compositingInfo, apiK
       // 2. 오버레이 이미지 처리
       let overlayImageBase64;
       if (overlayImageData.startsWith('http')) {
-        // URL 형태 - 다운로드
         overlayImageBase64 = await imageUrlToBase64(overlayImageData);
       } else {
-        // 이미 base64 형태 - 데이터만 추출
         overlayImageBase64 = extractBase64Data(overlayImageData);
       }
       
       // 3. 합성 프롬프트 생성
       const compositingPrompt = generateCompositingPrompt(compositingInfo);
       
-      // 4. Gemini API 호출
-      const geminiResponse = await callNanoBananaAPI(
-        baseImageBase64, 
-        overlayImageBase64, 
-        compositingPrompt, 
-        apiKey
-      );
+      let composedImageUrl = null;
+      let method = 'unknown';
       
-      // 5. 결과 이미지 추출
-      const composedImageUrl = extractEditedImageFromResponse(geminiResponse);
-      
-      console.log('[safeCompose] ✅ 합성 성공');
-      
-      return {
-        success: true,
-        composedImageUrl: composedImageUrl,
-        metadata: {
-          originalBaseUrl: baseImageUrl,
-          compositingContext: compositingInfo.compositingContext,
-          prompt: compositingPrompt,
-          model: NANO_BANANA_MODEL,
-          timestamp: new Date().toISOString(),
-          attempt: attempt
+      // 4. Freepik 프록시 우선 시도
+      if (FREEPIK_API_KEY && attempt === 1) {
+        try {
+          console.log('[safeCompose] Freepik 프록시 우선 시도');
+          const freepikResponse = await callFreepikNanoBanana(
+            baseImageBase64, 
+            overlayImageBase64, 
+            compositingPrompt
+          );
+          
+          composedImageUrl = extractImageFromFreepikResponse(freepikResponse);
+          method = 'freepik-proxy';
+          
+        } catch (freepikError) {
+          console.warn('[safeCompose] Freepik 프록시 실패, Gemini 직접 호출로 전환:', freepikError.message);
         }
-      };
+      }
+      
+      // 5. Freepik 실패 시 또는 2번째 시도부터 Gemini 직접 호출
+      if (!composedImageUrl && keyManager.keys.length > 0) {
+        try {
+          console.log('[safeCompose] Gemini 직접 호출 시도');
+          const geminiResult = await callDirectGeminiNanoBanana(
+            baseImageBase64, 
+            overlayImageBase64, 
+            compositingPrompt
+          );
+          
+          composedImageUrl = extractEditedImageFromGeminiResponse(geminiResult.result);
+          method = `gemini-direct-key${geminiResult.keyIndex}`;
+          
+        } catch (geminiError) {
+          console.error('[safeCompose] Gemini 직접 호출 실패:', geminiError.message);
+          
+          // Rate Limit 에러면 다른 키로 재시도
+          if (geminiError.message.includes('Rate Limit') && attempt < MAX_RETRIES) {
+            console.log('[safeCompose] Rate Limit 감지, 다른 API 키로 재시도');
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+            continue;
+          }
+          
+          throw geminiError;
+        }
+      }
+      
+      if (composedImageUrl) {
+        console.log(`[safeCompose] ✅ 합성 성공 (${method})`);
+        
+        return {
+          success: true,
+          composedImageUrl: composedImageUrl,
+          metadata: {
+            originalBaseUrl: baseImageUrl,
+            compositingContext: compositingInfo.compositingContext,
+            prompt: compositingPrompt,
+            method: method,
+            model: method === 'freepik-proxy' ? 'freepik-nano-banana' : NANO_BANANA_MODEL,
+            timestamp: new Date().toISOString(),
+            attempt: attempt,
+            apiKeyUsed: method === 'gemini-direct' ? currentKeyIndex : 'freepik'
+          }
+        };
+      } else {
+        throw new Error('모든 API 방법이 실패했습니다');
+      }
       
     } catch (error) {
       lastError = error;
@@ -306,11 +532,11 @@ export default async function handler(req, res) {
 
   try {
     const {
-      baseImageUrl,        // Freepik에서 생성된 베이스 이미지 URL
-      overlayImageData,    // 합성할 제품/로고 이미지 (base64 또는 URL)
-      compositingInfo,     // 합성 정보 객체
-      sceneNumber,         // 씬 번호 (디버깅용)
-      conceptId           // 컨셉 ID (디버깅용)
+      baseImageUrl,
+      overlayImageData,
+      compositingInfo,
+      sceneNumber,
+      conceptId
     } = req.body || {};
 
     // 입력값 검증
@@ -335,15 +561,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // Gemini API 키 확인
-    const apiKey = process.env.GEMINI_API_KEY || 
-                   process.env.VITE_GEMINI_API_KEY;
-
-    if (!apiKey) {
-      console.error('[nanobanana-compose] Gemini API 키가 없음');
+    // API 키 상태 확인 - 🔥 수정: Gemini 키가 1개라도 있으면 작동
+    if (!FREEPIK_API_KEY && keyManager.keys.length === 0) {
+      console.error('[nanobanana-compose] API 키가 모두 없음');
       return res.status(500).json({
         success: false,
-        error: 'Gemini API key not configured'
+        error: 'No API keys configured (Freepik or Gemini)'
       });
     }
 
@@ -353,15 +576,16 @@ export default async function handler(req, res) {
       hasBaseImage: !!baseImageUrl,
       hasOverlayData: !!overlayImageData,
       compositingContext: compositingInfo.compositingContext,
-      model: NANO_BANANA_MODEL
+      availableFreepikKey: !!FREEPIK_API_KEY,
+      availableGeminiKeys: keyManager.keys.length,
+      currentKeyUsage: keyManager.getUsageStats()
     });
 
-    // 실제 Nano Banana 합성 실행
+    // 실제 합성 실행
     const result = await safeCompose(
       baseImageUrl,
       overlayImageData,
-      compositingInfo,
-      apiKey
+      compositingInfo
     );
 
     const processingTime = Date.now() - startTime;
@@ -371,6 +595,7 @@ export default async function handler(req, res) {
       conceptId,
       processingTime: processingTime + 'ms',
       success: result.success,
+      method: result.metadata.method,
       hasComposedUrl: !!result.composedImageUrl
     });
 
@@ -383,7 +608,11 @@ export default async function handler(req, res) {
         conceptId,
         originalBaseUrl: baseImageUrl,
         compositingContext: compositingInfo.compositingContext,
-        model: NANO_BANANA_MODEL
+        availableApis: {
+          freepik: !!FREEPIK_API_KEY,
+          gemini: keyManager.keys.length
+        },
+        finalKeyStats: keyManager.getUsageStats()
       }
     });
 
@@ -397,7 +626,6 @@ export default async function handler(req, res) {
       error: error.message,
       processingTime: processingTime,
       fallback: {
-        // 실패 시 원본 이미지 반환
         composedImageUrl: req.body?.baseImageUrl || null,
         reason: 'composition_failed',
         details: error.message
