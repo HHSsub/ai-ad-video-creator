@@ -1,65 +1,3 @@
-// api/storyboard-init.js - Nano Banana 연동을 위한 PRODUCT COMPOSITING SCENE 감지 추가
-
-import 'dotenv/config';
-import fs from 'fs';
-import path from 'path';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-/* =========================================================
-   2-STEP CHAIN + PRODUCT COMPOSITING SCENE 감지
-   🔥 NEW: PRODUCT COMPOSITING SCENE 감지 및 합성 정보 추가
-   STEP1: 6개 컨셉 전략/묘사 + PRODUCT COMPOSITING SCENE 지정
-   STEP2: 6개 컨셉 * sceneCountPerConcept 이미지 JSON + 합성 정보
-========================================================= */
-
-/* ---------------- 기존 코드 유지 (텍스트 로더 등) ---------------- */
-function loadTxt(name){
-  const p = path.resolve(process.cwd(),'public',name);
-  if(!fs.existsSync(p)){
-    console.error(`[storyboard-init][Z2M] 템플릿 누락: ${name} (${p})`);
-    return null;
-  }
-  const txt = fs.readFileSync(p,'utf-8');
-  console.log(`[storyboard-init][Z2M] 템플릿 로드: ${name} (${txt.length} chars)`);
-  return txt;
-}
-
-const INPUT_SECOND_PROMPT = loadTxt('input_second_prompt.txt'); // STEP1
-const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (JSON)
-
-/* ---------------- 기존 유틸 함수들 유지 ---------------- */
-function parseVideoLengthSeconds(raw){
-  if(raw == null) return 10;
-  if(typeof raw === 'number') return raw;
-  const m = String(raw).match(/\d+/);
-  if(!m) return 10;
-  const n = parseInt(m[0],10);
-  return (isNaN(n)||n<=0)?10:n;
-}
-
-function calcSceneCountPerConcept(sec){
-  const n = Math.floor(sec/2);
-  return n<1?1:n;
-}
-
-function mapAspectRatio(formData){
-  const v = (formData?.videoAspectRatio || formData?.aspectRatio || '').toString().trim().toLowerCase();
-  if(['9:16','vertical','portrait'].includes(v)) return 'vertical_9_16';
-  if(['1:1','square'].includes(v)) return 'square_1_1';
-  if(['4:5','portrait_4_5','4:5portrait'].includes(v)) return 'portrait_4_5';
-  return 'widescreen_16_9';
-}
-
-/* ---------------- 기존 모델 체인 & 재시도 로직 유지 ---------------- */
-const MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN ||
-  process.env.GEMINI_MODEL ||
-  'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash,gemini-1.5-flash')
-  .split(',')
-  .map(s=>s.trim())
-  .filter(Boolean);
-
-const MAX_ATTEMPTS = Number(process.env.GEMINI_MAX_ATTEMPTS || 8);
-const BASE_BACKOFF = Number(process.env.GEMINI_BASE_BACKOFF_MS || 1500);
 const sleep = ms=>new Promise(r=>setTimeout(r,ms));
 const jitter = ms=>Math.round(ms*(0.7+Math.random()*0.6));
 
@@ -71,81 +9,133 @@ function retryable(e){
   return false;
 }
 
-// 🔥 수정: callGemini() 완전소진시 flash-lite 강제 fallback
-async function callGemini(genAI, prompt, label){
-  let attempt=0;
-  const total = Math.max(MODEL_CHAIN.length*2, MAX_ATTEMPTS);
+// 🔥 수정: 다중 사용자 대응 Gemini 호출 함수
+async function callGeminiWithKeyManager(prompt, label, sessionId = 'default'){
+  const keyResult = storyboardKeyManager.selectKeyForStoryboard(sessionId);
+  
+  if (!keyResult) {
+    throw new Error(`${label} 실패: 사용 가능한 Gemini API 키가 없습니다`);
+  }
 
-  let flashExhausted = false;
-  let lastError = null;
-  // 1차: 기존 모델 순회
-  for(; attempt<total; ){
-    for(const model of MODEL_CHAIN){
-      for(let local=1; local<=2; local++){
-        attempt++;
-        console.log(`[storyboard-init][Z2M] ${label} attempt ${attempt}/${total} model=${model}`);
-        try{
-          const g = genAI.getGenerativeModel({model});
-          const t0=Date.now();
-          const r = await g.generateContent(prompt);
-          const text = r.response.text();
-          console.log(`[storyboard-init][Z2M] ${label} success model=${model} ${Date.now()-t0}ms (len=${text.length})`);
-          return { text, model, took: Date.now()-t0, attempts: attempt };
-        }catch(e){
-          lastError = e;
-          if(!retryable(e)) throw e;
-          // gemini-2.5-flash가 완전히 소진되는 상황 감지
-          if(model === 'gemini-2.5-flash' && attempt >= total) {
-            flashExhausted = true;
-          }
-          const delay = jitter(BASE_BACKOFF*Math.pow(2, Math.floor(attempt/MODEL_CHAIN.length)));
-          console.warn(`[storyboard-init][Z2M] ${label} fail model=${model} ${e.message} retry in ${delay}ms`);
-          await sleep(delay);
-        }
-      }
+  const { key: apiKey, index: keyIndex } = keyResult;
+  
+  // Step1 또는 Step2 마킹
+  if (label.includes('STEP1')) {
+    storyboardKeyManager.markStep1Start(keyIndex, sessionId);
+  } else if (label.includes('STEP2')) {
+    storyboardKeyManager.markStep2Start(keyIndex, sessionId);
+  }
+
+  try {
+    console.log(`[callGeminiWithKeyManager] ${label} 세션=${sessionId} 키=${keyIndex} 시작`);
+    
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // 🔥 NEW: 스마트 딜레이 (키 개수에 따라 조정)
+    const dynamicDelay = storyboardKeyManager.keys.length >= 3 ? 1000 : 3000;
+    if (label.includes('STEP2')) {
+      console.log(`[callGeminiWithKeyManager] Step1→Step2 간격 조정: ${dynamicDelay}ms`);
+      await sleep(dynamicDelay);
     }
-    // 추가: gemini-2.5-flash 완전소진이면 flash-lite로 단독 시도
-    if (flashExhausted) {
+
+    let attempt = 0;
+    const maxAttempts = storyboardKeyManager.keys.length >= 2 ? 6 : 8; // 키가 많으면 재시도 줄임
+    let lastError = null;
+
+    // 재시도 루프 (키별로 최적화)
+    for (; attempt < maxAttempts; attempt++) {
       try {
-        const fallbackModel = MODEL_CHAIN.includes('gemini-2.5-flash-lite') ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
-        const g = genAI.getGenerativeModel({model: fallbackModel});
-        const t0=Date.now();
-        console.warn(`[storyboard-init][Z2M] ${label} fallback to ${fallbackModel} 단독 시도`);
-        const r = await g.generateContent(prompt);
-        const text = r.response.text();
-        console.log(`[storyboard-init][Z2M] ${label} fallback success model=${fallbackModel} ${Date.now()-t0}ms (len=${text.length})`);
-        return { text, model: fallbackModel, took: Date.now()-t0, attempts: attempt+1 };
-      } catch(e) {
+        console.log(`[callGeminiWithKeyManager] ${label} 키=${keyIndex} 시도=${attempt+1}/${maxAttempts}`);
+        
+        const model = genAI.getGenerativeModel({
+          model: attempt < 4 ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite' // 4회 실패 후 fallback
+        });
+        
+        const startTime = Date.now();
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        const processingTime = Date.now() - startTime;
+        
+        console.log(`[callGeminiWithKeyManager] ${label} 키=${keyIndex} 성공 ${processingTime}ms (len=${text.length})`);
+        
+        return { 
+          text, 
+          model: attempt < 4 ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite',
+          took: processingTime, 
+          attempts: attempt + 1,
+          keyIndex,
+          sessionId
+        };
+        
+      } catch (e) {
         lastError = e;
-        if(!retryable(e)) throw e;
-        const delay = jitter(BASE_BACKOFF);
-        console.warn(`[storyboard-init][Z2M] ${label} fallback fail ${e.message} retry in ${delay}ms`);
+        console.warn(`[callGeminiWithKeyManager] ${label} 키=${keyIndex} 시도=${attempt+1} 실패: ${e.message}`);
+        
+        if (!retryable(e)) {
+          throw e; // 재시도 불가능한 오류
+        }
+        
+        // Rate Limit 감지시 다른 키로 전환 시도
+        if (e.message.includes('429') || e.message.includes('overload')) {
+          const altKeyResult = storyboardKeyManager.selectKeyForStoryboard(sessionId + '_retry');
+          if (altKeyResult && altKeyResult.index !== keyIndex) {
+            console.log(`[callGeminiWithKeyManager] ${label} Rate Limit → 키 ${keyIndex}에서 ${altKeyResult.index}로 전환`);
+            // 키 변경하고 재시도
+            const altApiKey = altKeyResult.key;
+            const altGenAI = new GoogleGenerativeAI(altApiKey);
+            const altModel = altGenAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            
+            try {
+              await sleep(2000); // 키 전환시 추가 대기
+              const altResult = await altModel.generateContent(prompt);
+              const altText = altResult.response.text();
+              console.log(`[callGeminiWithKeyManager] ${label} 키 전환 성공: ${altKeyResult.index}`);
+              
+              return {
+                text: altText,
+                model: 'gemini-2.5-flash',
+                took: Date.now() - startTime,
+                attempts: attempt + 1,
+                keyIndex: altKeyResult.index,
+                sessionId,
+                keySwitched: true
+              };
+            } catch (altError) {
+              console.warn(`[callGeminiWithKeyManager] ${label} 키 전환도 실패: ${altError.message}`);
+            }
+          }
+        }
+        
+        // 지수 백오프
+        const delay = jitter(1500 * Math.pow(1.5, attempt));
+        console.log(`[callGeminiWithKeyManager] ${label} ${delay}ms 후 재시도...`);
         await sleep(delay);
       }
-      break;
     }
+    
+    throw lastError || new Error(`${label} 최대 재시도 초과 (키=${keyIndex})`);
+    
+  } finally {
+    // 🔥 중요: 에러든 성공이든 반드시 키 사용 완료 처리는 마지막에 수행
+    // 여기서는 Step1, Step2 개별 완료가 아닌 전체 세션 완료시에만 처리하도록 변경
   }
-  // 기존: throw new Error(`${label} 실패(모든 모델 소진)`);
-  let errMsg = `${label} 실패(모든 모델 소진)`;
-  if (lastError && lastError.message) errMsg += `: ${lastError.message}`;
-  throw new Error(errMsg);
 }
 
-/* ---------------- 🔥 NEW: PRODUCT COMPOSITING SCENE 감지 함수 ---------------- */
+/* =========================================================
+   기존 PRODUCT COMPOSITING SCENE 감지 함수 - 변경 없음
+========================================================= */
+
 function detectProductCompositingScenes(storyboardText, videoPurpose) {
   const compositingScenes = [];
   
-  // [PRODUCT COMPOSITING SCENE] 패턴 직접 검색
   const explicitPattern = /\[PRODUCT COMPOSITING SCENE\]/gi;
   const explicitMatches = storyboardText.match(explicitPattern);
   
   if (explicitMatches) {
     console.log(`[detectProductCompositingScenes] 명시적 PRODUCT COMPOSITING SCENE 발견: ${explicitMatches.length}개`);
     
-    // 각 매치 위치 찾기
     let searchPos = 0;
     storyboardText.replace(explicitPattern, (match, offset) => {
-      // 해당 위치 앞의 S# 패턴 찾기
       const beforeText = storyboardText.slice(0, offset);
       const sceneMatches = beforeText.match(/S#(\d+)/g);
       if (sceneMatches && sceneMatches.length > 0) {
@@ -161,18 +151,15 @@ function detectProductCompositingScenes(storyboardText, videoPurpose) {
       return match;
     });
   } else {
-    // 백업: 영상 목적에 따른 자동 감지
     console.log(`[detectProductCompositingScenes] 명시적 지점 없음, 영상 목적(${videoPurpose})에 따른 자동 감지`);
     
     if (videoPurpose === '구매 전환') {
-      // S#2 자동 지정
       compositingScenes.push({
         sceneNumber: 2,
         explicit: false,
         context: 'AUTO_PURCHASE_CONVERSION'
       });
     } else {
-      // 브랜드 인지도: 마지막 씬 자동 지정 (일반적으로 5씬이라 가정)
       const sceneMatches = storyboardText.match(/S#(\d+)/g);
       if (sceneMatches && sceneMatches.length > 0) {
         const lastSceneMatch = sceneMatches[sceneMatches.length - 1];
@@ -189,7 +176,10 @@ function detectProductCompositingScenes(storyboardText, videoPurpose) {
   return compositingScenes;
 }
 
-/* ---------------- 기존 STEP1 프롬프트 빌더 유지 ---------------- */
+/* =========================================================
+   기존 프롬프트 빌더들 - 변경 없음
+========================================================= */
+
 function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
   if(!INPUT_SECOND_PROMPT) throw new Error('input_second_prompt.txt 누락');
 
@@ -214,7 +204,6 @@ function buildStep1Prompt(fd, videoLengthSeconds, sceneCountPerConcept){
   return p;
 }
 
-/* ---------------- 기존 컨셉 블록 추출 로직 유지 ---------------- */
 function extractConceptBlocks(raw){
   if(!raw) return [];
   
@@ -320,12 +309,12 @@ function generateFallbackConcepts() {
     {
       concept_id: 3,
       concept_name: "핵심 가치의 극대화",
-      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지[...]"
+      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지 밀어붙입니다."
     },
     {
       concept_id: 4,
       concept_name: "기회비용의 시각화",
-      raw_block: "제품/서비스를 사용했을 때의 이점이 아닌, 사용하지 않았을 때 발생하는 손해를 구체적이고 현실감 있게 보여주는 네거티브 접근 방식[...]"
+      raw_block: "제품/서비스를 사용했을 때의 이점이 아닌, 사용하지 않았을 때 발생하는 손해를 구체적이고 현실감 있게 보여주는 네거티브 접근 방식입니다."
     },
     {
       concept_id: 5,
@@ -335,12 +324,11 @@ function generateFallbackConcepts() {
     {
       concept_id: 6,
       concept_name: "파격적 반전",
-      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적[...]"
+      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적으로 각인시킵니다."
     }
   ];
 }
 
-/* ---------------- 기존 STEP2 프롬프트 빌더 유지 ---------------- */
 function buildFinalPrompt(phase1Output, conceptBlocks, fd, sceneCountPerConcept){
   if(!FINAL_PROMPT) throw new Error('final_prompt.txt 누락');
   const videoLengthSeconds = parseVideoLengthSeconds(fd.videoLength);
@@ -415,7 +403,6 @@ ${conceptsForPrompt}
   return `${FINAL_PROMPT}\n\n${override}`;
 }
 
-/* ---------------- 기존 JSON 파싱 로직 유지 ---------------- */
 function parseMultiConceptJSON(raw){
   if(!raw) return null;
   const first = raw.indexOf('{');
@@ -447,7 +434,6 @@ function parseMultiConceptJSON(raw){
   }
 }
 
-/* ---------------- 🔥 UPDATED: 합성 정보 포함 styles 구성 ---------------- */
 function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositingScenes, formData){
   if(!conceptJson?.concepts) return [];
   
@@ -467,7 +453,7 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
           scene_number:i,
           timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
           image_prompt:{
-            prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa M[...]`,
+            prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa Mini with a 50mm lens.`,
             negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
             num_images:1,
             image:{ size:'widescreen_16_9' },
@@ -484,7 +470,6 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
     
     arr.sort((a,b)=>(a.scene_number||0)-(b.scene_number||0));
     
-    // 🔥 NEW: 각 이미지 프롬프트에 합성 정보 추가
     const imagePrompts = arr.map(sc=>{
       const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === sc.scene_number);
       
@@ -501,7 +486,6 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
         filter_nsfw: sc.image_prompt?.filter_nsfw !== undefined ? sc.image_prompt.filter_nsfw : true,
         motion_prompt: sc.motion_prompt?.prompt || "Subtle camera drift.",
         timecode: sc.timecode || "",
-        // 🔥 NEW: 합성 관련 정보 추가
         isCompositingScene: isCompositingScene,
         compositingInfo: isCompositingScene ? {
           needsProductImage: formData.productImageProvided || false,
@@ -522,7 +506,10 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
   });
 }
 
-/* ---------------- 메인 핸들러 ---------------- */
+/* =========================================================
+   메인 핸들러 (다중 사용자 대응)
+========================================================= */
+
 export default async function handler(req,res){
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
@@ -532,7 +519,14 @@ export default async function handler(req,res){
   if(req.method!=='POST') return res.status(405).json({error:'Method not allowed'});
 
   const t0=Date.now();
-  console.log('================ [storyboard-init][Z2M] START ================');
+  
+  // 🔥 NEW: 세션 ID 생성 (다중 사용자 구분)
+  const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  let selectedKeyIndex = null;
+  
+  console.log('================ [storyboard-init][다중사용자] START ================');
+  console.log(`[storyboard-init] 세션 시작: ${sessionId}`);
+  console.log(`[storyboard-init] 현재 키 사용 현황:`, storyboardKeyManager.getUsageStats());
 
   try{
     const { formData } = req.body || {};
@@ -540,41 +534,43 @@ export default async function handler(req,res){
     if(!INPUT_SECOND_PROMPT) throw new Error('input_second_prompt.txt 누락');
     if(!FINAL_PROMPT)        throw new Error('final_prompt.txt 누락');
 
-    const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if(!apiKey) throw new Error('Gemini API Key 누락');
-    const gen = new GoogleGenerativeAI(apiKey);
+    // 🔥 NEW: API 키 가용성 체크
+    if (storyboardKeyManager.keys.length === 0) {
+      console.error(`[storyboard-init] 세션 ${sessionId}: 사용 가능한 Gemini API 키가 없음`);
+      throw new Error('사용 가능한 Gemini API 키가 없습니다. 환경변수를 확인해주세요.');
+    }
 
     const videoLengthSeconds = parseVideoLengthSeconds(formData.videoLength);
     const sceneCountPerConcept = calcSceneCountPerConcept(videoLengthSeconds);
 
-    console.log(`[storyboard-init][Z2M] videoLengthSeconds=${videoLengthSeconds} sceneCountPerConcept=${sceneCountPerConcept}`);
+    console.log(`[storyboard-init] 세션 ${sessionId}: videoLengthSeconds=${videoLengthSeconds} sceneCountPerConcept=${sceneCountPerConcept}`);
 
-    /* STEP1 */
+    /* STEP1 - 다중 사용자 대응 */
     const step1Prompt = buildStep1Prompt(formData, videoLengthSeconds, sceneCountPerConcept);
-    console.log('[storyboard-init][Z2M] STEP1 promptLen=', step1Prompt.length);
-    const step1 = await callGemini(gen, step1Prompt, 'STEP1');
+    console.log(`[storyboard-init] 세션 ${sessionId}: STEP1 promptLen=${step1Prompt.length}`);
+    
+    const step1 = await callGeminiWithKeyManager(step1Prompt, 'STEP1', sessionId);
+    selectedKeyIndex = step1.keyIndex;
     const phase1_output = step1.text;
 
-    // 🔥 NEW: PRODUCT COMPOSITING SCENE 감지
     const compositingScenes = detectProductCompositingScenes(phase1_output, formData.videoPurpose);
-    console.log('[storyboard-init][Z2M] 감지된 합성 씬:', compositingScenes);
+    console.log(`[storyboard-init] 세션 ${sessionId}: 감지된 합성 씬:`, compositingScenes);
 
     const conceptBlocks = extractConceptBlocks(phase1_output);
 
-    /* STEP2 */
+    /* STEP2 - 같은 키 사용 권장 */
     const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, formData, sceneCountPerConcept);
-    console.log('[storyboard-init][Z2M] STEP2 promptLen=', step2Prompt.length);
-    const step2 = await callGemini(gen, step2Prompt, 'STEP2');
-
+    console.log(`[storyboard-init] 세션 ${sessionId}: STEP2 promptLen=${step2Prompt.length}`);
+    
+    const step2 = await callGeminiWithKeyManager(step2Prompt, 'STEP2', sessionId);
     const mcJson = parseMultiConceptJSON(step2.text);
 
     let styles=[];
     if(mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length===6){
-      // 🔥 UPDATED: 합성 정보 포함하여 styles 구성
       styles = buildStylesFromConceptJson(mcJson, sceneCountPerConcept, compositingScenes, formData);
-      console.log('[storyboard-init][Z2M] multi-concept JSON 파싱 성공 (6 concepts)');
+      console.log(`[storyboard-init] 세션 ${sessionId}: multi-concept JSON 파싱 성공 (6 concepts)`);
     } else {
-      console.warn('[storyboard-init][Z2M] multi-concept JSON 미구현 → placeholder 구성');
+      console.warn(`[storyboard-init] 세션 ${sessionId}: multi-concept JSON 미구현 → placeholder 구성`);
       styles = conceptBlocks.map(c=>{
         const imagePrompts=[];
         for(let i=1;i<=sceneCountPerConcept;i++){
@@ -592,7 +588,6 @@ export default async function handler(req,res){
             filter_nsfw:true,
             motion_prompt:"Subtle camera drift.",
             timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
-            // 🔥 NEW: 합성 정보 추가
             isCompositingScene: isCompositingScene,
             compositingInfo: isCompositingScene ? {
               needsProductImage: formData.productImageProvided || false,
@@ -613,7 +608,7 @@ export default async function handler(req,res){
     }
 
     if(styles.length!==6){
-      console.warn('[storyboard-init][Z2M] styles length !=6 최종 보정');
+      console.warn(`[storyboard-init] 세션 ${sessionId}: styles length !=6 최종 보정`);
       const existing = new Set(styles.map(s=>s.concept_id));
       for(let i=1;i<=6;i++){
         if(!existing.has(i)){
@@ -633,7 +628,6 @@ export default async function handler(req,res){
               filter_nsfw:true,
               motion_prompt:"Subtle camera drift.",
               timecode:`00:${String((k-1)*2).padStart(2,'0')}-00:${String(k*2).padStart(2,'0')}`,
-              // 🔥 NEW: 합성 정보 추가
               isCompositingScene: isCompositingScene,
               compositingInfo: isCompositingScene ? {
                 needsProductImage: formData.productImageProvided || false,
@@ -655,12 +649,19 @@ export default async function handler(req,res){
       styles.sort((a,b)=>a.concept_id-b.concept_id);
     }
 
-    // 🔥 NEW: 응답에 합성 정보 포함
+    // 🔥 NEW: 세션 완료 처리
+    if (selectedKeyIndex !== null) {
+      storyboardKeyManager.markSessionComplete(selectedKeyIndex, sessionId);
+    }
+
+    const processingTime = Date.now() - t0;
+    console.log(`[storyboard-init] 세션 ${sessionId}: 처리 완료 ${processingTime}ms`);
+    console.log(`[storyboard-init] 최종 키 사용 현황:`, storyboardKeyManager.getUsageStats());
+
     res.status(200).json({
       success:true,
       styles,
       imagePrompts: styles[0]?.imagePrompts || [],
-      // 🔥 NEW: 합성 관련 메타데이터 추가
       compositingInfo: {
         scenes: compositingScenes,
         hasProductImage: formData.productImageProvided || false,
@@ -669,27 +670,200 @@ export default async function handler(req,res){
         brandLogoData: formData.brandLogo || null
       },
       metadata:{
+        sessionId,
         videoLengthSeconds,
         sceneCountPerConcept,
         totalImagesExpected: styles.length * sceneCountPerConcept,
-        modelChain: MODEL_CHAIN,
-        totalMs: Date.now()-t0,
+        availableApiKeys: storyboardKeyManager.keys.length,
+        usedKeyIndex: selectedKeyIndex,
+        totalMs: processingTime,
         step1Model: step1.model,
         step2Model: step2.model,
         multiConceptJsonParsed: !!(mcJson && mcJson.concepts),
         conceptsDetectedFromStep1: conceptBlocks.length,
         z2multi:true,
         conceptBlocksGenerated: conceptBlocks.length === 0 ? 'fallback_auto_generated' : 'extracted_from_gemini',
-        // 🔥 NEW: 합성 관련 메타데이터
         compositingScenesDetected: compositingScenes.length,
-        compositingEnabled: compositingScenes.length > 0 && (formData.productImageProvided || formData.brandLogoProvided)
+        compositingEnabled: compositingScenes.length > 0 && (formData.productImageProvided || formData.brandLogoProvided),
+        // 🔥 NEW: 다중 사용자 관련 메타데이터
+        multiUserStats: {
+          sessionId,
+          keySelected: selectedKeyIndex,
+          keyPoolSize: storyboardKeyManager.keys.length,
+          step1Attempts: step1.attempts,
+          step2Attempts: step2.attempts,
+          keySwitched: step1.keySwitched || step2.keySwitched || false,
+          currentKeyUsage: storyboardKeyManager.getUsageStats()
+        }
       }
     });
 
   }catch(e){
-    console.error('[storyboard-init][Z2M] 오류', e);
-    res.status(500).json({success:false,error:e.message});
+    console.error(`[storyboard-init] 세션 ${sessionId} 오류:`, e);
+    
+    // 🔥 NEW: 오류 시에도 키 해제
+    if (selectedKeyIndex !== null) {
+      storyboardKeyManager.markSessionComplete(selectedKeyIndex, sessionId);
+    }
+    
+    res.status(500).json({
+      success:false,
+      error:e.message,
+      sessionId,
+      availableApiKeys: storyboardKeyManager.keys.length,
+      keyUsageStats: storyboardKeyManager.getUsageStats()
+    });
   }finally{
-    console.log('================ [storyboard-init][Z2M] END ================');
+    console.log(`================ [storyboard-init] 세션 ${sessionId} END ================`);
+  }
+}// api/storyboard-init.js - 다중 사용자 대응 Gemini API 키 분배 시스템
+
+import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+/* =========================================================
+   다중 사용자 대응 API 키 관리 시스템
+========================================================= */
+
+// 🔥 NEW: 다중 Gemini API 키 풀
+const GEMINI_API_KEYS = [
+  process.env.GEMINI_API_KEY,
+  process.env.VITE_GEMINI_API_KEY,
+  process.env.GEMINI_API_KEY_2,
+  process.env.GEMINI_API_KEY_3,
+  process.env.GEMINI_API_KEY_4,
+  process.env.GEMINI_API_KEY_5
+].filter(Boolean);
+
+// 🔥 NEW: 스마트 키 관리자 (storyboard-init용)
+class StoryboardApiKeyManager {
+  constructor(keys) {
+    this.keys = keys.filter(Boolean);
+    this.usage = new Map(); // keyIndex -> { step1: timestamp, step2: timestamp, concurrent: count }
+    
+    console.log(`[StoryboardApiKeyManager] 초기화: ${this.keys.length}개 키 사용 가능`);
+    
+    if (this.keys.length === 0) {
+      console.error('[StoryboardApiKeyManager] ❌ 사용 가능한 Gemini API 키가 없습니다!');
+    }
+  }
+  
+  // Step1과 Step2를 연속으로 사용할 최적의 키 선택
+  selectKeyForStoryboard(sessionId = 'default') {
+    if (this.keys.length === 0) return null;
+    if (this.keys.length === 1) return { key: this.keys[0], index: 0 };
+    
+    const now = Date.now();
+    let bestIndex = 0;
+    let minScore = Infinity;
+    
+    // 각 키의 부하 점수 계산
+    for (let i = 0; i < this.keys.length; i++) {
+      const usage = this.usage.get(i) || { step1: 0, step2: 0, concurrent: 0 };
+      
+      // 점수 = 동시사용 * 10000 + 최근 사용으로부터의 시간 페널티
+      const recentUsage = Math.max(usage.step1, usage.step2);
+      const timePenalty = Math.max(0, 30000 - (now - recentUsage)); // 30초 이내 사용시 페널티
+      const score = usage.concurrent * 10000 + timePenalty;
+      
+      if (score < minScore) {
+        minScore = score;
+        bestIndex = i;
+      }
+    }
+    
+    console.log(`[StoryboardApiKeyManager] 세션 ${sessionId}: 키 ${bestIndex} 선택 (점수: ${minScore})`);
+    return { key: this.keys[bestIndex], index: bestIndex };
+  }
+  
+  // Step1 시작
+  markStep1Start(keyIndex, sessionId = 'default') {
+    if (!this.usage.has(keyIndex)) {
+      this.usage.set(keyIndex, { step1: 0, step2: 0, concurrent: 0 });
+    }
+    this.usage.get(keyIndex).step1 = Date.now();
+    this.usage.get(keyIndex).concurrent++;
+    console.log(`[StoryboardApiKeyManager] 세션 ${sessionId}: 키 ${keyIndex} Step1 시작 (동시: ${this.usage.get(keyIndex).concurrent})`);
+  }
+  
+  // Step2 시작 (Step1과 같은 키 권장)
+  markStep2Start(keyIndex, sessionId = 'default') {
+    if (this.usage.has(keyIndex)) {
+      this.usage.get(keyIndex).step2 = Date.now();
+      console.log(`[StoryboardApiKeyManager] 세션 ${sessionId}: 키 ${keyIndex} Step2 시작`);
+    }
+  }
+  
+  // 세션 완료 (Step1, Step2 모두 끝남)
+  markSessionComplete(keyIndex, sessionId = 'default') {
+    if (this.usage.has(keyIndex)) {
+      this.usage.get(keyIndex).concurrent = Math.max(0, this.usage.get(keyIndex).concurrent - 1);
+      console.log(`[StoryboardApiKeyManager] 세션 ${sessionId}: 키 ${keyIndex} 완료 (동시: ${this.usage.get(keyIndex).concurrent})`);
+    }
+  }
+  
+  // 현재 사용 현황
+  getUsageStats() {
+    const stats = {};
+    for (let i = 0; i < this.keys.length; i++) {
+      const usage = this.usage.get(i) || { step1: 0, step2: 0, concurrent: 0 };
+      stats[`key_${i}`] = {
+        concurrent: usage.concurrent,
+        lastStep1: usage.step1 ? new Date(usage.step1).toISOString() : 'never',
+        lastStep2: usage.step2 ? new Date(usage.step2).toISOString() : 'never'
+      };
+    }
+    return stats;
   }
 }
+
+// 글로벌 키 매니저
+const storyboardKeyManager = new StoryboardApiKeyManager(GEMINI_API_KEYS);
+
+/* =========================================================
+   기존 코드 (텍스트 로더 등) - 변경 없음
+========================================================= */
+
+function loadTxt(name){
+  const p = path.resolve(process.cwd(),'public',name);
+  if(!fs.existsSync(p)){
+    console.error(`[storyboard-init][Z2M] 템플릿 누락: ${name} (${p})`);
+    return null;
+  }
+  const txt = fs.readFileSync(p,'utf-8');
+  console.log(`[storyboard-init][Z2M] 템플릿 로드: ${name} (${txt.length} chars)`);
+  return txt;
+}
+
+const INPUT_SECOND_PROMPT = loadTxt('input_second_prompt.txt'); // STEP1
+const FINAL_PROMPT        = loadTxt('final_prompt.txt');        // STEP2 (JSON)
+
+/* =========================================================
+   기존 유틸 함수들 - 변경 없음
+========================================================= */
+
+function parseVideoLengthSeconds(raw){
+  if(raw == null) return 10;
+  if(typeof raw === 'number') return raw;
+  const m = String(raw).match(/\d+/);
+  if(!m) return 10;
+  const n = parseInt(m[0],10);
+  return (isNaN(n)||n<=0)?10:n;
+}
+
+function calcSceneCountPerConcept(sec){
+  const n = Math.floor(sec/2);
+  return n<1?1:n;
+}
+
+function mapAspectRatio(formData){
+  const v = (formData?.videoAspectRatio || formData?.aspectRatio || '').toString().trim().toLowerCase();
+  if(['9:16','vertical','portrait'].includes(v)) return 'vertical_9_16';
+  if(['1:1','square'].includes(v)) return 'square_1_1';
+  if(['4:5','portrait_4_5','4:5portrait'].includes(v)) return 'portrait_4_5';
+  return 'widescreen_16_9';
+}
+
+const sleep = ms=>new Promise(r
