@@ -649,4 +649,8 @@ export default async function handler(req,res){
       },
       errorDetails: {
         timestamp: new Date().toISOString(),
-        processingTime: Date.now
+        processingTime: Date.now() - t0
+      }
+    });
+  }
+}
