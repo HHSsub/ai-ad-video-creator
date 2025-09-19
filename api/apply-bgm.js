@@ -205,7 +205,13 @@ function mergeBgm(videoPath, bgmPath, options = {}) {
       bgmPath: bgmPath,
       outputPath: outFile,
       volume: volume,
-      fadeSec: fadeSec
+      fadeSec: fadeSec,
+      videoExists: fs.existsSync(resolvedVideoPath),
+      videoSize: fs.existsSync(resolvedVideoPath) ? fs.statSync(resolvedVideoPath).size : 0,
+      bgmExists: fs.existsSync(bgmPath),
+      bgmSize: fs.existsSync(bgmPath) ? fs.statSync(bgmPath).size : 0,
+      outputDir: path.dirname(outFile),
+      outputDirExists: fs.existsSync(path.dirname(outFile))
     });
 
     try {
