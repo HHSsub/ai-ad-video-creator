@@ -29,7 +29,6 @@ SpinnerOverlay.propTypes = {
   lines: PropTypes.arrayOf(PropTypes.string),
 };
 
-// 문자열 "10초", "10 s" 등 대응
 function imagesPerStyle(videoLength, fallbackCountFromMeta){
   if(typeof fallbackCountFromMeta === 'number' && fallbackCountFromMeta > 0){
     return fallbackCountFromMeta;
@@ -62,8 +61,8 @@ async function runWithConcurrency(tasks, limit, onStep) {
   return results;
 }
 
-// 🔥 NEW: 이미지 합성 함수
-async function composeImageIfNeeded(imageObj, style, compositingInfo) {
+// 🔥 NEW: 이미지 합성 함수 (딜레이 포함)
+async function composeImageIfNeeded(imageObj, style, compositingInfo, delayMs = 2000) {
   // 합성이 필요한 조건 체크
   if (!imageObj.isCompositingScene || !imageObj.compositingInfo) {
     return imageObj; // 합성 불필요
@@ -85,7 +84,13 @@ async function composeImageIfNeeded(imageObj, style, compositingInfo) {
   }
 
   try {
-    console.log(`[composeImageIfNeeded] 합성 시작: Scene ${imageObj.sceneNumber}`);
+    console.log(`[composeImageIfNeeded] 합성 시작: Scene ${imageObj.sceneNumber} (${delayMs}ms 딜레이 적용)`);
+    
+    // 🔥 NEW: Rate Limit 방지를 위한 딜레이
+    if (delayMs > 0) {
+      console.log(`[composeImageIfNeeded] Rate Limit 방지 딜레이: ${delayMs}ms`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
     
     const response = await fetch(`${API_BASE}/api/nanobanana-compose`, {
       method: 'POST',
@@ -108,7 +113,7 @@ async function composeImageIfNeeded(imageObj, style, compositingInfo) {
     const result = await response.json();
     
     if (result.success && result.composedImageUrl) {
-      console.log(`[composeImageIfNeeded] 합성 완료: Scene ${imageObj.sceneNumber}`);
+      console.log(`[composeImageIfNeeded] 합성 완료: Scene ${imageObj.sceneNumber} (${result.metadata?.method || 'unknown'})`);
       
       // 합성된 이미지로 교체
       return {
@@ -283,8 +288,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               }finally{
                 const doneCountRef = successImages + imagesFail;
                 setPercent(cur=>{
-                  const base = 15 + Math.round(((doneCountRef)/(totalImages))*60); // 15~75%
-                  return base>75?75:base;
+                  const base = 15 + Math.round(((doneCountRef)/(totalImages))*50); // 15~65%
+                  return base>65?65:base;
                 });
               }
             });
@@ -292,28 +297,31 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         });
 
         await runWithConcurrency(tasks, 8, ()=>{});
-        setPercent(75);
+        setPercent(65);
         log(`이미지 생성 완료: 성공 ${imagesDone + successImages} / 실패 ${imagesFail} / 총 ${totalImages}`);
 
-        // 🔥 NEW: 3/3 이미지 합성 단계 (조건부 실행)
+        // 🔥 NEW: 3/3 이미지 합성 단계 (조건부 실행 + 딜레이)
         if (compositingInfo && (compositingInfo.hasProductImage || compositingInfo.hasBrandLogo)) {
-          log('3/3 이미지 합성 시작 (Nano Banana)');
+          log('3/3 이미지 합성 시작 (Rate Limit 방지 딜레이 적용)');
           
           let compositionTasks = [];
           styles.forEach(style => {
-            style.images.forEach(img => {
+            style.images.forEach((img, index) => {
               if (img.isCompositingScene && img.compositingInfo) {
                 compositionTasks.push(async () => {
                   try {
-                    log(`합성 요청: [${style.style}] Scene ${img.sceneNumber}`);
-                    const composedImg = await composeImageIfNeeded(img, style, compositingInfo);
+                    // 🔥 NEW: 순차적 딜레이 적용 (첫 번째는 5초, 이후 3초씩)
+                    const delayMs = index === 0 ? 5000 : 3000;
+                    log(`합성 요청: [${style.style}] Scene ${img.sceneNumber} (${delayMs}ms 딜레이)`);
+                    
+                    const composedImg = await composeImageIfNeeded(img, style, compositingInfo, delayMs);
                     
                     // 원본 이미지 객체를 합성된 이미지로 업데이트
                     const imgIndex = style.images.findIndex(i => i.id === img.id);
                     if (imgIndex >= 0) {
                       style.images[imgIndex] = composedImg;
                       if (composedImg.isComposed) {
-                        log(`합성 완료: [${style.style}] Scene ${img.sceneNumber}`);
+                        log(`합성 완료: [${style.style}] Scene ${img.sceneNumber} (${composedImg.compositionMetadata?.method || 'unknown'})`);
                       } else {
                         log(`합성 스킵: [${style.style}] Scene ${img.sceneNumber}`);
                       }
@@ -327,14 +335,20 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           });
 
           if (compositionTasks.length > 0) {
-            log(`총 ${compositionTasks.length}개 이미지 합성 시작`);
+            log(`총 ${compositionTasks.length}개 이미지 합성 시작 (순차 처리로 Rate Limit 방지)`);
             let composedCount = 0;
             
-            await runWithConcurrency(compositionTasks, 4, (done, total) => {
-              composedCount = done;
-              const compositionPercent = 75 + Math.round((done / total) * 25); // 75~100%
-              setPercent(compositionPercent);
-            });
+            // 🔥 NEW: 순차 처리로 Rate Limit 방지 (동시 처리 대신)
+            for (const task of compositionTasks) {
+              try {
+                await task();
+                composedCount++;
+                const compositionPercent = 65 + Math.round((composedCount / compositionTasks.length) * 35); // 65~100%
+                setPercent(compositionPercent);
+              } catch (e) {
+                log(`합성 태스크 실행 오류: ${e.message}`);
+              }
+            }
             
             log(`이미지 합성 완료: ${composedCount}/${compositionTasks.length}`);
           } else {
@@ -391,7 +405,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             input_second_prompt.txt → final_prompt.txt 두 번만 Gemini 호출. 
             장면 수 = (영상길이 ÷ 2초). 6개 컨셉 × 장면 수 = 전체 이미지.
             <br />
-            🔥 <strong>NEW:</strong> PRODUCT COMPOSITING SCENE 자동 감지 → Nano Banana 이미지 합성
+            🔥 <strong>NEW:</strong> PRODUCT COMPOSITING SCENE 자동 감지 → Freepik/Gemini Nano Banana 합성 (Rate Limit 방지 딜레이 적용)
           </p>
         </div>
 
@@ -409,7 +423,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             {debugInfo.compositingEnabled && (
               <>
                 <br />
-                🔥 <strong>이미지 합성 활성화:</strong> 제품/로고 이미지가 자동으로 합성됩니다.
+                🔥 <strong>이미지 합성 활성화:</strong> 제품/로고 이미지가 Rate Limit 방지 딜레이와 함께 합성됩니다.
               </>
             )}
           </div>
@@ -418,7 +432,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         {/* 🔥 NEW: 업로드된 이미지 미리보기 */}
         {(formData.productImage || formData.brandLogo) && (
           <div className="mb-4 bg-green-50 border border-green-200 rounded p-3">
-            <h4 className="text-sm font-semibold text-green-800 mb-2">합성용 이미지</h4>
+            <h4 className="text-sm font-semibold text-green-800 mb-2">합성용 이미지 (Rate Limit 방지 딜레이 적용)</h4>
             <div className="flex gap-4">
               {formData.productImage && (
                 <div className="text-center">
@@ -441,6 +455,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                 </div>
               )}
             </div>
+            <p className="text-xs text-green-600 mt-2">
+              💡 합성 시 순차 처리와 딜레이(5초+3초)로 API Rate Limit을 방지합니다.
+            </p>
           </div>
         )}
 
@@ -461,7 +478,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
           >
             {(formData.productImage || formData.brandLogo) 
-              ? '스토리보드 생성 + 이미지 합성 시작' 
+              ? '스토리보드 생성 + 이미지 합성 시작 (딜레이 적용)' 
               : '스토리보드 생성 시작'
             }
           </button>
