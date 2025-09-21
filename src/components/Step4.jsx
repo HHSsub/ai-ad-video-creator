@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-const Step4 = ({ storyboard, selectedConceptId, onPrev }) => {
+const Step4 = ({ storyboard, selectedConceptId, onPrev, formData }) => { // 🔥 formData 추가
   const styles = storyboard?.styles || [];
   const selected = styles.find(s => s.concept_id === selectedConceptId);
   const [logs, setLogs] = useState([]);
@@ -38,20 +38,44 @@ const Step4 = ({ storyboard, selectedConceptId, onPrev }) => {
 
       if (!segs.length) throw new Error('videoUrl 있는 scene 없음');
 
-      log('클립 합치기 JSON 모드 요청');
+      // 🔥 사용자가 선택한 영상 길이를 정확히 전달
+      const userVideoLength = formData?.videoLength || storyboard?.metadata?.videoLength || '10초';
+      
+      log(`클립 합치기 시작: ${segs.length}개 클립 → ${userVideoLength}`);
+      log(`🔥 사용자 선택 영상 길이: ${userVideoLength}`);
+      
       const r = await fetch(`${API_BASE}/api/compile-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ segments: segs, jsonMode: true })
+        body: JSON.stringify({ 
+          segments: segs, 
+          jsonMode: true,
+          videoLength: userVideoLength, // 🔥 핵심: 사용자 선택 길이 전달
+          formData: formData // 🔥 formData도 함께 전달
+        })
       });
+      
       if (!r.ok) {
         const txt = await r.text().catch(() => '');
         throw new Error(`compile 실패 ${r.status} ${txt}`);
       }
+      
       const j = await r.json();
       if (!j.success) throw new Error(j.error || 'compile 실패');
+      
       setCompiledUrl(j.compiledVideoUrl);
-      log(`합치기 완료 url=${j.compiledVideoUrl}`);
+      
+      // 🔥 길이 검증 로그
+      const meta = j.metadata || {};
+      const lengthMatch = meta.lengthMatch ? '✅ 일치' : '❌ 불일치';
+      
+      log(`합치기 완료: ${j.compiledVideoUrl}`);
+      log(`🔥 길이 검증: 선택 ${meta.userSelectedVideoLength || 'N/A'}초 → 실제 ${meta.actualCompiledDuration || 'N/A'}초 ${lengthMatch}`);
+      
+      if (!meta.lengthMatch) {
+        log(`⚠️ 영상 길이가 예상과 다릅니다!`);
+      }
+      
     } catch (e) {
       setErr(e.message);
       log(`오류: ${e.message}`);
@@ -109,15 +133,28 @@ const applyBgm = async () => {
   return (
     <div className="p-6 bg-white rounded shadow">
       <h2 className="text-2xl font-bold mb-4">4단계: 합치기 & BGM</h2>
+      
+      {/* 🔥 영상 길이 정보 표시 */}
+      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+        <p className="text-sm text-blue-800">
+          <strong>선택된 영상 길이:</strong> {formData?.videoLength || storyboard?.metadata?.videoLength || '10초'}
+        </p>
+        <p className="text-xs text-blue-600 mt-1">
+          이 길이에 맞춰 클립들이 합쳐집니다. (각 클립 2초씩)
+        </p>
+      </div>
+
       {err && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{err}</div>}
+      
       {!compiledUrl && (
         <button
           onClick={compile}
           disabled={loading}
           className="px-6 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-600 text-white disabled:opacity-50">
-          {loading ? '합치는 중...' : '클립 합치기'}
+          {loading ? '합치는 중...' : '🔥 정확한 길이로 클립 합치기'}
         </button>
       )}
+      
       {compiledUrl && !finalVideo && (
         <div className="mt-6 space-y-4">
           <div>
@@ -145,13 +182,19 @@ const applyBgm = async () => {
           </button>
         </div>
       )}
+      
       {finalVideo && (
         <div className="mt-8">
-          <h3 className="font-semibold mb-2">Final Video</h3>
+          <h3 className="font-semibold mb-2">🎉 Final Video</h3>
           <video src={finalVideo} controls className="w-full rounded mb-3" />
-          <a href={finalVideo} download className="inline-block px-5 py-2 bg-blue-600 text-white rounded">
-            다운로드
-          </a>
+          <div className="flex gap-3">
+            <a href={finalVideo} download className="inline-block px-5 py-2 bg-blue-600 text-white rounded">
+              다운로드
+            </a>
+            <div className="text-sm text-gray-600 flex items-center">
+              길이: {formData?.videoLength || '10초'} | BGM: {bgmMood || '없음'}
+            </div>
+          </div>
         </div>
       )}
 
@@ -172,7 +215,8 @@ const applyBgm = async () => {
 Step4.propTypes = {
   storyboard: PropTypes.object,
   selectedConceptId: PropTypes.number,
-  onPrev: PropTypes.func
+  onPrev: PropTypes.func,
+  formData: PropTypes.object // 🔥 formData PropTypes 추가
 };
 
 export default Step4;
