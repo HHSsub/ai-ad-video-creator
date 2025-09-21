@@ -9,7 +9,7 @@ export default defineConfig({
     hmr: { host: '13.222.179.138', port: 5173, protocol: 'ws' },
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://localhost:3000',  // 백엔드 서버 포트
         changeOrigin: true,
         secure: false,
         configure: (proxy, options) => {
