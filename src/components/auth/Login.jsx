@@ -11,7 +11,8 @@ const Login = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      // 🔥🔥🔥 직접 포트 3000으로 요청
+      const response = await fetch('http://13.222.179.138:3000/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -19,19 +20,25 @@ const Login = ({ onLogin }) => {
         body: JSON.stringify(credentials),
       });
 
+      console.log('🔥 응답 상태:', response.status);
+      console.log('🔥 응답 헤더:', response.headers);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const data = await response.json();
+      console.log('🔥 응답 데이터:', data);
 
       if (data.success) {
-        // 로그인 성공 시 사용자 정보를 부모 컴포넌트로 전달
         onLogin(data.user);
-        // 입력 필드 초기화
         setCredentials({ username: '', password: '' });
       } else {
         setError(data.message || '로그인에 실패했습니다.');
       }
     } catch (err) {
-      setError('서버 연결에 실패했습니다.');
-      console.error('로그인 오류:', err);
+      console.error('🔥 로그인 오류 상세:', err);
+      setError(`서버 연결 실패: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -59,6 +66,12 @@ const Login = ({ onLogin }) => {
             <p className="text-gray-600 mt-2">계정 정보를 입력해주세요</p>
           </div>
 
+          {/* 🔥 디버깅 정보 표시 */}
+          <div className="mb-4 p-3 bg-gray-100 rounded text-xs">
+            <p>디버깅: http://13.222.179.138:3000/api/auth/login 으로 요청</p>
+            <p>입력값: {credentials.username} / {credentials.password}</p>
+          </div>
+
           {/* 로그인 폼 */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
@@ -73,7 +86,7 @@ const Login = ({ onLogin }) => {
                 value={credentials.username}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="아이디를 입력하세요"
+                placeholder="admin 또는 guest"
               />
             </div>
 
@@ -89,7 +102,7 @@ const Login = ({ onLogin }) => {
                 value={credentials.password}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="비밀번호를 입력하세요"
+                placeholder="Upnexx!! 또는 guest1234"
               />
             </div>
 
@@ -123,11 +136,12 @@ const Login = ({ onLogin }) => {
             </button>
           </form>
 
-          {/* 접촉 정보 - 보안 강화 */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-600 text-center mb-2">로그인이 필요한 서비스입니다</p>
-            <div className="text-xs text-gray-500 text-center">
-              관리자 또는 게스트 계정으로 접속하세요
+          {/* 테스트 계정 안내 */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <p className="text-xs text-blue-600 text-center mb-2">테스트 계정</p>
+            <div className="text-xs text-blue-500 space-y-1">
+              <div>관리자: admin</div>
+              <div>일반사용자: guest</div>
             </div>
           </div>
         </div>
