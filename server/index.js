@@ -45,31 +45,45 @@ app.get('/health', (req, res) => {
   });
 });
 
+// =============================================================================
+// 🔥 인증 & 프롬프트 관련 API (기존 API들보다 먼저 배치!)
+// =============================================================================
+
 // 인증 관련 API
 app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-  // 하드코딩된 사용자 계정
-  const users = {
-    admin: { password: 'Upnexx!!', role: 'admin', name: '관리자' },
-    guest: { password: 'guest1234', role: 'user', name: '게스트' }
-  };
+    // 하드코딩된 사용자 계정
+    const users = {
+      admin: { password: 'Upnexx!!', role: 'admin', name: '관리자' },
+      guest: { password: 'guest1234', role: 'user', name: '게스트' }
+    };
 
-  const user = users[username];
+    const user = users[username];
 
-  if (user && user.password === password) {
-    res.json({
-      success: true,
-      user: {
-        username,
-        role: user.role,
-        name: user.name
-      }
-    });
-  } else {
-    res.status(401).json({
+    if (user && user.password === password) {
+      console.log(`✅ 로그인 성공: ${username} (${user.role})`);
+      res.json({
+        success: true,
+        user: {
+          username,
+          role: user.role,
+          name: user.name
+        }
+      });
+    } else {
+      console.log(`❌ 로그인 실패: ${username}`);
+      res.status(401).json({
+        success: false,
+        message: '아이디 또는 비밀번호가 올바르지 않습니다.'
+      });
+    }
+  } catch (error) {
+    console.error('로그인 API 오류:', error);
+    res.status(500).json({
       success: false,
-      message: '아이디 또는 비밀번호가 올바르지 않습니다.'
+      message: '서버 오류가 발생했습니다.'
     });
   }
 });
@@ -96,6 +110,7 @@ app.get('/api/prompts/get', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('프롬프트 로드 오류:', error);
     res.status(500).json({
       success: false,
       message: '프롬프트 파일을 읽는데 실패했습니다.',
@@ -164,12 +179,14 @@ app.post('/api/prompts/update', async (req, res) => {
     // 새 내용으로 파일 업데이트
     fs.writeFileSync(filePath, content, 'utf-8');
 
+    console.log(`✅ 프롬프트 업데이트 완료: ${targetFile}`);
     res.json({
       success: true,
       message: '프롬프트가 성공적으로 업데이트되었습니다.'
     });
 
   } catch (error) {
+    console.error('프롬프트 업데이트 오류:', error);
     res.status(500).json({
       success: false,
       message: '프롬프트 업데이트에 실패했습니다.',
@@ -199,6 +216,7 @@ app.get('/api/prompts/versions', async (req, res) => {
     });
 
   } catch (error) {
+    console.error('버전 로드 오류:', error);
     res.status(500).json({
       success: false,
       message: '버전 목록을 가져오는데 실패했습니다.',
@@ -276,12 +294,14 @@ app.post('/api/prompts/restore', async (req, res) => {
     const updatedVersions = versions.slice(0, 100); // 최대 100개 유지
     fs.writeFileSync(metadataPath, JSON.stringify(updatedVersions, null, 2));
 
+    console.log(`✅ 프롬프트 복원 완료: ${version.filename}`);
     res.json({
       success: true,
       message: '성공적으로 복원되었습니다.'
     });
 
   } catch (error) {
+    console.error('프롬프트 복원 오류:', error);
     res.status(500).json({
       success: false,
       message: '복원에 실패했습니다.',
@@ -290,7 +310,9 @@ app.post('/api/prompts/restore', async (req, res) => {
   }
 });
 
-// API 라우트 바인딩 헬퍼
+// =============================================================================
+// API 라우트 바인딩 헬퍼 (기존 API들)
+// =============================================================================
 const bindRoute = (path, handler, methods = ['POST']) => {
   app.options(path, (req, res) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -347,6 +369,7 @@ app.use('/tmp', express.static('tmp', {
 
 // 404 핸들러
 app.use('*', (req, res) => {
+  console.log(`❌ 404 요청: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     error: 'Not Found',
     path: req.originalUrl,
@@ -396,25 +419,12 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔑 API 키 상태:`);
   console.log(`   - Freepik: ${process.env.FREEPIK_API_KEY ? '✅' : '❌'}`);
   console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
-  console.log(`📋 사용 가능한 엔드포인트:`);
-  console.log(`   - GET  /health`);
-  console.log(`   - GET  /api/debug`);
+  console.log(`📋 새로운 인증 API:`);
   console.log(`   - POST /api/auth/login`);
   console.log(`   - GET  /api/prompts/get`);
   console.log(`   - POST /api/prompts/update`);
   console.log(`   - GET  /api/prompts/versions`);
   console.log(`   - POST /api/prompts/restore`);
-  console.log(`   - POST /api/storyboard-init`);
-  console.log(`   - POST /api/storyboard-render-image`);
-  console.log(`   - POST /api/image-to-video`);
-  console.log(`   - POST /api/generate-video`);
-  console.log(`   - POST /api/video-status`);
-  console.log(`   - POST /api/compile-videos`);
-  console.log(`   - POST /api/apply-bgm`);
-  console.log(`   - POST /api/load-mood-list`);
-  console.log(`   - POST /api/load-bgm-list`);
-  console.log(`   - POST /api/bgm-stream`);
-  console.log(`   - POST /api/nanobanana-compose`); // 🔥 NEW
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
 });
 
