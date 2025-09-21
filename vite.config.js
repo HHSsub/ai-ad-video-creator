@@ -9,9 +9,12 @@ export default defineConfig({
     hmr: { host: '13.222.179.138', port: 5173, protocol: 'ws' },
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',  // 백엔드 서버 포트
+        target: 'http://13.222.179.138:3000',  // 🔥 외부 IP로 변경
         changeOrigin: true,
         secure: false,
+        rewrite: (path) => {
+          console.log(`🔥 Proxy rewrite: ${path}`);
+          return path;
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
             console.log('[proxy error]', err);
