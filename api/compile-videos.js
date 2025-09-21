@@ -1,4 +1,4 @@
-// 향상된 영상 합치기 시스템 - 타임아웃 및 무한대기 해결
+// 향상된 영상 합치기 시스템 - 타임아웃 및 무한대기 해결 + 영상 길이 정확 반영
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
@@ -204,7 +204,6 @@ export default async function handler(req, res) {
 
     // 🔥 여기서 Step1에서 넘어온 videoLength를 정확히 반영 
     // segments: [{videoUrl, ...}], videoLength: '10초' | '20초' | '30초' (문자열)
-    // clipDurationSec은 프론트에서 명시적으로 넘기지 않으므로 여기서 계산
     const {
       segments,
       fps = 24, // 🔥 30->24 (처리 속도 향상)
@@ -218,37 +217,43 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'segments[] required' });
     }
 
-    // 🔥 videoLength 파싱 (문자열 '10초' 등 → 숫자 초)
-    let videoLengthSeconds = 10;
+    // 🔥 사용자가 선택한 영상 길이를 정확히 파싱하여 반영
+    let userSelectedVideoLengthSeconds = 10; // 기본값
+    
     if (typeof videoLength === 'number') {
-      videoLengthSeconds = videoLength;
+      userSelectedVideoLengthSeconds = videoLength;
     } else if (typeof videoLength === 'string') {
-      const m = videoLength.match(/\d+/);
-      if (m) videoLengthSeconds = parseInt(m[0], 10);
+      const match = videoLength.match(/(\d+)/);
+      if (match) {
+        userSelectedVideoLengthSeconds = parseInt(match[1], 10);
+      }
     }
-    if (![10, 20, 30].includes(videoLengthSeconds)) videoLengthSeconds = 10;
-
-    let sceneCount = Math.floor(videoLengthSeconds / 2);
-    if (sceneCount < 1) sceneCount = 1;
-
-    // 트림 길이 및 세그먼트 개수 계산
-    let clipDurationSec = 2;
-    let limitedSegments = segments.slice(0, sceneCount);
-    if (videoLengthSeconds === 30) {
-      clipDurationSec = 2; // 30초도 어차피 이미지15장이니까 무조건 2초로 짜르기 
-      limitedSegments = segments.slice(0, 6); // 30초/5초 = 6개
-    } else {
-      clipDurationSec = Math.floor(videoLengthSeconds / sceneCount);
-      if (clipDurationSec < 1) clipDurationSec = 1;
+    
+    // 유효한 값인지 확인 (10, 20, 30초만 허용)
+    if (![10, 20, 30].includes(userSelectedVideoLengthSeconds)) {
+      console.warn(`[compile-videos] 잘못된 영상 길이: ${videoLength}, 기본값 10초 사용`);
+      userSelectedVideoLengthSeconds = 10;
     }
 
-    console.log('[compile-videos] 🚀 시작 (빠른 모드):', {
-      segments: segments.length,
-      limitedSegments: limitedSegments.length,
-      clipDuration: clipDurationSec,
+    console.log(`[compile-videos] 🔥 사용자 선택 영상 길이: ${userSelectedVideoLengthSeconds}초`);
+
+    // 🔥 영상 길이에 따른 정확한 계산
+    // 각 이미지당 2초씩 할당하여 총 길이가 사용자 선택과 일치하도록
+    const clipDurationSec = 2; // 각 클립당 2초 고정
+    const requiredClipCount = userSelectedVideoLengthSeconds / clipDurationSec; // 10초->5개, 20초->10개, 30초->15개
+    
+    // segments를 필요한 개수만큼만 사용
+    const limitedSegments = segments.slice(0, requiredClipCount);
+    
+    console.log('[compile-videos] 🚀 시작 (영상 길이 정확 반영):', {
+      userSelectedLength: `${userSelectedVideoLengthSeconds}초`,
+      totalSegments: segments.length,
+      requiredClipCount: requiredClipCount,
+      actualUsedSegments: limitedSegments.length,
+      clipDurationPerSegment: `${clipDurationSec}초`,
+      expectedTotalDuration: `${limitedSegments.length * clipDurationSec}초`,
       resolution: scale,
-      fps: fps,
-      videoLengthSeconds: videoLengthSeconds
+      fps: fps
     });
 
     // 임시 디렉토리 생성
@@ -259,7 +264,7 @@ export default async function handler(req, res) {
     let totalOriginalDuration = 0;
 
     // 1단계: 비디오 다운로드 및 전처리
-    console.log('[compile-videos] 1단계: 비디오 다운로드 및 처리');
+    console.log(`[compile-videos] 1단계: 총 ${limitedSegments.length}개 비디오 처리 시작`);
     
     for (let i = 0; i < limitedSegments.length; i++) {
       const segment = limitedSegments[i];
@@ -357,7 +362,15 @@ export default async function handler(req, res) {
 
     // 3단계: 결과 처리
     const processingTime = Date.now() - startTime;
-    const compiledDuration = processedClips.length * clipDurationSec;
+    const actualCompiledDuration = processedClips.length * clipDurationSec; // 실제 생성된 영상 길이
+    
+    console.log('[compile-videos] 🎉 최종 결과:', {
+      사용자선택길이: `${userSelectedVideoLengthSeconds}초`,
+      실제생성길이: `${actualCompiledDuration}초`,
+      클립개수: processedClips.length,
+      클립당길이: `${clipDurationSec}초`,
+      일치여부: actualCompiledDuration === userSelectedVideoLengthSeconds ? '✅ 일치' : '❌ 불일치'
+    });
     
     if (jsonMode) {
       const projectRoot = process.cwd();
@@ -389,7 +402,7 @@ export default async function handler(req, res) {
         publicUrl,
         fileExists,
         fileSize: `${(fileSize / 1024 / 1024).toFixed(2)} MB`,
-        duration: compiledDuration,
+        duration: actualCompiledDuration,
         처리시간: processingTime + 'ms'
       });
       
@@ -397,10 +410,14 @@ export default async function handler(req, res) {
         success: true,
         compiledVideoUrl: publicUrl,
         metadata: {
-          segmentsCount: processedClips.length,
+          // 🔥 정확한 길이 정보 포함
+          userSelectedVideoLength: userSelectedVideoLengthSeconds,
+          actualCompiledDuration: actualCompiledDuration,
+          segmentsUsed: processedClips.length,
+          segmentsTotal: segments.length,
+          clipDurationSec: clipDurationSec,
+          lengthMatch: actualCompiledDuration === userSelectedVideoLengthSeconds,
           originalDuration: totalOriginalDuration,
-          compiledDuration: compiledDuration,
-          clipDurationSec,
           processingTime,
           scale,
           fps,
@@ -442,7 +459,7 @@ export default async function handler(req, res) {
       
       console.log('[compile-videos] 바이너리 모드 완료:', {
         fileSize: (buffer.length / 1024 / 1024).toFixed(2) + 'MB',
-        duration: compiledDuration,
+        duration: actualCompiledDuration,
         처리시간: processingTime + 'ms'
       });
       
