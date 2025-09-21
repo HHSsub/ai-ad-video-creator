@@ -18,6 +18,7 @@ function App(){
   console.log('App 상태:', {
     step,
     formDataKeys: Object.keys(formData),
+    videoLength: formData.videoLength, // 🔥 영상 길이 확인
     hasStoryboard: !!storyboard,
     selectedConceptId,
     isLoading,
@@ -64,6 +65,15 @@ function App(){
           </div>
         </div>
 
+        {/* 🔥 영상 길이 정보 표시 (디버깅용) */}
+        {formData.videoLength && (
+          <div className="mb-4 text-center">
+            <div className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+              선택된 영상 길이: <strong>{formData.videoLength}</strong>
+            </div>
+          </div>
+        )}
+
         {/* 현재 단계별 컴포넌트 렌더링 */}
         {step === 1 && (
           <Step1
@@ -71,6 +81,7 @@ function App(){
             setFormData={setFormData}
             onNext={() => {
               console.log('Step1 완료, formData:', formData);
+              console.log('🔥 선택된 영상 길이:', formData.videoLength);
               next();
             }}
           />
@@ -86,6 +97,7 @@ function App(){
             onPrev={prev}
             onNext={() => {
               console.log('Step2 완료, storyboard styles:', storyboard?.styles?.length);
+              console.log('🔥 전달된 영상 길이:', formData.videoLength);
               next();
             }}
           />
@@ -105,6 +117,7 @@ function App(){
                 return;
               }
               console.log('Step3 완료, selectedConceptId:', selectedConceptId);
+              console.log('🔥 전달될 영상 길이:', formData.videoLength);
               next();
             }}
           />
@@ -114,6 +127,7 @@ function App(){
           <Step4
             storyboard={storyboard}
             selectedConceptId={selectedConceptId}
+            formData={formData} // 🔥 핵심: formData를 Step4에 전달
             onPrev={prev}
             onReset={() => {
               // 전체 초기화
@@ -122,6 +136,7 @@ function App(){
               setStoryboard(null);
               setSelectedConceptId(null);
               setIsLoading(false);
+              console.log('🔄 전체 초기화 완료');
             }}
           />
         )}
@@ -133,6 +148,11 @@ function App(){
           <div className="bg-white rounded-lg p-6 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">처리 중입니다...</p>
+            {formData.videoLength && (
+              <p className="text-xs text-gray-500 mt-2">
+                영상 길이: {formData.videoLength}
+              </p>
+            )}
           </div>
         </div>
       )}
