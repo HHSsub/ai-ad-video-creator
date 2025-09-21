@@ -24,11 +24,14 @@ const Login = ({ onLogin }) => {
       if (data.success) {
         // 로그인 성공 시 사용자 정보를 부모 컴포넌트로 전달
         onLogin(data.user);
+        // 입력 필드 초기화
+        setCredentials({ username: '', password: '' });
       } else {
         setError(data.message || '로그인에 실패했습니다.');
       }
     } catch (err) {
       setError('서버 연결에 실패했습니다.');
+      console.error('로그인 오류:', err);
     } finally {
       setLoading(false);
     }
@@ -120,18 +123,11 @@ const Login = ({ onLogin }) => {
             </button>
           </form>
 
-          {/* 테스트 계정 안내 */}
+          {/* 접촉 정보 - 보안 강화 */}
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-600 text-center mb-2">테스트 계정</p>
-            <div className="text-xs text-gray-500 space-y-1">
-              <div className="flex justify-between">
-                <span>관리자:</span>
-                <span>admin / Upnexx!!</span>
-              </div>
-              <div className="flex justify-between">
-                <span>일반 사용자:</span>
-                <span>guest / guest1234</span>
-              </div>
+            <p className="text-xs text-gray-600 text-center mb-2">로그인이 필요한 서비스입니다</p>
+            <div className="text-xs text-gray-500 text-center">
+              관리자 또는 게스트 계정으로 접속하세요
             </div>
           </div>
         </div>
