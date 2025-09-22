@@ -10,6 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
   3. 실패한 이미지는 정적 이미지로 대체 처리
   4. 상세한 에러 로깅 및 진행률 표시 개선
   5. 무한 로딩 방지를 위한 타임아웃 및 강제 완료 로직
+  6. 🔥 NEW: 씬 순서 정렬 강화 (sceneNumber 기준)
 */
 
 const Step3 = ({
@@ -173,13 +174,17 @@ const Step3 = ({
     log(`🚀 영상 태스크 생성 시작: ${selected.style} (이미지 ${selected.images.length}개)`);
 
     try {
+      // 🔥 NEW: 이미지를 sceneNumber 순으로 정렬
+      const sortedImages = [...selected.images].sort((a, b) => a.sceneNumber - b.sceneNumber);
+      log(`🔄 이미지 정렬 완료: Scene ${sortedImages.map(img => img.sceneNumber).join(', ')}`);
+
       const newTasks = [];
       let successfulTasks = 0;
       let staticImageCount = 0;
 
       // 🔥 모든 이미지에 대해 태스크 생성 (실패해도 계속 진행)
-      for (let i = 0; i < selected.images.length; i++) {
-        const img = selected.images[i];
+      for (let i = 0; i < sortedImages.length; i++) {
+        const img = sortedImages[i];
         
         try {
           const taskResult = await createVideoTask(img);
@@ -194,12 +199,13 @@ const Step3 = ({
               targetImg.videoUrl = targetImg.url; // 정적 이미지 사용
               targetImg.isStaticVideo = true;
               targetImg.failureReason = taskResult.error;
+              log(`📷 Scene ${img.sceneNumber}: 정적 이미지로 설정 완료`);
             }
             staticImageCount++;
           }
           
           // 진행률 업데이트
-          const progress = Math.round(((i + 1) / selected.images.length) * 50);
+          const progress = Math.round(((i + 1) / sortedImages.length) * 50);
           setPercent(progress);
           
         } catch (error) {
@@ -208,7 +214,7 @@ const Step3 = ({
         }
 
         // API 부하 방지를 위한 짧은 딜레이
-        if (i < selected.images.length - 1) {
+        if (i < sortedImages.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
@@ -370,6 +376,10 @@ const Step3 = ({
   const completedCount = selected?.images?.filter(img => !!img.videoUrl).length || 0;
   const staticCount = selected?.images?.filter(img => img.isStaticVideo).length || 0;
 
+  // 🔥 NEW: 이미지를 sceneNumber 순으로 정렬하여 표시
+  const sortedImages = selected?.images ? 
+    [...selected.images].sort((a, b) => a.sceneNumber - b.sceneNumber) : [];
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       <h2 className="text-2xl font-bold mb-4">3단계: 컨셉 선택 & 영상 클립 생성</h2>
@@ -438,8 +448,9 @@ const Step3 = ({
           <h3 className="font-semibold mb-2">
             {selected.style} - Scene 상태 ({completedCount}/{selected.images.length} 완료)
           </h3>
+          {/* 🔥 NEW: 정렬된 이미지로 표시 */}
           <div className="grid md:grid-cols-5 gap-3">
-            {(selected.images || []).map(img => {
+            {sortedImages.map(img => {
               const hasVideo = !!img.videoUrl;
               const isStatic = img.isStaticVideo;
               
@@ -499,6 +510,9 @@ const Step3 = ({
                   ℹ️ 일부 비디오 생성이 실패하여 정적 이미지로 대체되었습니다
                 </span>
               )}
+              <div className="text-xs text-gray-500 mt-1">
+                📋 씬 순서: {sortedImages.map(img => `Scene${img.sceneNumber}`).join(' → ')}
+              </div>
             </div>
           )}
         </div>
