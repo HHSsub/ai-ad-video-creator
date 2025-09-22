@@ -219,30 +219,6 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
   }
 }
 
-const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) => {
-  const [error, setError] = useState(null);
-  const [percent, setPercent] = useState(0);
-  const [logs, setLogs] = useState([]);
-  const [imagesDone, setImagesDone] = useState(0);
-  const [imagesFail, setImagesFail] = useState(0);
-  const [imagesTotal, setImagesTotal] = useState(0);
-  const [debugInfo, setDebugInfo] = useState(null);
-  const [progressManager] = useState(new ProgressManager());
-
-  const isBusy = isLoading;
-
-  const log = (msg) => {
-    const timestampedMsg = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    setLogs((prev) => [...prev, timestampedMsg]);
-    console.log(timestampedMsg);
-  };
-
-  const updateProgress = (phase, progress) => {
-    const newPercent = progressManager.updatePhase(phase, progress);
-    setPercent(newPercent);
-    return newPercent;
-  };
-
   const handleGenerateStoryboard = async () => {
     setIsLoading?.(true);
     setError(null);
@@ -251,15 +227,14 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     setImagesFail(0);
     setImagesTotal(0);
     setDebugInfo(null);
-
+  
     progressManager.startPhase('STEP1');
     setPercent(0);
-
+  
     try {
       log('1/4 STEP1: 스토리보드 기본 구조 생성 시작');
       updateProgress('STEP1', 0.1);
-
-      // 🔥 업로드된 이미지 데이터 확인 및 로깅
+  
       log(`업로드된 이미지 확인: 제품이미지=${!!formData.productImage}, 브랜드로고=${!!formData.brandLogo}`);
       if (formData.productImage) {
         log(`제품 이미지 타입: ${typeof formData.productImage}, 크기: ${formData.productImage.url ? formData.productImage.url.length : 'N/A'}`);
@@ -267,34 +242,125 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       if (formData.brandLogo) {
         log(`브랜드 로고 타입: ${typeof formData.brandLogo}, 크기: ${formData.brandLogo.url ? formData.brandLogo.url.length : 'N/A'}`);
       }
-
+  
       const step1ProgressInterval = setInterval(() => {
         const currentProgress = progressManager.phases.STEP1.current;
         if (currentProgress < 24) {
           updateProgress('STEP1', Math.min(0.9, (currentProgress - 0) / 25 + 0.1));
         }
       }, 800);
-
-      const initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formData }),
-      });
-
-      clearInterval(step1ProgressInterval);
-
-      if (!initRes.ok) {
-        const err = await initRes.json().catch(() => ({}));
-        log(`STEP1 실패: ${initRes.status} ${err?.error || ''}`);
-        throw new Error(err?.error || `init failed: ${initRes.status}`);
+  
+      // 🔥 API 호출 부분 개선 - 에러 핸들링 강화
+      let initRes;
+      try {
+        // 🔥 AbortController로 타임아웃 제어
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          log('❌ API 호출 타임아웃 (60초)');
+        }, 60000);
+  
+        log('📡 백엔드 API 호출 시작...');
+        
+        initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            // 🔥 헤더 크기 최소화
+            'Cache-Control': 'no-cache'
+          },
+          body: JSON.stringify({ formData }),
+          signal: controller.signal // 🔥 타임아웃 시그널 추가
+        });
+  
+        clearTimeout(timeoutId);
+        
+      } catch (fetchError) {
+        clearInterval(step1ProgressInterval);
+        
+        // 🔥 상세한 에러 분석
+        if (fetchError.name === 'AbortError') {
+          throw new Error('API 호출 타임아웃 (60초). 백엔드 서버 상태를 확인하세요.');
+        } else if (fetchError.message.includes('Failed to fetch')) {
+          throw new Error('백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.');
+        } else if (fetchError.message.includes('ETIMEDOUT')) {
+          throw new Error('네트워크 연결 타임아웃. 서버 상태를 확인하세요.');
+        } else if (fetchError.message.includes('ECONNRESET')) {
+          throw new Error('연결이 재설정되었습니다. 서버를 재시작해보세요.');
+        } else {
+          throw new Error(`네트워크 오류: ${fetchError.message}`);
+        }
       }
-
-      const initData = await initRes.json();
+  
+      clearInterval(step1ProgressInterval);
+  
+      // 🔥 응답 상태 확인 개선
+      if (!initRes) {
+        throw new Error('서버 응답을 받지 못했습니다.');
+      }
+  
+      log(`📡 백엔드 응답 상태: ${initRes.status} ${initRes.statusText}`);
+  
+      if (!initRes.ok) {
+        let errorMessage = `HTTP ${initRes.status}`;
+        try {
+          const errorData = await initRes.text();
+          log(`❌ 서버 에러 응답: ${errorData.substring(0, 200)}`);
+          
+          // JSON 파싱 시도
+          try {
+            const errorJson = JSON.parse(errorData);
+            errorMessage = errorJson.error || errorJson.message || errorMessage;
+          } catch {
+            errorMessage = errorData.substring(0, 100) || errorMessage;
+          }
+        } catch {
+          errorMessage += ' (응답 본문 읽기 실패)';
+        }
+        
+        // 🔥 HTTP 상태별 맞춤 에러 메시지
+        if (initRes.status === 431) {
+          throw new Error('요청 헤더가 너무 큽니다. 업로드한 이미지 크기를 줄여보세요.');
+        } else if (initRes.status === 500) {
+          throw new Error(`서버 내부 오류: ${errorMessage}`);
+        } else if (initRes.status === 502 || initRes.status === 503) {
+          throw new Error('서버가 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도하세요.');
+        } else {
+          throw new Error(`서버 오류 (${initRes.status}): ${errorMessage}`);
+        }
+      }
+  
+      // 🔥 응답 파싱 개선
+      let initData;
+      try {
+        const responseText = await initRes.text();
+        log(`📡 응답 크기: ${responseText.length} bytes`);
+        
+        if (!responseText) {
+          throw new Error('서버에서 빈 응답을 받았습니다.');
+        }
+        
+        initData = JSON.parse(responseText);
+      } catch (parseError) {
+        log(`❌ JSON 파싱 실패: ${parseError.message}`);
+        throw new Error('서버 응답 형식이 올바르지 않습니다. 서버 로그를 확인하세요.');
+      }
+  
+      // 🔥 응답 데이터 검증
+      if (!initData.success) {
+        throw new Error(initData.error || '스토리보드 생성 실패');
+      }
+  
+      if (!initData.styles || !Array.isArray(initData.styles)) {
+        throw new Error('스토리보드 데이터 형식이 올바르지 않습니다.');
+      }
+  
       const { styles, metadata, compositingInfo } = initData;
-
+  
       progressManager.completePhase('STEP1');
       setPercent(25);
-      log('STEP1 완료: 기본 스토리보드 구조 생성 성공');
+      log('✅ STEP1 완료: 기본 스토리보드 구조 생성 성공');
 
       // STEP2 시작
       progressManager.startPhase('STEP2');
@@ -550,12 +616,21 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         log('성공 이미지 0 → 자동 이동 중단 (프롬프트/파싱 확인 필요)');
       }
 
-    } catch (e) {
-      console.error('Step2 오류:', e);
-      log(`오류: ${e.message}`);
-      setError(e.message);
-      setIsLoading?.(false);
-      setPercent(0);
+  } catch (e) {
+    console.error('Step2 오류:', e);
+    log(`❌ 전체 오류: ${e.message}`);
+    setError(e.message);
+    setIsLoading?.(false);
+    setPercent(0);
+    
+    // 🔥 에러 상황별 사용자 가이드
+    if (e.message.includes('연결할 수 없습니다')) {
+      log('💡 해결방법: 관리자에게 서버 상태 확인을 요청하세요.');
+    } else if (e.message.includes('타임아웃')) {
+      log('💡 해결방법: 잠시 후 다시 시도하거나, 업로드한 이미지 크기를 줄여보세요.');
+    } else if (e.message.includes('헤더가 너무 큽니다')) {
+      log('💡 해결방법: 업로드한 이미지 파일 크기를 2MB 이하로 줄여주세요.');
+    }
     }
   };
 
