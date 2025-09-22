@@ -15,6 +15,7 @@ export default defineConfig({
         rewrite: (path) => {
           console.log(`🔥 Proxy rewrite: ${path}`);
           return path;
+        },
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
             console.log('[proxy error]', err);
