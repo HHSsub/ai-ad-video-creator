@@ -9,15 +9,15 @@ const POLLING_INTERVAL = 3000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// 태스크 상태 폴링 (Mystic 엔드포인트)
+// 태스크 상태 폴링 (Mystic -> Seedream 엔드포인트)
 async function pollTaskStatus(taskId, conceptId = 0) {
   const startTime = Date.now();
   
   while (Date.now() - startTime < POLLING_TIMEOUT) {
     try {
-      console.log(`[pollTaskStatus] Mystic 태스크 ${taskId.substring(0, 8)} 상태 확인 중... (컨셉: ${conceptId})`);
-
-      const url = `${FREEPIK_API_BASE}/ai/mystic/${encodeURIComponent(taskId)}`;
+      console.log(`[pollTaskStatus] Seedream 태스크 ${taskId.substring(0, 8)} 상태 확인 중... (컨셉: ${conceptId})`);
+ 
+      const url = `${FREEPIK_API_BASE}/ai/text-to-image/seedream-v4/${encodeURIComponent(taskId)}`;
       
       // 🔥 키 풀을 활용한 안전한 API 호출
       const result = await safeCallFreepik(url, {
@@ -25,7 +25,7 @@ async function pollTaskStatus(taskId, conceptId = 0) {
         headers: {
           'Accept': 'application/json'
         }
-      }, conceptId, `mystic-status-${taskId.substring(0, 8)}`);
+      }, conceptId, `seedream-status-${taskId.substring(0, 8)}`); // mystic -> seedream
 
       console.log(`[pollTaskStatus] 응답:`, result);
 
@@ -79,8 +79,8 @@ async function generateImageWithFreepik(imagePrompt, conceptId = 0) {
   });
 
   // Mystic 생성 엔드포인트 (문서: POST /v1/ai/mystic)
-  const endpoint = `${FREEPIK_API_BASE}/ai/mystic`;
-
+  const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image/seedream-v4`; // mystic으로하려면 ai/mystic
+ 
   // 문서 필드명 기준으로 요청 바디 구성
   const requestBody = {
     prompt: imagePrompt.prompt,
@@ -132,14 +132,14 @@ async function generateImageWithFreepik(imagePrompt, conceptId = 0) {
   });
 
   try {
-    // 🔥 키 풀을 활용한 안전한 태스크 생성: POST /v1/ai/mystic
+    // 🔥 키 풀을 활용한 안전한 태스크 생성: POST /v1/ai/mystic or /vi/ai/text-to-image/seedream-v4
     const result = await safeCallFreepik(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(requestBody)
-    }, conceptId, `mystic-create-concept-${conceptId}`);
+    }, conceptId, `seedream-create-concept-${conceptId}`); // mystic에서 seedream으로 수정했음 
 
     console.log('[generateImageWithFreepik] 태스크 생성 응답:', result);
 
@@ -159,7 +159,7 @@ async function generateImageWithFreepik(imagePrompt, conceptId = 0) {
     return {
       success: true,
       imageUrl: imageUrl,
-      method: 'freepik-mystic-polling-keypool',
+      method: 'freepik-seedream-polling-keypool',
       taskId: taskId,
       conceptId: conceptId,
       raw: pollResult.raw
@@ -281,7 +281,7 @@ export default async function handler(req, res) {
           sceneNumber,
           conceptId,
           promptUsed: imagePrompt.prompt, // 절대 자르지 않음
-          apiProvider: 'Freepik Mystic 2025 KeyPool',
+          apiProvider: 'Freepik Seedream-v4 2025 KeyPool',
           size: imagePrompt.image?.size || imagePrompt.aspect_ratio,
           style: imagePrompt.styling?.style || null,
           seed: imagePrompt.seed || null,
