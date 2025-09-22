@@ -385,13 +385,14 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
           timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
           image_prompt:{
             prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa Mini with a 50mm lens.`,
-            negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
-            num_images:1,
-            image:{ size:'widescreen_16_9' },
-            styling:{ style:'photo', color:'color', lighting:'natural' },
-            guidance_scale:7.5,
+            // negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted", // 미스틱옵션 
+            // num_images:1, // 미스틱옵션
+            aspect_ratio: 'widescreen_16_9', // 🔥 Seedream v4 파라미터로 변경
+            // image:{ size:'widescreen_16_9' }, // 기존 미스틱 방식의 사이즈 지정임 
+            // styling:{ style:'photo', color:'color', lighting:'natural' },
+            guidance_scale:2.5, // 미스틱->7.5, seedream -> 2.5
             seed: Math.floor(10000 + Math.random()*90000),
-            filter_nsfw:true
+            // filter_nsfw:true
           },
           motion_prompt:{ prompt:'Subtle camera drift.'},
           duration_seconds:2
@@ -410,14 +411,19 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
         title: `Scene ${sc.scene_number}`,
         duration: sc.duration_seconds || 2,
         prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 8K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.',
-        negative_prompt: sc.image_prompt?.negative_prompt || "blurry, low quality, watermark, logo, text, cartoon, distorted",
-        styling: sc.image_prompt?.styling || { style:"photo", color:"color", lighting:"natural" },
-        size: sc.image_prompt?.image?.size || "widescreen_16_9",
-        guidance_scale: sc.image_prompt?.guidance_scale || 7.5,
-        seed: sc.image_prompt?.seed || Math.floor(10000 + Math.random()*90000),
-        filter_nsfw: sc.image_prompt?.filter_nsfw !== undefined ? sc.image_prompt.filter_nsfw : true,
+        
+        //negative_prompt: sc.image_prompt?.negative_prompt || "blurry, low quality, watermark, logo, text, cartoon, distorted", // 미스틱일때 설정했던것
+        //styling: sc.image_prompt?.styling || { style:"photo", color:"color", lighting:"natural" }, // 미스틱일때 설정했던것
+        //size: sc.image_prompt?.image?.size || "widescreen_16_9", // 미스틱일때 설정했던것
+        
+        aspect_ratio: sc.image_prompt?.aspect_ratio || 'widescreen_16_9',
+        guidance_scale: sc.image_prompt?.guidance_scale || 2.5,
+        seed: sc.image_prompt?.seed || Math.floor(Math.random() * 1000000),
+        
+        //filter_nsfw: sc.image_prompt?.filter_nsfw !== undefined ? sc.image_prompt.filter_nsfw : true, // 미스틱일때 설정했던것
         motion_prompt: sc.motion_prompt?.prompt || "Subtle camera drift.",
         timecode: sc.timecode || "",
+         
         // 🔥 NEW: 합성 관련 정보 추가
         isCompositingScene: isCompositingScene,
         compositingInfo: isCompositingScene ? {
