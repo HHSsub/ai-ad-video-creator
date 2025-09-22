@@ -631,7 +631,6 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
     } else if (e.message.includes('헤더가 너무 큽니다')) {
       log('💡 해결방법: 업로드한 이미지 파일 크기를 2MB 이하로 줄여주세요.');
     }
-    }
   };
 
   return (
