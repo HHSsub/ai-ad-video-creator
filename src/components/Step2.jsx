@@ -280,8 +280,8 @@ const Step2 = ({
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
           controller.abort();
-          log('❌ API 호출 타임아웃 (60초)');
-        }, 60000);
+          log('❌ API 호출 타임아웃 (300초)');
+        }, 300000);
 
         log('📡 백엔드 API 호출 시작...');
 
@@ -301,7 +301,7 @@ const Step2 = ({
       } catch (fetchError) {
         clearInterval(step1ProgressInterval);
         if (fetchError.name === 'AbortError') {
-          throw new Error('API 호출 타임아웃 (60초). 백엔드 서버 상태를 확인하세요.');
+          throw new Error('API 호출 타임아웃 (300초). 백엔드 서버 상태를 확인하세요.');
         } else if (fetchError.message.includes('Failed to fetch')) {
           throw new Error('백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.');
         } else if (fetchError.message.includes('ETIMEDOUT')) {
