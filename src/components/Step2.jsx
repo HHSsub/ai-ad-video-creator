@@ -64,13 +64,13 @@ class ProgressManager {
   }
 }
 
-function imagesPerStyle(videoLength, fallbackCountFromMeta){
-  if(typeof fallbackCountFromMeta === 'number' && fallbackCountFromMeta > 0){
+function imagesPerStyle(videoLength, fallbackCountFromMeta) {
+  if (typeof fallbackCountFromMeta === 'number' && fallbackCountFromMeta > 0) {
     return fallbackCountFromMeta;
   }
-  const digits = String(videoLength||'').match(/\d+/);
-  const sec = digits ? parseInt(digits[0],10) : 10;
-  const n = Math.max(1, Math.floor(sec/2));
+  const digits = String(videoLength || '').match(/\d+/);
+  const sec = digits ? parseInt(digits[0], 10) : 10;
+  const n = Math.max(1, Math.floor(sec / 2));
   return n;
 }
 
@@ -79,10 +79,10 @@ async function runSafeWorkerPool(tasks, limit, onProgress) {
   const results = new Array(tasks.length);
   let completed = 0;
   let failed = 0;
-  
+
   const workers = Array.from({ length: Math.min(limit, tasks.length) }, async (_, workerIndex) => {
     let taskIndex = workerIndex;
-    
+
     while (taskIndex < tasks.length) {
       try {
         console.log(`[Worker${workerIndex}] 작업 ${taskIndex + 1}/${tasks.length} 시작`);
@@ -99,7 +99,7 @@ async function runSafeWorkerPool(tasks, limit, onProgress) {
       }
     }
   });
-  
+
   await Promise.all(workers);
   return results;
 }
@@ -107,7 +107,7 @@ async function runSafeWorkerPool(tasks, limit, onProgress) {
 // 🔥 개별 합성 작업 (실제 업로드된 이미지 데이터 사용)
 async function composeSingleImageSafely(imageObj, style, compositingInfo, retryCount = 0) {
   const maxRetries = 2;
-  
+
   // 합성이 필요한 조건 체크
   if (!imageObj.isCompositingScene || !imageObj.compositingInfo) {
     console.log(`[composeSingleImageSafely] 합성 불필요: Scene ${imageObj.sceneNumber}`);
@@ -115,10 +115,10 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
   }
 
   const { needsProductImage, needsBrandLogo } = imageObj.compositingInfo;
-  
+
   // 🔥 실제 업로드된 이미지 데이터 추출
   let overlayImageData = null;
-  
+
   if (needsProductImage && compositingInfo.productImageData) {
     // formData.productImage에서 실제 업로드된 base64 데이터 사용
     if (typeof compositingInfo.productImageData === 'object' && compositingInfo.productImageData.url) {
@@ -127,8 +127,8 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
       overlayImageData = compositingInfo.productImageData; // 직접 base64
     }
     console.log(`[composeSingleImageSafely] 제품 이미지 합성 준비: Scene ${imageObj.sceneNumber}`);
-  } 
-  
+  }
+
   if (!overlayImageData && needsBrandLogo && compositingInfo.brandLogoData) {
     // formData.brandLogo에서 실제 업로드된 base64 데이터 사용
     if (typeof compositingInfo.brandLogoData === 'object' && compositingInfo.brandLogoData.url) {
@@ -151,11 +151,11 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
 
   try {
     console.log(`[composeSingleImageSafely] 🔥 Nano Banana 합성 시작: Scene ${imageObj.sceneNumber} (시도 ${retryCount + 1}/${maxRetries + 1})`);
-    
+
     // Rate Limit 분산을 위한 딜레이
     const requestDelay = Math.random() * 3000 + 2000;
     await new Promise(resolve => setTimeout(resolve, requestDelay));
-    
+
     // 🔥 실제 nanobanana-compose API 호출
     const response = await fetch(`${API_BASE}/api/nanobanana-compose`, {
       method: 'POST',
@@ -176,10 +176,10 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
     }
 
     const result = await response.json();
-    
+
     if (result.success && result.composedImageUrl) {
       console.log(`[composeSingleImageSafely] ✅ 합성 완료: Scene ${imageObj.sceneNumber} (${result.metadata?.method || 'unknown'})`);
-      
+
       // 합성된 이미지로 교체
       return {
         ...imageObj,
@@ -196,18 +196,18 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
 
   } catch (error) {
     console.error(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber} 시도 ${retryCount + 1} 실패:`, error.message);
-    
+
     // 재시도 로직 (429, 5xx 에러만)
     const retryableErrors = ['429', '500', '502', '503', '504', 'timeout'];
     const shouldRetry = retryableErrors.some(code => error.message.includes(code));
-    
+
     if (retryCount < maxRetries && shouldRetry) {
       const retryDelay = (retryCount + 1) * 5000;
       console.log(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber} ${retryDelay}ms 후 재시도...`);
       await new Promise(resolve => setTimeout(resolve, retryDelay));
       return composeSingleImageSafely(imageObj, style, compositingInfo, retryCount + 1);
     }
-    
+
     // 최종 실패 시 원본 반환 (에러 격리)
     console.warn(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber} 최종 실패, 원본 사용: ${error.message}`);
     return {
@@ -219,6 +219,31 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
   }
 }
 
+const Step2 = ({
+  onNext,
+  onPrev,
+  formData,
+  setStoryboard,
+  setIsLoading,
+  isLoading
+}) => {
+  const [error, setError] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [imagesDone, setImagesDone] = useState(0);
+  const [imagesFail, setImagesFail] = useState(0);
+  const [imagesTotal, setImagesTotal] = useState(0);
+  const [debugInfo, setDebugInfo] = useState(null);
+  const [percent, setPercent] = useState(0);
+
+  const progressManager = new ProgressManager();
+
+  const log = (msg) => setLogs(prev => [...prev, msg]);
+  const updateProgress = (phase, progress) => {
+    setPercent(progressManager.updatePhase(phase, progress));
+  };
+
+  const isBusy = isLoading;
+
   const handleGenerateStoryboard = async () => {
     setIsLoading?.(true);
     setError(null);
@@ -227,14 +252,14 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
     setImagesFail(0);
     setImagesTotal(0);
     setDebugInfo(null);
-  
+
     progressManager.startPhase('STEP1');
     setPercent(0);
-  
+
     try {
       log('1/4 STEP1: 스토리보드 기본 구조 생성 시작');
       updateProgress('STEP1', 0.1);
-  
+
       log(`업로드된 이미지 확인: 제품이미지=${!!formData.productImage}, 브랜드로고=${!!formData.brandLogo}`);
       if (formData.productImage) {
         log(`제품 이미지 타입: ${typeof formData.productImage}, 크기: ${formData.productImage.url ? formData.productImage.url.length : 'N/A'}`);
@@ -242,44 +267,39 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
       if (formData.brandLogo) {
         log(`브랜드 로고 타입: ${typeof formData.brandLogo}, 크기: ${formData.brandLogo.url ? formData.brandLogo.url.length : 'N/A'}`);
       }
-  
+
       const step1ProgressInterval = setInterval(() => {
         const currentProgress = progressManager.phases.STEP1.current;
         if (currentProgress < 24) {
           updateProgress('STEP1', Math.min(0.9, (currentProgress - 0) / 25 + 0.1));
         }
       }, 800);
-  
-      // 🔥 API 호출 부분 개선 - 에러 핸들링 강화
+
       let initRes;
       try {
-        // 🔥 AbortController로 타임아웃 제어
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
           controller.abort();
           log('❌ API 호출 타임아웃 (60초)');
         }, 60000);
-  
+
         log('📡 백엔드 API 호출 시작...');
-        
+
         initRes = await fetch(`${API_BASE}/api/storyboard-init`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            // 🔥 헤더 크기 최소화
             'Cache-Control': 'no-cache'
           },
           body: JSON.stringify({ formData }),
-          signal: controller.signal // 🔥 타임아웃 시그널 추가
+          signal: controller.signal
         });
-  
+
         clearTimeout(timeoutId);
-        
+
       } catch (fetchError) {
         clearInterval(step1ProgressInterval);
-        
-        // 🔥 상세한 에러 분석
         if (fetchError.name === 'AbortError') {
           throw new Error('API 호출 타임아웃 (60초). 백엔드 서버 상태를 확인하세요.');
         } else if (fetchError.message.includes('Failed to fetch')) {
@@ -292,23 +312,21 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
           throw new Error(`네트워크 오류: ${fetchError.message}`);
         }
       }
-  
+
       clearInterval(step1ProgressInterval);
-  
-      // 🔥 응답 상태 확인 개선
+
       if (!initRes) {
         throw new Error('서버 응답을 받지 못했습니다.');
       }
-  
+
       log(`📡 백엔드 응답 상태: ${initRes.status} ${initRes.statusText}`);
-  
+
       if (!initRes.ok) {
         let errorMessage = `HTTP ${initRes.status}`;
         try {
           const errorData = await initRes.text();
           log(`❌ 서버 에러 응답: ${errorData.substring(0, 200)}`);
-          
-          // JSON 파싱 시도
+
           try {
             const errorJson = JSON.parse(errorData);
             errorMessage = errorJson.error || errorJson.message || errorMessage;
@@ -318,8 +336,7 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
         } catch {
           errorMessage += ' (응답 본문 읽기 실패)';
         }
-        
-        // 🔥 HTTP 상태별 맞춤 에러 메시지
+
         if (initRes.status === 431) {
           throw new Error('요청 헤더가 너무 큽니다. 업로드한 이미지 크기를 줄여보세요.');
         } else if (initRes.status === 500) {
@@ -330,39 +347,36 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
           throw new Error(`서버 오류 (${initRes.status}): ${errorMessage}`);
         }
       }
-  
-      // 🔥 응답 파싱 개선
+
       let initData;
       try {
         const responseText = await initRes.text();
         log(`📡 응답 크기: ${responseText.length} bytes`);
-        
+
         if (!responseText) {
           throw new Error('서버에서 빈 응답을 받았습니다.');
         }
-        
+
         initData = JSON.parse(responseText);
       } catch (parseError) {
         log(`❌ JSON 파싱 실패: ${parseError.message}`);
         throw new Error('서버 응답 형식이 올바르지 않습니다. 서버 로그를 확인하세요.');
       }
-  
-      // 🔥 응답 데이터 검증
+
       if (!initData.success) {
         throw new Error(initData.error || '스토리보드 생성 실패');
       }
-  
+
       if (!initData.styles || !Array.isArray(initData.styles)) {
         throw new Error('스토리보드 데이터 형식이 올바르지 않습니다.');
       }
-  
+
       const { styles, metadata, compositingInfo } = initData;
-  
+
       progressManager.completePhase('STEP1');
       setPercent(25);
       log('✅ STEP1 완료: 기본 스토리보드 구조 생성 성공');
 
-      // STEP2 시작
       progressManager.startPhase('STEP2');
       log('2/4 STEP2: 상세 JSON 스토리보드 생성 시작');
       updateProgress('STEP2', 0.1);
@@ -381,27 +395,26 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
       setPercent(50);
       log('STEP2 완료: JSON 스토리보드 생성 성공');
 
-      // 이미지 개수 계산
       const perStyle = imagesPerStyle(formData.videoLength, metadata?.sceneCountPerConcept);
-      styles.forEach(s=>{
-        if(!Array.isArray(s.imagePrompts)) s.imagePrompts = [];
-        if(s.imagePrompts.length < perStyle){
-          const last = s.imagePrompts[s.imagePrompts.length-1];
-          while(s.imagePrompts.length < perStyle){
-            const idx = s.imagePrompts.length+1;
+      styles.forEach(s => {
+        if (!Array.isArray(s.imagePrompts)) s.imagePrompts = [];
+        if (s.imagePrompts.length < perStyle) {
+          const last = s.imagePrompts[s.imagePrompts.length - 1];
+          while (s.imagePrompts.length < perStyle) {
+            const idx = s.imagePrompts.length + 1;
             s.imagePrompts.push(last ? {
               ...last,
               sceneNumber: idx,
-              title:`Scene ${idx}`,
+              title: `Scene ${idx}`,
               prompt: last.prompt
             } : {
               sceneNumber: idx,
-              title:`Scene ${idx}`,
-              duration:2,
-              prompt:`${s.style} auto-filled scene ${idx}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.`
+              title: `Scene ${idx}`,
+              duration: 2,
+              prompt: `${s.style} auto-filled scene ${idx}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.`
             });
           }
-        } else if(s.imagePrompts.length > perStyle){
+        } else if (s.imagePrompts.length > perStyle) {
           s.imagePrompts = s.imagePrompts.slice(0, perStyle);
         }
       });
@@ -409,15 +422,13 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
       const totalImages = styles.length * perStyle;
       setImagesTotal(totalImages);
 
-      // 🔥 합성 정보 상세 로깅
       if (compositingInfo) {
         log(`🔥 합성 정보 확인: 감지된 씬 ${compositingInfo.scenes.length}개`);
         compositingInfo.scenes.forEach(scene => {
           log(`  - Scene ${scene.sceneNumber}: ${scene.context} (명시적: ${scene.explicit})`);
         });
         log(`제품이미지 사용: ${compositingInfo.hasProductImage}, 브랜드로고 사용: ${compositingInfo.hasBrandLogo}`);
-        
-        // 실제 이미지 데이터 확인
+
         if (compositingInfo.productImageData) {
           const dataType = typeof compositingInfo.productImageData;
           const dataSize = compositingInfo.productImageData.url ? compositingInfo.productImageData.url.length : 'N/A';
@@ -440,19 +451,18 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
 
       log(`스토리보드 완료: 스타일 ${styles.length}개 · 스타일당 장면 ${perStyle}개 · 총 이미지 ${totalImages}`);
 
-      // 3/4 이미지 생성 시작
       progressManager.startPhase('IMAGES');
       log('3/4 Freepik 이미지 생성 시작');
 
       let successImages = 0;
       let failedImages = 0;
-      
-      if(styles.length && perStyle > 0){
+
+      if (styles.length && perStyle > 0) {
         const imageTasks = [];
-        styles.forEach(style=>{
+        styles.forEach(style => {
           style.images = [];
-          (style.imagePrompts||[]).forEach(p=>{
-            imageTasks.push(async ()=>{
+          (style.imagePrompts || []).forEach(p => {
+            imageTasks.push(async () => {
               const promptToSend = p.prompt;
               try {
                 log(`이미지 생성 요청: [${style.style}] Scene ${p.sceneNumber}`);
@@ -466,47 +476,46 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
                     title: p.title
                   }),
                 });
-                if(!res.ok){
-                  const txt = await res.text().catch(()=> '');
-                  throw new Error(`${res.status} ${txt.slice(0,120)}`);
+                if (!res.ok) {
+                  const txt = await res.text().catch(() => '');
+                  throw new Error(`${res.status} ${txt.slice(0, 120)}`);
                 }
                 const data = await res.json();
-                if(!data.success || !data.url){
+                if (!data.success || !data.url) {
                   throw new Error('응답 이상');
                 }
-                
-                // 합성 정보를 포함한 이미지 객체 생성
+
                 const imgObj = {
-                  id:`${style.concept_id}-${p.sceneNumber}-${Math.random().toString(36).slice(2,8)}`,
-                  sceneNumber:p.sceneNumber,
-                  title:p.title,
-                  url:data.url,
-                  thumbnail:data.url,
-                  prompt:promptToSend,
-                  duration:p.duration||2,
-                  image_prompt:{
+                  id: `${style.concept_id}-${p.sceneNumber}-${Math.random().toString(36).slice(2, 8)}`,
+                  sceneNumber: p.sceneNumber,
+                  title: p.title,
+                  url: data.url,
+                  thumbnail: data.url,
+                  prompt: promptToSend,
+                  duration: p.duration || 2,
+                  image_prompt: {
                     prompt: promptToSend,
                     negative_prompt: 'blurry, low quality, watermark, cartoon, distorted',
-                    num_images:1,
-                    image:{ size:'widescreen_16_9' },
-                    styling:{ style:'photo' },
-                    seed: Math.floor(10000 + Math.random()*90000)
+                    num_images: 1,
+                    image: { size: 'widescreen_16_9' },
+                    styling: { style: 'photo' },
+                    seed: Math.floor(10000 + Math.random() * 90000)
                   },
                   isCompositingScene: p.isCompositingScene || false,
                   compositingInfo: p.compositingInfo || null
                 };
-                
+
                 style.images.push(imgObj);
                 successImages++;
-                
+
                 if (imgObj.isCompositingScene) {
                   log(`✅ 합성 대상 이미지 생성: [${style.style}] Scene ${p.sceneNumber} (Context: ${imgObj.compositingInfo?.compositingContext})`);
                 } else {
                   log(`이미지 생성 완료: [${style.style}] Scene ${p.sceneNumber}`);
                 }
-                
+
                 return { success: true };
-              }catch(e){
+              } catch (e) {
                 failedImages++;
                 log(`이미지 생성 예외: [${style.style}] Scene ${p.sceneNumber} - ${e.message}`);
                 return { success: false, error: e.message };
@@ -526,25 +535,22 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
         setPercent(80);
         log(`이미지 생성 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
 
-        // 🔥 4/4 이미지 합성 단계 (조건부 실행)
         if (compositingInfo && (compositingInfo.hasProductImage || compositingInfo.hasBrandLogo)) {
           progressManager.startPhase('COMPOSE');
           log('4/4 🔥 이미지 합성 시작 (Nano Banana API + 개별 에러 격리)');
-          
-          // 합성 대상 이미지들만 추출
+
           const compositionTasks = [];
           let totalCompositingScenes = 0;
-          
+
           styles.forEach(style => {
             style.images.forEach(img => {
               if (img.isCompositingScene && img.compositingInfo) {
                 totalCompositingScenes++;
                 log(`🎯 합성 대상 발견: [${style.style}] Scene ${img.sceneNumber}, Context: ${img.compositingInfo.compositingContext}`);
-                
+
                 compositionTasks.push(async () => {
                   const composedImg = await composeSingleImageSafely(img, style, compositingInfo);
-                  
-                  // 원본 이미지 객체를 합성된 이미지로 업데이트
+
                   const imgIndex = style.images.findIndex(i => i.id === img.id);
                   if (imgIndex >= 0) {
                     style.images[imgIndex] = composedImg;
@@ -566,11 +572,10 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
 
           if (compositionTasks.length > 0) {
             log(`🔥 총 ${compositionTasks.length}개 이미지 Nano Banana 합성 시작 (병렬 처리 + 개별 에러 격리)`);
-            
+
             let composedCount = 0;
             let composeFailed = 0;
-            
-            // 병렬 합성 실행
+
             await runSafeWorkerPool(compositionTasks, 2, (completed, failed, total) => {
               composedCount = completed;
               composeFailed = failed;
@@ -578,18 +583,18 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
               updateProgress('COMPOSE', progress);
               log(`합성 진행: ${completed}/${total} 완료 (실패: ${failed})`);
             });
-            
+
             log(`🎉 이미지 합성 완료: 성공 ${composedCount} / 실패 ${composeFailed} / 총 ${compositionTasks.length}`);
           } else {
             log(`⚠️ 합성 대상 이미지 없음 (감지된 합성 씬: ${totalCompositingScenes}개, 실제 이미지: ${styles.reduce((sum, style) => sum + (style.images || []).length, 0)}개)`);
           }
-          
+
           progressManager.completePhase('COMPOSE');
         } else {
           log('4/4 이미지 합성 스킵 (업로드된 이미지 없음)');
           progressManager.completePhase('COMPOSE');
         }
-        
+
         setPercent(100);
         log(`전체 처리 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
       } else {
@@ -601,7 +606,7 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
         success: true,
         styles,
         compositingInfo,
-        metadata:{
+        metadata: {
           ...metadata,
           perStyleCount: perStyle,
           createdAt: new Date().toISOString(),
@@ -610,27 +615,27 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
 
       setIsLoading?.(false);
 
-      if(successImages > 0){
+      if (successImages > 0) {
         onNext?.();
       } else {
         log('성공 이미지 0 → 자동 이동 중단 (프롬프트/파싱 확인 필요)');
       }
 
-  } catch (e) {
-    console.error('Step2 오류:', e);
-    log(`❌ 전체 오류: ${e.message}`);
-    setError(e.message);
-    setIsLoading?.(false);
-    setPercent(0);
-    
-    // 🔥 에러 상황별 사용자 가이드
-    if (e.message.includes('연결할 수 없습니다')) {
-      log('💡 해결방법: 관리자에게 서버 상태 확인을 요청하세요.');
-    } else if (e.message.includes('타임아웃')) {
-      log('💡 해결방법: 잠시 후 다시 시도하거나, 업로드한 이미지 크기를 줄여보세요.');
-    } else if (e.message.includes('헤더가 너무 큽니다')) {
-      log('💡 해결방법: 업로드한 이미지 파일 크기를 2MB 이하로 줄여주세요.');
-    }
+    } catch (e) {
+      console.error('Step2 오류:', e);
+      log(`❌ 전체 오류: ${e.message}`);
+      setError(e.message);
+      setIsLoading?.(false);
+      setPercent(0);
+
+      if (e.message.includes('연결할 수 없습니다')) {
+        log('💡 해결방법: 관리자에게 서버 상태 확인을 요청하세요.');
+      } else if (e.message.includes('타임아웃')) {
+        log('💡 해결방법: 잠시 후 다시 시도하거나, 업로드한 이미지 크기를 줄여보세요.');
+      } else if (e.message.includes('헤더가 너무 큽니다')) {
+        log('💡 해결방법: 업로드한 이미지 파일 크기를 2MB 이하로 줄여주세요.');
+      }
+    };
   };
 
   return (
@@ -667,16 +672,15 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
           </div>
         )}
 
-        {/* 업로드된 이미지 미리보기 */}
         {(formData.productImage || formData.brandLogo) && (
           <div className="mb-4 bg-green-50 border border-green-200 rounded p-3">
             <h4 className="text-sm font-semibold text-green-800 mb-2">합성용 이미지 (Nano Banana로 자동 합성)</h4>
             <div className="flex gap-4">
               {formData.productImage && (
                 <div className="text-center">
-                  <img 
-                    src={formData.productImage.url} 
-                    alt="제품 이미지" 
+                  <img
+                    src={formData.productImage.url}
+                    alt="제품 이미지"
                     className="w-16 h-16 object-cover rounded border"
                   />
                   <p className="text-xs text-green-700 mt-1">제품 이미지</p>
@@ -684,9 +688,9 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
               )}
               {formData.brandLogo && (
                 <div className="text-center">
-                  <img 
-                    src={formData.brandLogo.url} 
-                    alt="브랜드 로고" 
+                  <img
+                    src={formData.brandLogo.url}
+                    alt="브랜드 로고"
                     className="w-16 h-16 object-cover rounded border"
                   />
                   <p className="text-xs text-green-700 mt-1">브랜드 로고</p>
@@ -715,8 +719,8 @@ async function composeSingleImageSafely(imageObj, style, compositingInfo, retryC
             disabled={isBusy}
             className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
           >
-            {(formData.productImage || formData.brandLogo) 
-              ? '스토리보드 생성 + Nano Banana 이미지 합성 시작' 
+            {(formData.productImage || formData.brandLogo)
+              ? '스토리보드 생성 + Nano Banana 이미지 합성 시작'
               : '스토리보드 생성 시작'
             }
           </button>
