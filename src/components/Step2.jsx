@@ -33,10 +33,10 @@ SpinnerOverlay.propTypes = {
 class ProgressManager {
   constructor() {
     this.phases = {
-      STEP1: { start: 0, end: 15, current: 0 },
-      STEP2: { start: 15, end: 30, current: 15 },
-      IMAGES: { start: 30, end: 70, current: 30 },
-      COMPOSE: { start: 70, end: 100, current: 70 }
+      STEP1: { start: 0, end: 25, current: 0 },
+      STEP2: { start: 25, end: 50, current: 25 },
+      IMAGES: { start: 50, end: 80, current: 50 },
+      COMPOSE: { start: 80, end: 100, current: 80 }
     };
     this.currentPhase = 'STEP1';
   }
@@ -270,8 +270,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
       const step1ProgressInterval = setInterval(() => {
         const currentProgress = progressManager.phases.STEP1.current;
-        if (currentProgress < 14) {
-          updateProgress('STEP1', Math.min(0.9, (currentProgress - 0) / 15 + 0.1));
+        if (currentProgress < 24) {
+          updateProgress('STEP1', Math.min(0.9, (currentProgress - 0) / 25 + 0.1));
         }
       }, 800);
 
@@ -293,7 +293,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const { styles, metadata, compositingInfo } = initData;
 
       progressManager.completePhase('STEP1');
-      setPercent(15);
+      setPercent(25);
       log('STEP1 완료: 기본 스토리보드 구조 생성 성공');
 
       // STEP2 시작
@@ -303,8 +303,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
       const step2ProgressInterval = setInterval(() => {
         const currentProgress = progressManager.phases.STEP2.current;
-        if (currentProgress < 29) {
-          updateProgress('STEP2', Math.min(0.9, (currentProgress - 15) / 15 + 0.1));
+        if (currentProgress < 49) {
+          updateProgress('STEP2', Math.min(0.9, (currentProgress - 25) / 25 + 0.1));
         }
       }, 1000);
 
@@ -312,7 +312,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
       clearInterval(step2ProgressInterval);
       progressManager.completePhase('STEP2');
-      setPercent(30);
+      setPercent(50);
       log('STEP2 완료: JSON 스토리보드 생성 성공');
 
       // 이미지 개수 계산
@@ -457,7 +457,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         });
 
         progressManager.completePhase('IMAGES');
-        setPercent(70);
+        setPercent(80);
         log(`이미지 생성 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
 
         // 🔥 4/4 이미지 합성 단계 (조건부 실행)
@@ -569,7 +569,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           <p className="text-gray-600">
             🔥 <strong>업로드된 이미지를 합성 대상 씬에 자동 합성</strong> - Nano Banana API 활용
             <br />
-            STEP1(0-15%) → STEP2(15-30%) → 이미지생성(30-70%) → 합성(70-100%)
+            STEP1(0-25%) → STEP2(25-50%) → 이미지생성(50-80%) → 합성(80-100%)
           </p>
         </div>
 
