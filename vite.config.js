@@ -16,8 +16,8 @@ export default defineConfig({
         target: 'http://localhost:3000',  // 🔥 localhost로 변경 (같은 서버 내부 통신)
         changeOrigin: true,
         secure: false,
-        timeout: 60000, // 🔥 타임아웃 60초로 증가
-        proxyTimeout: 60000, // 🔥 프록시 타임아웃 추가
+        timeout: 180000, // 🔥 타임아웃 180초로 증가
+        proxyTimeout: 120000, // 🔥 프록시 타임아웃 추가 (120초)
         // 🔥 헤더 크기 제한 해결
         headers: {
           'Connection': 'keep-alive',
