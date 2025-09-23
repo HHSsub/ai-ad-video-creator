@@ -64,6 +64,15 @@ class ProgressManager {
   }
 }
 
+function getAspectRatioCode(videoAspectRatio) {
+  switch (videoAspectRatio) {
+    case '가로 (16:9)': return 'widescreen_16_9';
+    case '세로 (9:16)': return 'vertical_9_16';
+    case '정사각형 (1:1)': return 'square_1_1';
+    default: return 'widescreen_16_9';
+  }
+}
+
 function imagesPerStyle(videoLength, fallbackCountFromMeta) {
   if (typeof fallbackCountFromMeta === 'number' && fallbackCountFromMeta > 0) {
     return fallbackCountFromMeta;
@@ -497,7 +506,7 @@ const Step2 = ({
                     prompt: promptToSend,
                     negative_prompt: 'blurry, low quality, watermark, cartoon, distorted',
                     num_images: 1,
-                    image: { size: 'widescreen_16_9' },
+                    image: { size: getAspectRatioCode(formData.videoAspectRatio)  }, // 16_9 고정이아니라, Step1에서의 비디오 영상비율 입력값 사용 
                     styling: { style: 'photo' },
                     seed: Math.floor(10000 + Math.random() * 90000)
                   },
