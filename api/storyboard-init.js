@@ -89,13 +89,13 @@ function detectProductCompositingScenes(storyboardText, videoPurpose) {
         context: 'AUTO_PURCHASE_CONVERSION'
       });
     } else {
-      // 브랜드 인지도: 마지막 씬 자동 지정 (일반적으로 5씬이라 가정)
+      // 브랜드 인지도: 마찬가지로 씬2로 고정 지정 // 마지막씬 감지위한 로직들은 일단 내버려두었음
       const sceneMatches = storyboardText.match(/S#(\d+)/g);
       if (sceneMatches && sceneMatches.length > 0) {
         const lastSceneMatch = sceneMatches[sceneMatches.length - 1];
         const lastSceneNumber = parseInt(lastSceneMatch.replace('S#', ''), 10);
         compositingScenes.push({
-          sceneNumber: lastSceneNumber,
+          sceneNumber: 2, // 옛날엔 여기에 lastSceneNumber 삽입했다 
           explicit: false,
           context: 'AUTO_BRAND_AWARENESS'
         });
