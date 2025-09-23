@@ -387,7 +387,7 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
             prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa Mini with a 50mm lens.`,
             // negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted", // 미스틱옵션 
             // num_images:1, // 미스틱옵션
-            aspect_ratio: 'widescreen_16_9', // 🔥 Seedream v4 파라미터로 변경
+            aspect_ratio: aspectRatioCode, // 🔥 Seedream v4 파라미터로 변경
             // image:{ size:'widescreen_16_9' }, // 기존 미스틱 방식의 사이즈 지정임 
             // styling:{ style:'photo', color:'color', lighting:'natural' },
             guidance_scale:2.5, // 미스틱->7.5, seedream -> 2.5
@@ -485,6 +485,7 @@ export default async function handler(req,res){
       maxRetries: 3
     });
     const phase1_output = step1.text;
+    console.log("STEP1 프롬프트 결과물", phase1_output)
 
     // 🔥 NEW: PRODUCT COMPOSITING SCENE 감지
     const compositingScenes = detectProductCompositingScenes(phase1_output, formData.videoPurpose);
@@ -502,6 +503,7 @@ export default async function handler(req,res){
     });
 
     const mcJson = parseMultiConceptJSON(step2.text);
+    console.log("STEP2 프롬프트 결과물", mcJson)
 
     let styles=[];
     if(mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length===6){
@@ -521,7 +523,7 @@ export default async function handler(req,res){
             prompt:`${c.concept_name} placeholder scene ${i}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting. Shot by ARRI Alexa Mini with a 50mm lens.`,
             negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
             styling:{ style:"photo", color:"color", lighting:"natural" },
-            size:"widescreen_16_9",
+            size:aspectRatioCode,
             guidance_scale:7.5,
             seed: Math.floor(10000 + Math.random()*90000),
             filter_nsfw:true,
@@ -562,7 +564,7 @@ export default async function handler(req,res){
               prompt:`Concept ${i} auto-filled scene ${k}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting. Shot by RED Komodo with a 50mm lens.`,
               negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
               styling:{ style:"photo", color:"color", lighting:"natural" },
-              size:"widescreen_16_9",
+              size:aspectRatioCode,
               guidance_scale:7.5,
               seed: Math.floor(10000 + Math.random()*90000),
               filter_nsfw:true,
