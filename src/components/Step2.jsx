@@ -475,11 +475,17 @@ const Step2 = ({
               const promptToSend = p.prompt;
               try {
                 log(`이미지 생성 요청: [${style.style}] Scene ${p.sceneNumber}`);
+                const imagePromptObj = {
+                  prompt: promptToSend,
+                  aspect_ratio: getAspectRatioCode(formData.videoAspectRatio),
+                  seed: Math.floor(10000 + Math.random() * 90000),
+                  // 필요하면 guidance_scale 등 추가
+                };
                 const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    prompt: promptToSend,
+                    imagePrompt: imagePromptObj,
                     sceneNumber: p.sceneNumber,
                     conceptId: style.concept_id,
                     title: p.title
