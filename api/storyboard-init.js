@@ -40,11 +40,39 @@ function calcSceneCountPerConcept(sec){
   return n<1?1:n;
 }
 
-function mapAspectRatio(formData){
-  const v = (formData?.videoAspectRatio || formData?.aspectRatio || '').toString().trim().toLowerCase();
-  if(['9:16','vertical','portrait'].includes(v)) return 'vertical_9_16';
-  if(['1:1','square'].includes(v)) return 'square_1_1';
-  if(['4:5','portrait_4_5','4:5portrait'].includes(v)) return 'portrait_4_5';
+// 만약 입력값에 'vertical', '1:1', 'torch', '16_9' 등 어디서 들어와도 변환시킨다
+function mapAspectRatio(formData) {
+  const v = (formData?.videoAspectRatio || formData?.aspectRatio || '')
+    .toString().trim().replace(/[_\s-]/g, '').toLowerCase();
+
+  // 모든 입력을 정확한 Freepik/Seedream 공식 ENUM 문자열로 매핑
+  const mapping = {
+    'square': 'square_1_1',
+    '1:1': 'square_1_1', '11': 'square_1_1', 'square1_1': 'square_1_1',
+    '4:3': 'classic_4_3', '43': 'classic_4_3', 'classic4_3': 'classic_4_3', 'classic43': 'classic_4_3',
+    '3:4': 'traditional_3_4', '34': 'traditional_3_4', 'traditional3_4': 'traditional_3_4', 'traditional34': 'traditional_3_4',
+    '16:9': 'widescreen_16_9', '169': 'widescreen_16_9', 'widescreen': 'widescreen_16_9', 'widescreen16_9': 'widescreen_16_9',
+    '9:16': 'social_story_9_16', '916': 'social_story_9_16', 'story': 'social_story_9_16', 'socialstory': 'social_story_9_16', 'vertical': 'social_story_9_16', 'portrait9_16': 'social_story_9_16',
+    '20:9': 'smartphone_horizontal_20_9', '209': 'smartphone_horizontal_20_9',
+    '9:20': 'smartphone_vertical_9_20', '920': 'smartphone_vertical_9_20',
+    '21:9': 'film_horizontal_21_9', '219': 'film_horizontal_21_9', 'horizontal21_9': 'film_horizontal_21_9',
+    '9:21': 'film_vertical_9_21', '921': 'film_vertical_9_21', 'vertical9_21': 'film_vertical_9_21',
+    '3:2': 'standard_3_2', '32': 'standard_3_2',
+    '2:3': 'portrait_2_3', '23': 'portrait_2_3',
+    '2:1': 'horizontal_2_1', '21': 'horizontal_2_1',
+    '1:2': 'vertical_1_2', '12': 'vertical_1_2',
+    '5:4': 'social_5_4', '54': 'social_5_4',
+    '4:5': 'social_post_4_5', '45': 'social_post_4_5'
+  };
+
+  // 입력값이 '16x9', '16_9', '16-9', '16:9' 이런 식이면 정규화해서 맵핑 가능하게
+  let stdKey = v.replace(/[^0-9a-z]/g, ''); // ex: '16_9' -> '169'
+
+  // 몇몇 줄임말/케이스 커버
+  if (mapping[v]) return mapping[v];
+  if (mapping[stdKey]) return mapping[stdKey];
+
+  // 아무것도 해당하지 않으면 공식 API default로 fallback
   return 'widescreen_16_9';
 }
 
@@ -237,7 +265,7 @@ function generateFallbackConcepts() {
     {
       concept_id: 3,
       concept_name: "핵심 가치의 극대화",
-      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지 강조합니다."
+      raw_block: "브랜드가 가진 가장 강력하고 본질적인 핵심 가치 하나만을 선택하여, 그것이 세상의 유일한 법칙인 것처럼 시각적/서사적으로 극단까지 밀어붙입니다."
     },
     {
       concept_id: 4,
@@ -252,7 +280,7 @@ function generateFallbackConcepts() {
     {
       concept_id: 6,
       concept_name: "파격적 반전",
-      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적으로 전달합니다."
+      raw_block: "시청자가 특정 장르의 클리셰를 따라가도록 유도하다가, 결말 부분에서 모든 예상을 뒤엎는 파격적인 반전을 통해 브랜드 메시지를 극적으로 각인시킵니다."
     }
   ];
 }
@@ -385,14 +413,12 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
           timecode:`00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
           image_prompt:{
             prompt:`Concept ${c.concept_name||'Concept'} placeholder scene ${i}. Insanely detailed, hyper-realistic, sharp focus, 8K, micro-details, cinematic lighting, ends with: Shot by ARRI Alexa Mini with a 50mm lens.`,
-            // negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted", // 미스틱옵션 
-            // num_images:1, // 미스틱옵션
-            aspect_ratio: aspectRatioCode, // 🔥 Seedream v4 파라미터로 변경
-            // image:{ size:'widescreen_16_9' }, // 기존 미스틱 방식의 사이즈 지정임 
-            // styling:{ style:'photo', color:'color', lighting:'natural' },
-            guidance_scale:2.5, // 미스틱->7.5, seedream -> 2.5
+            negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
+            num_images:1,
+            aspect_ratio: mapAspectRatio(formData),
+            guidance_scale:2.5,
             seed: Math.floor(10000 + Math.random()*90000),
-            // filter_nsfw:true
+            filter_nsfw:true
           },
           motion_prompt:{ prompt:'Subtle camera drift.'},
           duration_seconds:2
@@ -411,16 +437,9 @@ function buildStylesFromConceptJson(conceptJson, sceneCountPerConcept, compositi
         title: `Scene ${sc.scene_number}`,
         duration: sc.duration_seconds || 2,
         prompt: sc.image_prompt?.prompt || 'Fallback prompt, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 8K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.',
-        
-        //negative_prompt: sc.image_prompt?.negative_prompt || "blurry, low quality, watermark, logo, text, cartoon, distorted", // 미스틱일때 설정했던것
-        //styling: sc.image_prompt?.styling || { style:"photo", color:"color", lighting:"natural" }, // 미스틱일때 설정했던것
-        //size: sc.image_prompt?.image?.size || "widescreen_16_9", // 미스틱일때 설정했던것
-        
         aspect_ratio: sc.image_prompt?.aspect_ratio || 'widescreen_16_9',
         guidance_scale: sc.image_prompt?.guidance_scale || 2.5,
         seed: sc.image_prompt?.seed || Math.floor(Math.random() * 1000000),
-        
-        //filter_nsfw: sc.image_prompt?.filter_nsfw !== undefined ? sc.image_prompt.filter_nsfw : true, // 미스틱일때 설정했던것
         motion_prompt: sc.motion_prompt?.prompt || "Subtle camera drift.",
         timecode: sc.timecode || "",
          
@@ -482,7 +501,8 @@ export default async function handler(req,res){
     
     const step1 = await safeCallGemini(step1Prompt, {
       label: 'STEP1-storyboard-init',
-      maxRetries: 3
+      maxRetries: 3,
+      isImageComposition: false // 텍스트 작업임을 반드시 명시!
     });
     const phase1_output = step1.text;
     console.log("STEP1 프롬프트 결과물", phase1_output)
@@ -499,7 +519,8 @@ export default async function handler(req,res){
     
     const step2 = await safeCallGemini(step2Prompt, {
       label: 'STEP2-storyboard-init', 
-      maxRetries: 3
+      maxRetries: 3,
+      isImageComposition: false // 텍스트 작업임을 반드시 명시!
     });
 
     const mcJson = parseMultiConceptJSON(step2.text);
@@ -523,7 +544,7 @@ export default async function handler(req,res){
             prompt:`${c.concept_name} placeholder scene ${i}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting. Shot by ARRI Alexa Mini with a 50mm lens.`,
             negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
             styling:{ style:"photo", color:"color", lighting:"natural" },
-            size:aspectRatioCode,
+            size:mapAspectRatio(formData),
             guidance_scale:7.5,
             seed: Math.floor(10000 + Math.random()*90000),
             filter_nsfw:true,
@@ -564,7 +585,7 @@ export default async function handler(req,res){
               prompt:`Concept ${i} auto-filled scene ${k}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting. Shot by RED Komodo with a 50mm lens.`,
               negative_prompt:"blurry, low quality, watermark, logo, text, cartoon, distorted",
               styling:{ style:"photo", color:"color", lighting:"natural" },
-              size:aspectRatioCode,
+              size:mapAspectRatio(formData),
               guidance_scale:7.5,
               seed: Math.floor(10000 + Math.random()*90000),
               filter_nsfw:true,
