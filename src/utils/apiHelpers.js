@@ -269,7 +269,7 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 
           'x-freepik-api-key': apiKey,
           'User-Agent': 'AI-Ad-Creator/2025',
           'Accept': 'application/json',
-          'Keep-Alive': 'timeout=300, max=1000'
+          // 'Keep-Alive': 'timeout=300, max=1000'
         }
       };
       
