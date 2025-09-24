@@ -13,7 +13,6 @@ import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 import compileVideos from '../api/compile-videos.js';
 import debug from '../api/debug.js';
-// 추가: BGM 관련 API 핸들러 import
 import applyBgm from '../api/apply-bgm.js';
 import loadMoodList from '../api/load-mood-list.js';
 import loadBgmList from '../api/load-bgm-list.js';
@@ -25,24 +24,22 @@ const PORT = process.env.PORT || 3000;
 
 // 🔥 서버 타임아웃 설정 강화
 app.use((req, res, next) => {
-  // 요청별 타임아웃 설정 (5분)
   req.setTimeout(300000);
   res.setTimeout(300000);
   next();
 });
 
-// CORS 설정 (모든 origin 허용)
+// CORS 설정
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key'],
-  // 🔥 CORS 프리플라이트 캐시 시간 증가
   maxAge: 86400
 }));
 
-// 🔥 Body parser 설정 강화 (대용량 응답 처리)
+// Body parser 설정 강화
 app.use(bodyParser.json({ 
-  limit: '100mb', // 🔥 100MB로 증가
+  limit: '100mb',
   extended: true,
   parameterLimit: 50000
 }));
@@ -50,16 +47,6 @@ app.use(bodyParser.urlencoded({
   extended: true, 
   limit: '100mb',
   parameterLimit: 50000
-}));
-
-// 🔥 응답 압축 미들웨어 추가
-import compression from 'compression';
-app.use(compression({
-  filter: (req, res) => {
-    // JSON 응답만 압축
-    return res.getHeader('Content-Type')?.includes('application/json');
-  },
-  threshold: 1024 // 1KB 이상만 압축
 }));
 
 // 헬스체크 엔드포인트
@@ -70,7 +57,6 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     memory: process.memoryUsage(),
     env: process.env.NODE_ENV,
-    // 🔥 API 키 상태 포함
     apiKeys: {
       gemini: !!process.env.GEMINI_API_KEY,
       freepik: !!process.env.FREEPIK_API_KEY
@@ -78,16 +64,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// =============================================================================
-// 🔥 인증 & 프롬프트 관련 API (기존 API들보다 먼저 배치!)
-// =============================================================================
-
 // 인증 관련 API
 app.post('/api/auth/login', (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // 하드코딩된 사용자 계정
     const users = {
       admin: { password: 'Upnexx!!', role: 'admin', name: '관리자' },
       guest: { password: 'guest1234', role: 'user', name: '게스트' }
@@ -166,7 +147,6 @@ app.post('/api/prompts/update', async (req, res) => {
     const publicPath = path.join(process.cwd(), 'public');
     const versionsPath = path.join(publicPath, 'versions');
     
-    // versions 디렉토리가 없으면 생성
     if (!fs.existsSync(versionsPath)) {
       fs.mkdirSync(versionsPath, { recursive: true });
     }
@@ -174,17 +154,14 @@ app.post('/api/prompts/update', async (req, res) => {
     const targetFile = filename.endsWith('.txt') ? filename : `${filename}.txt`;
     const filePath = path.join(publicPath, targetFile);
     
-    // 기존 파일이 있으면 버전으로 백업
     if (fs.existsSync(filePath)) {
       const existingContent = fs.readFileSync(filePath, 'utf-8');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const versionFileName = `${filename}_${timestamp}.txt`;
       const versionFilePath = path.join(versionsPath, versionFileName);
       
-      // 버전 파일 저장
       fs.writeFileSync(versionFilePath, existingContent);
       
-      // 버전 메타데이터 저장
       const metadataPath = path.join(versionsPath, 'versions.json');
       let versions = [];
       
@@ -204,12 +181,10 @@ app.post('/api/prompts/update', async (req, res) => {
         versionFile: versionFileName
       });
       
-      // 최대 100개 버전만 유지
       versions = versions.slice(0, 100);
       fs.writeFileSync(metadataPath, JSON.stringify(versions, null, 2));
     }
 
-    // 새 내용으로 파일 업데이트
     fs.writeFileSync(filePath, content, 'utf-8');
 
     console.log(`✅ 프롬프트 업데이트 완료: ${targetFile}`);
@@ -299,7 +274,6 @@ app.post('/api/prompts/restore', async (req, res) => {
       });
     }
 
-    // 현재 파일 백업 (위의 update API와 동일한 로직)
     const currentFilePath = path.join(publicPath, version.filename);
     if (fs.existsSync(currentFilePath)) {
       const currentContent = fs.readFileSync(currentFilePath, 'utf-8');
@@ -309,7 +283,6 @@ app.post('/api/prompts/restore', async (req, res) => {
       
       fs.writeFileSync(backupFilePath, currentContent);
       
-      // 메타데이터에 백업 추가
       versions.unshift({
         id: `${version.filename.replace('.txt', '')}_backup_${timestamp}`,
         filename: version.filename,
@@ -319,12 +292,10 @@ app.post('/api/prompts/restore', async (req, res) => {
       });
     }
 
-    // 버전 파일 내용으로 현재 파일 복원
     const versionContent = fs.readFileSync(versionFilePath, 'utf-8');
     fs.writeFileSync(currentFilePath, versionContent, 'utf-8');
     
-    // 업데이트된 메타데이터 저장
-    const updatedVersions = versions.slice(0, 100); // 최대 100개 유지
+    const updatedVersions = versions.slice(0, 100);
     fs.writeFileSync(metadataPath, JSON.stringify(updatedVersions, null, 2));
 
     console.log(`✅ 프롬프트 복원 완료: ${version.filename}`);
@@ -343,9 +314,7 @@ app.post('/api/prompts/restore', async (req, res) => {
   }
 });
 
-// =============================================================================
-// 🔥 API 라우트 바인딩 헬퍼 (타임아웃 강화)
-// =============================================================================
+// API 라우트 바인딩 헬퍼
 const bindRoute = (path, handler, methods = ['POST']) => {
   app.options(path, (req, res) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -356,9 +325,8 @@ const bindRoute = (path, handler, methods = ['POST']) => {
 
   methods.forEach((method) => {
     app[method.toLowerCase()](path, async (req, res) => {
-      // 🔥 긴 요청을 위한 타임아웃 설정
-      req.setTimeout(300000); // 5분
-      res.setTimeout(300000); // 5분
+      req.setTimeout(300000);
+      res.setTimeout(300000);
       
       try {
         await handler(req, res);
@@ -369,7 +337,6 @@ const bindRoute = (path, handler, methods = ['POST']) => {
             success: false,
             error: error.message,
             timestamp: new Date().toISOString(),
-            // 🔥 디버깅 정보 추가
             debug: {
               method,
               path,
@@ -451,13 +418,12 @@ app.use((error, req, res, next) => {
       error: 'Internal Server Error',
       message: error.message,
       timestamp: new Date().toISOString(),
-      // 🔥 에러 시 메모리 상태 포함
       memory: process.memoryUsage()
     });
   }
 });
 
-// 🔥 서버 시작 + EADDRINUSE 처리 + 타임아웃 설정
+// 서버 시작
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 AI 광고 영상 제작 API 서버 시작됨`);
   console.log(`📍 주소: http://0.0.0.0:${PORT}`);
@@ -465,18 +431,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔑 API 키 상태:`);
   console.log(`   - Freepik: ${process.env.FREEPIK_API_KEY ? '✅' : '❌'}`);
   console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
-  console.log(`📋 새로운 인증 API:`);
-  console.log(`   - POST /api/auth/login`);
-  console.log(`   - GET  /api/prompts/get`);
-  console.log(`   - POST /api/prompts/update`);
-  console.log(`   - GET  /api/prompts/versions`);
-  console.log(`   - POST /api/prompts/restore`);
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
   
-  // 🔥 서버 타임아웃 설정
-  server.timeout = 300000; // 5분
-  server.keepAliveTimeout = 300000; // 5분
-  server.headersTimeout = 305000; // 5분 + 5초
+  server.timeout = 300000;
+  server.keepAliveTimeout = 300000;
+  server.headersTimeout = 305000;
   
   console.log(`⏱️ 서버 타임아웃: ${server.timeout}ms`);
 });
@@ -487,7 +446,7 @@ server.on('error', (err) => {
     console.log('\n🛠 해결 방법 예시:');
     console.log(`  lsof -i :${PORT}`);
     console.log(`  sudo fuser -k ${PORT}/tcp`);
-    console.log('  pkill -f server/index.js  (또는 pm2 사용 시 pm2 delete <id>)');
+    console.log('  pkill -f server/index.js');
     console.log(`  다시 실행: PORT=${PORT} npm run start:api`);
     process.exit(1);
   } else {
@@ -496,9 +455,8 @@ server.on('error', (err) => {
   }
 });
 
-// 🔥 클라이언트 연결 시 타임아웃 설정
 server.on('connection', (socket) => {
-  socket.setTimeout(300000); // 5분
+  socket.setTimeout(300000);
   socket.setKeepAlive(true, 1000);
 });
 
@@ -514,11 +472,11 @@ server.on('connection', (socket) => {
   });
 });
 
-// 🔥 메모리 사용량 모니터링
+// 메모리 사용량 모니터링
 setInterval(() => {
   const memory = process.memoryUsage();
   const mbUsed = Math.round(memory.heapUsed / 1024 / 1024);
-  if (mbUsed > 500) { // 500MB 이상시 경고
+  if (mbUsed > 500) {
     console.warn(`⚠️ 메모리 사용량 높음: ${mbUsed}MB`);
   }
-}, 60000); // 1분마다 체크
+}, 60000);
