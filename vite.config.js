@@ -13,36 +13,51 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',  // 🔥 localhost로 변경 (같은 서버 내부 통신)
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
-        timeout: 180000, // 🔥 타임아웃 180초로 증가
-        proxyTimeout: 120000, // 🔥 프록시 타임아웃 추가 (120초)
-        // 🔥 헤더 크기 제한 해결
+        timeout: 300000, // 🔥 300초로 증가 (5분)
+        proxyTimeout: 300000, // 🔥 프록시 타임아웃도 동일하게
+        // 🔥 HTTP 설정 최적화
         headers: {
           'Connection': 'keep-alive',
+          'Keep-Alive': 'timeout=300, max=1000'
         },
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
             console.log('❌ [proxy error]', err.message);
-            // 🔥 에러 시 적절한 응답 반환
             if (!res.headersSent) {
-              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.writeHead(500, { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              });
               res.end(JSON.stringify({ 
                 error: 'Backend server unavailable', 
                 message: err.message,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                suggestion: 'Backend 서버가 응답하지 않습니다. 서버 상태를 확인해주세요.'
               }));
             }
           });
           proxy.on('proxyReq', (proxyReq, req, res) => {
             console.log('📤 [proxy req]', req.method, req.url);
-            // 🔥 헤더 크기 제한 방지
+            // 🔥 대용량 응답 처리를 위한 헤더 설정
             proxyReq.removeHeader('if-none-match');
             proxyReq.removeHeader('if-modified-since');
+            proxyReq.setHeader('Accept-Encoding', 'gzip, deflate');
+            // 🔥 타임아웃 연장
+            proxyReq.setTimeout(300000); // 5분
           });
           proxy.on('proxyRes', (proxyRes, req, res) => {
             console.log('📥 [proxy res]', proxyRes.statusCode, req.url);
+            // 🔥 대용량 응답 처리
+            proxyRes.headers['access-control-allow-origin'] = '*';
+            proxyRes.headers['access-control-allow-methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+            proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, x-freepik-api-key';
+          });
+          // 🔥 프록시 레벨 타임아웃 설정
+          proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
+            proxyReq.setTimeout(300000);
           });
         }
       }
@@ -50,10 +65,23 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    // 🔥 빌드 시 메모리 최적화
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          utils: ['@google/generative-ai']
+        }
+      }
+    }
   },
   // 🔥 개발 서버 성능 최적화
   optimizeDeps: {
     exclude: ['@google/generative-ai']
+  },
+  // 🔥 JSON 파싱 크기 제한 증가
+  define: {
+    global: 'globalThis',
   }
 });
