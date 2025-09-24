@@ -41,14 +41,14 @@ function getGeminiModelFromEnv() {
   return process.env.GEMINI_MODEL || 
          process.env.VITE_GEMINI_MODEL || 
          process.env.REACT_APP_GEMINI_MODEL || 
-         'gemini-2.5-flash'; // 기본값을 flash로 변경
+         'gemini-2.5-pro'; // 기본값을 pro로 변경
 }
 
 function getFallbackGeminiModel() {
   return process.env.FALLBACK_GEMINI_MODEL || 
          process.env.VITE_FALLBACK_GEMINI_MODEL || 
          process.env.REACT_APP_FALLBACK_GEMINI_MODEL || 
-         'gemini-2.5-flash-lite';
+         'gemini-2.5-flash';
 }
 
 /**
