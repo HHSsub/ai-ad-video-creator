@@ -18,21 +18,49 @@ import applyBgm from '../api/apply-bgm.js';
 import loadMoodList from '../api/load-mood-list.js';
 import loadBgmList from '../api/load-bgm-list.js';
 import bgmStream from '../api/bgm-stream.js';
-import nanobanaCompose from '../api/nanobanana-compose.js'; // 🔥 NEW: Nano Banana 합성 API
+import nanobanaCompose from '../api/nanobanana-compose.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// 🔥 서버 타임아웃 설정 강화
+app.use((req, res, next) => {
+  // 요청별 타임아웃 설정 (5분)
+  req.setTimeout(300000);
+  res.setTimeout(300000);
+  next();
+});
 
 // CORS 설정 (모든 origin 허용)
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key'],
+  // 🔥 CORS 프리플라이트 캐시 시간 증가
+  maxAge: 86400
 }));
 
-// Body parser 설정
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+// 🔥 Body parser 설정 강화 (대용량 응답 처리)
+app.use(bodyParser.json({ 
+  limit: '100mb', // 🔥 100MB로 증가
+  extended: true,
+  parameterLimit: 50000
+}));
+app.use(bodyParser.urlencoded({ 
+  extended: true, 
+  limit: '100mb',
+  parameterLimit: 50000
+}));
+
+// 🔥 응답 압축 미들웨어 추가
+import compression from 'compression';
+app.use(compression({
+  filter: (req, res) => {
+    // JSON 응답만 압축
+    return res.getHeader('Content-Type')?.includes('application/json');
+  },
+  threshold: 1024 // 1KB 이상만 압축
+}));
 
 // 헬스체크 엔드포인트
 app.get('/health', (req, res) => {
@@ -41,7 +69,12 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    env: process.env.NODE_ENV
+    env: process.env.NODE_ENV,
+    // 🔥 API 키 상태 포함
+    apiKeys: {
+      gemini: !!process.env.GEMINI_API_KEY,
+      freepik: !!process.env.FREEPIK_API_KEY
+    }
   });
 });
 
@@ -311,7 +344,7 @@ app.post('/api/prompts/restore', async (req, res) => {
 });
 
 // =============================================================================
-// API 라우트 바인딩 헬퍼 (기존 API들)
+// 🔥 API 라우트 바인딩 헬퍼 (타임아웃 강화)
 // =============================================================================
 const bindRoute = (path, handler, methods = ['POST']) => {
   app.options(path, (req, res) => {
@@ -323,6 +356,10 @@ const bindRoute = (path, handler, methods = ['POST']) => {
 
   methods.forEach((method) => {
     app[method.toLowerCase()](path, async (req, res) => {
+      // 🔥 긴 요청을 위한 타임아웃 설정
+      req.setTimeout(300000); // 5분
+      res.setTimeout(300000); // 5분
+      
       try {
         await handler(req, res);
       } catch (error) {
@@ -331,7 +368,14 @@ const bindRoute = (path, handler, methods = ['POST']) => {
           res.status(500).json({
             success: false,
             error: error.message,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            // 🔥 디버깅 정보 추가
+            debug: {
+              method,
+              path,
+              timeout: '300000ms',
+              memoryUsage: process.memoryUsage()
+            }
           });
         }
       }
@@ -348,10 +392,10 @@ bindRoute('/api/video-status', videoStatus, ['POST']);
 bindRoute('/api/compile-videos', compileVideos, ['POST']);
 bindRoute('/api/debug', debug, ['GET']);
 bindRoute('/api/apply-bgm', applyBgm, ['POST']);
-bindRoute('/api/load-mood-list', loadMoodList, ['GET','POST']); // 🔥 BGM mood 드롭다운용
-bindRoute('/api/load-bgm-list', loadBgmList, ['GET','POST']);   // 🔥 BGM 리스트
-bindRoute('/api/bgm-stream', bgmStream, ['GET','POST']);        // 🔥 BGM 스트림
-bindRoute('/api/nanobanana-compose', nanobanaCompose, ['POST']); // 🔥 NEW: Nano Banana 합성
+bindRoute('/api/load-mood-list', loadMoodList, ['GET','POST']);
+bindRoute('/api/load-bgm-list', loadBgmList, ['GET','POST']);
+bindRoute('/api/bgm-stream', bgmStream, ['GET','POST']);
+bindRoute('/api/nanobanana-compose', nanobanaCompose, ['POST']);
 
 // 정적 파일 서빙
 app.use('/tmp', express.static('tmp', {
@@ -393,7 +437,7 @@ app.use('*', (req, res) => {
       'POST /api/load-mood-list',
       'POST /api/load-bgm-list',
       'POST /api/bgm-stream',
-      'POST /api/nanobanana-compose' // 🔥 NEW
+      'POST /api/nanobanana-compose'
     ]
   });
 });
@@ -406,12 +450,14 @@ app.use((error, req, res, next) => {
       success: false,
       error: 'Internal Server Error',
       message: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      // 🔥 에러 시 메모리 상태 포함
+      memory: process.memoryUsage()
     });
   }
 });
 
-// 서버 시작 + EADDRINUSE 처리
+// 🔥 서버 시작 + EADDRINUSE 처리 + 타임아웃 설정
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 AI 광고 영상 제작 API 서버 시작됨`);
   console.log(`📍 주소: http://0.0.0.0:${PORT}`);
@@ -426,6 +472,13 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - GET  /api/prompts/versions`);
   console.log(`   - POST /api/prompts/restore`);
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
+  
+  // 🔥 서버 타임아웃 설정
+  server.timeout = 300000; // 5분
+  server.keepAliveTimeout = 300000; // 5분
+  server.headersTimeout = 305000; // 5분 + 5초
+  
+  console.log(`⏱️ 서버 타임아웃: ${server.timeout}ms`);
 });
 
 server.on('error', (err) => {
@@ -443,6 +496,12 @@ server.on('error', (err) => {
   }
 });
 
+// 🔥 클라이언트 연결 시 타임아웃 설정
+server.on('connection', (socket) => {
+  socket.setTimeout(300000); // 5분
+  socket.setKeepAlive(true, 1000);
+});
+
 // 종료 시그널
 ['SIGINT','SIGTERM'].forEach(sig=>{
   process.once(sig, ()=>{
@@ -454,3 +513,12 @@ server.on('error', (err) => {
     setTimeout(()=>process.exit(1),5000).unref();
   });
 });
+
+// 🔥 메모리 사용량 모니터링
+setInterval(() => {
+  const memory = process.memoryUsage();
+  const mbUsed = Math.round(memory.heapUsed / 1024 / 1024);
+  if (mbUsed > 500) { // 500MB 이상시 경고
+    console.warn(`⚠️ 메모리 사용량 높음: ${mbUsed}MB`);
+  }
+}, 60000); // 1분마다 체크
