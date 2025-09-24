@@ -104,8 +104,12 @@ function detectMimeType(imageUrl, fallback = 'image/jpeg') {
 function generateCompositingPrompt(compositingInfo, needsProductImage, needsBrandLogo) {
   const { compositingContext } = compositingInfo;
   
-  let prompt = `You are an expert image compositor specializing in professional advertising visuals. 
-Your task is to seamlessly integrate uploaded brand assets into a background scene to create a cohesive, natural-looking advertisement.
+  let prompt = `Seamlessly composite the foreground product into the background, creating a single, ultra-realistic, and perfectly cohesive photograph.
+Harmonize Lighting & Color: Match the product's lighting to the background's light source direction, color temperature, and shadow softness. The product's color and contrast must blend perfectly with the scene's ambient light.
+Cast Realistic Shadows: Generate a physically accurate contact shadow where the product meets the surface, ensuring the shadow's blur and darkness are consistent with the environment's lighting.
+Integrate Edges & Focus: Meticulously blend the product's edges to match the background's depth of field (bokeh) and atmospheric conditions. Eliminate any artificial 'cut-out' appearance.
+Render Environmental Interaction: Create subtle, realistic reflections of the background onto the product's surface (especially if glossy or metallic).
+Final Polish: Apply a unified, professional color grade over the entire image. The final result must be a masterpiece of photorealism, cohesive, 8K, high detail.
 
 INSTRUCTIONS:
 1. Use the first image as the base background scene
@@ -122,11 +126,11 @@ INSTRUCTIONS:
   
   // 오버레이 이미지 처리 방식
   if (needsProductImage && needsBrandLogo) {
-    prompt += `Overlay: The second image contains both product and brand logo. Place the product prominently as the hero element, and integrate the logo subtly in an appropriate corner or branded area. `;
+    prompt += `Overlay: The second image contains both product and brand logo `;
   } else if (needsProductImage) {
-    prompt += `Overlay: The second image contains a product. Integrate it as the focal point of the composition, making it look naturally placed within the scene environment. `;
+    prompt += `Overlay: The second image contains a product. `;
   } else if (needsBrandLogo) {
-    prompt += `Overlay: The second image contains a brand logo. Place it elegantly and subtly within the composition, typically in a corner or branded space that doesn't overwhelm the scene. `;
+    prompt += `Overlay: The second image contains a brand logo. `;
   }
 
   // 컨텍스트별 세부 지침
@@ -145,19 +149,8 @@ INSTRUCTIONS:
       prompt += `Focus: Create a natural, professional advertising composition. `;
   }
 
-  // 기술적 요구사항 (더 구체적으로)
-  prompt += `
-TECHNICAL REQUIREMENTS:
-- Match lighting direction and color temperature between all elements
-- Create realistic shadows and reflections for integrated objects
-- Maintain consistent perspective and natural scale relationships
-- Preserve the original atmosphere and mood of the background
-- Ensure seamless integration with no obvious compositing artifacts
-- Keep all text elements readable if present
-- Avoid adding any new text or watermarks
-- Result should look like a single, professional photograph
-
-Generate a cohesive, professional advertisement image that looks completely natural.`;
+  // 기술적 요구사항 여기서 더 넣어도 됨
+  prompt += ``;
 
   return prompt;
 }
@@ -214,7 +207,8 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
       safeCallGemini(geminiContent, {
         model: 'gemini-2.0-flash-exp', // 🔥 최신 이미지 생성 모델
         maxRetries: 1, // 내부에서 재시도하므로 1회만
-        label: `nanobanana-compose-attempt-${retryCount + 1}`
+        label: `nanobanana-compose-attempt-${retryCount + 1}`,
+        isImageComposition: True // 이미지 작업임을 반드시 명시!
       }),
       timeoutPromise
     ]);
