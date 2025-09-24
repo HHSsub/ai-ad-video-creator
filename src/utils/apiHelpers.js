@@ -1,5 +1,5 @@
 // src/utils/apiHelpers.js
-// 🔥 제대로 작동하는 API 키 풀 활용 헬퍼
+// 🔥 Gemini 모델 설정 수정 + 동시 사용자 대응 강화
 
 import { apiKeyManager } from './apiKeyManager.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -35,14 +35,31 @@ function isRetryableError(error, statusCode) {
 }
 
 /**
- * 🔥 안전한 Gemini API 호출 (개선된 키 풀 활용)
+ * 🔥 환경변수에서 Gemini 모델 설정 가져오기
+ */
+function getGeminiModelFromEnv() {
+  return process.env.GEMINI_MODEL || 
+         process.env.VITE_GEMINI_MODEL || 
+         process.env.REACT_APP_GEMINI_MODEL || 
+         'gemini-2.5-flash'; // 기본값을 flash로 변경
+}
+
+function getFallbackGeminiModel() {
+  return process.env.FALLBACK_GEMINI_MODEL || 
+         process.env.VITE_FALLBACK_GEMINI_MODEL || 
+         process.env.REACT_APP_FALLBACK_GEMINI_MODEL || 
+         'gemini-2.5-flash-lite';
+}
+
+/**
+ * 🔥 안전한 Gemini API 호출 (환경변수 모델 사용)
  */
 export async function safeCallGemini(prompt, options = {}) {
   const {
-    model = 'gemini-2.5-flash-image-preview', // 🔥 나노바나나 기본 모델
+    model = getGeminiModelFromEnv(), // 🔥 환경변수에서 모델 가져오기
     maxRetries = MAX_RETRIES,
     label = 'gemini-call',
-    fallbackModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite']
+    fallbackModels = [getFallbackGeminiModel(), 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
   } = options;
 
   let lastError;
@@ -55,10 +72,9 @@ export async function safeCallGemini(prompt, options = {}) {
   }
 
   // 🔥 키 풀 상태 로깅
+  console.log(`[safeCallGemini] 🎯 환경변수 모델: ${model}, 폴백: ${fallbackModels.join(', ')}`);
   if (typeof apiKeyManager.logStatus === 'function') {
     apiKeyManager.logStatus();
-  } else if (typeof apiKeyManager.logApiKeyStatus === 'function') {
-    apiKeyManager.logApiKeyStatus();
   }
 
   for (const currentModel of allModels) {
@@ -69,26 +85,39 @@ export async function safeCallGemini(prompt, options = {}) {
       let selectedKeyIndex = null;
       
       try {
-        // 🔥 최적의 API 키 선택
+        // 🔥 최적의 API 키 선택 (동시 사용자 대응)
         const { key: apiKey, index: keyIndex } = apiKeyManager.selectBestGeminiKey();
         selectedKeyIndex = keyIndex;
         
         console.log(`[${label}] 🔑 시도 ${totalAttempts} (모델: ${currentModel}, 키: ${keyIndex})`);
         
+        // 🔥 동시 요청 부하 분산을 위한 랜덤 딜레이
+        const concurrentDelay = Math.random() * 500 + 200; // 200-700ms
+        await new Promise(resolve => setTimeout(resolve, concurrentDelay));
+        
         const startTime = Date.now();
         
         // 🔥 Gemini API 호출
         const genAI = new GoogleGenerativeAI(apiKey);
-        const geminiModel = genAI.getGenerativeModel({ model: currentModel });
+        
+        // 🔥 이미지 생성 모델 vs 텍스트 모델 구분
+        let geminiModel;
+        if (Array.isArray(prompt) && prompt.some(p => p.inlineData)) {
+          // 이미지 포함 요청이면 이미지 생성 모델 강제 사용
+          console.log(`[${label}] 🖼️ 이미지 요청 감지, 이미지 생성 모델 사용`);
+          geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+        } else {
+          // 텍스트만 요청이면 환경변수 모델 사용
+          geminiModel = genAI.getGenerativeModel({ model: currentModel });
+        }
         
         let result;
-        // 🔥 입력 타입에 따른 처리 (텍스트/이미지)
         result = await geminiModel.generateContent(prompt);
         
         const response = result.response;
         let text = '';
 
-        // Gemini API 응답 처리 (텍스트/이미지 대응)
+        // Gemini API 응답 처리
         if (response.candidates && response.candidates[0]) {
           const candidate = response.candidates[0];
           if (candidate.content && candidate.content.parts) {
@@ -130,16 +159,20 @@ export async function safeCallGemini(prompt, options = {}) {
         lastError = error;
         const errorMessage = error?.message || '';
         const statusCode = error?.status;
+        
         // API 키가 선택되었다면 에러 기록
         if (selectedKeyIndex !== null) {
           apiKeyManager.markKeyError('gemini', selectedKeyIndex, errorMessage);
         }
-        console.error(`[${label}] 시도 ${totalAttempts} 실패 (모델: ${currentModel}):`, errorMessage);
+        
+        console.error(`[${label}] 시도 ${totalAttempts} 실패 (모델: ${currentModel}, 키: ${selectedKeyIndex}):`, errorMessage);
+        
         // 재시도 불가능한 에러면 즉시 중단
         if (!isRetryableError(error, statusCode)) {
           console.error(`[${label}] 재시도 불가능한 에러: ${errorMessage}`);
           break;
         }
+        
         // 마지막 시도가 아니면 딜레이 후 재시도
         if (modelAttempt < maxRetries - 1) {
           const delay = exponentialBackoffDelay(modelAttempt);
@@ -148,12 +181,14 @@ export async function safeCallGemini(prompt, options = {}) {
         }
       }
     }
+    
     // 현재 모델 실패시, 다음 모델로 전환
     if (allModels.indexOf(currentModel) < allModels.length - 1) {
       console.warn(`[${label}] 모델 ${currentModel} 실패, 다음 모델로 전환`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
+  
   // 모든 모델과 재시도 실패
   const errorMessage = `Gemini API 호출 실패 (${totalAttempts}회 시도, 모든 모델 실패): ${lastError?.message || 'Unknown error'}`;
   console.error(`[${label}] ❌ ${errorMessage}`);
@@ -161,7 +196,7 @@ export async function safeCallGemini(prompt, options = {}) {
 }
 
 /**
- * 🔥 안전한 Freepik API 호출 (키 풀 활용 + 재시도)
+ * 🔥 안전한 Freepik API 호출 (동시 사용자 대응 개선)
  */
 export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 'freepik-call') {
   const maxRetries = options.maxRetries || MAX_RETRIES;
@@ -170,10 +205,16 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     let keyIndex = null;
     try {
-      // 컨셉별 API 키 선택
+      // 🔥 컨셉별 API 키 선택 (동시 사용자 대응)
       const { key: apiKey, index } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
       keyIndex = index;
+      
       console.log(`[${label}] 시도 ${attempt + 1}/${maxRetries} (컨셉: ${conceptId}, 키: ${keyIndex})`);
+      
+      // 🔥 동시 요청 부하 분산
+      const concurrentDelay = Math.random() * 1000 + 500; // 500-1500ms
+      await new Promise(resolve => setTimeout(resolve, concurrentDelay));
+      
       const requestOptions = {
         ...options,
         headers: {
@@ -182,20 +223,27 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 
           'User-Agent': 'AI-Ad-Creator/2025'
         }
       };
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90초 타임아웃
+      
       const startTime = Date.now();
+      
       const response = await fetch(url, {
         ...requestOptions,
         signal: controller.signal
       });
+      
       clearTimeout(timeoutId);
       const processingTime = Date.now() - startTime;
+      
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         const error = new Error(`HTTP ${response.status}: ${errorText}`);
         error.status = response.status;
+        
         apiKeyManager.markKeyError('freepik', keyIndex, error.message);
+        
         if (isRetryableError(error, response.status) && attempt < maxRetries - 1) {
           const delay = exponentialBackoffDelay(attempt);
           console.log(`[${label}] ${delay}ms 후 재시도... (키: ${keyIndex})`);
@@ -204,16 +252,21 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 
         }
         throw error;
       }
+      
       const data = await response.json();
       apiKeyManager.markKeySuccess('freepik', keyIndex);
+      
       console.log(`[${label}] ✅ 성공 (키: ${keyIndex}, 시간: ${processingTime}ms)`);
+      
       return data;
+      
     } catch (error) {
       lastError = error;
       if (keyIndex !== null) {
         apiKeyManager.markKeyError('freepik', keyIndex, error.message);
       }
       console.error(`[${label}] 시도 ${attempt + 1} 실패:`, error.message);
+      
       if (attempt < maxRetries - 1 && isRetryableError(error, error.status)) {
         const delay = exponentialBackoffDelay(attempt);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -222,6 +275,7 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 
       break;
     }
   }
+  
   throw lastError || new Error(`${label} 최대 재시도 초과`);
 }
 
@@ -231,8 +285,6 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 
 export function getApiKeyStatus() {
   if (typeof apiKeyManager.getUsageStats === 'function') {
     return apiKeyManager.getUsageStats();
-  } else if (typeof apiKeyManager.getApiKeyStatus === 'function') {
-    return apiKeyManager.getApiKeyStatus();
   }
   return null;
 }
@@ -253,8 +305,6 @@ export function getAvailableKeyCount(service) {
 export function logApiKeyStatus() {
   if (typeof apiKeyManager.logStatus === 'function') {
     apiKeyManager.logStatus();
-  } else if (typeof apiKeyManager.logApiKeyStatus === 'function') {
-    apiKeyManager.logApiKeyStatus();
   } else {
     const stats = getApiKeyStatus();
     console.log('=== API Key Pool Status ===');
