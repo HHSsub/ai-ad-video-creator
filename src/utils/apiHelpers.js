@@ -1,11 +1,12 @@
-// src/utils/apiHelpers.js - 단계별 명확한 모델 선택 + 동시 사용자 대응 최적화
+// src/utils/apiHelpers.js - 타임아웃 및 응답 크기 최적화
 
 import { apiKeyManager } from './apiKeyManager.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
-const MAX_DELAY = 10000;
+const MAX_DELAY = 30000; // 🔥 30초로 증가
+const REQUEST_TIMEOUT = 300000; // 🔥 5분 타임아웃
 
 /**
  * 지수 백오프를 사용한 딜레이 함수 (지터 포함)
@@ -24,7 +25,8 @@ function isRetryableError(error, statusCode) {
   const retryableMessages = [
     'rate limit', 'quota', 'overload', 'timeout', 
     'network', 'fetch', 'econnreset', 'ecancelled',
-    'too many requests', 'exceeded your current quota'
+    'too many requests', 'exceeded your current quota',
+    'socket hang up', 'connect timeout'
   ];
   
   if (retryableStatus.includes(statusCode)) return true;
@@ -40,7 +42,7 @@ function getTextGeminiModel() {
   return process.env.GEMINI_MODEL || 
          process.env.VITE_GEMINI_MODEL || 
          process.env.REACT_APP_GEMINI_MODEL || 
-         'gemini-2.5-pro'; // 🔥 텍스트 작업용 기본값
+         'gemini-2.5-pro';
 }
 
 function getFallbackTextModel() {
@@ -54,23 +56,32 @@ function getFallbackTextModel() {
  * 🔥 이미지 합성 전용 모델 (나노바나나용)
  */
 function getImageCompositionModel() {
-  return 'gemini-2.0-flash-exp'; // 🔥 이미지 합성 전용 모델 고정
+  return 'gemini-2.0-flash-exp';
 }
 
 /**
- * 🔥 안전한 Gemini API 호출 (단계별 명확한 모델 선택)
- * 
- * @param {string|Array} prompt - 프롬프트 (문자열 또는 멀티모달 배열)
- * @param {Object} options - 옵션
- * @param {string} options.label - 로그용 라벨
- * @param {number} options.maxRetries - 최대 재시도 횟수
- * @param {boolean} options.isImageComposition - 이미지 합성 작업 여부 (나노바나나용)
+ * 🔥 타임아웃 기능이 있는 Promise
+ */
+function withTimeout(promise, timeoutMs = REQUEST_TIMEOUT) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Request timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+    })
+  ]);
+}
+
+/**
+ * 🔥 안전한 Gemini API 호출 (타임아웃 및 응답 크기 최적화)
  */
 export async function safeCallGemini(prompt, options = {}) {
   const {
     maxRetries = MAX_RETRIES,
     label = 'gemini-call',
-    isImageComposition = false // 🔥 이미지 합성 작업 플래그
+    isImageComposition = false,
+    timeout = REQUEST_TIMEOUT
   } = options;
 
   let lastError;
@@ -86,12 +97,10 @@ export async function safeCallGemini(prompt, options = {}) {
   let selectedModel, fallbackModels;
   
   if (isImageComposition) {
-    // 나노바나나 이미지 합성: 전용 모델 사용
     selectedModel = getImageCompositionModel();
-    fallbackModels = ['gemini-2.0-flash-exp']; // 동일 모델로 재시도
+    fallbackModels = ['gemini-2.0-flash-exp'];
     console.log(`[${label}] 🎨 이미지 합성 모드: ${selectedModel}`);
   } else {
-    // 스토리보드 생성 등 텍스트 작업: 환경변수 모델 사용
     selectedModel = getTextGeminiModel();
     fallbackModels = [getFallbackTextModel(), 'gemini-2.5-flash'];
     console.log(`[${label}] 📝 텍스트 생성 모드: ${selectedModel}`);
@@ -113,38 +122,33 @@ export async function safeCallGemini(prompt, options = {}) {
       let selectedKeyIndex = null;
       
       try {
-        // 🔥 최적의 API 키 선택 (동시 사용자 대응)
+        // 🔥 최적의 API 키 선택
         const { key: apiKey, index: keyIndex } = apiKeyManager.selectBestGeminiKey();
         selectedKeyIndex = keyIndex;
         
         console.log(`[${label}] 🔑 시도 ${totalAttempts} (모델: ${currentModel}, 키: ${keyIndex})`);
         
         // 🔥 동시 요청 부하 분산을 위한 스마트 딜레이
-        // 키 인덱스별로 다른 지연시간 + 랜덤 지터로 충돌 방지
-        const keyBasedDelay = (keyIndex * 200) + Math.random() * 800 + 300; // 300-1100ms + 키별 오프셋
+        const keyBasedDelay = (keyIndex * 200) + Math.random() * 800 + 300;
         await new Promise(resolve => setTimeout(resolve, keyBasedDelay));
         
         const requestStartTime = Date.now();
         
-        // 🔥 Gemini API 클라이언트 생성 및 호출
+        // 🔥 Gemini API 클라이언트 생성 및 호출 (타임아웃 적용)
         const genAI = new GoogleGenerativeAI(apiKey);
         const geminiModel = genAI.getGenerativeModel({ model: currentModel });
         
-        let result;
-        if (Array.isArray(prompt)) {
-          // 🔥 멀티모달 요청 (이미지 합성용)
-          console.log(`[${label}] 🖼️ 멀티모달 요청 실행 (이미지 ${prompt.filter(p => p.inlineData).length}개)`);
-          result = await geminiModel.generateContent(prompt);
-        } else {
-          // 🔥 텍스트 요청 (스토리보드 생성용)
-          console.log(`[${label}] 📝 텍스트 요청 실행 (길이: ${prompt.length}자)`);
-          result = await geminiModel.generateContent(prompt);
-        }
+        // 🔥 타임아웃과 함께 API 호출
+        const apiCall = Array.isArray(prompt) 
+          ? geminiModel.generateContent(prompt)
+          : geminiModel.generateContent(prompt);
+          
+        const result = await withTimeout(apiCall, timeout);
         
         const response = result.response;
         let text = '';
 
-        // 🔥 Gemini API 응답 처리 (멀티모달 대응)
+        // 🔥 Gemini API 응답 처리
         if (response.candidates && response.candidates[0]) {
           const candidate = response.candidates[0];
           if (candidate.content && candidate.content.parts) {
@@ -152,7 +156,6 @@ export async function safeCallGemini(prompt, options = {}) {
               if (part.text) {
                 text += part.text;
               } else if (part.inlineData) {
-                // 🔥 이미지 데이터 처리 (나노바나나 합성 결과)
                 const mimeType = part.inlineData.mimeType || 'image/jpeg';
                 const data = part.inlineData.data;
                 text += `data:${mimeType};base64,${data}`;
@@ -175,13 +178,20 @@ export async function safeCallGemini(prompt, options = {}) {
         
         console.log(`[${label}] ✅ 성공 (모델: ${currentModel}, 키: ${selectedKeyIndex}, 시간: ${processingTime}ms, 응답: ${text.length}자)`);
         
+        // 🔥 응답 크기 모니터링
+        const responseSizeMB = (text.length / 1024 / 1024).toFixed(2);
+        if (responseSizeMB > 10) {
+          console.warn(`[${label}] ⚠️ 대용량 응답: ${responseSizeMB}MB`);
+        }
+        
         return {
           text,
           model: currentModel,
           keyIndex: selectedKeyIndex,
           processingTime,
           totalAttempts,
-          isImageComposition: isImageComposition
+          isImageComposition: isImageComposition,
+          responseSizeMB: parseFloat(responseSizeMB)
         };
         
       } catch (error) {
@@ -195,6 +205,11 @@ export async function safeCallGemini(prompt, options = {}) {
         }
         
         console.error(`[${label}] 시도 ${totalAttempts} 실패 (모델: ${currentModel}, 키: ${selectedKeyIndex}):`, errorMessage);
+        
+        // 타임아웃 에러 특별 처리
+        if (errorMessage.includes('timeout')) {
+          console.warn(`[${label}] ⏱️ 타임아웃 발생 (${timeout}ms), 다음 시도 지연 시간 증가`);
+        }
         
         // 재시도 불가능한 에러면 즉시 중단
         if (!isRetryableError(error, statusCode)) {
@@ -214,7 +229,7 @@ export async function safeCallGemini(prompt, options = {}) {
     // 현재 모델 실패시, 다음 모델로 전환
     if (allModels.indexOf(currentModel) < allModels.length - 1) {
       console.warn(`[${label}] 모델 ${currentModel} 실패, 다음 모델로 전환`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000)); // 🔥 모델 전환 시 3초 대기
     }
   }
   
@@ -226,24 +241,25 @@ export async function safeCallGemini(prompt, options = {}) {
 }
 
 /**
- * 🔥 안전한 Freepik API 호출 (동시 사용자 대응 개선)
+ * 🔥 안전한 Freepik API 호출 (타임아웃 최적화)
  */
 export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 'freepik-call') {
   const maxRetries = options.maxRetries || MAX_RETRIES;
+  const timeout = options.timeout || REQUEST_TIMEOUT;
   let lastError;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     let keyIndex = null;
     try {
-      // 🔥 컨셉별 API 키 선택 (라운드 로빈 방식으로 부하 분산)
+      // 🔥 컨셉별 API 키 선택
       const { key: apiKey, index } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
       keyIndex = index;
       
       console.log(`[${label}] 시도 ${attempt + 1}/${maxRetries} (컨셉: ${conceptId}, 키: ${keyIndex})`);
       
-      // 🔥 동시 요청 부하 분산 (컨셉ID + 키 인덱스 기반)
-      const conceptBasedDelay = ((conceptId * 300) + (keyIndex * 500)) % 2000 + 800; // 800-2800ms
-      const jitter = Math.random() * 500; // 추가 지터
+      // 🔥 동시 요청 부하 분산
+      const conceptBasedDelay = ((conceptId * 300) + (keyIndex * 500)) % 2000 + 800;
+      const jitter = Math.random() * 500;
       await new Promise(resolve => setTimeout(resolve, conceptBasedDelay + jitter));
       
       const requestOptions = {
@@ -252,19 +268,23 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 
           ...options.headers,
           'x-freepik-api-key': apiKey,
           'User-Agent': 'AI-Ad-Creator/2025',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Keep-Alive': 'timeout=300, max=1000'
         }
       };
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120초 타임아웃
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
       
       const startTime = Date.now();
       
-      const response = await fetch(url, {
+      // 🔥 타임아웃과 함께 fetch 호출
+      const fetchPromise = fetch(url, {
         ...requestOptions,
         signal: controller.signal
       });
+      
+      const response = await withTimeout(fetchPromise, timeout);
       
       clearTimeout(timeoutId);
       const processingTime = Date.now() - startTime;
