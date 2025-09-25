@@ -290,13 +290,19 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     }
   };
 
-  // 오버레이 이미지 데이터 추출 - 기존 그대로 유지
+  // 🔥 수정: overlayImageData를 base64 string으로 추출
   const getOverlayImageData = (compositingInfo, flags) => {
     if (flags.hasProductImageData && compositingInfo.productImageData) {
-      return compositingInfo.productImageData;
+      // base64 또는 url 필드에서 문자열 추출
+      return compositingInfo.productImageData.base64 || 
+             compositingInfo.productImageData.url || 
+             compositingInfo.productImageData;
     }
     if (flags.hasBrandLogoData && compositingInfo.brandLogoData) {
-      return compositingInfo.brandLogoData;
+      // base64 또는 url 필드에서 문자열 추출  
+      return compositingInfo.brandLogoData.base64 || 
+             compositingInfo.brandLogoData.url || 
+             compositingInfo.brandLogoData;
     }
     return null;
   };
@@ -646,40 +652,55 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
         setPercent(100);
         log(`전체 처리 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
+
+        // 🔥 수정: 스토리보드를 항상 설정 (합성 실패해도 표시)
+        const finalStoryboard = {
+          success: true,
+          styles: finalStyles,
+          compositingInfo: finalCompositingInfo,
+          metadata: {
+            ...metadata,
+            videoPurpose: formData.videoPurpose,
+            promptFiles: promptFiles,
+            perStyleCount: perStyle,
+            totalImages: totalImages,
+            successImages: successImages,
+            failedImages: failedImages,
+            processingTimeMs: Date.now() - startTime,
+            createdAt: new Date().toISOString(),
+          }
+        };
+
+        console.log('[Step2] 최종 스토리보드:', finalStoryboard);
+        setStoryboard?.(finalStoryboard);
+
+        if (successImages > 0) {
+          setTimeout(() => {
+            onNext?.();
+          }, 2000);
+        } else {
+          log('성공 이미지 0 → 자동 이동 중단 (프롬프트/파싱 확인 필요)');
+        }
       } else {
         log('이미지 생성 건너뜀: styles 또는 perStyle=0');
         setPercent(100);
-      }
-
-      // 최종 스토리보드 구성
-      const finalStoryboard = {
-        success: true,
-        styles: finalStyles,
-        compositingInfo: finalCompositingInfo,
-        metadata: {
-          ...metadata,
-          videoPurpose: formData.videoPurpose,
-          promptFiles: promptFiles,
-          perStyleCount: perStyle,
-          totalImages: totalImages,
-          processingTimeMs: Date.now() - startTime,
-          createdAt: new Date().toISOString(),
-        }
-      };
-
-      console.log('[Step2] 최종 스토리보드:', finalStoryboard);
-      setStoryboard?.(finalStoryboard);
-      setIsLoading?.(false);
-
-      const totalTime = Math.round((Date.now() - startTime) / 1000);
-      log(`🎉 전체 프로세스 완료! (${totalTime}초 소요)`);
-
-      if (successImages > 0) {
-        setTimeout(() => {
-          onNext?.();
-        }, 2000);
-      } else {
-        log('성공 이미지 0 → 자동 이동 중단 (프롬프트/파싱 확인 필요)');
+        
+        // 🔥 수정: 이미지 없어도 스토리보드 설정
+        const finalStoryboard = {
+          success: true,
+          styles: finalStyles,
+          compositingInfo: finalCompositingInfo,
+          metadata: {
+            ...metadata,
+            videoPurpose: formData.videoPurpose,
+            promptFiles: promptFiles,
+            perStyleCount: perStyle,
+            totalImages: totalImages,
+            processingTimeMs: Date.now() - startTime,
+            createdAt: new Date().toISOString(),
+          }
+        };
+        setStoryboard?.(finalStoryboard);
       }
 
     } catch (e) {
