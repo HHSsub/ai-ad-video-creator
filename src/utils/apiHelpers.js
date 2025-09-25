@@ -1,4 +1,4 @@
-// src/utils/apiHelpers.js - 타임아웃 및 응답 크기 최적화
+// src/utils/apiHelpers.js - 🔥 모델명 로깅 + 이미지 합성 모델 정확히 설정
 
 import { apiKeyManager } from './apiKeyManager.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -39,24 +39,31 @@ function isRetryableError(error, statusCode) {
  * 🔥 환경변수에서 텍스트용 Gemini 모델 가져오기 (Pro 우선)
  */
 function getTextGeminiModel() {
-  return process.env.GEMINI_MODEL || 
-         process.env.VITE_GEMINI_MODEL || 
-         process.env.REACT_APP_GEMINI_MODEL || 
-         'gemini-2.5-pro';
+  const model = process.env.GEMINI_MODEL || 
+                process.env.VITE_GEMINI_MODEL || 
+                process.env.REACT_APP_GEMINI_MODEL || 
+                'gemini-2.5-pro';
+  console.log(`[getTextGeminiModel] 텍스트용 모델 선택: ${model}`);
+  return model;
 }
 
 function getFallbackTextModel() {
-  return process.env.FALLBACK_GEMINI_MODEL || 
-         process.env.VITE_FALLBACK_GEMINI_MODEL || 
-         process.env.REACT_APP_FALLBACK_GEMINI_MODEL || 
-         'gemini-2.5-flash';
+  const model = process.env.FALLBACK_GEMINI_MODEL || 
+                process.env.VITE_FALLBACK_GEMINI_MODEL || 
+                process.env.REACT_APP_FALLBACK_GEMINI_MODEL || 
+                'gemini-2.5-flash';
+  console.log(`[getFallbackTextModel] 폴백 텍스트 모델: ${model}`);
+  return model;
 }
 
 /**
- * 🔥 이미지 합성 전용 모델 (나노바나나용)
+ * 🔥 이미지 합성 전용 모델 (나노바나나용) - 정확한 모델명
  */
 function getImageCompositionModel() {
-  return 'gemini-2.5-flash-image-priview';
+  // 🔥 정확한 Gemini 2.5 Flash Image Preview 모델명
+  const model = 'gemini-2.5-flash-image-preview';
+  console.log(`[getImageCompositionModel] 이미지 합성 모델: ${model}`);
+  return model;
 }
 
 /**
@@ -74,14 +81,15 @@ function withTimeout(promise, timeoutMs = REQUEST_TIMEOUT) {
 }
 
 /**
- * 🔥 안전한 Gemini API 호출 (타임아웃 및 응답 크기 최적화)
+ * 🔥 안전한 Gemini API 호출 (타임아웃 및 응답 크기 최적화 + 모델명 로깅)
  */
 export async function safeCallGemini(prompt, options = {}) {
   const {
     maxRetries = MAX_RETRIES,
     label = 'gemini-call',
     isImageComposition = false,
-    timeout = REQUEST_TIMEOUT
+    timeout = REQUEST_TIMEOUT,
+    model = null // 🔥 외부에서 모델명 직접 전달 가능
   } = options;
 
   let lastError;
@@ -93,12 +101,17 @@ export async function safeCallGemini(prompt, options = {}) {
     throw new Error('모든 Gemini API 키가 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요.');
   }
 
-  // 🔥 단계별 모델 선택
+  // 🔥 단계별 모델 선택 (외부 지정 모델 우선)
   let selectedModel, fallbackModels;
   
-  if (isImageComposition) {
+  if (model) {
+    // 외부에서 모델명을 직접 지정한 경우 (이미지 합성 등)
+    selectedModel = model;
+    fallbackModels = [];
+    console.log(`[${label}] 🎯 지정된 모델 사용: ${selectedModel}`);
+  } else if (isImageComposition) {
     selectedModel = getImageCompositionModel();
-    fallbackModels = ['gemini-2.5-flash-image-priview'];
+    fallbackModels = ['gemini-2.5-flash-image-preview'];
     console.log(`[${label}] 🎨 이미지 합성 모드: ${selectedModel}`);
   } else {
     selectedModel = getTextGeminiModel();
@@ -140,158 +153,123 @@ export async function safeCallGemini(prompt, options = {}) {
         
         // 🔥 타임아웃과 함께 API 호출
         const apiCall = Array.isArray(prompt) 
-          ? geminiModel.generateContent(prompt)
+          ? geminiModel.generateContent({ contents: prompt })
           : geminiModel.generateContent(prompt);
-          
+        
         const result = await withTimeout(apiCall, timeout);
         
-        const response = result.response;
-        let text = '';
-
-        // 🔥 Gemini API 응답 처리
-        if (response.candidates && response.candidates[0]) {
-          const candidate = response.candidates[0];
-          if (candidate.content && candidate.content.parts) {
-            for (const part of candidate.content.parts) {
-              if (part.text) {
-                text += part.text;
-              } else if (part.inlineData) {
-                const mimeType = part.inlineData.mimeType || 'image/jpeg';
-                const data = part.inlineData.data;
-                text += `data:${mimeType};base64,${data}`;
-                console.log(`[${label}] 🖼️ 이미지 데이터 수신: ${mimeType}, 크기: ${data.length} bytes`);
-              }
-            }
-          }
-        } else if (typeof response.text === 'function') {
-          text = response.text();
-        }
-
-        if (!text || text.trim().length === 0) {
-          throw new Error('Empty response from Gemini API');
+        if (!result?.response) {
+          throw new Error('Gemini API에서 응답을 받지 못했습니다.');
         }
         
+        // 🔥 응답 처리 (이미지 포함 가능)
+        const responseText = result.response.text();
         const processingTime = Date.now() - requestStartTime;
         
-        // 🔥 성공 기록
-        apiKeyManager.markKeySuccess('gemini', selectedKeyIndex);
+        // 🔥 성공 로깅 (모델명 포함)
+        console.log(`[${label}] ✅ 성공 (모델: ${currentModel}, 키: ${keyIndex}, 시간: ${processingTime}ms, 응답: ${responseText?.length || 0}자)`);
         
-        console.log(`[${label}] ✅ 성공 (모델: ${currentModel}, 키: ${selectedKeyIndex}, 시간: ${processingTime}ms, 응답: ${text.length}자)`);
-        
-        // 🔥 응답 크기 모니터링
-        const responseSizeMB = (text.length / 1024 / 1024).toFixed(2);
-        if (responseSizeMB > 10) {
-          console.warn(`[${label}] ⚠️ 대용량 응답: ${responseSizeMB}MB`);
+        // 키 사용 성공 기록
+        if (selectedKeyIndex !== null) {
+          apiKeyManager.markKeySuccess('gemini', selectedKeyIndex);
         }
         
-        return {
-          text,
+        // 🔥 응답에 메타데이터 포함
+        const responseWithMeta = {
+          text: responseText,
           model: currentModel,
           keyIndex: selectedKeyIndex,
           processingTime,
           totalAttempts,
-          isImageComposition: isImageComposition,
-          responseSizeMB: parseFloat(responseSizeMB)
+          success: true
         };
+
+        // 🔥 이미지 생성 응답인 경우 candidates 정보도 포함
+        if (result.response.candidates && result.response.candidates.length > 0) {
+          responseWithMeta.candidates = result.response.candidates;
+          
+          // 이미지 데이터 추출 시도
+          const candidate = result.response.candidates[0];
+          if (candidate?.content?.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.inlineData && part.inlineData.data) {
+                console.log(`[${label}] 🖼️ 이미지 응답 감지 (${Math.round(part.inlineData.data.length/1024)}KB)`);
+                responseWithMeta.imageData = part.inlineData.data;
+                responseWithMeta.mimeType = part.inlineData.mimeType;
+                break;
+              }
+            }
+          }
+        }
+
+        return responseWithMeta;
         
       } catch (error) {
         lastError = error;
-        const errorMessage = error?.message || '';
-        const statusCode = error?.status;
+        const processingTime = Date.now() - requestStartTime;
         
-        // API 키가 선택되었다면 에러 기록
+        // 키 에러 기록
         if (selectedKeyIndex !== null) {
-          apiKeyManager.markKeyError('gemini', selectedKeyIndex, errorMessage);
+          apiKeyManager.markKeyError('gemini', selectedKeyIndex, error.message);
         }
         
-        console.error(`[${label}] 시도 ${totalAttempts} 실패 (모델: ${currentModel}, 키: ${selectedKeyIndex}):`, errorMessage);
+        console.error(`[${label}] 시도 ${totalAttempts} 실패 (모델: ${currentModel}, 키: ${selectedKeyIndex}, ${processingTime}ms):`, error.message);
         
-        // 타임아웃 에러 특별 처리
-        if (errorMessage.includes('timeout')) {
-          console.warn(`[${label}] ⏱️ 타임아웃 발생 (${timeout}ms), 다음 시도 지연 시간 증가`);
-        }
-        
-        // 재시도 불가능한 에러면 즉시 중단
-        if (!isRetryableError(error, statusCode)) {
-          console.error(`[${label}] 재시도 불가능한 에러: ${errorMessage}`);
-          break;
-        }
-        
-        // 마지막 시도가 아니면 딜레이 후 재시도
-        if (modelAttempt < maxRetries - 1) {
+        if (isRetryableError(error) && modelAttempt < maxRetries - 1) {
           const delay = exponentialBackoffDelay(modelAttempt);
-          console.log(`[${label}] ${delay}ms 후 재시도...`);
+          console.log(`[${label}] ${delay}ms 후 재시도... (모델: ${currentModel})`);
           await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
         }
+        break;
       }
-    }
-    
-    // 현재 모델 실패시, 다음 모델로 전환
-    if (allModels.indexOf(currentModel) < allModels.length - 1) {
-      console.warn(`[${label}] 모델 ${currentModel} 실패, 다음 모델로 전환`);
-      await new Promise(resolve => setTimeout(resolve, 3000)); // 🔥 모델 전환 시 3초 대기
     }
   }
   
-  // 모든 모델과 재시도 실패
   const totalTime = Date.now() - startTime;
-  const errorMessage = `Gemini API 호출 실패 (${totalAttempts}회 시도, ${totalTime}ms, 모든 모델 실패): ${lastError?.message || 'Unknown error'}`;
-  console.error(`[${label}] ❌ ${errorMessage}`);
-  throw new Error(errorMessage);
+  console.error(`[${label}] ❌ 모든 모델 시도 실패 (총 시간: ${totalTime}ms, 시도: ${totalAttempts}회)`);
+  throw lastError || new Error(`${label} 모든 재시도 실패`);
 }
 
 /**
- * 🔥 안전한 Freepik API 호출 (타임아웃 최적화)
+ * 🔥 안전한 Freepik API 호출 (개선된 재시도 로직)
  */
-export async function safeCallFreepik(url, options = {}, conceptId = 0, label = 'freepik-call') {
-  const maxRetries = options.maxRetries || MAX_RETRIES;
-  const timeout = options.timeout || REQUEST_TIMEOUT;
-  let lastError;
+export async function safeCallFreepik(url, options = {}, conceptId = 0) {
+  const {
+    maxRetries = MAX_RETRIES,
+    label = 'freepik-call',
+    timeout = REQUEST_TIMEOUT
+  } = options;
 
+  let lastError;
+  
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     let keyIndex = null;
+    const requestStartTime = Date.now();
+    
     try {
-      // 🔥 컨셉별 API 키 선택
+      // 🔥 컨셉별 키 선택 (부하 분산)
       const { key: apiKey, index } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
       keyIndex = index;
       
       console.log(`[${label}] 시도 ${attempt + 1}/${maxRetries} (컨셉: ${conceptId}, 키: ${keyIndex})`);
       
-      // 🔥 동시 요청 부하 분산
-      const conceptBasedDelay = ((conceptId * 300) + (keyIndex * 500)) % 2000 + 800;
-      const jitter = Math.random() * 500;
-      await new Promise(resolve => setTimeout(resolve, conceptBasedDelay + jitter));
+      const response = await withTimeout(
+        fetch(url, {
+          ...options,
+          headers: {
+            'X-Freepik-API-Key': apiKey,
+            'Content-Type': 'application/json',
+            ...options.headers
+          }
+        }),
+        timeout
+      );
       
-      const requestOptions = {
-        ...options,
-        headers: {
-          ...options.headers,
-          'x-freepik-api-key': apiKey,
-          'User-Agent': 'AI-Ad-Creator/2025',
-          'Accept': 'application/json',
-          // 'Keep-Alive': 'timeout=300, max=1000'
-        }
-      };
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-      
-      const startTime = Date.now();
-      
-      // 🔥 타임아웃과 함께 fetch 호출
-      const fetchPromise = fetch(url, {
-        ...requestOptions,
-        signal: controller.signal
-      });
-      
-      const response = await withTimeout(fetchPromise, timeout);
-      
-      clearTimeout(timeoutId);
-      const processingTime = Date.now() - startTime;
+      const processingTime = Date.now() - requestStartTime;
       
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        const error = new Error(`HTTP ${response.status}: ${errorText.slice(0, 200)}`);
+        const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
         error.status = response.status;
         
         apiKeyManager.markKeyError('freepik', keyIndex, error.message);
