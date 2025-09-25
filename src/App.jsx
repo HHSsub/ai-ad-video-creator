@@ -218,7 +218,7 @@ function App(){
           <Step1
             formData={formData}
             setFormData={setFormData}
-            onNext={() => {
+            next={() => {
               console.log('Step1 완료, formData:', formData);
               console.log('🔥 선택된 영상 길이:', formData.videoLength);
               next();
