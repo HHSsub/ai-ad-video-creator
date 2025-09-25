@@ -64,13 +64,11 @@ const DEFAULT_FIELD_CONFIG = {
     type: 'select', 
     options: [
       { value: '10초', label: '10초' },
-      { value: '15초', label: '15초' },
       { value: '20초', label: '20초' },
       { value: '30초', label: '30초' },
-      { value: '60초', label: '60초' }
     ],
     defaultValue: '10초',
-    randomValues: ['10초', '15초', '20초', '30초']
+    randomValues: ['10초', '20초', '30초']
   },
   aspectRatioCode: {
     key: 'aspectRatioCode',
