@@ -680,7 +680,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                   });
                 }
               });
-            });
+            };
           });
 
           if (compositionTasks.length > 0) {
