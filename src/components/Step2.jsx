@@ -331,22 +331,43 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         }
       }, 800);
 
-      // 🔥 Step1 API 호출 (제품/서비스 분기)
+      // 🔥 Step1 API 호출 (제품/서비스 분기) - 수정된 부분
       console.log('[Step2] STEP1 API 호출 시작:', {
         promptType: promptFiles.step1,
         videoPurpose: formData.videoPurpose,
         brandName: formData.brandName
       });
 
+      // formData에서 필요한 필드만 추출 (file 객체 제외)
+      const apiPayload = {
+        brandName: formData.brandName,
+        industryCategory: formData.industryCategory,
+        productServiceCategory: formData.productServiceCategory,
+        productServiceName: formData.productServiceName,
+        videoPurpose: formData.videoPurpose,
+        videoLength: formData.videoLength,
+        coreTarget: formData.coreTarget,
+        coreDifferentiation: formData.coreDifferentiation,
+        aspectRatioCode: formData.aspectRatioCode,
+        brandLogo: formData.brandLogo ? {
+          name: formData.brandLogo.name,
+          size: formData.brandLogo.size
+        } : null,
+        productImage: formData.productImage ? {
+          name: formData.productImage.name,
+          size: formData.productImage.size  
+        } : null,
+        promptType: promptFiles.step1 // step1_product 또는 step1_service
+      };
+
+      console.log('[Step2] API 페이로드:', apiPayload);
+
       const step1Response = await fetch(`${API_BASE}/api/storyboard-init`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          promptType: promptFiles.step1, // step1_product 또는 step1_service
-        }),
+        body: JSON.stringify(apiPayload),
       });
 
       clearInterval(step1ProgressInterval);
@@ -460,12 +481,17 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       } catch (parseError) {
         console.error('[Step2] STEP2 JSON 파싱 실패:', parseError);
         log(`❌ Step2 JSON 파싱 실패: ${parseError.message}`);
-        throw new Error('Step2 서버 응답 형식이 올바르지 않습니다.');
+        throw new Error('Step2 서버 응답 형식이 올바르지 않습니다. 서버 로그를 확인하세요.');
       }
 
       if (!detailedData.success) {
         console.error('[Step2] STEP2 실패:', detailedData.error);
         throw new Error(detailedData.error || 'Step2 상세 스토리보드 생성 실패');
+      }
+
+      if (!detailedData.styles || !Array.isArray(detailedData.styles)) {
+        console.error('[Step2] STEP2 데이터 형식 오류:', detailedData);
+        throw new Error('Step2 스토리보드 데이터 형식이 올바르지 않습니다.');
       }
 
       // 🔥 Gemini Step2 응답 저장
@@ -488,72 +514,20 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         console.warn('[Step2] STEP2 응답 저장 실패:', saveError);
       }
 
-      // 상세 JSON 데이터를 기존 스타일에 병합
-      if (detailedData.detailedStyles && Array.isArray(detailedData.detailedStyles)) {
-        detailedData.detailedStyles.forEach((detailedStyle, index) => {
-          if (styles[index] && detailedStyle.imagePrompts) {
-            styles[index].imagePrompts = detailedStyle.imagePrompts;
-          }
-        });
-      }
-
       progressManager.completePhase('STEP2');
       setPercent(50);
-      log('✅ STEP2 완료: JSON 스토리보드 생성 성공');
+      log('✅ STEP2 완료: 상세 JSON 스토리보드 생성 성공');
 
-      // 이미지 수 계산 및 조정
-      const perStyle = imagesPerStyle(formData.videoLength, metadata?.sceneCountPerConcept);
-      console.log('[Step2] 스타일당 이미지 수:', perStyle);
+      // detailedData의 styles 사용
+      const finalStyles = detailedData.styles;
+      const finalCompositingInfo = detailedData.compositingInfo;
 
-      styles.forEach(s => {
-        if (!Array.isArray(s.imagePrompts)) s.imagePrompts = [];
-        if (s.imagePrompts.length < perStyle) {
-          const last = s.imagePrompts[s.imagePrompts.length - 1];
-          while (s.imagePrompts.length < perStyle) {
-            const idx = s.imagePrompts.length + 1;
-            s.imagePrompts.push(last ? {
-              ...last,
-              sceneNumber: idx,
-              title: `Scene ${idx}`,
-              prompt: last.prompt
-            } : {
-              sceneNumber: idx,
-              title: `Scene ${idx}`,
-              duration: 2,
-              prompt: `${s.style} auto-filled scene ${idx}, insanely detailed, micro-details, hyper-realistic textures, visible skin pores, 4K, sharp focus. Shot by ARRI Alexa Mini with a 50mm lens.`
-            });
-          }
-        } else if (s.imagePrompts.length > perStyle) {
-          s.imagePrompts = s.imagePrompts.slice(0, perStyle);
-        }
-      });
+      log(`📊 스토리보드 요약: ${finalStyles.length}개 컨셉, 스타일당 평균 ${finalStyles.length > 0 ? Math.round(finalStyles.reduce((sum, s) => sum + (s.imagePrompts?.length || 0), 0) / finalStyles.length) : 0}개 씬`);
 
-      const totalImages = styles.length * perStyle;
-      console.log('[Step2] 총 생성할 이미지 수:', totalImages);
+      const perStyle = finalStyles.length > 0 ? (finalStyles[0].imagePrompts?.length || 0) : 0;
+      const totalImages = finalStyles.length * perStyle;
 
-      setDebugInfo({
-        stylesCount: styles.length,
-        perStyleScenes: perStyle,
-        expectedTotal: totalImages,
-        compositingEnabled: !!(compositingInfo && (compositingInfo.hasProductImage || compositingInfo.hasBrandLogo))
-      });
-
-      // 합성 정보 로깅
-      if (compositingInfo) {
-        log(`🔥 합성 정보 확인: 감지된 씬 ${compositingInfo.scenes.length}개`);
-        compositingInfo.scenes.forEach(scene => {
-          log(`  - Scene ${scene.sceneNumber}: ${scene.context} (명시적: ${scene.explicit})`);
-        });
-        log(`제품이미지 사용: ${compositingInfo.hasProductImage}, 브랜드로고 사용: ${compositingInfo.hasBrandLogo}`);
-
-        if (compositingInfo.productImageData) {
-          const dataType = typeof compositingInfo.productImageData;
-          const dataSize = compositingInfo.productImageData.url ? 
-            compositingInfo.productImageData.url.length : 
-            JSON.stringify(compositingInfo.productImageData).length;
-          log(`제품이미지 데이터 확인: ${dataType}, 크기: ${Math.round(dataSize/1024)}KB`);
-        }
-      }
+      log(`🎯 총 생성할 이미지: ${totalImages}개 (${finalStyles.length} 컨셉 × ${perStyle} 씬)`);
 
       // STEP3: 이미지 생성
       if (totalImages > 0) {
@@ -565,12 +539,12 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         let failedImages = 0;
 
         // 각 스타일에 images 배열 초기화
-        styles.forEach(style => {
+        finalStyles.forEach(style => {
           if (!style.images) style.images = [];
         });
 
         const imageTasks = [];
-        styles.forEach(style => {
+        finalStyles.forEach(style => {
           style.imagePrompts.forEach(p => {
             imageTasks.push(async () => {
               try {
@@ -591,135 +565,121 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                     size: getAspectRatioCode(formData.videoAspectRatio), // Seedream v4 aspect ratio
                     width: getWidthFromAspectRatio(formData.videoAspectRatio),
                     height: getHeightFromAspectRatio(formData.videoAspectRatio),
-                    num_images: 1,
-                    styling: {
-                      style: 'photo',
-                      color: 'color',
-                      lighting: 'natural'
-                    },
                     guidance_scale: 7.5,
                     seed: Math.floor(10000 + Math.random() * 90000),
                     filter_nsfw: true,
-                    // 추가 메타데이터
                     sceneNumber: p.sceneNumber,
-                    conceptId: style.id,
-                    isCompositingScene: p.isCompositingScene || false,
-                    compositingInfo: p.compositingInfo || null
+                    conceptId: style.concept_id || style.id,
+                    styleName: style.style || style.conceptName
                   })
                 });
 
-                if (!res.ok) {
-                  const txt = await res.text().catch(() => '');
-                  console.error(`[Step2] 이미지 생성 실패: ${res.status} ${txt.substring(0, 120)}`);
-                  throw new Error(`${res.status} ${txt.slice(0, 120)}`);
-                }
-                
-                const data = await res.json();
-                
-                if (!data.success || !data.url) {
-                  console.error(`[Step2] 이미지 생성 응답 오류:`, data);
-                  throw new Error('응답 이상');
-                }
-
-                console.log(`[Step2] 이미지 생성 성공: ${data.url}`);
-
-                // 🔥 Seedream v4 호환 이미지 객체 구성
-                const imgObj = {
-                  id: `${style.concept_id || style.id}-${p.sceneNumber}-${Math.random().toString(36).slice(2, 8)}`,
-                  sceneNumber: p.sceneNumber,
-                  title: p.title,
-                  url: data.url,
-                  thumbnail: data.url,
-                  prompt: promptToSend,
-                  duration: p.duration || 2,
-                  // 🔥 Seedream v4 완전한 image_prompt 구조
-                  image_prompt: {
-                    prompt: promptToSend,
-                    negative_prompt: 'blurry, low quality, watermark, cartoon, distorted',
-                    num_images: 1,
-                    size: getAspectRatioCode(formData.videoAspectRatio), // Seedream v4 aspect ratio
-                    width: getWidthFromAspectRatio(formData.videoAspectRatio),
-                    height: getHeightFromAspectRatio(formData.videoAspectRatio),
-                    styling: { 
-                      style: 'photo',
-                      color: 'color', 
-                      lighting: 'natural'
-                    },
-                    guidance_scale: 7.5,
-                    seed: Math.floor(10000 + Math.random() * 90000),
-                    filter_nsfw: true
-                  },
-                  // 합성 정보
-                  isCompositingScene: p.isCompositingScene || false,
-                  compositingInfo: p.compositingInfo || null
-                };
-
-                style.images.push(imgObj);
-                successImages++;
-
-                if (imgObj.isCompositingScene) {
-                  log(`✅ 합성 대상 이미지 생성: [${style.style}] Scene ${p.sceneNumber} (Context: ${imgObj.compositingInfo?.compositingContext})`);
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data.success && data.url) {
+                    const imageObj = {
+                      id: `${style.style || style.conceptName || 'style'}-${p.sceneNumber}`.toLowerCase().replace(/\s+/g, '-'),
+                      title: p.title || `Scene ${p.sceneNumber}`,
+                      url: data.url,
+                      thumbnail: data.url,
+                      prompt: promptToSend,
+                      duration: p.duration || 2,
+                      sceneNumber: p.sceneNumber,
+                      // 🔥 합성 정보 추가
+                      isCompositingScene: p.isCompositingScene || false,
+                      compositingInfo: p.compositingInfo || null
+                    };
+                    
+                    style.images.push(imageObj);
+                    successImages++;
+                    setImagesDone(prev => prev + 1);
+                    log(`✅ Scene ${p.sceneNumber} 이미지 생성 완료 (${style.conceptName || style.style})`);
+                  } else {
+                    throw new Error(data.error || '이미지 URL 없음');
+                  }
                 } else {
-                  log(`이미지 생성 완료: [${style.style}] Scene ${p.sceneNumber}`);
+                  const errorText = await res.text().catch(() => '');
+                  throw new Error(`HTTP ${res.status}: ${errorText.substring(0, 100)}`);
                 }
-
-                return { success: true };
-              } catch (e) {
+              } catch (error) {
+                console.error(`[Step2] 이미지 생성 실패: Style ${style.id}, Scene ${p.sceneNumber}:`, error);
                 failedImages++;
-                console.error(`[Step2] 이미지 생성 예외:`, e);
-                log(`이미지 생성 예외: [${style.style}] Scene ${p.sceneNumber} - ${e.message}`);
-                return { success: false, error: e.message };
+                setImagesFail(prev => prev + 1);
+                log(`❌ Scene ${p.sceneNumber} 이미지 생성 실패: ${error.message}`);
               }
             });
           });
         });
 
-        console.log(`[Step2] 총 ${imageTasks.length}개 이미지 생성 태스크 실행`);
-
-        await runSafeWorkerPool(imageTasks, 6, (completed, failed, total) => {
-          setImagesDone(completed);
-          setImagesFail(failed);
+        await runSafeWorkerPool(imageTasks, 3, (completed, failed, total) => {
           const progress = (completed + failed) / total;
           updateProgress('IMAGES', progress);
+          log(`이미지 생성: ${completed + failed}/${total} 완료`);
+        });
+
+        // 이미지 정렬 (씬 순서)
+        finalStyles.forEach(style => {
+          if (style.images) {
+            style.images.sort((a, b) => a.sceneNumber - b.sceneNumber);
+          }
         });
 
         progressManager.completePhase('IMAGES');
         setPercent(80);
-        log(`이미지 생성 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
+        log(`🎨 이미지 생성 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
 
-        // STEP4: 이미지 합성 (나노 바나나)
-        if (compositingInfo && (compositingInfo.hasProductImage || compositingInfo.hasBrandLogo)) {
+        // STEP4: 이미지 합성 (Nano Banana)
+        const totalCompositingScenes = finalCompositingInfo?.totalCompositingScenes || 0;
+        
+        if ((formData.productImage || formData.brandLogo) && totalCompositingScenes > 0) {
           progressManager.startPhase('COMPOSE');
-          log('4/4 🔥 이미지 합성 시작 (Nano Banana API + 개별 에러 격리)');
+          log('4/4 COMPOSE: Nano Banana 이미지 합성 시작');
+          updateProgress('COMPOSE', 0.1);
+
+          // 🔥 Base64를 ProductImageData/BrandLogoData로 변환
+          if (formData.productImage?.url && !finalCompositingInfo.productImageData) {
+            log('🔥 제품 이미지 Base64 → ProductImageData 변환');
+            finalCompositingInfo.productImageData = {
+              base64: formData.productImage.url,
+              originalName: formData.productImage.name,
+              size: formData.productImage.size
+            };
+          }
+
+          if (formData.brandLogo?.url && !finalCompositingInfo.brandLogoData) {
+            log('🔥 브랜드 로고 Base64 → BrandLogoData 변환');
+            finalCompositingInfo.brandLogoData = {
+              base64: formData.brandLogo.url,
+              originalName: formData.brandLogo.name,
+              size: formData.brandLogo.size
+            };
+          }
+
+          // 디버깅 정보 출력
+          if (finalCompositingInfo.productImageData) {
+            const dataType = finalCompositingInfo.productImageData.url ? 'URL' : 'Base64';
+            const dataSize = finalCompositingInfo.productImageData.url ? 
+              finalCompositingInfo.productImageData.url.length : 
+              JSON.stringify(finalCompositingInfo.productImageData).length;
+            log(`제품이미지 데이터 확인: ${dataType}, 크기: ${Math.round(dataSize/1024)}KB`);
+          }
 
           const compositionTasks = [];
-          let totalCompositingScenes = 0;
-
-          styles.forEach(style => {
-            style.images.forEach(img => {
-              if (img.isCompositingScene && img.compositingInfo) {
-                totalCompositingScenes++;
-                log(`🎯 합성 대상 발견: [${style.style}] Scene ${img.sceneNumber}, Context: ${img.compositingInfo.compositingContext}`);
-
-                compositionTasks.push(async () => {
-                  const composedImg = await composeSingleImageSafely(img, style, compositingInfo);
-
-                  const imgIndex = style.images.findIndex(i => i.id === img.id);
-                  if (imgIndex >= 0) {
-                    style.images[imgIndex] = composedImg;
-                    if (composedImg.isComposed && composedImg.compositionMetadata?.method && !composedImg.compositionMetadata.method.startsWith('fallback')) {
-                      log(`✅ 합성 성공: [${style.style}] Scene ${img.sceneNumber} (${composedImg.compositionMetadata?.method || 'unknown'})`);
-                    } else {
-                      log(`❌ 합성 실패: [${style.style}] Scene ${img.sceneNumber} - 원본 사용 (${composedImg.compositionError || composedImg.compositionMetadata?.fallbackReason || 'unknown error'})`);
-                    }
-                  }
-                  return {
-                    success: composedImg.isComposed && composedImg.compositionMetadata?.method && !composedImg.compositionMetadata.method.startsWith('fallback'),
-                    attempted: true,
-                    sceneNumber: img.sceneNumber
-                  };
-                });
-              }
+          finalStyles.forEach((style) => {
+            if (style.images && Array.isArray(style.images)) {
+              style.images.forEach((img) => {
+                if (img.isCompositingScene && img.compositingInfo) {
+                  compositionTasks.push(async () => {
+                    const composedImage = await composeSingleImageSafely(img, style, finalCompositingInfo);
+                    // 합성 결과로 원본 이미지 교체
+                    Object.assign(img, composedImage);
+                    return {
+                      success: true,
+                      sceneNumber: img.sceneNumber
+                    };
+                  });
+                }
+              });
             });
           });
 
@@ -739,7 +699,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
             log(`🎉 이미지 합성 완료: 성공 ${composedCount} / 실패 ${composeFailed} / 총 ${compositionTasks.length}`);
           } else {
-            log(`⚠️ 합성 대상 이미지 없음 (감지된 합성 씬: ${totalCompositingScenes}개, 실제 이미지: ${styles.reduce((sum, style) => sum + (style.images || []).length, 0)}개)`);
+            log(`⚠️ 합성 대상 이미지 없음 (감지된 합성 씬: ${totalCompositingScenes}개, 실제 이미지: ${finalStyles.reduce((sum, style) => sum + (style.images || []).length, 0)}개)`);
           }
 
           progressManager.completePhase('COMPOSE');
@@ -758,8 +718,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       // 최종 스토리보드 구성
       const finalStoryboard = {
         success: true,
-        styles,
-        compositingInfo,
+        styles: finalStyles,
+        compositingInfo: finalCompositingInfo,
         metadata: {
           ...metadata,
           videoPurpose: formData.videoPurpose,
