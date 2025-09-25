@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 
-const Step1 = ({ formData, setFormData, next }) => {
+const Step1 = ({ formData, setFormData, onNext }) => {
   const [errors, setErrors] = useState({});
   const brandLogoRef = useRef(null);
   const productImageRef = useRef(null);
@@ -132,8 +132,8 @@ const Step1 = ({ formData, setFormData, next }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // const handleNext = next || onNext; // onNext없다고 에러남
-  const handleNext = next
+  const handleNext = onNext
+  
   const handleSubmit = () => {
     if (validateForm()) {
       if (handleNext) {
