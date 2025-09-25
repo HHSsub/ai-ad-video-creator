@@ -132,9 +132,15 @@ const Step1 = ({ formData, setFormData, next }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleNext = next || onNext;
+  
   const handleSubmit = () => {
     if (validateForm()) {
-      next(); 
+      if (handleNext) {
+        handleNext();
+      } else {
+        console.error('next 또는 onNext 함수가 전달되지 않았습니다.');
+      }
     }
   };
 
