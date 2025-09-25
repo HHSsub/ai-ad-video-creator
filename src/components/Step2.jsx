@@ -290,19 +290,14 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     }
   };
 
-  // 🔥 수정: overlayImageData를 base64 string으로 추출
+  // 🔥 수정: overlayImageData를 올바르게 추출 - compositingInfo에서 직접 가져오기
   const getOverlayImageData = (compositingInfo, flags) => {
+    // compositingInfo에서 직접 base64 문자열을 반환
     if (flags.hasProductImageData && compositingInfo.productImageData) {
-      // base64 또는 url 필드에서 문자열 추출
-      return compositingInfo.productImageData.base64 || 
-             compositingInfo.productImageData.url || 
-             compositingInfo.productImageData;
+      return compositingInfo.productImageData; // 이미 base64 string임
     }
     if (flags.hasBrandLogoData && compositingInfo.brandLogoData) {
-      // base64 또는 url 필드에서 문자열 추출  
-      return compositingInfo.brandLogoData.base64 || 
-             compositingInfo.brandLogoData.url || 
-             compositingInfo.brandLogoData;
+      return compositingInfo.brandLogoData; // 이미 base64 string임
     }
     return null;
   };
@@ -346,7 +341,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         brandName: formData.brandName
       });
 
-      // formData에서 필요한 필드만 추출 (file 객체 제외)
+      // 🔥 수정: formData에서 이미지 base64 데이터도 포함해서 전달
       const apiPayload = {
         brandName: formData.brandName,
         industryCategory: formData.industryCategory,
@@ -359,11 +354,13 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         aspectRatioCode: formData.aspectRatioCode,
         brandLogo: formData.brandLogo ? {
           name: formData.brandLogo.name,
-          size: formData.brandLogo.size
+          size: formData.brandLogo.size,
+          url: formData.brandLogo.url  // 🔥 base64 데이터 추가
         } : null,
         productImage: formData.productImage ? {
           name: formData.productImage.name,
-          size: formData.productImage.size  
+          size: formData.productImage.size,
+          url: formData.productImage.url  // 🔥 base64 데이터 추가
         } : null,
         promptType: promptFiles.step1 // step1_product 또는 step1_service
       };
@@ -578,23 +575,15 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           log('4/4 COMPOSE: Nano Banana 이미지 합성 시작');
           updateProgress('COMPOSE', 0.1);
 
-          // 🔥 Base64를 ProductImageData/BrandLogoData로 변환
+          // 🔥 수정: 이미 전달된 base64 데이터를 올바르게 설정
           if (formData.productImage?.url && !finalCompositingInfo.productImageData) {
             log('🔥 제품 이미지 Base64 → ProductImageData 변환');
-            finalCompositingInfo.productImageData = {
-              base64: formData.productImage.url,
-              originalName: formData.productImage.name,
-              size: formData.productImage.size
-            };
+            finalCompositingInfo.productImageData = formData.productImage.url; // 직접 base64 string 전달
           }
 
           if (formData.brandLogo?.url && !finalCompositingInfo.brandLogoData) {
             log('🔥 브랜드 로고 Base64 → BrandLogoData 변환');
-            finalCompositingInfo.brandLogoData = {
-              base64: formData.brandLogo.url,
-              originalName: formData.brandLogo.name,
-              size: formData.brandLogo.size
-            };
+            finalCompositingInfo.brandLogoData = formData.brandLogo.url; // 직접 base64 string 전달
           }
 
           // 디버깅 정보 출력
