@@ -102,26 +102,34 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-// 프롬프트 관련 API
+// 4개 프롬프트 파일 경로 정의
+const PROMPT_FILES = {
+  step1_product: 'public/Prompt_step1_product.txt',
+  step1_service: 'public/Prompt_step1_service.txt', 
+  step2_product: 'public/Prompt_step2_product.txt',
+  step2_service: 'public/Prompt_step2_service.txt'
+};
+
+// 프롬프트 로드 API - 4개 프롬프트 지원
 app.get('/api/prompts/get', async (req, res) => {
   try {
     const publicPath = path.join(process.cwd(), 'public');
-    
-    const inputSecondPrompt = fs.readFileSync(
-      path.join(publicPath, 'input_second_prompt.txt'), 
-      'utf-8'
-    );
-    const finalPrompt = fs.readFileSync(
-      path.join(publicPath, 'final_prompt.txt'), 
-      'utf-8'
-    );
+    const prompts = {};
+
+    // 4개 프롬프트 파일 모두 읽기
+    for (const [key, relativePath] of Object.entries(PROMPT_FILES)) {
+      try {
+        const content = fs.readFileSync(path.join(publicPath, path.basename(relativePath)), 'utf-8');
+        prompts[key] = content;
+      } catch (error) {
+        console.error(`프롬프트 파일 읽기 실패: ${key}`, error.message);
+        prompts[key] = ''; // 파일이 없으면 빈 문자열로 초기화
+      }
+    }
 
     res.json({
       success: true,
-      prompts: {
-        input_second_prompt: inputSecondPrompt,
-        final_prompt: finalPrompt
-      }
+      prompts
     });
   } catch (error) {
     console.error('프롬프트 로드 오류:', error);
@@ -133,6 +141,7 @@ app.get('/api/prompts/get', async (req, res) => {
   }
 });
 
+// 프롬프트 업데이트 API - 4개 프롬프트 지원
 app.post('/api/prompts/update', async (req, res) => {
   try {
     const { filename, content } = req.body;
@@ -144,16 +153,27 @@ app.post('/api/prompts/update', async (req, res) => {
       });
     }
 
+    // 유효한 프롬프트 키인지 확인
+    if (!PROMPT_FILES[filename]) {
+      return res.status(400).json({
+        success: false,
+        message: '유효하지 않은 프롬프트 파일명입니다.'
+      });
+    }
+
     const publicPath = path.join(process.cwd(), 'public');
     const versionsPath = path.join(publicPath, 'versions');
     
+    // 버전 디렉토리 생성
     if (!fs.existsSync(versionsPath)) {
       fs.mkdirSync(versionsPath, { recursive: true });
     }
 
-    const targetFile = filename.endsWith('.txt') ? filename : `${filename}.txt`;
-    const filePath = path.join(publicPath, targetFile);
+    // 실제 파일명 (경로에서 파일명만 추출)
+    const actualFileName = path.basename(PROMPT_FILES[filename]);
+    const filePath = path.join(publicPath, actualFileName);
     
+    // 기존 파일이 있으면 백업
     if (fs.existsSync(filePath)) {
       const existingContent = fs.readFileSync(filePath, 'utf-8');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -162,6 +182,7 @@ app.post('/api/prompts/update', async (req, res) => {
       
       fs.writeFileSync(versionFilePath, existingContent);
       
+      // 버전 메타데이터 업데이트
       const metadataPath = path.join(versionsPath, 'versions.json');
       let versions = [];
       
@@ -175,19 +196,21 @@ app.post('/api/prompts/update', async (req, res) => {
       
       versions.unshift({
         id: `${filename}_${timestamp}`,
-        filename: targetFile,
+        filename: actualFileName,
+        promptKey: filename, // 어떤 프롬프트인지 구분
         timestamp: new Date().toISOString(),
         preview: existingContent.substring(0, 200) + (existingContent.length > 200 ? '...' : ''),
         versionFile: versionFileName
       });
       
-      versions = versions.slice(0, 100);
+      versions = versions.slice(0, 100); // 최대 100개 버전만 유지
       fs.writeFileSync(metadataPath, JSON.stringify(versions, null, 2));
     }
 
+    // 새 내용 저장
     fs.writeFileSync(filePath, content, 'utf-8');
 
-    console.log(`✅ 프롬프트 업데이트 완료: ${targetFile}`);
+    console.log(`✅ 프롬프트 업데이트 완료: ${actualFileName} (${filename})`);
     res.json({
       success: true,
       message: '프롬프트가 성공적으로 업데이트되었습니다.'
@@ -203,6 +226,7 @@ app.post('/api/prompts/update', async (req, res) => {
   }
 });
 
+// 프롬프트 버전 히스토리 조회 API
 app.get('/api/prompts/versions', async (req, res) => {
   try {
     const versionsPath = path.join(process.cwd(), 'public', 'versions');
@@ -233,6 +257,7 @@ app.get('/api/prompts/versions', async (req, res) => {
   }
 });
 
+// 프롬프트 복원 API
 app.post('/api/prompts/restore', async (req, res) => {
   try {
     const { versionId } = req.body;
@@ -274,31 +299,37 @@ app.post('/api/prompts/restore', async (req, res) => {
       });
     }
 
+    // 현재 파일을 백업하고 복원
     const currentFilePath = path.join(publicPath, version.filename);
     if (fs.existsSync(currentFilePath)) {
       const currentContent = fs.readFileSync(currentFilePath, 'utf-8');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupFileName = `${version.filename.replace('.txt', '')}_backup_${timestamp}.txt`;
+      const backupFileName = `${version.promptKey || 'unknown'}_backup_${timestamp}.txt`;
       const backupFilePath = path.join(versionsPath, backupFileName);
       
       fs.writeFileSync(backupFilePath, currentContent);
       
+      // 백업 정보를 버전 히스토리에 추가
       versions.unshift({
-        id: `${version.filename.replace('.txt', '')}_backup_${timestamp}`,
+        id: `${version.promptKey || 'unknown'}_backup_${timestamp}`,
         filename: version.filename,
+        promptKey: version.promptKey,
         timestamp: new Date().toISOString(),
         preview: currentContent.substring(0, 200) + (currentContent.length > 200 ? '...' : ''),
-        versionFile: backupFileName
+        versionFile: backupFileName,
+        isBackup: true
       });
     }
 
+    // 선택한 버전으로 복원
     const versionContent = fs.readFileSync(versionFilePath, 'utf-8');
     fs.writeFileSync(currentFilePath, versionContent, 'utf-8');
     
+    // 업데이트된 버전 히스토리 저장
     const updatedVersions = versions.slice(0, 100);
     fs.writeFileSync(metadataPath, JSON.stringify(updatedVersions, null, 2));
 
-    console.log(`✅ 프롬프트 복원 완료: ${version.filename}`);
+    console.log(`✅ 프롬프트 복원 완료: ${version.filename} (${version.promptKey})`);
     res.json({
       success: true,
       message: '성공적으로 복원되었습니다.'
@@ -309,6 +340,143 @@ app.post('/api/prompts/restore', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '복원에 실패했습니다.',
+      error: error.message
+    });
+  }
+});
+
+// Gemini 응답 저장 API
+app.post('/api/prompts/save-response', async (req, res) => {
+  try {
+    const { promptKey, step, formData, response, timestamp } = req.body;
+    
+    if (!promptKey || !step || !response) {
+      return res.status(400).json({
+        success: false,
+        message: '필수 데이터가 누락되었습니다.'
+      });
+    }
+
+    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
+    
+    // 디렉토리 생성
+    if (!fs.existsSync(responsesPath)) {
+      fs.mkdirSync(responsesPath, { recursive: true });
+    }
+
+    // 파일명: promptKey_step_timestamp.json
+    const fileName = `${promptKey}_${step}_${timestamp || Date.now()}.json`;
+    const filePath = path.join(responsesPath, fileName);
+    
+    const responseData = {
+      promptKey,
+      step,
+      formData: formData || {},
+      response,
+      timestamp: timestamp || new Date().toISOString(),
+      savedAt: new Date().toISOString()
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
+
+    console.log(`✅ Gemini 응답 저장 완료: ${fileName}`);
+    res.json({
+      success: true,
+      message: 'Gemini 응답이 저장되었습니다.',
+      fileName
+    });
+
+  } catch (error) {
+    console.error('Gemini 응답 저장 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gemini 응답 저장에 실패했습니다.',
+      error: error.message
+    });
+  }
+});
+
+// 프롬프트별 Gemini 응답 조회 API
+app.get('/api/prompts/responses/:promptKey', async (req, res) => {
+  try {
+    const { promptKey } = req.params;
+    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
+    
+    if (!fs.existsSync(responsesPath)) {
+      return res.json({
+        success: true,
+        responses: []
+      });
+    }
+
+    // 해당 프롬프트 키로 시작하는 파일들 찾기
+    const files = fs.readdirSync(responsesPath)
+      .filter(file => file.startsWith(`${promptKey}_`) && file.endsWith('.json'))
+      .sort((a, b) => {
+        // 파일명에서 타임스탬프 추출하여 최신 순으로 정렬
+        const aTimestamp = a.split('_').pop().replace('.json', '');
+        const bTimestamp = b.split('_').pop().replace('.json', '');
+        return parseInt(bTimestamp) - parseInt(aTimestamp);
+      });
+
+    const responses = [];
+    
+    for (const file of files.slice(0, 20)) { // 최대 20개만
+      try {
+        const filePath = path.join(responsesPath, file);
+        const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        
+        responses.push({
+          fileName: file,
+          ...content,
+          preview: content.response ? content.response.substring(0, 300) + '...' : ''
+        });
+      } catch (error) {
+        console.error(`파일 읽기 실패: ${file}`, error.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      responses
+    });
+
+  } catch (error) {
+    console.error('Gemini 응답 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gemini 응답 조회에 실패했습니다.',
+      error: error.message
+    });
+  }
+});
+
+// 특정 Gemini 응답 상세 조회 API
+app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
+  try {
+    const { fileName } = req.params;
+    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
+    const filePath = path.join(responsesPath, fileName);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: '응답 파일을 찾을 수 없습니다.'
+      });
+    }
+
+    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    
+    res.json({
+      success: true,
+      data: content
+    });
+
+  } catch (error) {
+    console.error('Gemini 응답 상세 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gemini 응답 상세 조회에 실패했습니다.',
       error: error.message
     });
   }
