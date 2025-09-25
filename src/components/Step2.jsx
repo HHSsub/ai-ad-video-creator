@@ -187,6 +187,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   const [imagesFail, setImagesFail] = useState(0);
   const [error, setError] = useState('');
   const [debugInfo, setDebugInfo] = useState(null);
+  const [styles, setStyles] = useState([]); // 🔥 누락된 styles state 추가
 
   const isBusy = isLoading;
   const progressManager = new ProgressManager();
@@ -642,7 +643,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         setPercent(100);
         log(`전체 처리 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
 
-        // 🔥 수정: 스토리보드를 항상 설정 (합성 실패해도 표시)
+        // 🔥 수정: 최종 결과를 styles state에 저장
         const finalStoryboard = {
           success: true,
           styles: finalStyles,
@@ -662,8 +663,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
         console.log('[Step2] 최종 스토리보드:', finalStoryboard);
         setStoryboard?.(finalStoryboard);
+        setStyles(finalStyles); // 🔥 누락된 styles state 설정
 
-        // 🔥 수정: 자동 넘어가기 제거 - 사용자가 직접 다음 버튼 클릭하게 함
         log('✅ 스토리보드 생성 완료! 컨셉을 확인하고 "다음 단계" 버튼을 클릭하세요.');
         
       } else {
@@ -686,6 +687,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           }
         };
         setStoryboard?.(finalStoryboard);
+        setStyles(finalStyles); // 🔥 누락된 styles state 설정
         log('✅ 스토리보드 구조 생성 완료! "다음 단계" 버튼을 클릭하세요.');
       }
 
