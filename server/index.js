@@ -22,70 +22,6 @@ import nanobanaCompose from '../api/nanobanana-compose.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-
-// ===============================================
-// server/index.js에 추가할 미들웨어 - 기존 코드 위에 추가
-// ===============================================
-
-// API 호출 시 누락된 필수 데이터를 랜덤값으로 채우는 미들웨어
-const fillMissingFormData = (req, res, next) => {
-  try {
-    const formData = req.body;
-    
-    // 랜덤값 풀
-    const randomPools = {
-      brandName: ['브랜드A', '브랜드B', '브랜드C', '혁신기업', '글로벌코퍼'],
-      industryCategory: ['IT/소프트웨어', '제조업', '서비스업', '유통업', '금융업', '의료/헬스케어', '교육', '엔터테인먼트'],
-      productServiceCategory: ['스마트폰', '노트북', '자동차', '화장품', '의류', '식품', '생활용품', '서비스'],
-      productServiceName: ['프리미엄 제품', '신제품', '베스트셀러', '혁신 서비스', '프로 에디션'],
-      coreTarget: ['20-30대 직장인', '30-40대 직장여성', '40-50대 중장년층', '대학생', 'MZ세대', '시니어층'],
-      coreDifferentiation: ['혁신적인 기술력', '합리적인 가격', '프리미엄 품질', '친환경', '편리함', '안전성', '디자인 우수성'],
-      videoRequirements: ['역동적인 분위기', '감성적인 톤앤매너', '전문적인 이미지', '트렌디한 스타일', '자연스러운 연출']
-    };
-
-    // 기본값 설정
-    const defaults = {
-      videoLength: '10초',
-      aspectRatioCode: 'widescreen_16_9',
-      videoPurpose: 'product'
-    };
-
-    // 누락된 필드 채우기
-    Object.keys(randomPools).forEach(key => {
-      if (!formData[key] || (typeof formData[key] === 'string' && formData[key].trim() === '')) {
-        const pool = randomPools[key];
-        formData[key] = pool[Math.floor(Math.random() * pool.length)];
-        console.log(`[fillMissingFormData] ${key} 랜덤값 적용: ${formData[key]}`);
-      }
-    });
-
-    // 기본값 적용
-    Object.keys(defaults).forEach(key => {
-      if (!formData[key]) {
-        formData[key] = defaults[key];
-        console.log(`[fillMissingFormData] ${key} 기본값 적용: ${formData[key]}`);
-      }
-    });
-
-    console.log('[fillMissingFormData] 최종 formData:', {
-      brandName: formData.brandName,
-      industryCategory: formData.industryCategory,
-      productServiceCategory: formData.productServiceCategory,
-      productServiceName: formData.productServiceName,
-      videoPurpose: formData.videoPurpose,
-      videoLength: formData.videoLength,
-      aspectRatioCode: formData.aspectRatioCode,
-      coreTarget: formData.coreTarget,
-      coreDifferentiation: formData.coreDifferentiation
-    });
-
-    next();
-  } catch (error) {
-    console.error('formData 보완 중 오류:', error);
-    next(); // 오류가 있어도 계속 진행
-  }
-};
-
 // 🔥 서버 타임아웃 설정 강화
 app.use((req, res, next) => {
   req.setTimeout(300000);
@@ -241,43 +177,48 @@ app.post('/api/prompts/update', async (req, res) => {
     if (fs.existsSync(filePath)) {
       const existingContent = fs.readFileSync(filePath, 'utf-8');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const versionFileName = `${filename}_${timestamp}.txt`;
-      const versionFilePath = path.join(versionsPath, versionFileName);
+      const backupFileName = `${filename}_backup_${timestamp}.txt`;
+      const backupFilePath = path.join(versionsPath, backupFileName);
       
-      fs.writeFileSync(versionFilePath, existingContent);
-      
-      // 버전 메타데이터 업데이트
-      const metadataPath = path.join(versionsPath, 'versions.json');
-      let versions = [];
-      
-      if (fs.existsSync(metadataPath)) {
-        try {
-          versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-        } catch (e) {
-          versions = [];
-        }
-      }
-      
-      versions.unshift({
-        id: `${filename}_${timestamp}`,
-        filename: actualFileName,
-        promptKey: filename, // 어떤 프롬프트인지 구분
-        timestamp: new Date().toISOString(),
-        preview: existingContent.substring(0, 200) + (existingContent.length > 200 ? '...' : ''),
-        versionFile: versionFileName
-      });
-      
-      versions = versions.slice(0, 100); // 최대 100개 버전만 유지
-      fs.writeFileSync(metadataPath, JSON.stringify(versions, null, 2));
+      fs.writeFileSync(backupFilePath, existingContent);
+      console.log(`기존 프롬프트 백업: ${backupFileName}`);
     }
 
-    // 새 내용 저장
+    // 새 프롬프트 저장
     fs.writeFileSync(filePath, content, 'utf-8');
 
-    console.log(`✅ 프롬프트 업데이트 완료: ${actualFileName} (${filename})`);
+    // 버전 메타데이터 업데이트
+    const metadataPath = path.join(versionsPath, 'versions.json');
+    let versions = [];
+    
+    if (fs.existsSync(metadataPath)) {
+      try {
+        versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+      } catch (error) {
+        console.error('기존 버전 메타데이터 파싱 실패:', error);
+      }
+    }
+
+    const versionEntry = {
+      id: `${filename}_${Date.now()}`,
+      filename: actualFileName,
+      promptKey: filename,
+      timestamp: new Date().toISOString(),
+      preview: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+      versionFile: `${filename}_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`
+    };
+
+    versions.unshift(versionEntry);
+    
+    // 최대 100개 버전만 유지
+    const limitedVersions = versions.slice(0, 100);
+    fs.writeFileSync(metadataPath, JSON.stringify(limitedVersions, null, 2));
+
+    console.log(`✅ 프롬프트 업데이트 완료: ${filename}`);
     res.json({
       success: true,
-      message: '프롬프트가 성공적으로 업데이트되었습니다.'
+      message: '프롬프트가 성공적으로 업데이트되었습니다.',
+      filename
     });
 
   } catch (error) {
@@ -290,32 +231,32 @@ app.post('/api/prompts/update', async (req, res) => {
   }
 });
 
-// 프롬프트 버전 히스토리 조회 API
+// 프롬프트 버전 목록 조회 API
 app.get('/api/prompts/versions', async (req, res) => {
   try {
-    const versionsPath = path.join(process.cwd(), 'public', 'versions');
+    const publicPath = path.join(process.cwd(), 'public');
+    const versionsPath = path.join(publicPath, 'versions');
     const metadataPath = path.join(versionsPath, 'versions.json');
     
-    let versions = [];
-    
-    if (fs.existsSync(metadataPath)) {
-      try {
-        versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-      } catch (e) {
-        versions = [];
-      }
+    if (!fs.existsSync(metadataPath)) {
+      return res.json({
+        success: true,
+        versions: []
+      });
     }
 
+    const versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+    
     res.json({
       success: true,
-      versions
+      versions: versions.slice(0, 50) // 최근 50개만 반환
     });
 
   } catch (error) {
-    console.error('버전 로드 오류:', error);
+    console.error('버전 목록 조회 오류:', error);
     res.status(500).json({
       success: false,
-      message: '버전 목록을 가져오는데 실패했습니다.',
+      message: '버전 목록 조회에 실패했습니다.',
       error: error.message
     });
   }
@@ -546,65 +487,23 @@ app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
   }
 });
 
-// API 라우트 바인딩 헬퍼
-const bindRoute = (path, handler, methods = ['POST']) => {
-  app.options(path, (req, res) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', methods.join(', ') + ', OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-freepik-api-key');
-    res.status(200).end();
-  });
-
-  methods.forEach((method) => {
-    app[method.toLowerCase()](path, async (req, res) => {
-      req.setTimeout(300000);
-      res.setTimeout(300000);
-      
-      try {
-        await handler(req, res);
-      } catch (error) {
-        console.error(`[${method} ${path}] 오류:`, error);
-        if (!res.headersSent) {
-          res.status(500).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString(),
-            debug: {
-              method,
-              path,
-              timeout: '300000ms',
-              memoryUsage: process.memoryUsage()
-            }
-          });
-        }
-      }
-    });
-  });
-};
-
 // ===============================================
-// 기존 API 라우트들에 미들웨어 적용
+// 🔥 API 라우트들 - 중복 제거 및 단순화
 // ===============================================
 
-// 기존의 app.use('/api/storyboard-init', storyboardInit); 를
-app.use('/api/storyboard-init', fillMissingFormData, storyboardInit);
-
-// 기존의 app.use('/api/storyboard', storyboard); 를 
-app.use('/api/storyboard', fillMissingFormData, storyboard);
-
-// 모든 API 라우트 등록
-bindRoute('/api/storyboard-init', storyboardInit, ['POST']);
-bindRoute('/api/storyboard-render-image', storyboardRenderImage, ['POST']);
-bindRoute('/api/image-to-video', imageToVideo, ['POST']);
-bindRoute('/api/generate-video', generateVideo, ['POST']);
-bindRoute('/api/video-status', videoStatus, ['POST']);
-bindRoute('/api/compile-videos', compileVideos, ['POST']);
-bindRoute('/api/debug', debug, ['GET']);
-bindRoute('/api/apply-bgm', applyBgm, ['POST']);
-bindRoute('/api/load-mood-list', loadMoodList, ['GET','POST']);
-bindRoute('/api/load-bgm-list', loadBgmList, ['GET','POST']);
-bindRoute('/api/bgm-stream', bgmStream, ['GET','POST']);
-bindRoute('/api/nanobanana-compose', nanobanaCompose, ['POST']);
+// 정적 API 라우트들
+app.use('/api/storyboard-init', storyboardInit);
+app.use('/api/storyboard-render-image', storyboardRenderImage);
+app.use('/api/image-to-video', imageToVideo);
+app.use('/api/generate-video', generateVideo);
+app.use('/api/video-status', videoStatus);
+app.use('/api/compile-videos', compileVideos);
+app.use('/api/debug', debug);
+app.use('/api/apply-bgm', applyBgm);
+app.use('/api/load-mood-list', loadMoodList);
+app.use('/api/load-bgm-list', loadBgmList);
+app.use('/api/bgm-stream', bgmStream);
+app.use('/api/nanobanana-compose', nanobanaCompose);
 
 // 정적 파일 서빙
 app.use('/tmp', express.static('tmp', {
@@ -643,9 +542,9 @@ app.use('*', (req, res) => {
       'POST /api/video-status',
       'POST /api/compile-videos',
       'POST /api/apply-bgm',
-      'POST /api/load-mood-list',
-      'POST /api/load-bgm-list',
-      'POST /api/bgm-stream',
+      'GET /api/load-mood-list',
+      'GET /api/load-bgm-list',
+      'GET /api/bgm-stream',
       'POST /api/nanobanana-compose'
     ]
   });
