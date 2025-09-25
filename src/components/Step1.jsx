@@ -1,9 +1,28 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { loadFieldConfig, saveFieldConfig, applyDefaultValues } from '../utils/fieldConfig';
 
-const Step1 = ({ formData, setFormData, onNext }) => {
+const Step1 = ({ formData, setFormData, onNext, user }) => {
   const [errors, setErrors] = useState({});
+  const [fieldConfig, setFieldConfig] = useState({});
+  const [editingLabel, setEditingLabel] = useState(null);
+  const [tempLabel, setTempLabel] = useState('');
   const brandLogoRef = useRef(null);
   const productImageRef = useRef(null);
+
+  // 관리자 권한 확인
+  const isAdmin = user?.role === 'admin';
+
+  // 컴포넌트 마운트 시 필드 설정 로드
+  useEffect(() => {
+    const config = loadFieldConfig();
+    setFieldConfig(config);
+    
+    // 숨겨진 필드들의 기본값 적용
+    const defaultValues = applyDefaultValues(config);
+    if (Object.keys(defaultValues).length > 0) {
+      setFormData(prev => ({ ...prev, ...defaultValues }));
+    }
+  }, []);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -91,42 +110,22 @@ const Step1 = ({ formData, setFormData, onNext }) => {
   const validateForm = () => {
     const newErrors = {};
     
-    // 필수 필드 검증
-    if (!formData.brandName?.trim()) {
-      newErrors.brandName = '브랜드명을 입력해주세요.';
-    }
-    
-    if (!formData.industryCategory?.trim()) {
-      newErrors.industryCategory = '산업 카테고리를 입력해주세요.';
-    }
-    
-    if (!formData.productServiceCategory?.trim()) {
-      newErrors.productServiceCategory = '제품/서비스 카테고리를 입력해주세요.';
-    }
-    
-    if (!formData.productServiceName?.trim()) {
-      newErrors.productServiceName = '제품명/서비스명을 입력해주세요.';
-    }
-    
-    if (!formData.videoPurpose) {
-      newErrors.videoPurpose = '영상 목적을 선택해주세요.';
-    }
-    
-    if (!formData.videoLength) {
-      newErrors.videoLength = '영상 길이를 선택해주세요.';
-    }
-    
-    if (!formData.coreTarget?.trim()) {
-      newErrors.coreTarget = '핵심 타겟을 입력해주세요.';
-    }
-    
-    if (!formData.coreDifferentiation?.trim()) {
-      newErrors.coreDifferentiation = '핵심 차별점을 입력해주세요.';
-    }
-    
-    if (!formData.aspectRatioCode) {
-      newErrors.aspectRatioCode = '영상 비율을 선택해주세요.';
-    }
+    // 표시되는 필수 필드들만 검증
+    Object.values(fieldConfig).forEach(field => {
+      if (field.visible && field.required) {
+        const value = formData[field.key];
+        
+        if (field.type === 'text' || field.type === 'textarea') {
+          if (!value?.trim()) {
+            newErrors[field.key] = `${field.label}을(를) 입력해주세요.`;
+          }
+        } else if (field.type === 'select') {
+          if (!value) {
+            newErrors[field.key] = `${field.label}을(를) 선택해주세요.`;
+          }
+        }
+      }
+    });
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -144,318 +143,490 @@ const Step1 = ({ formData, setFormData, onNext }) => {
     }
   };
 
+  // 관리자 기능: 옵션 삭제 (필드 숨김)
+  const handleHideField = (fieldKey) => {
+    if (!isAdmin) return;
+    
+    const newConfig = {
+      ...fieldConfig,
+      [fieldKey]: {
+        ...fieldConfig[fieldKey],
+        visible: false
+      }
+    };
+    
+    setFieldConfig(newConfig);
+    saveFieldConfig(newConfig);
+    
+    // 숨겨진 필드에 기본값/랜덤값 적용
+    const defaultValues = applyDefaultValues(newConfig);
+    if (defaultValues[fieldKey]) {
+      setFormData(prev => ({ ...prev, [fieldKey]: defaultValues[fieldKey] }));
+    }
+  };
+
+  // 관리자 기능: 옵션 되돌리기 (필드 보임)
+  const handleRestoreField = (fieldKey) => {
+    if (!isAdmin) return;
+    
+    const newConfig = {
+      ...fieldConfig,
+      [fieldKey]: {
+        ...fieldConfig[fieldKey],
+        visible: true
+      }
+    };
+    
+    setFieldConfig(newConfig);
+    saveFieldConfig(newConfig);
+  };
+
+  // 관리자 기능: 라벨 수정 시작
+  const startEditLabel = (fieldKey, currentLabel) => {
+    if (!isAdmin) return;
+    setEditingLabel(fieldKey);
+    setTempLabel(currentLabel);
+  };
+
+  // 관리자 기능: 라벨 수정 저장
+  const saveLabel = (fieldKey) => {
+    if (!isAdmin) return;
+    
+    const newConfig = {
+      ...fieldConfig,
+      [fieldKey]: {
+        ...fieldConfig[fieldKey],
+        label: tempLabel.trim() || fieldConfig[fieldKey].label
+      }
+    };
+    
+    setFieldConfig(newConfig);
+    saveFieldConfig(newConfig);
+    setEditingLabel(null);
+    setTempLabel('');
+  };
+
+  // 관리자 기능: 라벨 수정 취소
+  const cancelEditLabel = () => {
+    setEditingLabel(null);
+    setTempLabel('');
+  };
+
+  // 필드 렌더링 함수들
+  const renderTextField = (field) => (
+    <div key={field.key}>
+      <div className="flex items-center justify-between mb-2">
+        {/* 라벨 (관리자면 편집 가능) */}
+        {isAdmin && editingLabel === field.key ? (
+          <div className="flex items-center space-x-2 flex-1">
+            <input
+              type="text"
+              value={tempLabel}
+              onChange={(e) => setTempLabel(e.target.value)}
+              className="text-sm font-medium text-gray-700 border border-gray-300 rounded px-2 py-1"
+              onKeyPress={(e) => e.key === 'Enter' && saveLabel(field.key)}
+              autoFocus
+            />
+            <button
+              onClick={() => saveLabel(field.key)}
+              className="text-green-600 hover:text-green-700 text-sm"
+            >
+              저장
+            </button>
+            <button
+              onClick={cancelEditLabel}
+              className="text-gray-500 hover:text-gray-600 text-sm"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          <label 
+            className={`block text-sm font-medium text-gray-700 ${
+              isAdmin ? 'cursor-pointer hover:text-blue-600' : ''
+            }`}
+            onClick={() => isAdmin && startEditLabel(field.key, field.label)}
+          >
+            {field.label} {field.required && '*'}
+            {isAdmin && (
+              <span className="ml-1 text-xs text-blue-500">(클릭하여 수정)</span>
+            )}
+          </label>
+        )}
+
+        {/* 관리자 버튼들 */}
+        {isAdmin && editingLabel !== field.key && (
+          <div className="flex space-x-1">
+            <button
+              onClick={() => handleHideField(field.key)}
+              className="text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-300 hover:bg-red-50"
+              title="이 입력 항목 숨기기"
+            >
+              옵션삭제
+            </button>
+          </div>
+        )}
+      </div>
+
+      <input
+        type="text"
+        value={formData[field.key] || ''}
+        onChange={(e) => handleInputChange(field.key, e.target.value)}
+        placeholder={field.placeholder}
+        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+          errors[field.key] ? 'border-red-500' : 'border-gray-300'
+        }`}
+      />
+      {errors[field.key] && (
+        <p className="mt-1 text-sm text-red-600">{errors[field.key]}</p>
+      )}
+    </div>
+  );
+
+  const renderTextAreaField = (field) => (
+    <div key={field.key} className="md:col-span-2">
+      <div className="flex items-center justify-between mb-2">
+        {/* 라벨 (관리자면 편집 가능) */}
+        {isAdmin && editingLabel === field.key ? (
+          <div className="flex items-center space-x-2 flex-1">
+            <input
+              type="text"
+              value={tempLabel}
+              onChange={(e) => setTempLabel(e.target.value)}
+              className="text-sm font-medium text-gray-700 border border-gray-300 rounded px-2 py-1"
+              onKeyPress={(e) => e.key === 'Enter' && saveLabel(field.key)}
+              autoFocus
+            />
+            <button
+              onClick={() => saveLabel(field.key)}
+              className="text-green-600 hover:text-green-700 text-sm"
+            >
+              저장
+            </button>
+            <button
+              onClick={cancelEditLabel}
+              className="text-gray-500 hover:text-gray-600 text-sm"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          <label 
+            className={`block text-sm font-medium text-gray-700 ${
+              isAdmin ? 'cursor-pointer hover:text-blue-600' : ''
+            }`}
+            onClick={() => isAdmin && startEditLabel(field.key, field.label)}
+          >
+            {field.label} {field.required && '*'}
+            {isAdmin && (
+              <span className="ml-1 text-xs text-blue-500">(클릭하여 수정)</span>
+            )}
+          </label>
+        )}
+
+        {/* 관리자 버튼들 */}
+        {isAdmin && editingLabel !== field.key && (
+          <div className="flex space-x-1">
+            <button
+              onClick={() => handleHideField(field.key)}
+              className="text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-300 hover:bg-red-50"
+              title="이 입력 항목 숨기기"
+            >
+              옵션삭제
+            </button>
+          </div>
+        )}
+      </div>
+
+      <textarea
+        value={formData[field.key] || ''}
+        onChange={(e) => handleInputChange(field.key, e.target.value)}
+        placeholder={field.placeholder}
+        rows={3}
+        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+          errors[field.key] ? 'border-red-500' : 'border-gray-300'
+        }`}
+      />
+      {errors[field.key] && (
+        <p className="mt-1 text-sm text-red-600">{errors[field.key]}</p>
+      )}
+    </div>
+  );
+
+  const renderSelectField = (field) => (
+    <div key={field.key}>
+      <div className="flex items-center justify-between mb-2">
+        {/* 라벨 (관리자면 편집 가능) */}
+        {isAdmin && editingLabel === field.key ? (
+          <div className="flex items-center space-x-2 flex-1">
+            <input
+              type="text"
+              value={tempLabel}
+              onChange={(e) => setTempLabel(e.target.value)}
+              className="text-sm font-medium text-gray-700 border border-gray-300 rounded px-2 py-1"
+              onKeyPress={(e) => e.key === 'Enter' && saveLabel(field.key)}
+              autoFocus
+            />
+            <button
+              onClick={() => saveLabel(field.key)}
+              className="text-green-600 hover:text-green-700 text-sm"
+            >
+              저장
+            </button>
+            <button
+              onClick={cancelEditLabel}
+              className="text-gray-500 hover:text-gray-600 text-sm"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          <label 
+            className={`block text-sm font-medium text-gray-700 ${
+              isAdmin ? 'cursor-pointer hover:text-blue-600' : ''
+            }`}
+            onClick={() => isAdmin && startEditLabel(field.key, field.label)}
+          >
+            {field.label} {field.required && '*'}
+            {isAdmin && (
+              <span className="ml-1 text-xs text-blue-500">(클릭하여 수정)</span>
+            )}
+          </label>
+        )}
+
+        {/* 관리자 버튼들 */}
+        {isAdmin && editingLabel !== field.key && (
+          <div className="flex space-x-1">
+            <button
+              onClick={() => handleHideField(field.key)}
+              className="text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-300 hover:bg-red-50"
+              title="이 입력 항목 숨기기"
+            >
+              옵션삭제
+            </button>
+          </div>
+        )}
+      </div>
+
+      <select
+        value={formData[field.key] || ''}
+        onChange={(e) => handleInputChange(field.key, e.target.value)}
+        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+          errors[field.key] ? 'border-red-500' : 'border-gray-300'
+        }`}
+      >
+        <option value="">{field.label} 선택</option>
+        {field.options?.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {errors[field.key] && (
+        <p className="mt-1 text-sm text-red-600">{errors[field.key]}</p>
+      )}
+    </div>
+  );
+
+  // 표시되는 필드들만 필터링
+  const visibleFields = Object.values(fieldConfig).filter(field => field.visible);
+  // 숨겨진 필드들
+  const hiddenFields = Object.values(fieldConfig).filter(field => !field.visible);
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-lg p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Step 1: 기본 정보 입력</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Step 1: 기본 정보 입력</h2>
+          
+          {/* 관리자 전용 숨겨진 필드 관리 */}
+          {isAdmin && hiddenFields.length > 0 && (
+            <div className="text-sm">
+              <span className="text-gray-500">숨겨진 항목: </span>
+              {hiddenFields.map((field, index) => (
+                <span key={field.key}>
+                  <button
+                    onClick={() => handleRestoreField(field.key)}
+                    className="text-blue-600 hover:text-blue-700 underline"
+                    title={`${field.label} 되돌리기`}
+                  >
+                    {field.label}
+                  </button>
+                  {index < hiddenFields.length - 1 && ', '}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* 브랜드명 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              브랜드명 *
-            </label>
-            <input
-              type="text"
-              value={formData.brandName || ''}
-              onChange={(e) => handleInputChange('brandName', e.target.value)}
-              placeholder="예: 삼성, LG, 현대"
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.brandName ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {errors.brandName && (
-              <p className="mt-1 text-sm text-red-600">{errors.brandName}</p>
-            )}
-          </div>
+          {visibleFields.map(field => {
+            switch (field.type) {
+              case 'text':
+                return renderTextField(field);
+              case 'textarea':
+                return renderTextAreaField(field);
+              case 'select':
+                return renderSelectField(field);
+              default:
+                return null;
+            }
+          })}
 
-          {/* 산업 카테고리 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              산업 카테고리 *
-            </label>
-            <input
-              type="text"
-              value={formData.industryCategory || ''}
-              onChange={(e) => handleInputChange('industryCategory', e.target.value)}
-              placeholder="예: 전자제품, 자동차, 화장품"
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.industryCategory ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {errors.industryCategory && (
-              <p className="mt-1 text-sm text-red-600">{errors.industryCategory}</p>
-            )}
-          </div>
-
-          {/* 제품/서비스 카테고리 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              제품/서비스 카테고리 *
-            </label>
-            <input
-              type="text"
-              value={formData.productServiceCategory || ''}
-              onChange={(e) => handleInputChange('productServiceCategory', e.target.value)}
-              placeholder="예: 스마트폰, 세단, 스킨케어"
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.productServiceCategory ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {errors.productServiceCategory && (
-              <p className="mt-1 text-sm text-red-600">{errors.productServiceCategory}</p>
-            )}
-          </div>
-
-          {/* 제품명/서비스명 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              제품명/서비스명 *
-            </label>
-            <input
-              type="text"
-              value={formData.productServiceName || ''}
-              onChange={(e) => handleInputChange('productServiceName', e.target.value)}
-              placeholder="예: 갤럭시 S24, 아반떼, 후"
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.productServiceName ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {errors.productServiceName && (
-              <p className="mt-1 text-sm text-red-600">{errors.productServiceName}</p>
-            )}
-          </div>
-
-          {/* 영상 목적 - 수정된 부분 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              영상 목적 *
-            </label>
-            <select
-              value={formData.videoPurpose || ''}
-              onChange={(e) => handleInputChange('videoPurpose', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.videoPurpose ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="">선택해주세요</option>
-              <option value="제품">제품</option>
-              <option value="서비스">서비스</option>
-            </select>
-            {errors.videoPurpose && (
-              <p className="mt-1 text-sm text-red-600">{errors.videoPurpose}</p>
-            )}
-          </div>
-
-          {/* 영상 길이 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              영상 길이 *
-            </label>
-            <select
-              value={formData.videoLength || ''}
-              onChange={(e) => handleInputChange('videoLength', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.videoLength ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="">선택해주세요</option>
-              <option value="10초">10초</option>
-              <option value="20초">20초</option>
-              <option value="30초">30초</option>
-            </select>
-            {errors.videoLength && (
-              <p className="mt-1 text-sm text-red-600">{errors.videoLength}</p>
-            )}
-          </div>
-
-          {/* 영상 비율 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              영상 비율 *
-            </label>
-            <select
-              value={formData.aspectRatioCode || ''}
-              onChange={(e) => handleInputChange('aspectRatioCode', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.aspectRatioCode ? 'border-red-500' : 'border-gray-300'
-              }`}
-            >
-              <option value="">선택해주세요</option>
-              <option value="widescreen_16_9">16:9 (와이드스크린)</option>
-              <option value="vertical_9_16">9:16 (세로형)</option>
-              <option value="square_1_1">1:1 (정사각형)</option>
-            </select>
-            {errors.aspectRatioCode && (
-              <p className="mt-1 text-sm text-red-600">{errors.aspectRatioCode}</p>
-            )}
-          </div>
-        </div>
-
-        {/* 핵심 타겟 */}
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            핵심 타겟 *
-          </label>
-          <textarea
-            value={formData.coreTarget || ''}
-            onChange={(e) => handleInputChange('coreTarget', e.target.value)}
-            placeholder="예: 20-30대 직장인 여성, 스마트폰 업그레이드를 고려하는 사람"
-            rows={3}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-              errors.coreTarget ? 'border-red-500' : 'border-gray-300'
-            }`}
-          />
-          {errors.coreTarget && (
-            <p className="mt-1 text-sm text-red-600">{errors.coreTarget}</p>
-          )}
-        </div>
-
-        {/* 핵심 차별점 */}
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            핵심 차별점 (UVP) *
-          </label>
-          <textarea
-            value={formData.coreDifferentiation || ''}
-            onChange={(e) => handleInputChange('coreDifferentiation', e.target.value)}
-            placeholder="예: 업계 최초 접이식 디스플레이, 24시간 배터리 지속시간"
-            rows={3}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-              errors.coreDifferentiation ? 'border-red-500' : 'border-gray-300'
-            }`}
-          />
-          {errors.coreDifferentiation && (
-            <p className="mt-1 text-sm text-red-600">{errors.coreDifferentiation}</p>
-          )}
-        </div>
-
-        {/* 영상 요구사항 (Optional) */}
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            영상 요구사항 (선택사항)
-          </label>
-          <textarea
-            value={formData.videoRequirements || ''}
-            onChange={(e) => handleInputChange('videoRequirements', e.target.value)}
-            placeholder="예: 밝고 경쾌한 느낌, 젊은 감성, 모던한 스타일"
-            rows={2}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-
-        {/* 파일 업로드 섹션 */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* 브랜드 로고 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              브랜드 로고 (선택사항)
-            </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
-              <div className="space-y-1 text-center">
-                {formData.brandLogo ? (
-                  <div className="relative">
-                    <img
-                      src={formData.brandLogo.url}
-                      alt="브랜드 로고 미리보기"
-                      className="mx-auto h-20 w-20 object-contain"
-                    />
-                    <button
-                      onClick={() => removeFile('brandLogo')}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm"
-                    >
-                      ×
-                    </button>
-                    <p className="mt-2 text-xs text-gray-600">{formData.brandLogo.name}</p>
-                  </div>
-                ) : (
-                  <>
-                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <div className="flex text-sm text-gray-600">
-                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                        <span>로고 업로드</span>
-                        <input
-                          ref={brandLogoRef}
-                          type="file"
-                          className="sr-only"
-                          accept="image/*"
-                          onChange={(e) => handleFileUpload(e.target.files[0], 'brandLogo')}
+          {/* 파일 업로드 필드들 (별도 처리) */}
+          <div className="md:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 브랜드 로고 업로드 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  브랜드 로고 (선택사항)
+                </label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+                  <div className="space-y-1 text-center">
+                    {formData.brandLogo ? (
+                      <div className="relative">
+                        <img
+                          src={formData.brandLogo.url}
+                          alt="브랜드 로고 미리보기"
+                          className="mx-auto h-20 w-auto object-contain"
                         />
-                      </label>
-                      <p className="pl-1">또는 드래그</p>
-                    </div>
-                    <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
-                  </>
+                        <button
+                          type="button"
+                          onClick={() => removeFile('brandLogo')}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                        <p className="text-xs text-gray-500 mt-2">{formData.brandLogo.name}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <div className="text-sm text-gray-600">
+                          <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
+                            <span>파일 선택</span>
+                            <input
+                              ref={brandLogoRef}
+                              type="file"
+                              className="sr-only"
+                              accept="image/*"
+                              onChange={(e) => handleFileUpload(e.target.files[0], 'brandLogo')}
+                            />
+                          </label>
+                          <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {errors.brandLogo && (
+                  <p className="mt-1 text-sm text-red-600">{errors.brandLogo}</p>
+                )}
+              </div>
+
+              {/* 제품 이미지 업로드 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  제품 이미지 (선택사항)
+                </label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+                  <div className="space-y-1 text-center">
+                    {formData.productImage ? (
+                      <div className="relative">
+                        <img
+                          src={formData.productImage.url}
+                          alt="제품 이미지 미리보기"
+                          className="mx-auto h-20 w-auto object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeFile('productImage')}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                        <p className="text-xs text-gray-500 mt-2">{formData.productImage.name}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <div className="text-sm text-gray-600">
+                          <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
+                            <span>파일 선택</span>
+                            <input
+                              ref={productImageRef}
+                              type="file"
+                              className="sr-only"
+                              accept="image/*"
+                              onChange={(e) => handleFileUpload(e.target.files[0], 'productImage')}
+                            />
+                          </label>
+                          <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {errors.productImage && (
+                  <p className="mt-1 text-sm text-red-600">{errors.productImage}</p>
                 )}
               </div>
             </div>
-            {errors.brandLogo && (
-              <p className="mt-1 text-sm text-red-600">{errors.brandLogo}</p>
-            )}
-          </div>
-
-          {/* 제품 이미지 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              제품 이미지 (선택사항)
-            </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
-              <div className="space-y-1 text-center">
-                {formData.productImage ? (
-                  <div className="relative">
-                    <img
-                      src={formData.productImage.url}
-                      alt="제품 이미지 미리보기"
-                      className="mx-auto h-20 w-20 object-contain"
-                    />
-                    <button
-                      onClick={() => removeFile('productImage')}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm"
-                    >
-                      ×
-                    </button>
-                    <p className="mt-2 text-xs text-gray-600">{formData.productImage.name}</p>
-                  </div>
-                ) : (
-                  <>
-                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <div className="flex text-sm text-gray-600">
-                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                        <span>제품 이미지 업로드</span>
-                        <input
-                          ref={productImageRef}
-                          type="file"
-                          className="sr-only"
-                          accept="image/*"
-                          onChange={(e) => handleFileUpload(e.target.files[0], 'productImage')}
-                        />
-                      </label>
-                      <p className="pl-1">또는 드래그</p>
-                    </div>
-                    <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
-                  </>
-                )}
-              </div>
-            </div>
-            {errors.productImage && (
-              <p className="mt-1 text-sm text-red-600">{errors.productImage}</p>
-            )}
           </div>
         </div>
 
-        {/* 다음 버튼 */}
-        <div className="mt-8 flex justify-end">
+        {/* 다음 단계 버튼 */}
+        <div className="flex justify-end mt-8">
           <button
             onClick={handleSubmit}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
-            다음 단계로
+            다음 단계 →
           </button>
         </div>
+
+        {/* 관리자 전용 안내 메시지 */}
+        {isAdmin && (
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex">
+              <svg className="h-5 w-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">관리자 기능</h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  <p>• 필드명 클릭: 라벨 수정</p>
+                  <p>• 옵션삭제: 필드 숨기기 (자동으로 기본값/랜덤값 적용)</p>
+                  <p>• 숨겨진 필드는 상단에서 복원 가능</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 숨겨진 필드 안내 (일반 사용자용) */}
+        {!isAdmin && Object.values(fieldConfig).some(field => !field.visible) && (
+          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex">
+              <svg className="h-5 w-5 text-yellow-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.002 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700">
+                  
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
