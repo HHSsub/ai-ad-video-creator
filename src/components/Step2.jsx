@@ -663,13 +663,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         console.log('[Step2] 최종 스토리보드:', finalStoryboard);
         setStoryboard?.(finalStoryboard);
 
-        if (successImages > 0) {
-          setTimeout(() => {
-            onNext?.();
-          }, 2000);
-        } else {
-          log('성공 이미지 0 → 자동 이동 중단 (프롬프트/파싱 확인 필요)');
-        }
+        // 🔥 수정: 자동 넘어가기 제거 - 사용자가 직접 다음 버튼 클릭하게 함
+        log('✅ 스토리보드 생성 완료! 컨셉을 확인하고 "다음 단계" 버튼을 클릭하세요.');
+        
       } else {
         log('이미지 생성 건너뜀: styles 또는 perStyle=0');
         setPercent(100);
@@ -690,6 +686,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           }
         };
         setStoryboard?.(finalStoryboard);
+        log('✅ 스토리보드 구조 생성 완료! "다음 단계" 버튼을 클릭하세요.');
       }
 
     } catch (e) {
@@ -789,16 +786,28 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             </button>
           </div>
 
-          <button
-            onClick={handleGenerateStoryboard}
-            disabled={isBusy}
-            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-          >
-            {(formData.productImage || formData.brandLogo)
-              ? '스토리보드 생성 + Nano Banana 이미지 합성 시작'
-              : '스토리보드 생성 시작'
-            }
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleGenerateStoryboard}
+              disabled={isBusy}
+              className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+            >
+              {(formData.productImage || formData.brandLogo)
+                ? '스토리보드 생성 + Nano Banana 이미지 합성 시작'
+                : '스토리보드 생성 시작'
+              }
+            </button>
+
+            {/* 🔥 수정: 스토리보드 완성된 후에만 다음 단계 버튼 표시 */}
+            {styles && styles.length > 0 && !isBusy && (
+              <button
+                onClick={onNext}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
+                다음 단계 (컨셉 선택)
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
