@@ -22,6 +22,70 @@ import nanobanaCompose from '../api/nanobanana-compose.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+
+// ===============================================
+// server/index.js에 추가할 미들웨어 - 기존 코드 위에 추가
+// ===============================================
+
+// API 호출 시 누락된 필수 데이터를 랜덤값으로 채우는 미들웨어
+const fillMissingFormData = (req, res, next) => {
+  try {
+    const formData = req.body;
+    
+    // 랜덤값 풀
+    const randomPools = {
+      brandName: ['브랜드A', '브랜드B', '브랜드C', '혁신기업', '글로벌코퍼'],
+      industryCategory: ['IT/소프트웨어', '제조업', '서비스업', '유통업', '금융업', '의료/헬스케어', '교육', '엔터테인먼트'],
+      productServiceCategory: ['스마트폰', '노트북', '자동차', '화장품', '의류', '식품', '생활용품', '서비스'],
+      productServiceName: ['프리미엄 제품', '신제품', '베스트셀러', '혁신 서비스', '프로 에디션'],
+      coreTarget: ['20-30대 직장인', '30-40대 직장여성', '40-50대 중장년층', '대학생', 'MZ세대', '시니어층'],
+      coreDifferentiation: ['혁신적인 기술력', '합리적인 가격', '프리미엄 품질', '친환경', '편리함', '안전성', '디자인 우수성'],
+      videoRequirements: ['역동적인 분위기', '감성적인 톤앤매너', '전문적인 이미지', '트렌디한 스타일', '자연스러운 연출']
+    };
+
+    // 기본값 설정
+    const defaults = {
+      videoLength: '10초',
+      aspectRatioCode: 'widescreen_16_9',
+      videoPurpose: 'product'
+    };
+
+    // 누락된 필드 채우기
+    Object.keys(randomPools).forEach(key => {
+      if (!formData[key] || (typeof formData[key] === 'string' && formData[key].trim() === '')) {
+        const pool = randomPools[key];
+        formData[key] = pool[Math.floor(Math.random() * pool.length)];
+        console.log(`[fillMissingFormData] ${key} 랜덤값 적용: ${formData[key]}`);
+      }
+    });
+
+    // 기본값 적용
+    Object.keys(defaults).forEach(key => {
+      if (!formData[key]) {
+        formData[key] = defaults[key];
+        console.log(`[fillMissingFormData] ${key} 기본값 적용: ${formData[key]}`);
+      }
+    });
+
+    console.log('[fillMissingFormData] 최종 formData:', {
+      brandName: formData.brandName,
+      industryCategory: formData.industryCategory,
+      productServiceCategory: formData.productServiceCategory,
+      productServiceName: formData.productServiceName,
+      videoPurpose: formData.videoPurpose,
+      videoLength: formData.videoLength,
+      aspectRatioCode: formData.aspectRatioCode,
+      coreTarget: formData.coreTarget,
+      coreDifferentiation: formData.coreDifferentiation
+    });
+
+    next();
+  } catch (error) {
+    console.error('formData 보완 중 오류:', error);
+    next(); // 오류가 있어도 계속 진행
+  }
+};
+
 // 🔥 서버 타임아웃 설정 강화
 app.use((req, res, next) => {
   req.setTimeout(300000);
@@ -517,6 +581,16 @@ const bindRoute = (path, handler, methods = ['POST']) => {
     });
   });
 };
+
+// ===============================================
+// 기존 API 라우트들에 미들웨어 적용
+// ===============================================
+
+// 기존의 app.use('/api/storyboard-init', storyboardInit); 를
+app.use('/api/storyboard-init', fillMissingFormData, storyboardInit);
+
+// 기존의 app.use('/api/storyboard', storyboard); 를 
+app.use('/api/storyboard', fillMissingFormData, storyboard);
 
 // 모든 API 라우트 등록
 bindRoute('/api/storyboard-init', storyboardInit, ['POST']);
