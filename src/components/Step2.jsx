@@ -865,7 +865,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           </div>
         )}
 
-        {/* 스타일 프리뷰 */}
+        {/* 🔥 수정: 카피라이팅 표시 포함한 스타일 프리뷰 */}
         {styles && styles.length > 0 && (
           <div className="mb-6">
             <h3 className="font-semibold mb-3">생성된 컨셉 ({styles.length}개)</h3>
@@ -874,18 +874,53 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                 <div key={style.id || index} className="border rounded-lg p-4 bg-gray-50">
                   <h4 className="font-medium text-sm mb-2">{style.conceptName || style.style}</h4>
                   <p className="text-xs text-gray-600 mb-2">{style.description}</p>
+                  
+                  {/* 🔥 추가: 컨셉별 전체 카피라이팅 표시 */}
+                  {style.conceptHeadline && (
+                    <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-2">
+                      <p className="text-xs font-medium text-blue-800">컨셉 헤드라인</p>
+                      <p className="text-sm text-blue-900">{style.conceptHeadline}</p>
+                    </div>
+                  )}
+                  
                   <div className="text-xs">
                     <p>씬 수: {style.images?.length || style.imagePrompts?.length || 0}개</p>
+                    
+                    {/* 🔥 추가: 각 씬별 카피 표시 */}
+                    {style.imagePrompts && style.imagePrompts.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="font-medium text-gray-700">씬별 카피:</p>
+                        {style.imagePrompts.slice(0, 3).map((prompt, promptIdx) => (
+                          <div key={promptIdx} className="bg-yellow-50 border border-yellow-200 rounded p-1">
+                            <p className="text-xs">
+                              <span className="font-medium">S#{prompt.sceneNumber}:</span> 
+                              <span className="ml-1 text-yellow-800">{prompt.copy || '카피 없음'}</span>
+                            </p>
+                          </div>
+                        ))}
+                        {style.imagePrompts.length > 3 && (
+                          <p className="text-xs text-gray-500">...외 {style.imagePrompts.length - 3}개 씬</p>
+                        )}
+                      </div>
+                    )}
+                    
                     {style.images && style.images.length > 0 && (
                       <div className="grid grid-cols-2 gap-1 mt-2">
                         {style.images.slice(0, 4).map((img, imgIdx) => (
-                          <img 
-                            key={imgIdx}
-                            src={img.thumbnail || img.url} 
-                            alt={`Scene ${img.sceneNumber}`}
-                            className="w-full h-16 object-cover rounded border"
-                            loading="lazy"
-                          />
+                          <div key={imgIdx} className="relative">
+                            <img 
+                              src={img.thumbnail || img.url} 
+                              alt={`Scene ${img.sceneNumber}`}
+                              className="w-full h-16 object-cover rounded border"
+                              loading="lazy"
+                            />
+                            {/* 🔥 추가: 이미지 위에 카피 오버레이 */}
+                            {img.copy && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs p-1 rounded-b">
+                                {img.copy}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
