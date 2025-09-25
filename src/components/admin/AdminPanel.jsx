@@ -271,16 +271,16 @@ const AdminPanel = () => {
           {message.text}
         </div>
       )}
-
+      
+      {/* 좌측: 버전 히스토리 */}
       <div className="grid grid-cols-12 gap-6">
-        {/* 좌측: 버전 히스토리 */}
         <div className="col-span-3">
           <div className="bg-white rounded-lg shadow">
             <div className="px-4 py-3 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">버전 히스토리</h3>
               <p className="text-sm text-gray-600">프롬프트 수정 이력</p>
             </div>
-
+        
             <div className="p-4">
               {versions.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">버전 히스토리가 없습니다.</p>
@@ -289,30 +289,56 @@ const AdminPanel = () => {
                   {getCurrentPageVersions().map((version) => (
                     <div
                       key={version.id}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                        selectedVersion?.id === version.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors
+                        ${
+                          selectedVersion?.id === version.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }
+                        ${version.isCurrent ? 'bg-green-50 border-green-400 ring-2 ring-green-300' : ''}
+                      `}
                       onClick={() => setSelectedVersion(version)}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-blue-600">
-                          {promptLabels[version.promptKey] || version.filename}
+                        <span className={`text-xs font-medium
+                          ${version.isCurrent ? 'text-green-700' : 'text-blue-600'}
+                        `}>
+                          {version.isCurrent
+                            ? `현재 ${promptLabels[activeTab]}`
+                            : promptLabels[version.promptKey] || version.filename
+                          }
                         </span>
                         {version.isBackup && (
                           <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">백업</span>
                         )}
                       </div>
+                      {version.isCurrent && (
+                        <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full mb-1">
+                          현재 사용중
+                        </span>
+                      )}
                       <div className="text-xs text-gray-500">
                         {formatDateTime(version.timestamp)}
                       </div>
                       <div className="text-xs text-gray-600 mt-1 line-clamp-2">
                         {version.preview}
                       </div>
+                      {version.isCurrent && (
+                        <div className="mt-2 text-xs">
+                          <button 
+                            className="text-blue-600 hover:text-blue-800"
+                            onClick={e => {
+                              e.stopPropagation();
+                              loadGeminiResponses(activeTab);
+                            }}
+                          >
+                            📊 현재 프롬프트의 Gemini 응답 보기
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
-
+        
                   {/* 페이지네이션 */}
                   {totalPages > 1 && (
                     <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
