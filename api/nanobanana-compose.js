@@ -208,7 +208,7 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
         model: 'gemini-2.0-flash-exp', // 🔥 최신 이미지 생성 모델
         maxRetries: 1, // 내부에서 재시도하므로 1회만
         label: `nanobanana-compose-attempt-${retryCount + 1}`,
-        isImageComposition: True // 이미지 작업임을 반드시 명시!
+        isImageComposition: true // 이미지 작업임을 반드시 명시!
       }),
       timeoutPromise
     ]);
