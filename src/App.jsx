@@ -218,6 +218,7 @@ function App(){
           <Step1
             formData={formData}
             setFormData={setFormData}
+            user={user}  // user 정보 추가 전달
             onNext={() => {
               console.log('Step1 완료, formData:', formData);
               console.log('🔥 선택된 영상 길이:', formData.videoLength);
@@ -229,8 +230,9 @@ function App(){
         {step === 2 && (
           <Step2
             formData={formData}
-            setStoryboard={setStoryboard}
+            setFormData={setFormData}
             storyboard={storyboard}
+            setStoryboard={setStoryboard}
             isLoading={isLoading}
             setIsLoading={setIsLoading}
             onPrev={prev}
