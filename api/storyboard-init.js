@@ -47,7 +47,7 @@ async function safeCallGemini(prompt, options = {}) {
       const apiKey = getNextApiKey();
       const tempGenAI = new GoogleGenerativeAI(apiKey);
       const model = tempGenAI.getGenerativeModel({ 
-        model: "gemini-1.5-pro-latest",
+        model: "gemini-2.5-pro",
         generationConfig: {
           temperature: 0.7,
           topK: 40,
@@ -717,7 +717,7 @@ export default async function handler(req, res) {
       aspectRatio: mapAspectRatio(req.body),
       generatedAt: new Date().toISOString(),
       processingTimeMs: Date.now() - startTime,
-      geminiModel: "gemini-1.5-pro-latest",
+      geminiModel: "gemini-2.5-pro",
       keyPoolSize: API_KEYS.length,
       step1Length: phase1_output.length,
       step2Length: step2.text.length
