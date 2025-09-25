@@ -132,8 +132,8 @@ const Step1 = ({ formData, setFormData, next }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNext = next || onNext;
-  
+  // const handleNext = next || onNext; // onNext없다고 에러남
+  const handleNext = next
   const handleSubmit = () => {
     if (validateForm()) {
       if (handleNext) {
