@@ -204,67 +204,70 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     setPercent(newPercent);
   };
 
-  // 🔥 나노 바나나 합성 함수 - 기존 그대로 유지
+  // 🔥 composeSingleImageSafely 함수에서 오버레이 데이터 추출 부분 수정
   const composeSingleImageSafely = async (imageObj, style, compositingInfo, retryCount = 0, maxRetries = 2) => {
-    if (!imageObj.isCompositingScene || !imageObj.compositingInfo) {
-      console.log(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber}: 합성 대상이 아님`);
-      return imageObj;
-    }
-
-    const overlayImageData = getOverlayImageData(compositingInfo, {
-      hasProductImageData: !!compositingInfo.productImageData,
-      hasBrandLogoData: !!compositingInfo.brandLogoData
-    });
+    // 🔥 flags 기반으로 오버레이 이미지 결정 (수정된 부분)
+    const flags = {
+      hasProductImageData: !!(compositingInfo.productImageData),
+      hasBrandLogoData: !!(compositingInfo.brandLogoData)
+    };
+  
+    console.log(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber} flags:`, flags);
+  
+    // 🔥 수정: getOverlayImageData 호출
+    const overlayImageData = getOverlayImageData(compositingInfo, flags);
     
     if (!overlayImageData) {
       console.log(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber}: 오버레이 이미지 없음`);
       return imageObj;
     }
-
+  
     try {
       console.log(`[composeSingleImageSafely] 🔥 Nano Banana 합성 시작: Scene ${imageObj.sceneNumber} (시도 ${retryCount + 1}/${maxRetries + 1})`);
-
+  
       // Rate Limit 분산을 위한 딜레이
       const requestDelay = Math.random() * 3000 + 2000;
       await new Promise(resolve => setTimeout(resolve, requestDelay));
-
-      // 🔥 디버깅: nanobanana-compose로 전달되는 데이터 로깅
-      const response = await fetch(`${API_BASE}/api/nanobanana-compose`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseImageUrl: imageObj.url,
-          overlayImageData: overlayImageData,
-          compositingInfo: imageObj.compositingInfo,
-          sceneNumber: imageObj.sceneNumber,
-          conceptId: style.concept_id
-        })
-      });
-
-      console.log('[composeSingleImageSafely] nanobanana-compose 요청 데이터:', {
+  
+      // 🔥 백엔드로 전송할 데이터 최종 확인
+      const requestPayload = {
+        baseImageUrl: imageObj.url,
+        overlayImageData: overlayImageData, // 🔥 이제 문자열이어야 함
+        compositingInfo: imageObj.compositingInfo,
+        sceneNumber: imageObj.sceneNumber,
+        conceptId: style.concept_id
+      };
+  
+      console.log('[composeSingleImageSafely] 🚀 nanobanana-compose 요청 페이로드:', {
         baseImageUrl: imageObj.url?.substring(0, 50) + '...',
         overlayImageDataType: typeof overlayImageData,
         overlayImageDataIsString: typeof overlayImageData === 'string',
         overlayImageDataLength: overlayImageData?.length || 0,
         overlayImageDataPreview: typeof overlayImageData === 'string' ? 
           overlayImageData.substring(0, 50) + '...' : 
-          JSON.stringify(overlayImageData),
+          'NOT_A_STRING: ' + JSON.stringify(overlayImageData).substring(0, 50),
         hasCompositingInfo: !!imageObj.compositingInfo,
         sceneNumber: imageObj.sceneNumber,
         conceptId: style.concept_id
       });
-
+  
+      const response = await fetch(`${API_BASE}/api/nanobanana-compose`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestPayload)
+      });
+  
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         console.error(`[composeSingleImageSafely] HTTP ${response.status}: ${errorText.substring(0, 100)}`);
         throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
       }
-
+  
       const result = await response.json();
-
+  
       if (result.success && result.composedImageUrl) {
         console.log(`[composeSingleImageSafely] ✅ 합성 완료: Scene ${imageObj.sceneNumber} (${result.metadata?.method || 'unknown'})`);
-
+  
         // 합성된 이미지로 교체
         return {
           ...imageObj,
@@ -278,14 +281,14 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       } else {
         throw new Error(`합성 결과 없음: ${JSON.stringify(result)}`);
       }
-
+  
     } catch (error) {
       console.error(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber} 시도 ${retryCount + 1} 실패:`, error.message);
-
+  
       // 재시도 로직 (429, 5xx 에러만)
       const retryableErrors = ['429', '500', '502', '503', '504', 'timeout'];
       const shouldRetry = retryableErrors.some(code => error.message.includes(code));
-
+  
       if (retryCount < maxRetries && shouldRetry) {
         const retryDelay = (retryCount + 1) * 5000;
         console.log(`[composeSingleImageSafely] Scene ${imageObj.sceneNumber} ${retryDelay}ms 후 재시도...`);
@@ -306,13 +309,68 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
   // 🔥 수정: overlayImageData를 올바르게 추출 - compositingInfo에서 직접 가져오기
   const getOverlayImageData = (compositingInfo, flags) => {
-    // compositingInfo에서 직접 base64 문자열을 반환
+    console.log('[getOverlayImageData] 입력 데이터:', {
+      flags,
+      hasProductImageData: !!compositingInfo.productImageData,
+      hasBrandLogoData: !!compositingInfo.brandLogoData,
+      productImageType: typeof compositingInfo.productImageData,
+      brandLogoType: typeof compositingInfo.brandLogoData
+    });
+  
+    let overlayData = null;
+  
+    // 1. Product Image 우선 처리
     if (flags.hasProductImageData && compositingInfo.productImageData) {
-      return compositingInfo.productImageData; // 이미 base64 string임
+      if (typeof compositingInfo.productImageData === 'string') {
+        // 이미 base64 문자열인 경우
+        overlayData = compositingInfo.productImageData;
+        console.log('[getOverlayImageData] ✅ 제품 이미지 - 문자열 형태:', overlayData.length, 'chars');
+      } else if (typeof compositingInfo.productImageData === 'object' && compositingInfo.productImageData.url) {
+        // 객체 형태의 경우 url 필드에서 base64 추출
+        overlayData = compositingInfo.productImageData.url;
+        console.log('[getOverlayImageData] ✅ 제품 이미지 - 객체.url:', overlayData.length, 'chars');
+      } else {
+        console.error('[getOverlayImageData] ❌ 제품 이미지 형태 인식 불가:', typeof compositingInfo.productImageData);
+      }
     }
-    if (flags.hasBrandLogoData && compositingInfo.brandLogoData) {
-      return compositingInfo.brandLogoData; // 이미 base64 string임
+  
+    // 2. Brand Logo 처리 (Product Image가 없는 경우에만)
+    if (!overlayData && flags.hasBrandLogoData && compositingInfo.brandLogoData) {
+      if (typeof compositingInfo.brandLogoData === 'string') {
+        // 이미 base64 문자열인 경우
+        overlayData = compositingInfo.brandLogoData;
+        console.log('[getOverlayImageData] ✅ 브랜드 로고 - 문자열 형태:', overlayData.length, 'chars');
+      } else if (typeof compositingInfo.brandLogoData === 'object' && compositingInfo.brandLogoData.url) {
+        // 객체 형태의 경우 url 필드에서 base64 추출
+        overlayData = compositingInfo.brandLogoData.url;
+        console.log('[getOverlayImageData] ✅ 브랜드 로고 - 객체.url:', overlayData.length, 'chars');
+      } else {
+        console.error('[getOverlayImageData] ❌ 브랜드 로고 형태 인식 불가:', typeof compositingInfo.brandLogoData);
+      }
     }
+  
+    // 3. Base64 데이터 검증
+    if (overlayData) {
+      if (!overlayData.startsWith('data:image/')) {
+        console.warn('[getOverlayImageData] ⚠️ data URL 형태가 아닙니다:', overlayData.substring(0, 50));
+        // data URL이 아니면 추가 (보통 base64만 있는 경우)
+        if (/^[A-Za-z0-9+/=]+$/.test(overlayData)) {
+          overlayData = `data:image/jpeg;base64,${overlayData}`;
+          console.log('[getOverlayImageData] 🔧 data URL 형태로 변환:', overlayData.substring(0, 50));
+        }
+      }
+  
+      console.log('[getOverlayImageData] 🎯 최종 반환:', {
+        type: typeof overlayData,
+        length: overlayData.length,
+        isDataUrl: overlayData.startsWith('data:'),
+        preview: overlayData.substring(0, 50) + '...'
+      });
+  
+      return overlayData;
+    }
+  
+    console.log('[getOverlayImageData] ❌ 추출된 오버레이 데이터 없음');
     return null;
   };
 
