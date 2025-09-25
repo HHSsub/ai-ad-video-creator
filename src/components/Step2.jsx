@@ -228,7 +228,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const requestDelay = Math.random() * 3000 + 2000;
       await new Promise(resolve => setTimeout(resolve, requestDelay));
 
-      // 🔥 실제 nanobanana-compose API 호출
+      // 🔥 디버깅: nanobanana-compose로 전달되는 데이터 로깅
       const response = await fetch(`${API_BASE}/api/nanobanana-compose`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -239,6 +239,19 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           sceneNumber: imageObj.sceneNumber,
           conceptId: style.concept_id
         })
+      });
+
+      console.log('[composeSingleImageSafely] nanobanana-compose 요청 데이터:', {
+        baseImageUrl: imageObj.url?.substring(0, 50) + '...',
+        overlayImageDataType: typeof overlayImageData,
+        overlayImageDataIsString: typeof overlayImageData === 'string',
+        overlayImageDataLength: overlayImageData?.length || 0,
+        overlayImageDataPreview: typeof overlayImageData === 'string' ? 
+          overlayImageData.substring(0, 50) + '...' : 
+          JSON.stringify(overlayImageData),
+        hasCompositingInfo: !!imageObj.compositingInfo,
+        sceneNumber: imageObj.sceneNumber,
+        conceptId: style.concept_id
       });
 
       if (!response.ok) {
@@ -587,11 +600,21 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             finalCompositingInfo.brandLogoData = formData.brandLogo.url; // 직접 base64 string 전달
           }
 
+          // 🔥 디버깅: compositingInfo 데이터 구조 확인
+          console.log('[Step2] compositingInfo 구조 확인:', {
+            hasProductImageData: !!finalCompositingInfo.productImageData,
+            hasForm데이터: !!formData.productImage,
+            productImageType: typeof finalCompositingInfo.productImageData,
+            productImagePreview: typeof finalCompositingInfo.productImageData === 'string' ? 
+              finalCompositingInfo.productImageData.substring(0, 50) + '...' : 
+              JSON.stringify(finalCompositingInfo.productImageData).substring(0, 100) + '...'
+          });
+
           // 디버깅 정보 출력
           if (finalCompositingInfo.productImageData) {
-            const dataType = finalCompositingInfo.productImageData.url ? 'URL' : 'Base64';
-            const dataSize = finalCompositingInfo.productImageData.url ? 
-              finalCompositingInfo.productImageData.url.length : 
+            const dataType = typeof finalCompositingInfo.productImageData;
+            const dataSize = typeof finalCompositingInfo.productImageData === 'string' ? 
+              finalCompositingInfo.productImageData.length : 
               JSON.stringify(finalCompositingInfo.productImageData).length;
             log(`제품이미지 데이터 확인: ${dataType}, 크기: ${Math.round(dataSize/1024)}KB`);
           }
@@ -602,9 +625,26 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               style.images.forEach((img) => {
                 if (img.isCompositingScene && img.compositingInfo) {
                   compositionTasks.push(async () => {
-                    const composedImage = await composeSingleImageSafely(img, style, finalCompositingInfo);
-                    // 합성 결과로 원본 이미지 교체
-                    Object.assign(img, composedImage);
+                    try {
+                      const composedImage = await composeSingleImageSafely(img, style, finalCompositingInfo);
+                      
+                      // 원본 이미지를 합성된 이미지로 교체
+                      const imageIndex = style.images.findIndex(img => img.id === imageObj.id);
+                      if (imageIndex !== -1) {
+                        style.images[imageIndex] = composedImage;
+                      }
+
+                      if (composedImage.compositingSuccess) {
+                        compositingSuccess++;
+                        log(`✅ Scene ${imageObj.sceneNumber} 제품 합성 완료`);
+                      } else {
+                        compositingFailed++;
+                        log(`⚠️ Scene ${imageObj.sceneNumber} 제품 합성 실패 (원본 사용)`);
+                      }
+                    } catch (error) {
+                      compositingFailed++;
+                      log(`❌ Scene ${imageObj.sceneNumber} 제품 합성 오류: ${error.message}`);
+                    }
                     return {
                       success: true,
                       sceneNumber: img.sceneNumber
@@ -629,67 +669,66 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               log(`합성 진행: ${completed}/${total} 완료 (실패: ${failed})`);
             });
 
-            log(`🎉 이미지 합성 완료: 성공 ${composedCount} / 실패 ${composeFailed} / 총 ${compositionTasks.length}`);
-          } else {
-            log(`⚠️ 합성 대상 이미지 없음 (감지된 합성 씬: ${totalCompositingScenes}개, 실제 이미지: ${finalStyles.reduce((sum, style) => sum + (style.images || []).length, 0)}개)`);
-          }
-
-          progressManager.completePhase('COMPOSE');
-        } else {
-          log('4/4 이미지 합성 스킵 (업로드된 이미지 없음)');
-          progressManager.completePhase('COMPOSE');
-        }
-
-        setPercent(100);
-        log(`전체 처리 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
-
-        // 🔥 수정: 최종 결과를 styles state에 저장
-        const finalStoryboard = {
-          success: true,
-          styles: finalStyles,
-          compositingInfo: finalCompositingInfo,
-          metadata: {
-            ...metadata,
-            videoPurpose: formData.videoPurpose,
-            promptFiles: promptFiles,
-            perStyleCount: perStyle,
-            totalImages: totalImages,
-            successImages: successImages,
-            failedImages: failedImages,
-            processingTimeMs: Date.now() - startTime,
-            createdAt: new Date().toISOString(),
-          }
-        };
-
-        console.log('[Step2] 최종 스토리보드:', finalStoryboard);
-        setStoryboard?.(finalStoryboard);
-        setStyles(finalStyles); // 🔥 누락된 styles state 설정
-
-        log('✅ 스토리보드 생성 완료! 컨셉을 확인하고 "다음 단계" 버튼을 클릭하세요.');
-        
+        // 🔥 수정: 합성 성공/실패와 관계없이 항상 다음 단계 진행 가능하게 함
+        log(`📊 제품 합성 완료: 성공 ${compositingSuccess}개, 실패 ${compositingFailed}개`);
+        progressManager.completePhase('COMPOSE');
       } else {
-        log('이미지 생성 건너뜀: styles 또는 perStyle=0');
-        setPercent(100);
-        
-        // 🔥 수정: 이미지 없어도 스토리보드 설정
-        const finalStoryboard = {
-          success: true,
-          styles: finalStyles,
-          compositingInfo: finalCompositingInfo,
-          metadata: {
-            ...metadata,
-            videoPurpose: formData.videoPurpose,
-            promptFiles: promptFiles,
-            perStyleCount: perStyle,
-            totalImages: totalImages,
-            processingTimeMs: Date.now() - startTime,
-            createdAt: new Date().toISOString(),
-          }
-        };
-        setStoryboard?.(finalStoryboard);
-        setStyles(finalStyles); // 🔥 누락된 styles state 설정
-        log('✅ 스토리보드 구조 생성 완료! "다음 단계" 버튼을 클릭하세요.');
+        log('4/4 이미지 합성 스킵 (업로드된 이미지 없음)');
+        progressManager.completePhase('COMPOSE');
       }
+
+      setPercent(100);
+      log(`전체 처리 완료: 성공 ${successImages} / 실패 ${failedImages} / 총 ${totalImages}`);
+
+      // 🔥 수정: 최종 결과를 styles state에 저장
+      const finalStoryboard = {
+        success: true,
+        styles: finalStyles,
+        compositingInfo: finalCompositingInfo,
+        metadata: {
+          ...metadata,
+          videoPurpose: formData.videoPurpose,
+          promptFiles: promptFiles,
+          perStyleCount: perStyle,
+          totalImages: totalImages,
+          successImages: successImages,
+          failedImages: failedImages,
+          compositingSuccess: compositingSuccess || 0,
+          compositingFailed: compositingFailed || 0,
+          processingTimeMs: Date.now() - startTime,
+          createdAt: new Date().toISOString(),
+        }
+      };
+
+      console.log('[Step2] 최종 스토리보드:', finalStoryboard);
+      setStoryboard?.(finalStoryboard);
+      setStyles(finalStyles);
+
+      log('✅ 스토리보드 생성 완료! 컨셉을 확인하고 "다음 단계" 버튼을 클릭하세요.');
+      
+    } else {
+      log('이미지 생성 건너뜀: styles 또는 perStyle=0');
+      setPercent(100);
+      
+      // 🔥 수정: 이미지 없어도 스토리보드 설정
+      const finalStoryboard = {
+        success: true,
+        styles: finalStyles,
+        compositingInfo: finalCompositingInfo,
+        metadata: {
+          ...metadata,
+          videoPurpose: formData.videoPurpose,
+          promptFiles: promptFiles,
+          perStyleCount: perStyle,
+          totalImages: totalImages,
+          processingTimeMs: Date.now() - startTime,
+          createdAt: new Date().toISOString(),
+        }
+      };
+      setStoryboard?.(finalStoryboard);
+      setStyles(finalStyles);
+      log('✅ 스토리보드 구조 생성 완료! "다음 단계" 버튼을 클릭하세요.');
+    }
 
     } catch (e) {
       console.error('[Step2] 전체 오류:', e);
