@@ -19,7 +19,9 @@ const Step1 = ({ formData, setFormData, next }) => {
       }));
     }
   };
-
+  
+  const handleNext = next || onNext;
+  
   const handleFileUpload = async (file, field) => {
     if (!file) return;
 
@@ -134,7 +136,7 @@ const Step1 = ({ formData, setFormData, next }) => {
 
   const handleSubmit = () => {
     if (validateForm()) {
-      next();
+      handleNext(); // next() 대신 handleNext() 사용
     }
   };
 
