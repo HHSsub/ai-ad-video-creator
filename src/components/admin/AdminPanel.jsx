@@ -78,16 +78,36 @@ const AdminPanel = () => {
     }
   };
 
+  // 🔥 추가: 현재 프롬프트를 버전 히스토리 맨 위에 표시
   const loadVersions = async () => {
+    setLoading(true);
     try {
       const response = await fetch('/api/prompts/versions');
       const data = await response.json();
       
       if (data.success) {
-        setVersions(data.versions);
+        let allVersions = data.versions || [];
+        
+        // 🔥 현재 프롬프트를 가상 버전으로 맨 위에 추가
+        const currentPromptVersion = {
+          id: 'current_prompt',
+          filename: '현재 사용중인 프롬프트',
+          promptKey: activeTab,
+          timestamp: new Date().toISOString(),
+          preview: prompts[activeTab]?.substring(0, 200) + '...',
+          isCurrent: true, // 현재 프롬프트 표시용
+          versionFile: null
+        };
+        
+        allVersions.unshift(currentPromptVersion);
+        setVersions(allVersions);
+      } else {
+        showMessage('error', '버전 목록 로드에 실패했습니다.');
       }
     } catch (error) {
-      console.error('버전 로드 실패:', error);
+      showMessage('error', '서버 연결에 실패했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
