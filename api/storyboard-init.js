@@ -412,7 +412,8 @@ function buildStylesFromConceptJson(mcJson, sceneCount, compositingScenes, formD
         seed: Math.floor(10000 + Math.random() * 90000),
         filter_nsfw: true,
         motion_prompt: sceneData?.motionPrompt?.prompt || "Subtle camera drift, slow and elegant movement.",
-        copy: sceneData?.copy?.copy || `씬 ${i}`,
+        // 🔥 수정: copy 필드 올바른 추출
+        copy: sceneData?.copy?.copy || sceneData?.copy || `씬 ${i}`, // copy.copy 또는 copy 직접 사용
         timecode: `00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
         // 🔥 합성 정보 추가
         isCompositingScene: isCompositingScene,
@@ -433,6 +434,8 @@ function buildStylesFromConceptJson(mcJson, sceneCount, compositingScenes, formD
       style: getStyleFromConceptName(concept.name) || 'Commercial Photography',
       headline: `${concept.name} 헤드라인`,
       description: `${formData.videoPurpose} 광고를 위한 ${concept.name} 접근법`,
+      // 🔥 추가: 컨셉별 헤드라인 추출 (첫 번째 씬의 copy 또는 concept.headline 사용)
+      conceptHeadline: concept.headline || concept.scenes?.[0]?.copy?.copy || concept.scenes?.[0]?.copy || null,
       imagePrompts: imagePrompts,
       images: [], // 이미지 생성 시 채워질 배열
       metadata: {
