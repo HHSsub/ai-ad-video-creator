@@ -56,7 +56,7 @@ function getFallbackTextModel() {
  * 🔥 이미지 합성 전용 모델 (나노바나나용)
  */
 function getImageCompositionModel() {
-  return 'gemini-2.0-flash-exp';
+  return 'gemini-2.5-flash-image';
 }
 
 /**
@@ -98,7 +98,7 @@ export async function safeCallGemini(prompt, options = {}) {
   
   if (isImageComposition) {
     selectedModel = getImageCompositionModel();
-    fallbackModels = ['gemini-2.0-flash-exp'];
+    fallbackModels = ['gemini-2.5-flash-image'];
     console.log(`[${label}] 🎨 이미지 합성 모드: ${selectedModel}`);
   } else {
     selectedModel = getTextGeminiModel();
