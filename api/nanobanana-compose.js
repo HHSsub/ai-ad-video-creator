@@ -1,5 +1,4 @@
 // api/nanobanana-compose.js - 🔥 Gemini 2.5 Flash Image 정식 적용 + 모델명 로깅 + 재시도 강화
-
 import { safeCallGemini, getApiKeyStatus } from '../src/utils/apiHelpers.js';
 
 const MAX_RETRIES = 4; // 🔥 재시도 횟수 증가
@@ -133,7 +132,6 @@ INSTRUCTIONS:
     prompt += `Overlay: The second image is either a product or brand logo according to the context. `;
   }
 
-  // 컨텍스트별 세부 지침
   switch (compositingContext) {
     case 'PRODUCT_COMPOSITING_SCENE':
     case 'EXPLICIT':
@@ -149,7 +147,6 @@ INSTRUCTIONS:
       prompt += `Focus: Create a natural, professional advertising composition. `;
   }
 
-  // 기술적 요구사항
   prompt += `Return the composed image as the output.`;
 
   return prompt;
@@ -166,7 +163,6 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
     console.log(`[callGeminiImageComposition] 🔥 Gemini 이미지 합성 시도 ${retryCount + 1}/${maxRetries + 1}`);
     console.log(`[callGeminiImageComposition] 📊 입력 데이터: 베이스=${Math.round(baseImageBase64.length/1024)}KB, 오버레이=${Math.round(overlayImageBase64.length/1024)}KB`);
     
-    // 🔥 API 키 풀 상태 확인
     const keyStatus = getApiKeyStatus();
     if (keyStatus.gemini.totalKeys === 0) {
       throw new Error('Gemini API 키가 설정되지 않았습니다');
@@ -174,14 +170,12 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
     
     console.log(`[callGeminiImageComposition] API 키 상태: ${keyStatus.gemini.availableKeys}/${keyStatus.gemini.totalKeys}개 사용가능`);
     
-    // 🔥 Rate Limit 방지를 위한 딜레이 (2차 호출부터)
     if (retryCount > 0) {
-      const delay = RETRY_DELAY * retryCount + Math.random() * 3000; // 지터 추가
+      const delay = RETRY_DELAY * retryCount + Math.random() * 3000;
       console.log(`[callGeminiImageComposition] Rate Limit 방지 딜레이: ${Math.round(delay)}ms`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
 
-    // 🔥 Gemini 2.5 Flash Image - 정확한 API 형식
     const geminiContent = [
       { text: prompt },
       {
@@ -198,22 +192,19 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
       }
     ];
 
-    // 🔥 정확한 모델명 사용 + 로깅
     const modelName = 'gemini-2.5-flash-image-preview';
     console.log(`[callGeminiImageComposition] 🎯 사용 모델: ${modelName}`);
 
-    // 🔥 타임아웃을 적용한 safeCallGemini 호출
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Gemini API 호출 타임아웃')), COMPOSITION_TIMEOUT);
     });
 
-    // requestStartTime -> startTime으로 변경 (오류 수정)
     const result = await Promise.race([
       safeCallGemini(geminiContent, {
-        model: modelName, // 🔥 수정: 정확한 모델명 사용
-        maxRetries: 1, // 내부에서 재시도하므로 1회만
+        model: modelName,
+        maxRetries: 1,
         label: `nanobanana-compose-attempt-${retryCount + 1}`,
-        isImageComposition: true // 이미지 작업임을 반드시 명시!
+        isImageComposition: true
       }),
       timeoutPromise
     ]);
@@ -221,17 +212,12 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
     const processingTime = Date.now() - startTime;
     console.log(`[callGeminiImageComposition] API 응답 받음: ${processingTime}ms, 모델: ${modelName}, 응답길이=${result.text.length}`);
 
-    // 🔥 응답에서 이미지 데이터 추출 (여러 형태 지원)
     let imageData = null;
-    
-    // 1. data: URL 형태 확인
     const dataUrlMatch = result.text.match(/data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)/);
     if (dataUrlMatch) {
-      imageData = dataUrlMatch[0]; // 전체 data URL
+      imageData = dataUrlMatch[0];
       console.log(`[callGeminiImageComposition] ✅ Data URL 형태로 이미지 발견 (${Math.round(dataUrlMatch[1].length/1024)}KB)`);
     }
-    
-    // 2. 순수 base64 형태 확인 (길이 기반)
     if (!imageData) {
       const lines = result.text.split('\n');
       for (const line of lines) {
@@ -243,8 +229,6 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
         }
       }
     }
-    
-    // 3. JSON 응답 내부 확인
     if (!imageData) {
       try {
         const jsonMatch = result.text.match(/\{[\s\S]*\}/);
@@ -258,9 +242,7 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
             }
           }
         }
-      } catch (e) {
-        // JSON 파싱 실패는 무시
-      }
+      } catch (e) {}
     }
 
     if (imageData) {
@@ -276,39 +258,28 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
         attempts: retryCount + 1
       };
     }
-
-    // 🔥 이미지 데이터를 찾지 못한 경우 재시도
     if (retryCount < maxRetries) {
       console.log(`[callGeminiImageComposition] ⚠️ 이미지 데이터 없음, 재시도... (${retryCount + 1}/${maxRetries})`);
       console.log(`[callGeminiImageComposition] 응답 샘플: ${result.text.substring(0, 200)}...`);
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
       return callGeminiImageComposition(baseImageBase64, overlayImageBase64, prompt, retryCount + 1);
     }
-
     throw new Error('Gemini 응답에서 이미지 데이터를 찾을 수 없음');
-
   } catch (error) {
     const processingTime = Date.now() - startTime;
     console.error(`[callGeminiImageComposition] 시도 ${retryCount + 1} 실패 (${processingTime}ms):`, error.message);
-    
-    // 🔥 재시도 로직 (특정 에러만)
     const retryableErrors = ['429', '500', '502', '503', '504', 'timeout', 'quota', 'overload', 'rate limit', '사용 불가능'];
     const shouldRetry = retryableErrors.some(code => error.message.toLowerCase().includes(code));
-    
     if (retryCount < maxRetries && shouldRetry) {
-      const delay = RETRY_DELAY * (retryCount + 1) + Math.random() * 3000; // 지터 포함
+      const delay = RETRY_DELAY * (retryCount + 1) + Math.random() * 3000;
       console.log(`[callGeminiImageComposition] ${Math.round(delay)}ms 후 재시도... (${error.message.substring(0, 50)})`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return callGeminiImageComposition(baseImageBase64, overlayImageBase64, prompt, retryCount + 1);
     }
-    
     throw error;
   }
 }
 
-/**
- * 🔥 최종 합성 함수 (강화된 재시도 및 상태 추적)
- */
 async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositingInfo) {
   const startTime = Date.now();
   const maxAttempts = MAX_RETRIES + 1;
@@ -317,31 +288,20 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
   try {
     console.log(`[safeComposeWithGemini] 🔥 Gemini 2.5 Flash Image 합성 시작 (최대 ${maxAttempts}회 시도)`);
     console.log(`[safeComposeWithGemini] 합성 컨텍스트: ${compositingInfo.compositingContext}`);
-    
-    // 1. API 키 상태 확인
     const keyStatus = getApiKeyStatus();
     console.log(`[safeComposeWithGemini] Gemini API 키 상태: ${keyStatus.gemini.availableKeys}/${keyStatus.gemini.totalKeys}개 사용가능`);
-    
     if (keyStatus.gemini.totalKeys === 0) {
       throw new Error('Gemini API 키가 설정되지 않았습니다');
     }
-    
     if (keyStatus.gemini.availableKeys === 0) {
       console.warn('[safeComposeWithGemini] ⚠️ 사용 가능한 Gemini 키가 없음, 30분 후 재시도 권장');
-      // 모든 키가 블록된 상태에서도 시도 (일부 키가 복구될 수 있음)
     }
-    
-    // 2. 베이스 이미지 다운로드 및 변환
     console.log(`[safeComposeWithGemini] 베이스 이미지 다운로드: ${baseImageUrl.substring(0, 50)}...`);
     const baseImageBase64 = await imageUrlToBase64(baseImageUrl);
     const baseMimeType = detectMimeType(baseImageUrl);
-    
     console.log(`[safeComposeWithGemini] 베이스 이미지 준비: ${(baseImageBase64.length / 1024).toFixed(1)}KB (${baseMimeType})`);
-    
-    // 3. 오버레이 이미지 준비 (imageRef의 url 또는 base64)
     let overlayImageBase64;
     let overlayMimeType = 'image/jpeg';
-    
     if (overlayImageData.startsWith('http')) {
       console.log(`[safeComposeWithGemini] 오버레이 이미지 다운로드: ${overlayImageData.substring(0, 50)}...`);
       overlayImageBase64 = await imageUrlToBase64(overlayImageData);
@@ -349,19 +309,14 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
     } else {
       console.log(`[safeComposeWithGemini] 오버레이 이미지 base64 추출 중...`);
       overlayImageBase64 = extractBase64Data(overlayImageData);
-      // data URL에서 MIME 타입 추출
       if (overlayImageData.startsWith('data:')) {
         const mimeMatch = overlayImageData.match(/data:([^;]+)/);
         if (mimeMatch) overlayMimeType = mimeMatch[1];
       }
     }
-    
     console.log(`[safeComposeWithGemini] 오버레이 이미지 준비: ${(overlayImageBase64.length / 1024).toFixed(1)}KB (${overlayMimeType})`);
-    
-    // 4. 합성 정보 분석 (imageRef 단일 입력에 맞게)
     let needsProductImage = false;
     let needsBrandLogo = false;
-    // 영상 목적 및 context로 판단
     if (compositingInfo && compositingInfo.videoPurpose) {
       if (
         compositingInfo.videoPurpose.includes('제품') ||
@@ -376,26 +331,17 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
         needsBrandLogo = true;
       }
     }
-    // imageRef 존재 기반
     if (overlayImageData) {
       needsProductImage = needsProductImage || true;
       needsBrandLogo = needsBrandLogo || true;
     }
-    
     console.log(`[safeComposeWithGemini] 합성 요구사항: 제품=${needsProductImage}, 로고=${needsBrandLogo}`);
-    
-    // 5. 합성 프롬프트 생성
     const prompt = generateCompositingPrompt(compositingInfo, needsProductImage, needsBrandLogo);
     console.log(`[safeComposeWithGemini] 프롬프트 생성 완료: ${prompt.substring(0, 150)}...`);
-    
-    // 6. 🔥 실제 Gemini 2.5 Flash Image API 호출 (재시도 포함)
     const result = await callGeminiImageComposition(baseImageBase64, overlayImageBase64, prompt);
-    
     const processingTime = Date.now() - startTime;
-    
     if (result.success) {
       console.log(`[safeComposeWithGemini] ✅ 합성 성공 (${processingTime}ms, 모델: ${result.model}, 시도: ${result.attempts}회)`);
-      
       return {
         success: true,
         composedImageUrl: result.imageUrl,
@@ -419,18 +365,13 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
     } else {
       throw new Error('Gemini 이미지 합성 결과 없음');
     }
-    
   } catch (error) {
     lastError = error;
     console.error('[safeComposeWithGemini] 합성 프로세스 오류:', error.message);
-    
-    // 🔥 실패 시 원본 이미지로 fallback (에러 격리)
     const processingTime = Date.now() - startTime;
-    
     console.warn(`[safeComposeWithGemini] ⚠️ 합성 실패, 원본 이미지 사용: ${error.message}`);
-    
     return {
-      success: true, // 원본 사용이므로 성공으로 처리
+      success: true,
       composedImageUrl: baseImageUrl,
       metadata: {
         originalBaseUrl: baseImageUrl,
@@ -450,11 +391,7 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
   }
 }
 
-/**
- * 🔥 메인 API 핸들러 (향상된 에러 처리 및 로깅)
- */
 export default async function handler(req, res) {
-  // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -466,6 +403,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({
       success: false,
+      compositingSuccess: false,
       error: 'Method not allowed',
       allowed: ['POST']
     });
@@ -479,11 +417,11 @@ export default async function handler(req, res) {
 
     const { baseImageUrl, overlayImageData, compositingInfo, sceneNumber, conceptId } = req.body;
 
-    // 🔥 입력 데이터 검증
     if (!baseImageUrl || typeof baseImageUrl !== 'string') {
       console.error(`[nanobanana-compose] [${requestId}] ❌ 잘못된 baseImageUrl`);
       return res.status(400).json({
         success: false,
+        compositingSuccess: false,
         error: 'baseImageUrl (string) is required',
         received: { hasBaseImageUrl: !!baseImageUrl, type: typeof baseImageUrl },
         requestId
@@ -494,6 +432,7 @@ export default async function handler(req, res) {
       console.error(`[nanobanana-compose] [${requestId}] ❌ 잘못된 overlayImageData`);
       return res.status(400).json({
         success: false,
+        compositingSuccess: false,
         error: 'overlayImageData (string) is required',
         received: { hasOverlayImageData: !!overlayImageData },
         requestId
@@ -504,21 +443,21 @@ export default async function handler(req, res) {
       console.error(`[nanobanana-compose] [${requestId}] ❌ 잘못된 compositingInfo`);
       return res.status(400).json({
         success: false,
+        compositingSuccess: false,
         error: 'compositingInfo object is required',
         received: { hasCompositingInfo: !!compositingInfo },
         requestId
       });
     }
 
-    // 🔥 API 키 상태 확인 및 로깅
     const keyStatus = getApiKeyStatus();
     console.log(`[nanobanana-compose] [${requestId}] API 키 상태: Gemini ${keyStatus.gemini.availableKeys}/${keyStatus.gemini.totalKeys}개 사용가능`);
 
-    // API 키가 없으면 원본 반환
     if (keyStatus.gemini.totalKeys === 0) {
       console.error(`[nanobanana-compose] [${requestId}] ❌ Gemini API 키가 없음`);
       return res.status(200).json({
         success: true,
+        compositingSuccess: false,
         composedImageUrl: baseImageUrl,
         metadata: {
           method: 'fallback-no-api-key',
@@ -530,7 +469,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // 🔥 이미지 합성 실행
     console.log(`[nanobanana-compose] [${requestId}] 합성 시작: ${compositingInfo.compositingContext}`);
     
     const result = await safeComposeWithGemini(
@@ -540,12 +478,13 @@ export default async function handler(req, res) {
     );
 
     const totalProcessingTime = Date.now() - startTime;
+    const compositingSuccess = result.metadata.method !== 'fallback-original';
 
     console.log(`[nanobanana-compose] [${requestId}] ✅ 처리 완료: Scene ${sceneNumber}, 총 시간 ${totalProcessingTime}ms, 방법: ${result.metadata.method}`);
 
-    // 🔥 최종 응답 (요청 ID 포함)
     return res.status(200).json({
       success: true,
+      compositingSuccess: compositingSuccess,
       composedImageUrl: result.composedImageUrl,
       metadata: {
         ...result.metadata,
@@ -569,7 +508,7 @@ export default async function handler(req, res) {
           finalMethod: result.metadata.method,
           geminiUsed: result.metadata.geminiSuccess || false,
           keyUsed: result.metadata.keyIndex || null,
-          wasSuccessful: result.metadata.method !== 'fallback-original',
+          wasSuccessful: compositingSuccess,
           totalAttempts: result.metadata.totalAttempts || 1,
           usedModel: result.metadata.model || 'none'
         }
@@ -581,9 +520,9 @@ export default async function handler(req, res) {
 
     const totalProcessingTime = Date.now() - startTime;
 
-    // 🔥 에러 시에도 원본 이미지로 응답 (서비스 연속성)
     return res.status(200).json({
-      success: true, // 원본 사용으로 성공 처리
+      success: true,
+      compositingSuccess: false,
       composedImageUrl: req.body?.baseImageUrl || null,
       metadata: {
         method: 'fallback-handler-error',
