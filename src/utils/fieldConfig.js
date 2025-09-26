@@ -113,7 +113,22 @@ const DEFAULT_FIELD_CONFIG = {
     placeholder: '추가 요구사항이 있으시면 입력해주세요 (선택사항)',
     defaultValue: '',
     randomValues: ['역동적인 분위기', '감성적인 톤앤매너', '전문적인 이미지', '트렌디한 스타일', '자연스러운 연출']
-  }
+  },
+  imageUpload: { 
+    key: 'imageUpload', 
+    type: 'image', 
+    label: '이미지 업로드', 
+    required: false, 
+    visible: true 
+  },
+  imageUploadDesc: { 
+    key: 'imageUploadDesc', 
+    type: 'text', 
+    label: '이미지 설명', 
+    required: false, 
+    visible: true, 
+    placeholder: '이미지에 대한 설명을 입력하세요.' 
+  },
 };
 
 // LocalStorage 키
