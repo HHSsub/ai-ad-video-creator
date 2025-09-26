@@ -149,14 +149,14 @@ const DEFAULT_FIELD_CONFIG = {
   },
   
   // 🔥 이미지 설명 필드 (선택사항)
-  imageUploadDesc: { 
-    key: 'imageUploadDesc', 
-    type: 'text', 
-    label: '이미지 설명', 
-    required: false, 
-    visible: false, // 기본적으로 숨김
-    placeholder: '이미지에 대한 설명을 입력하세요.' 
-  }
+  // imageUploadDesc: { 
+  //   key: 'imageUploadDesc', 
+  //   type: 'text', 
+  //   label: '이미지 설명', 
+  //   required: false, 
+  //   visible: false, // 기본적으로 숨김
+  //   placeholder: '이미지에 대한 설명을 입력하세요.' 
+  // }
 };
 
 // LocalStorage 키
