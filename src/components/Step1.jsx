@@ -574,8 +574,6 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
         {errors[field.key] && (
           <p className="mt-1 text-sm text-red-600">{errors[field.key]}</p>
         )}
-        {/* 이미지 설명 입력란 (옵션) */}
-        {descField && renderTextField(descField)}
       </div>
     );
   };
