@@ -207,6 +207,7 @@ async function callGeminiImageComposition(baseImageBase64, overlayImageBase64, p
       setTimeout(() => reject(new Error('Gemini API 호출 타임아웃')), COMPOSITION_TIMEOUT);
     });
 
+    // requestStartTime -> startTime으로 변경 (오류 수정)
     const result = await Promise.race([
       safeCallGemini(geminiContent, {
         model: modelName, // 🔥 수정: 정확한 모델명 사용
@@ -364,13 +365,13 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
     if (compositingInfo && compositingInfo.videoPurpose) {
       if (
         compositingInfo.videoPurpose.includes('제품') ||
-        compositingInfo.compositingContext?.toLowerCase().includes('product')
+        (typeof compositingInfo.compositingContext === 'string' && compositingInfo.compositingContext.toLowerCase().includes('product'))
       ) {
         needsProductImage = true;
       }
       if (
         compositingInfo.videoPurpose.includes('브랜드') ||
-        compositingInfo.compositingContext?.toLowerCase().includes('brand')
+        (typeof compositingInfo.compositingContext === 'string' && compositingInfo.compositingContext.toLowerCase().includes('brand'))
       ) {
         needsBrandLogo = true;
       }
