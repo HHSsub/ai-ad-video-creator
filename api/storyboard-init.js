@@ -9,13 +9,13 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const PROMPT_FILE_MAPPING = {
   'step1_product': 'Prompt_step1_product.txt',
   'step1_service': 'Prompt_step1_service.txt',
-  'step2_product': 'Prompt_step2_product.txt', 
+  'step2_product': 'Prompt_step2_product.txt',
   'step2_service': 'Prompt_step2_service.txt'
 };
 
 // 🔥 API Key Pool (기존 고급 설정 유지)
-const API_KEYS = process.env.GEMINI_API_KEY ? 
-  process.env.GEMINI_API_KEY.split(',').map(k => k.trim()) : 
+const API_KEYS = process.env.GEMINI_API_KEY ?
+  process.env.GEMINI_API_KEY.split(',').map(k => k.trim()) :
   [];
 
 let keyIndex = 0;
@@ -32,21 +32,21 @@ function getNextApiKey() {
 
 // 🔥 안전한 Gemini 호출 (재시도 로직 포함)
 async function safeCallGemini(prompt, options = {}) {
-  const { 
-    label = 'gemini-call', 
-    maxRetries = 3, 
-    isImageComposition = false 
+  const {
+    label = 'gemini-call',
+    maxRetries = 3,
+    isImageComposition = false
   } = options;
-  
+
   let lastError = null;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[${label}] 시도 ${attempt}/${maxRetries}`);
-      
+
       const apiKey = getNextApiKey();
       const tempGenAI = new GoogleGenerativeAI(apiKey);
-      const model = tempGenAI.getGenerativeModel({ 
+      const model = tempGenAI.getGenerativeModel({
         model: "gemini-2.5-pro",
         generationConfig: {
           temperature: 0.7,
@@ -68,7 +68,7 @@ async function safeCallGemini(prompt, options = {}) {
       }
 
       const responseText = result.response.text();
-      
+
       if (!responseText) {
         throw new Error('Gemini API 응답이 비어있습니다.');
       }
@@ -79,7 +79,7 @@ async function safeCallGemini(prompt, options = {}) {
     } catch (error) {
       console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
       lastError = error;
-      
+
       if (attempt < maxRetries) {
         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
         console.log(`[${label}] ${delay}ms 후 재시도...`);
@@ -87,7 +87,7 @@ async function safeCallGemini(prompt, options = {}) {
       }
     }
   }
-  
+
   throw new Error(`${label} 최종 실패: ${lastError?.message || 'Unknown error'}`);
 }
 
@@ -95,7 +95,7 @@ async function safeCallGemini(prompt, options = {}) {
 function getSceneCount(videoLength) {
   const match = String(videoLength || '').match(/\d+/);
   if (!match) return 5;
-  
+
   const seconds = parseInt(match[0], 10);
   if (seconds <= 10) return 5;
   if (seconds <= 20) return 10;
@@ -105,35 +105,35 @@ function getSceneCount(videoLength) {
 
 // 🔥 Seedream v4 지원 영상 비율 매핑
 function mapAspectRatio(formData) {
-  const aspectRatio = formData?.videoAspectRatio || 
-                      formData?.aspectRatio || 
-                      formData?.aspectRatioCode ||
-                      '가로 (16:9)';
+  const aspectRatio = formData?.videoAspectRatio ||
+    formData?.aspectRatio ||
+    formData?.aspectRatioCode ||
+    '가로 (16:9)';
 
   console.log(`[mapAspectRatio] 입력: "${aspectRatio}"`);
-  
+
   const normalized = String(aspectRatio).toLowerCase().trim();
-  
+
   if (normalized.includes('16:9') || normalized.includes('가로') || normalized.includes('widescreen')) {
     console.log('[mapAspectRatio] → widescreen_16_9');
     return 'widescreen_16_9';
   }
-  
+
   if (normalized.includes('9:16') || normalized.includes('세로') || normalized.includes('vertical')) {
-    console.log('[mapAspectRatio] → vertical_9_16'); 
+    console.log('[mapAspectRatio] → vertical_9_16');
     return 'vertical_9_16';
   }
-  
+
   if (normalized.includes('1:1') || normalized.includes('정사각형') || normalized.includes('square')) {
     console.log('[mapAspectRatio] → square_1_1');
     return 'square_1_1';
   }
-  
+
   if (normalized.includes('4:5') || normalized.includes('portrait')) {
     console.log('[mapAspectRatio] → portrait_4_5');
     return 'portrait_4_5';
   }
-  
+
   console.log('[mapAspectRatio] 기본값: widescreen_16_9');
   return 'widescreen_16_9';
 }
@@ -141,20 +141,20 @@ function mapAspectRatio(formData) {
 // 🔥 PRODUCT COMPOSITING SCENE 감지 (기존 로직 유지)
 function detectProductCompositingScenes(phase1_output, videoPurpose) {
   const compositingScenes = [];
-  
+
   try {
     const lines = phase1_output.split('\n');
     let currentSceneNumber = null;
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
+
       // 씬 번호 감지
       const sceneMatch = line.match(/S#(\d+)|Scene\s+(\d+)|씬\s*(\d+)/i);
       if (sceneMatch) {
         currentSceneNumber = parseInt(sceneMatch[1] || sceneMatch[2] || sceneMatch[3], 10);
       }
-      
+
       // PRODUCT COMPOSITING SCENE 감지
       if (line.includes('[PRODUCT COMPOSITING SCENE]') && currentSceneNumber) {
         compositingScenes.push({
@@ -169,7 +169,7 @@ function detectProductCompositingScenes(phase1_output, videoPurpose) {
   } catch (error) {
     console.error('[detectProductCompositingScenes] 파싱 오류:', error);
   }
-  
+
   // 기본 합성 씬 (2번째 씬)이 없으면 추가
   if (compositingScenes.length === 0) {
     compositingScenes.push({
@@ -180,7 +180,7 @@ function detectProductCompositingScenes(phase1_output, videoPurpose) {
     });
     console.log('[detectProductCompositingScenes] 기본 Scene 2 추가');
   }
-  
+
   return compositingScenes;
 }
 
@@ -200,15 +200,15 @@ function extractConceptBlocks(phase1_output) {
     // 실제 파싱 로직 (기존과 동일)
     const lines = phase1_output.split('\n');
     let currentConcept = null;
-    
+
     for (const line of lines) {
       const conceptMatch = line.match(/컨셉:\s*(.+)/);
       if (conceptMatch) {
         const conceptName = conceptMatch[1].trim();
-        const defaultMatch = defaultConcepts.find(dc => 
+        const defaultMatch = defaultConcepts.find(dc =>
           conceptName.includes(dc.concept_name) || dc.concept_name.includes(conceptName)
         );
-        
+
         if (defaultMatch) {
           currentConcept = {
             concept_name: defaultMatch.concept_name,
@@ -242,7 +242,7 @@ function extractConceptBlocks(phase1_output) {
 // 🔥 STEP2 프롬프트 구성 (기존 로직 유지)
 function buildFinalPrompt(phase1_output, conceptBlocks, formData, sceneCount) {
   const aspectRatio = mapAspectRatio(formData);
-  
+
   return `
 당신은 전문 비디오 디렉터이자 VFX 수퍼바이저입니다. 아래 스토리보드를 Seedream v4 API에 최적화된 JSON 형태로 변환해주세요.
 
@@ -319,17 +319,17 @@ function parseMultiConceptJSON(responseText) {
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
     }
-    
+
     // 수동 파싱 로직
     const concepts = [];
     const lines = responseText.split('\n');
-    
+
     let currentConcept = null;
     let currentScene = null;
-    
+
     for (const line of lines) {
       const trimmed = line.trim();
-      
+
       // 컨셉 시작 감지
       if (trimmed.includes('컨셉:') || trimmed.includes('Concept:')) {
         if (currentConcept) concepts.push(currentConcept);
@@ -339,7 +339,7 @@ function parseMultiConceptJSON(responseText) {
         };
         continue;
       }
-      
+
       // 씬 시작 감지
       const sceneMatch = trimmed.match(/S#(\d+)|Scene\s+(\d+)/i);
       if (sceneMatch && currentConcept) {
@@ -352,7 +352,7 @@ function parseMultiConceptJSON(responseText) {
         };
         continue;
       }
-      
+
       // JSON 블록 감지
       if (trimmed.startsWith('{') && currentScene) {
         try {
@@ -360,7 +360,7 @@ function parseMultiConceptJSON(responseText) {
           const jsonStart = responseText.indexOf(trimmed);
           const jsonStr = responseText.substring(jsonStart, jsonEnd);
           const parsed = JSON.parse(jsonStr);
-          
+
           if (parsed.prompt) {
             currentScene.imagePrompt = parsed;
           } else if (parsed.copy) {
@@ -373,13 +373,13 @@ function parseMultiConceptJSON(responseText) {
         }
       }
     }
-    
+
     // 마지막 항목들 추가
     if (currentScene && currentConcept) currentConcept.scenes.push(currentScene);
     if (currentConcept) concepts.push(currentConcept);
-    
+
     return { concepts };
-    
+
   } catch (error) {
     console.error('[parseMultiConceptJSON] 전체 파싱 실패:', error);
     return null;
@@ -389,15 +389,15 @@ function parseMultiConceptJSON(responseText) {
 // 🔥 컨셉 JSON에서 스타일 구성 (기존 로직 유지 + 합성 정보 추가)
 function buildStylesFromConceptJson(mcJson, sceneCount, compositingScenes, formData) {
   const styles = [];
-  
+
   mcJson.concepts.forEach((concept, index) => {
     const imagePrompts = [];
-    
+
     // 각 씬에 대한 프롬프트 생성
     for (let i = 1; i <= sceneCount; i++) {
       const sceneData = concept.scenes?.find(s => s.sceneNumber === i);
       const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === i);
-      
+
       const prompt = {
         sceneNumber: i,
         title: `Scene ${i}`,
@@ -423,10 +423,10 @@ function buildStylesFromConceptJson(mcJson, sceneCount, compositingScenes, formD
           videoPurpose: formData.videoPurpose
         } : null
       };
-      
+
       imagePrompts.push(prompt);
     }
-    
+
     styles.push({
       id: index + 1,
       concept_id: index + 1,
@@ -445,7 +445,7 @@ function buildStylesFromConceptJson(mcJson, sceneCount, compositingScenes, formD
       }
     });
   });
-  
+
   console.log(`[buildStylesFromConceptJson] 구성된 스타일: ${styles.length}개`);
   return styles;
 }
@@ -460,24 +460,24 @@ function getStyleFromConceptName(conceptName) {
     '트렌드 융합': 'Vibrant Candid Flash Photography',
     '파격적 반전': 'Dramatic Film Noir Still'
   };
-  
+
   for (const [key, style] of Object.entries(styleMap)) {
     if (conceptName?.includes(key)) {
       return style;
     }
   }
-  
+
   return 'Commercial Photography';
 }
 
-// 🔥 합성 정보 분석 (기존 로직 유지)
+// 🔥 합성 정보 분석 (변수 변경사항 반영: imageRef로 통합)
 function analyzeCompositingInfo(formData, compositingScenes) {
   return {
-    hasProductImage: !!(formData.productImage && formData.productImage.url),
-    hasBrandLogo: !!(formData.brandLogo && formData.brandLogo.url),
+    hasProductImage: !!(formData.imageRef && formData.imageRef.url),
+    hasBrandLogo: !!(formData.imageRef && formData.imageRef.url),
     scenes: compositingScenes,
-    productImageData: formData.productImage || null,
-    brandLogoData: formData.brandLogo || null,
+    productImageData: formData.imageRef || null,
+    brandLogoData: formData.imageRef || null,
     totalCompositingScenes: compositingScenes.length
   };
 }
@@ -495,9 +495,9 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed. Use POST.' 
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use POST.'
     });
   }
 
@@ -514,8 +514,9 @@ export default async function handler(req, res) {
       coreTarget,
       coreDifferentiation,
       videoRequirements = '',
-      brandLogo = null,
-      productImage = null,
+      // brandLogo = null, // 제거
+      // productImage = null, // 제거
+      imageRef = null, // 🔥 imageRef로 통합
       aspectRatioCode = 'widescreen_16_9',
       promptType = 'step1_product' // 🔥 새로 추가된 필드
     } = req.body;
@@ -528,7 +529,7 @@ export default async function handler(req, res) {
     // 🔥 필수 필드 검증
     const requiredFields = {
       brandName: '브랜드명',
-      industryCategory: '산업 카테고리', 
+      industryCategory: '산업 카테고리',
       productServiceCategory: '제품/서비스 카테고리',
       productServiceName: '제품명/서비스명',
       videoPurpose: '영상 목적',
@@ -563,7 +564,7 @@ export default async function handler(req, res) {
     }
 
     const promptFilePath = path.join(process.cwd(), 'public', promptFileName);
-    
+
     if (!fs.existsSync(promptFilePath)) {
       console.error(`[storyboard-init] 프롬프트 파일 없음:`, promptFilePath);
       return res.status(404).json({
@@ -586,8 +587,9 @@ export default async function handler(req, res) {
       coreTarget,
       coreDifferentiation,
       videoRequirements: videoRequirements || '특별한 요구사항 없음',
-      brandLogo: brandLogo ? '업로드됨' : '업로드 안됨',
-      productImage: productImage ? '업로드됨' : '업로드 안됨',
+      // brandLogo: brandLogo ? '업로드됨' : '업로드 안됨', // 제거
+      // productImage: productImage ? '업로드됨' : '업로드 안됨', // 제거
+      imageRef: imageRef ? '업로드됨' : '업로드 안됨', // 🔥 imageRef만 사용
       aspectRatioCode
     };
 
@@ -603,11 +605,11 @@ export default async function handler(req, res) {
     // 🔥 STEP1: Gemini API 호출
     console.log(`[storyboard-init] 📡 STEP1 Gemini API 호출 시작`);
     const step1 = await safeCallGemini(promptTemplate, {
-      label: 'STEP1-storyboard-init', 
+      label: 'STEP1-storyboard-init',
       maxRetries: 3,
       isImageComposition: false
     });
-    
+
     const phase1_output = step1.text;
     console.log("[storyboard-init] ✅ STEP1 완료:", phase1_output.length, "chars");
 
@@ -627,9 +629,9 @@ export default async function handler(req, res) {
     const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, req.body, sceneCountPerConcept);
     console.log('[storyboard-init] 📡 STEP2 Gemini API 호출 시작');
     console.log(`[storyboard-init] STEP2 프롬프트 길이: ${step2Prompt.length} chars`);
-    
+
     const step2 = await safeCallGemini(step2Prompt, {
-      label: 'STEP2-storyboard-init', 
+      label: 'STEP2-storyboard-init',
       maxRetries: 3,
       isImageComposition: false
     });
@@ -647,7 +649,7 @@ export default async function handler(req, res) {
       console.log('[storyboard-init] ✅ multi-concept JSON 파싱 성공 (6 concepts)');
     } else {
       console.warn('[storyboard-init] ⚠️ multi-concept JSON 파싱 실패 → 기본 구조 생성');
-      
+
       // 기본 구조 생성
       const defaultConcepts = [
         { concept_name: '욕망의 시각화', style: 'Dreamy Ethereal Photography' },
@@ -657,7 +659,7 @@ export default async function handler(req, res) {
         { concept_name: '트렌드 융합', style: 'Vibrant Candid Flash Photography' },
         { concept_name: '파격적 반전', style: 'Dramatic Film Noir Still' }
       ];
-      
+
       styles = defaultConcepts.map((concept, index) => {
         const imagePrompts = [];
         for (let i = 1; i <= sceneCountPerConcept; i++) {
@@ -687,7 +689,7 @@ export default async function handler(req, res) {
             } : null
           });
         }
-        
+
         return {
           id: index + 1,
           concept_id: index + 1,
@@ -756,7 +758,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[storyboard-init] ❌ 전체 오류:', error);
-    
+
     const errorResponse = {
       success: false,
       error: error.message,
