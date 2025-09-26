@@ -6,8 +6,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   const [fieldConfig, setFieldConfig] = useState({});
   const [editingLabel, setEditingLabel] = useState(null);
   const [tempLabel, setTempLabel] = useState('');
-  const brandLogoRef = useRef(null);
-  const productImageRef = useRef(null);
+  const imageRef = useRef(null);
 
   // 관리자 권한 확인
   const isAdmin = user?.role === 'admin';
@@ -16,7 +15,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   useEffect(() => {
     const config = loadFieldConfig();
     setFieldConfig(config);
-    
+
     // 숨겨진 필드들의 기본값 적용
     const defaultValues = applyDefaultValues(config);
     if (Object.keys(defaultValues).length > 0) {
@@ -29,7 +28,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
       ...prev,
       [field]: value
     }));
-    
+
     // 에러가 있으면 제거
     if (errors[field]) {
       setErrors(prev => ({
@@ -38,7 +37,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
       }));
     }
   };
-  
+
   const handleFileUpload = async (file, field) => {
     if (!file) return;
 
@@ -97,24 +96,21 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
       ...prev,
       [field]: null
     }));
-    
+
     // 파일 input 초기화
-    if (field === 'brandLogo' && brandLogoRef.current) {
-      brandLogoRef.current.value = '';
-    }
-    if (field === 'productImage' && productImageRef.current) {
-      productImageRef.current.value = '';
+    if (imageRef.current) {
+      imageRef.current.value = '';
     }
   };
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     // 표시되는 필수 필드들만 검증
     Object.values(fieldConfig).forEach(field => {
       if (field.visible && field.required) {
         const value = formData[field.key];
-        
+
         if (field.type === 'text' || field.type === 'textarea') {
           if (!value?.trim()) {
             newErrors[field.key] = `${field.label}을(를) 입력해주세요.`;
@@ -122,6 +118,10 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
         } else if (field.type === 'select') {
           if (!value) {
             newErrors[field.key] = `${field.label}을(를) 선택해주세요.`;
+          }
+        } else if (field.type === 'image') {
+          if (!value) {
+            newErrors[field.key] = `${field.label}을(를) 업로드해주세요.`;
           }
         }
       }
@@ -132,7 +132,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   };
 
   const handleNext = onNext
-  
+
   const handleSubmit = () => {
     if (validateForm()) {
       if (handleNext) {
@@ -146,7 +146,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   // 관리자 기능: 옵션 삭제 (필드 숨김)
   const handleHideField = (fieldKey) => {
     if (!isAdmin) return;
-    
+
     const newConfig = {
       ...fieldConfig,
       [fieldKey]: {
@@ -154,10 +154,10 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
         visible: false
       }
     };
-    
+
     setFieldConfig(newConfig);
     saveFieldConfig(newConfig);
-    
+
     // 숨겨진 필드에 기본값/랜덤값 적용
     const defaultValues = applyDefaultValues(newConfig);
     if (defaultValues[fieldKey]) {
@@ -168,7 +168,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   // 관리자 기능: 옵션 되돌리기 (필드 보임)
   const handleRestoreField = (fieldKey) => {
     if (!isAdmin) return;
-    
+
     const newConfig = {
       ...fieldConfig,
       [fieldKey]: {
@@ -176,7 +176,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
         visible: true
       }
     };
-    
+
     setFieldConfig(newConfig);
     saveFieldConfig(newConfig);
   };
@@ -191,7 +191,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   // 관리자 기능: 라벨 수정 저장
   const saveLabel = (fieldKey) => {
     if (!isAdmin) return;
-    
+
     const newConfig = {
       ...fieldConfig,
       [fieldKey]: {
@@ -199,7 +199,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
         label: tempLabel.trim() || fieldConfig[fieldKey].label
       }
     };
-    
+
     setFieldConfig(newConfig);
     saveFieldConfig(newConfig);
     setEditingLabel(null);
@@ -428,6 +428,93 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
     </div>
   );
 
+  const renderImageField = (field, descField) => (
+    <div key={field.key} className="md:col-span-2">
+      <div className="flex items-center justify-between mb-2">
+        {/* 라벨 (관리자면 편집 가능) */}
+        {isAdmin && editingLabel === field.key ? (
+          <div className="flex items-center space-x-2 flex-1">
+            <input
+              type="text"
+              value={tempLabel}
+              onChange={(e) => setTempLabel(e.target.value)}
+              className="text-sm font-medium text-gray-700 border border-gray-300 rounded px-2 py-1"
+              onKeyPress={(e) => e.key === 'Enter' && saveLabel(field.key)}
+              autoFocus
+            />
+            <button onClick={() => saveLabel(field.key)} className="text-green-600 hover:text-green-700 text-sm">저장</button>
+            <button onClick={cancelEditLabel} className="text-gray-500 hover:text-gray-600 text-sm">취소</button>
+          </div>
+        ) : (
+          <label 
+            className={`block text-sm font-medium text-gray-700 ${isAdmin ? 'cursor-pointer hover:text-blue-600' : ''}`}
+            onClick={() => isAdmin && startEditLabel(field.key, field.label)}
+          >
+            {field.label} {field.required && '*'}
+            {isAdmin && <span className="ml-1 text-xs text-blue-500">(클릭하여 수정)</span>}
+          </label>
+        )}
+        {/* 관리자 버튼들 */}
+        {isAdmin && editingLabel !== field.key && (
+          <div className="flex space-x-1">
+            <button
+              onClick={() => handleHideField(field.key)}
+              className="text-red-600 hover:text-red-700 text-xs px-2 py-1 rounded border border-red-300 hover:bg-red-50"
+              title="이 입력 항목 숨기기"
+            >옵션삭제</button>
+          </div>
+        )}
+      </div>
+      <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+        <div className="space-y-1 text-center">
+          {formData[field.key] ? (
+            <div className="relative">
+              <img
+                src={formData[field.key].url}
+                alt="이미지 미리보기"
+                className="mx-auto h-20 w-auto object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => removeFile(field.key)}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <p className="text-xs text-gray-500 mt-2">{formData[field.key].name}</p>
+            </div>
+          ) : (
+            <>
+              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div className="text-sm text-gray-600">
+                <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
+                  <span>파일 선택</span>
+                  <input
+                    ref={imageRef}
+                    type="file"
+                    className="sr-only"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e.target.files[0], field.key)}
+                  />
+                </label>
+                <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {errors[field.key] && (
+        <p className="mt-1 text-sm text-red-600">{errors[field.key]}</p>
+      )}
+      {/* 이미지 설명 입력란 (옵션) */}
+      {descField && renderTextField(descField)}
+    </div>
+  );
+
   // 표시되는 필드들만 필터링
   const visibleFields = Object.values(fieldConfig).filter(field => field.visible);
   // 숨겨진 필드들
@@ -438,7 +525,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
       <div className="bg-white rounded-lg shadow-lg p-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Step 1: 기본 정보 입력</h2>
-          
+
           {/* 관리자 전용 숨겨진 필드 관리 */}
           {isAdmin && hiddenFields.length > 0 && (
             <div className="text-sm">
@@ -458,9 +545,14 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
             </div>
           )}
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {visibleFields.map(field => {
+            // image 필드면 desc까지 함께 전달
+            if (field.type === 'image') {
+              const descField = visibleFields.find(f => f.key === `${field.key}Desc`);
+              return renderImageField(field, descField);
+            }
             switch (field.type) {
               case 'text':
                 return renderTextField(field);
@@ -472,115 +564,6 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
                 return null;
             }
           })}
-
-          {/* 파일 업로드 필드들 (별도 처리) */}
-          <div className="md:col-span-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 브랜드 로고 업로드 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  브랜드 로고 (선택사항)
-                </label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
-                  <div className="space-y-1 text-center">
-                    {formData.brandLogo ? (
-                      <div className="relative">
-                        <img
-                          src={formData.brandLogo.url}
-                          alt="브랜드 로고 미리보기"
-                          className="mx-auto h-20 w-auto object-contain"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeFile('brandLogo')}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                        <p className="text-xs text-gray-500 mt-2">{formData.brandLogo.name}</p>
-                      </div>
-                    ) : (
-                      <>
-                        <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <div className="text-sm text-gray-600">
-                          <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
-                            <span>파일 선택</span>
-                            <input
-                              ref={brandLogoRef}
-                              type="file"
-                              className="sr-only"
-                              accept="image/*"
-                              onChange={(e) => handleFileUpload(e.target.files[0], 'brandLogo')}
-                            />
-                          </label>
-                          <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {errors.brandLogo && (
-                  <p className="mt-1 text-sm text-red-600">{errors.brandLogo}</p>
-                )}
-              </div>
-
-              {/* 제품 이미지 업로드 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  제품 이미지 (선택사항)
-                </label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
-                  <div className="space-y-1 text-center">
-                    {formData.productImage ? (
-                      <div className="relative">
-                        <img
-                          src={formData.productImage.url}
-                          alt="제품 이미지 미리보기"
-                          className="mx-auto h-20 w-auto object-contain"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeFile('productImage')}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                        <p className="text-xs text-gray-500 mt-2">{formData.productImage.name}</p>
-                      </div>
-                    ) : (
-                      <>
-                        <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <div className="text-sm text-gray-600">
-                          <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
-                            <span>파일 선택</span>
-                            <input
-                              ref={productImageRef}
-                              type="file"
-                              className="sr-only"
-                              accept="image/*"
-                              onChange={(e) => handleFileUpload(e.target.files[0], 'productImage')}
-                            />
-                          </label>
-                          <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {errors.productImage && (
-                  <p className="mt-1 text-sm text-red-600">{errors.productImage}</p>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* 다음 단계 버튼 */}
@@ -617,11 +600,11 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
           <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex">
               <svg className="h-5 w-5 text-yellow-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.002 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.002 16.5c-.77[...]
               </svg>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  
+                  {/* 사용자 안내 메시지 */}
                 </p>
               </div>
             </div>
