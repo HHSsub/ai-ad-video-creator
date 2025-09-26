@@ -163,6 +163,7 @@ export async function safeCallGemini(prompt, options = {}) {
         }
         
         // 🔥 응답 처리 (이미지 포함 가능)
+        const requestStartTime = Date.now(); // ✅ 각 시도마다 정의
         const responseText = result.response.text();
         const processingTime = Date.now() - requestStartTime;
         
@@ -185,6 +186,7 @@ export async function safeCallGemini(prompt, options = {}) {
         };
 
         // 🔥 이미지 생성 응답인 경우 candidates 정보도 포함
+        const requestStartTime = Date.now(); // ✅ 각 시도마다 정의
         if (result.response.candidates && result.response.candidates.length > 0) {
           responseWithMeta.candidates = result.response.candidates;
           
@@ -253,7 +255,7 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
       keyIndex = index;
       
       console.log(`[${label}] 시도 ${attempt + 1}/${maxRetries} (컨셉: ${conceptId}, 키: ${keyIndex})`);
-      
+      const requestStartTime = Date.now(); // ✅ 각 시도마다 정의
       const response = await withTimeout(
         fetch(url, {
           ...options,
