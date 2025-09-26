@@ -101,13 +101,13 @@ function detectMimeType(imageUrl, fallback = 'image/jpeg') {
  * 합성 프롬프트 생성 (더 구체적이고 실용적으로)
  */
 function generateCompositingPrompt(compositingInfo, needsProductImage, needsBrandLogo) {
-  const { compositingContext } = compositingInfo;
+  const { compositingContext, videoPurpose } = compositingInfo;
   
-  let prompt = `Seamlessly composite the foreground product into the background, creating a single, ultra-realistic, and perfectly cohesive photograph.
-Harmonize Lighting & Color: Match the product's lighting to the background's light source direction, color temperature, and shadow softness. The product's color and contrast must blend perfectly with the scene's ambient light.
-Cast Realistic Shadows: Generate a physically accurate contact shadow where the product meets the surface, ensuring the shadow's blur and darkness are consistent with the environment's lighting.
-Integrate Edges & Focus: Meticulously blend the product's edges to match the background's depth of field (bokeh) and atmospheric conditions. Eliminate any artificial 'cut-out' appearance.
-Render Environmental Interaction: Create subtle, realistic reflections of the background onto the product's surface (especially if glossy or metallic).
+  let prompt = `Seamlessly composite the foreground image into the background, creating a single, ultra-realistic, and perfectly cohesive photograph.
+Harmonize Lighting & Color: Match the foreground's lighting to the background's light source direction, color temperature, and shadow softness. The color and contrast must blend perfectly with the environment.
+Cast Realistic Shadows: Generate a physically accurate contact shadow where the foreground meets the surface, ensuring the shadow's blur and darkness are consistent with the environment's lighting.
+Integrate Edges & Focus: Meticulously blend the foreground edges to match the background's depth of field (bokeh) and atmospheric conditions. Eliminate any artificial 'cut-out' appearance.
+Render Environmental Interaction: Create subtle, realistic reflections of the background onto the foreground's surface (especially if glossy or metallic).
 Final Polish: Apply a unified, professional color grade over the entire image. The final result must be a masterpiece of photorealism, cohesive, 8K, high detail.
 
 INSTRUCTIONS:
@@ -119,17 +119,18 @@ INSTRUCTIONS:
 6. DO NOT add any text, watermarks, or artificial elements
 
 `;
-  
-  // 베이스 이미지 설명
+
   prompt += `Background: The first image provides the scene context and lighting environment. `;
-  
-  // 오버레이 이미지 처리 방식
+
+  // imageRef로 통합된 이미지가 실제로 제품인지 로고인지는 영상 목적 등으로 판별
   if (needsProductImage && needsBrandLogo) {
-    prompt += `Overlay: The second image contains both product and brand logo. `;
+    prompt += `Overlay: The second image contains either the product or brand logo, depending on advertising purpose. `;
   } else if (needsProductImage) {
-    prompt += `Overlay: The second image contains a product. `;
+    prompt += `Overlay: The second image contains the product (or a product-focused image). `;
   } else if (needsBrandLogo) {
-    prompt += `Overlay: The second image contains a brand logo. `;
+    prompt += `Overlay: The second image contains the brand logo (or a logo-focused image). `;
+  } else {
+    prompt += `Overlay: The second image is either a product or brand logo according to the context. `;
   }
 
   // 컨텍스트별 세부 지침
@@ -336,7 +337,7 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
     
     console.log(`[safeComposeWithGemini] 베이스 이미지 준비: ${(baseImageBase64.length / 1024).toFixed(1)}KB (${baseMimeType})`);
     
-    // 3. 오버레이 이미지 준비
+    // 3. 오버레이 이미지 준비 (imageRef의 url 또는 base64)
     let overlayImageBase64;
     let overlayMimeType = 'image/jpeg';
     
@@ -356,9 +357,29 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
     
     console.log(`[safeComposeWithGemini] 오버레이 이미지 준비: ${(overlayImageBase64.length / 1024).toFixed(1)}KB (${overlayMimeType})`);
     
-    // 4. 합성 정보 분석
-    const needsProductImage = compositingInfo.needsProductImage || false;
-    const needsBrandLogo = compositingInfo.needsBrandLogo || false;
+    // 4. 합성 정보 분석 (imageRef 단일 입력에 맞게)
+    let needsProductImage = false;
+    let needsBrandLogo = false;
+    // 영상 목적 및 context로 판단
+    if (compositingInfo && compositingInfo.videoPurpose) {
+      if (
+        compositingInfo.videoPurpose.includes('제품') ||
+        compositingInfo.compositingContext?.toLowerCase().includes('product')
+      ) {
+        needsProductImage = true;
+      }
+      if (
+        compositingInfo.videoPurpose.includes('브랜드') ||
+        compositingInfo.compositingContext?.toLowerCase().includes('brand')
+      ) {
+        needsBrandLogo = true;
+      }
+    }
+    // imageRef 존재 기반
+    if (overlayImageData) {
+      needsProductImage = needsProductImage || true;
+      needsBrandLogo = needsBrandLogo || true;
+    }
     
     console.log(`[safeComposeWithGemini] 합성 요구사항: 제품=${needsProductImage}, 로고=${needsBrandLogo}`);
     
