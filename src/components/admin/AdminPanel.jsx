@@ -1,4 +1,4 @@
-// src/components/admin/AdminPanel.jsx - 전체 수정본
+// src/components/admin/AdminPanel.jsx - 완전한 전체 코드
 
 import { useState, useEffect } from 'react';
 
@@ -43,22 +43,27 @@ const AdminPanel = () => {
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     loadPrompts();
-    loadVersions();
   }, []);
+
+  // prompts가 로드되면 버전 목록 업데이트
+  useEffect(() => {
+    if (Object.keys(prompts).length > 0 && prompts.step1_product !== '') {
+      loadVersions();
+    }
+  }, [prompts]);
 
   // 선택된 버전이 변경되면 해당 프롬프트의 Gemini 응답 로드
   useEffect(() => {
     if (selectedVersion) {
-      // 🔥 선택된 버전의 프롬프트 타입에 맞는 응답만 로드
       const promptKey = selectedVersion.promptKey || getPromptKeyFromVersion(selectedVersion);
       loadGeminiResponses(promptKey);
     }
   }, [selectedVersion]);
 
   const getPromptKeyFromVersion = (version) => {
-    // 버전 ID나 파일명에서 프롬프트 키 추출
-    if (version.id === 'current_prompt') {
-      return activeTab; // 현재 활성 탭의 프롬프트
+    // 현재 버전인 경우
+    if (version.id && version.id.startsWith('current_')) {
+      return version.id.replace('current_', '');
     }
     
     const filename = version.filename || version.id;
@@ -97,33 +102,43 @@ const AdminPanel = () => {
   };
 
   const loadVersions = async () => {
-    setLoading(true);
     try {
       const response = await fetch('/api/prompts/versions');
       const data = await response.json();
       
       if (data.success) {
-        setVersions(data.versions || []);
+        let allVersions = data.versions || [];
+        
+        // 현재 사용중인 프롬프트를 가상 버전으로 맨 위에 추가
+        const currentVersions = Object.keys(promptLabels).map(key => ({
+          id: `current_${key}`,
+          filename: `[현재] ${promptLabels[key]}`,
+          promptKey: key,
+          timestamp: new Date().toISOString(),
+          preview: prompts[key]?.substring(0, 150) + '...',
+          isCurrent: true,
+          versionFile: null
+        }));
+        
+        // 현재 버전들을 맨 앞에 추가
+        setVersions([...currentVersions, ...allVersions]);
       } else {
         showMessage('error', '버전 목록 로드에 실패했습니다.');
       }
     } catch (error) {
       showMessage('error', '서버 연결에 실패했습니다.');
-    } finally {
-      setLoading(false);
     }
   };
 
   const loadGeminiResponses = async (promptKey) => {
     try {
-      // 🔥 promptKey에 맞는 응답만 가져오기
       const response = await fetch(`/api/prompts/responses/${promptKey}`);
       const data = await response.json();
       
       if (data.success) {
         setGeminiResponses(data.responses || []);
       } else {
-        setGeminiResponses([]); // 응답이 없으면 빈 배열
+        setGeminiResponses([]);
       }
     } catch (error) {
       console.error('Gemini 응답 로드 실패:', error);
@@ -160,7 +175,6 @@ const AdminPanel = () => {
     }
   };
 
-  // 🔥 버전 되돌리기 기능 수정
   const restoreVersion = async (version) => {
     if (!version.versionFile) {
       showMessage('error', '복원할 버전 파일이 없습니다.');
@@ -189,7 +203,7 @@ const AdminPanel = () => {
       if (data.success) {
         showMessage('success', '성공적으로 복원되었습니다.');
         
-        // 🔥 복원된 프롬프트 탭으로 자동 전환
+        // 복원된 프롬프트 탭으로 자동 전환
         setActiveTab(promptKey);
         
         // 프롬프트와 버전 목록 새로고침
@@ -206,7 +220,6 @@ const AdminPanel = () => {
   const testPrompt = async (promptKey, step) => {
     setTestMode(true);
     try {
-      // API 호출하여 실제 Gemini 응답 생성
       const response = await fetch('/api/prompts/test', {
         method: 'POST',
         headers: {
@@ -223,7 +236,6 @@ const AdminPanel = () => {
       const data = await response.json();
       
       if (data.success) {
-        // 응답 목록 새로고침
         loadGeminiResponses(promptKey);
         showMessage('success', '프롬프트 테스트가 완료되었습니다.');
       } else {
@@ -237,19 +249,16 @@ const AdminPanel = () => {
     }
   };
 
-  // 🔥 응답 상세 보기 수정 - 3단계 응답 모두 표시
   const viewResponseDetail = async (fileName) => {
     try {
       const response = await fetch(`/api/prompts/response-detail/${fileName}`);
       const data = await response.json();
       
       if (data.success) {
-        // 🔥 Step1과 Step2 응답을 구분하여 저장
         const responseData = data.data;
         
         // rawStep1Response와 rawStep2Response가 있는지 확인
         if (!responseData.rawStep1Response && !responseData.rawStep2Response) {
-          // 구버전 응답인 경우
           responseData.rawStep1Response = '(Step1 응답 데이터가 없습니다)';
           responseData.rawStep2Response = responseData.response || responseData.geminiResponse || '(응답 데이터 없음)';
         }
@@ -327,14 +336,19 @@ const AdminPanel = () => {
                     <div
                       key={version.id}
                       className={`p-3 rounded-lg border cursor-pointer transition-colors relative group
-                        ${selectedVersion?.id === version.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                        ${version.isCurrent 
+                          ? 'border-green-500 bg-green-50'
+                          : selectedVersion?.id === version.id 
+                            ? 'border-blue-500 bg-blue-50' 
+                            : 'border-gray-200 hover:border-gray-300'}`}
                       onClick={() => setSelectedVersion(version)}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <span className="text-sm font-medium text-gray-900 line-clamp-1">
+                        <span className={`text-sm font-medium line-clamp-1 
+                          ${version.isCurrent ? 'text-green-700 font-bold' : 'text-gray-900'}`}>
                           {version.filename}
                         </span>
-                        {version.versionFile && (
+                        {version.versionFile && !version.isCurrent && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -344,6 +358,11 @@ const AdminPanel = () => {
                           >
                             되돌리기
                           </button>
+                        )}
+                        {version.isCurrent && (
+                          <span className="ml-2 px-2 py-1 text-xs bg-green-600 text-white rounded">
+                            현재
+                          </span>
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
@@ -448,7 +467,7 @@ const AdminPanel = () => {
             <div className="px-4 py-3 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">Gemini 응답</h3>
               <p className="text-sm text-gray-600">
-                {selectedVersion ? promptLabels[getPromptKeyFromVersion(selectedVersion)] : '버전을 선택하세요'}
+                {selectedVersion ? promptLabels[getPromptKeyFromVersion(selectedVersion)] || '버전을 선택하세요' : '버전을 선택하세요'}
               </p>
             </div>
 
@@ -457,9 +476,7 @@ const AdminPanel = () => {
                 <p className="text-gray-500 text-center py-8">좌측에서 버전을 선택하세요.</p>
               ) : geminiResponses.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">
-                  {getPromptKeyFromVersion(selectedVersion).includes('service') 
-                    ? '해당 프롬프트의 응답 히스토리가 없습니다.' 
-                    : '응답 히스토리가 없습니다.'}
+                  해당 프롬프트의 응답 히스토리가 없습니다.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -489,7 +506,7 @@ const AdminPanel = () => {
         </div>
       </div>
 
-      {/* 🔥 응답 상세 보기 모달 - 3단계 응답 모두 표시 */}
+      {/* 응답 상세 보기 모달 - 3단계 응답 모두 표시 */}
       {selectedResponse && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden">
@@ -564,7 +581,6 @@ const AdminPanel = () => {
             </div>
             
             <div className="p-6">
-              {/* 테스트 데이터 입력 폼 */}
               <div className="grid grid-cols-2 gap-4">
                 {Object.keys(testFormData).map((key) => (
                   <div key={key}>
