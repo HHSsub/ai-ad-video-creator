@@ -91,10 +91,6 @@ function getAspectRatioCode(videoAspectRatio) {
     console.log('[getAspectRatioCode] → square_1_1');
     return 'square_1_1';
   }
-  
-  if (normalized.includes('4:5') || normalized.includes('portrait')) {
-    console.log('[getAspectRatioCode] → portrait_4_5');
-    return 'portrait_4_5';
   }
   
   console.log('[getAspectRatioCode] 매칭 실패, 기본값: widescreen_16_9');
