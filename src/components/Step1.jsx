@@ -1,4 +1,4 @@
-// src/components/Step1.jsx - 영상설명 필드 영구삭제됨 + 1열 세로배치로 수정
+// src/components/Step1.jsx - 영상설명 필드 영구삭제됨 + 1열 세로배치로 수정 + placeholder 편집 기능 추가
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { loadFieldConfig, saveFieldConfig, loadAdminSettings, saveAdminSettings } from '../utils/fieldConfig';
@@ -12,6 +12,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
   const [editingImageLabel, setEditingImageLabel] = useState(false);
   const [editingImageDesc, setEditingImageDesc] = useState(false);
   const [tempImageLabel, setTempImageLabel] = useState('');
+  const [tempImageDesc, setTempImageDesc] = useState('');
   const [editingPlaceholder, setEditingPlaceholder] = useState(null);
   const [tempPlaceholder, setTempPlaceholder] = useState('');
 
@@ -35,19 +36,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
         } else if (event.data.type === 'ADMIN_SETTINGS_UPDATED') {
           setAdminSettings(event.data.settings);
         }
-      const handleLabelEdit = (fieldKey, newLabel) => {
-    const newSettings = {
-      ...adminSettings,
-      [fieldKey]: {
-        ...adminSettings[fieldKey],
-        label: newLabel
-      }
-    };
-    setAdminSettings(newSettings);
-    saveAdminSettings(newSettings);
-    setEditingLabel(null);
-    setTempLabel('');
-  };
+      };
 
       channel.addEventListener('message', handleConfigUpdate);
       return () => {
@@ -87,6 +76,20 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setFieldConfig(newConfig);
     saveFieldConfig(newConfig);
+  };
+
+  const handleLabelEdit = (fieldKey, newLabel) => {
+    const newSettings = {
+      ...adminSettings,
+      [fieldKey]: {
+        ...adminSettings[fieldKey],
+        label: newLabel
+      }
+    };
+    setAdminSettings(newSettings);
+    saveAdminSettings(newSettings);
+    setEditingLabel(null);
+    setTempLabel('');
   };
 
   const handlePlaceholderEdit = (fieldKey, newPlaceholder) => {
@@ -285,6 +288,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
           </div>
         </div>
       )}
+      
       {errors[field.key] && (
         <p className="text-sm text-red-600">{errors[field.key]}</p>
       )}
@@ -366,6 +370,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
           </div>
         </div>
       )}
+      
       {errors[field.key] && (
         <p className="text-sm text-red-600">{errors[field.key]}</p>
       )}
@@ -613,12 +618,8 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
         </div>
 
         <div className="grid grid-cols-1 gap-6">
-          {visibleFields.map(field => {
-            // image 필드면 desc까지 함께 전달
-            if (field.type === 'image') {
-              const descField = visibleFields.find(f => f.key === `${field.key}Desc`);
-              return renderImageField(field, descField);
-            }
+          {/* 이미지 업로드를 제외한 모든 필드 먼저 렌더링 */}
+          {visibleFields.filter(field => field.type !== 'image').map(field => {
             switch (field.type) {
               case 'text':
                 return renderTextField(field);
@@ -629,6 +630,11 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
               default:
                 return null;
             }
+          })}
+          
+          {/* 이미지 업로드 필드를 맨 마지막에 렌더링 */}
+          {visibleFields.filter(field => field.type === 'image').map(field => {
+            return renderImageField(field);
           })}
         </div>
 
@@ -653,6 +659,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
                 <h3 className="text-sm font-medium text-blue-800">관리자 모드 (실시간 반영)</h3>
                 <div className="mt-1 text-sm text-blue-700">
                   <p>• 각 필드의 "편집" 버튼으로 라벨을 수정하거나 "숨기기"로 필드를 제거할 수 있습니다.</p>
+                  <p>• "힌트편집" 버튼으로 placeholder 텍스트를 수정할 수 있습니다.</p>
                   <p>• 이미지 업로드 필드는 "라벨 편집", "설명 편집"이 가능하며, 변경사항이 다른 사용자에게도 실시간 반영됩니다.</p>
                   {Object.keys(adminSettings).length > 0 && (
                     <p className="mt-2 text-xs">현재 적용된 Admin 설정: {JSON.stringify(Object.keys(adminSettings))}</p>
