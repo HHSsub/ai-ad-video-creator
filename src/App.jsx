@@ -168,7 +168,7 @@ function App() {
                   onClick={() => setCurrentView('admin')}
                   className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
                 >
-                  관리자
+                  프롬프트관리
                 </button>
               )}
               <div className="flex items-center gap-2">
