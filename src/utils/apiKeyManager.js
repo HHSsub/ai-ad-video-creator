@@ -57,8 +57,6 @@ class ApiKeyManager {
     const keys = new Set();
     const patterns = [
       'GEMINI_API_KEY',
-      'VITE_GEMINI_API_KEY', 
-      'REACT_APP_GEMINI_API_KEY',
       'GOOGLE_API_KEY',
       'VITE_GOOGLE_API_KEY',
       'REACT_APP_GOOGLE_API_KEY',
