@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import './styles/main.css';
 import Login from './components/auth/Login';
 import AdminPanel from './components/admin/AdminPanel';
 import Step1 from './components/Step1';
