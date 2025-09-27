@@ -9,10 +9,10 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // 🔥 프롬프트 파일 매핑 - 제품/서비스 분기
 const PROMPT_FILE_MAPPING = {
-  'step1_product': 'step1_product.txt',
-  'step1_service': 'step1_service.txt',
-  'step2_product': 'step2_product.txt', 
-  'step2_service': 'step2_service.txt'
+  'step1_product': 'Prompt_step1_product.txt',  // 대문자 P 추가
+  'step1_service': 'Prompt_step1_service.txt',
+  'step2_product': 'Prompt_step2_product.txt',
+  'step2_service': 'Prompt_step2_service.txt'
 };
 
 // 영상 길이에 따른 씬 수 결정
