@@ -1,4 +1,4 @@
-// src/utils/fieldConfig.js - 영상설명, 이미지설명 필드 완전 제거 + 이미지업로드 맨 마지막 순서 보장 + 실제 프론트 옵션과 일치
+// src/utils/fieldConfig.js - 영상비율 중복 완전 제거 + 모든 로직 정리
 
 const DEFAULT_FIELD_CONFIG = {
   // 1. 브랜드 기본 정보
@@ -13,7 +13,7 @@ const DEFAULT_FIELD_CONFIG = {
     randomValues: ['삼성', 'LG', '현대', 'SK', 'KT', '네이버', '카카오', '쿠팡', '배달의민족', '토스']
   },
   
-  // 2. 산업/제품 카테고리 - 주관식으로 변경 (options 제거)
+  // 2. 산업/제품 카테고리
   industryCategory: {
     key: 'industryCategory',
     label: '산업 카테고리',
@@ -55,14 +55,11 @@ const DEFAULT_FIELD_CONFIG = {
     visible: true,
     type: 'select',
     options: [
-      { value: 'brand', label: '브랜드 인지도 향상' },
-      { value: 'product', label: '제품 홍보' },
-      { value: 'service', label: '서비스 홍보' },
-      { value: 'conversion', label: '구매 유도' },
-      { value: 'education', label: '사용법 안내' }
+      { value: 'product', label: '제품' },
+      { value: 'service', label: '서비스' },
     ],
-    defaultValue: '',
-    randomValues: ['브랜드 인지도 향상', '제품 홍보', '서비스 홍보', '구매 유도', '사용법 안내']
+    defaultValue: '제품',
+    randomValues: ['제품', '서비스']
   },
   
   // 영상길이 - 실제 프론트 옵션만 (10초, 20초, 30초)
@@ -77,11 +74,11 @@ const DEFAULT_FIELD_CONFIG = {
       { value: '20초', label: '20초' },
       { value: '30초', label: '30초' }
     ],
-    defaultValue: '',
+    defaultValue: '10초',
     randomValues: ['10초', '20초', '30초']
   },
   
-  // 영상비율 - 4:5 제거, 실제 프론트 옵션만, videoAspectRatio 제거하고 aspectRatio 하나만 사용
+  // 🔥 영상비율 - aspectRatio 하나만 사용 (videoAspectRatio 완전 삭제)
   aspectRatio: {
     key: 'aspectRatio',
     label: '영상 비율',
@@ -93,7 +90,7 @@ const DEFAULT_FIELD_CONFIG = {
       { value: 'square_1_1', label: '정사각형 (1:1)' },
       { value: 'portrait_9_16', label: '세로 (9:16)' }
     ],
-    defaultValue: '',
+    defaultValue: 'widescreen_16_9',
     randomValues: ['가로 (16:9)', '정사각형 (1:1)', '세로 (9:16)']
   },
   
@@ -132,7 +129,7 @@ const DEFAULT_FIELD_CONFIG = {
     randomValues: ['역동적인 분위기', '감성적인 톤앤매너', '전문적인 이미지', '트렌디한 스타일', '자연스러운 연출']
   },
 
-  // 🔥 6. 맨 마지막: 이미지 업로드 (이미지 설명 필드 완전 삭제됨)
+  // 🔥 6. 맨 마지막: 이미지 업로드
   imageUpload: { 
     key: 'imageUpload', 
     type: 'image', 
@@ -149,9 +146,7 @@ const DEFAULT_FIELD_CONFIG = {
       default: '제품일 때엔 제품 이미지를, 서비스 홍보일 때엔 브랜드 로고 이미지를 올려주세요'
     }
   }
-  // 🔥 영상설명 필드 완전 제거됨 - videoDescription 삭제
-  // 🔥 이미지설명 필드 완전 제거됨 - imageUploadDesc 삭제
-  // 🔥 videoAspectRatio 필드 완전 제거됨 - aspectRatio 하나만 사용
+  // 🔥 영상설명, 이미지설명, videoAspectRatio 필드 모두 완전 삭제됨
 };
 
 // LocalStorage 키
@@ -184,12 +179,8 @@ export const saveFieldConfig = (config) => {
     
     // 🔥 Admin 설정 변경사항을 서버에도 알림 (실시간 반영을 위함)
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
-      const channel = new BroadcastChannel('field-config-updates');
-      channel.postMessage({
-        type: 'FIELD_CONFIG_UPDATED',
-        config: config,
-        timestamp: Date.now()
-      });
+      const channel = new BroadcastChannel('admin-settings');
+      channel.postMessage({ type: 'field-config-updated', config });
     }
     
     return true;
@@ -200,35 +191,29 @@ export const saveFieldConfig = (config) => {
 };
 
 /**
- * 🔥 Admin 설정 로드 (라벨, 설명문구, 예시값 등)
+ * Admin 설정 로드
  */
 export const loadAdminSettings = () => {
   try {
     const saved = localStorage.getItem(ADMIN_SETTINGS_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
+    return saved ? JSON.parse(saved) : {};
   } catch (error) {
     console.error('Admin 설정 로드 오류:', error);
+    return {};
   }
-  return {};
 };
 
 /**
- * 🔥 Admin 설정 저장 (라벨, 설명문구, 예시값 등)
+ * Admin 설정 저장
  */
 export const saveAdminSettings = (settings) => {
   try {
     localStorage.setItem(ADMIN_SETTINGS_KEY, JSON.stringify(settings));
     
-    // 🔥 실시간 동기화
+    // BroadcastChannel로 실시간 알림
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
-      const channel = new BroadcastChannel('field-config-updates');
-      channel.postMessage({
-        type: 'ADMIN_SETTINGS_UPDATED',
-        settings: settings,
-        timestamp: Date.now()
-      });
+      const channel = new BroadcastChannel('admin-settings');
+      channel.postMessage({ type: 'admin-settings-updated', settings });
     }
     
     return true;
@@ -239,73 +224,99 @@ export const saveAdminSettings = (settings) => {
 };
 
 /**
- * 🔥 숨겨진 필드들에 대한 기본값 적용
+ * 필드 표시/숨김 토글
  */
-export const applyDefaultValues = (config) => {
-  const defaultValues = {};
+export const toggleFieldVisibility = (fieldKey) => {
+  const config = loadFieldConfig();
+  if (config[fieldKey]) {
+    config[fieldKey].visible = !config[fieldKey].visible;
+    saveFieldConfig(config);
+  }
+  return config;
+};
+
+/**
+ * 필드 라벨 업데이트
+ */
+export const updateFieldLabel = (fieldKey, newLabel) => {
+  const config = loadFieldConfig();
+  if (config[fieldKey]) {
+    config[fieldKey].label = newLabel;
+    saveFieldConfig(config);
+  }
+  return config;
+};
+
+/**
+ * 필드 플레이스홀더 업데이트
+ */
+export const updateFieldPlaceholder = (fieldKey, newPlaceholder) => {
+  const config = loadFieldConfig();
+  if (config[fieldKey]) {
+    config[fieldKey].placeholder = newPlaceholder;
+    saveFieldConfig(config);
+  }
+  return config;
+};
+
+/**
+ * 🔥 영상 비율 검증 및 정리 함수
+ */
+export const normalizeAspectRatio = (formData) => {
+  // videoAspectRatio가 있으면 aspectRatio로 이동
+  if (formData.videoAspectRatio && !formData.aspectRatio) {
+    formData.aspectRatio = formData.videoAspectRatio;
+    delete formData.videoAspectRatio;
+  }
   
-  Object.values(config).forEach(field => {
-    if (!field.visible && field.defaultValue !== undefined && field.defaultValue !== '') {
-      defaultValues[field.key] = field.defaultValue;
+  // 중복 제거
+  if (formData.videoAspectRatio && formData.aspectRatio) {
+    delete formData.videoAspectRatio; // aspectRatio만 유지
+  }
+  
+  // 기본값 설정
+  if (!formData.aspectRatio) {
+    formData.aspectRatio = '가로 (16:9)';
+  }
+  
+  return formData;
+};
+
+/**
+ * 🔥 폼 데이터 검증 및 정리
+ */
+export const validateAndCleanFormData = (formData) => {
+  const cleaned = { ...formData };
+  
+  // 영상 비율 정리
+  normalizeAspectRatio(cleaned);
+  
+  // 불필요한 필드 제거
+  delete cleaned.videoDescription;
+  delete cleaned.imageUploadDesc;
+  delete cleaned.videoAspectRatio; // 확실히 제거
+  
+  // 빈 값 검증
+  const config = loadFieldConfig();
+  Object.keys(config).forEach(key => {
+    const field = config[key];
+    if (field.required && field.visible && !cleaned[key]) {
+      console.warn(`필수 필드 누락: ${field.label}`);
     }
   });
   
-  return defaultValues;
+  return cleaned;
 };
 
-/**
- * 🔥 실시간 필드 설정 동기화 설정
- */
-export const setupFieldConfigSync = (onUpdate) => {
-  if (typeof window === 'undefined' || !window.BroadcastChannel) {
-    return () => {}; // cleanup 함수
-  }
-
-  const channel = new BroadcastChannel('field-config-updates');
-  
-  const handleMessage = (event) => {
-    const { type, config, settings } = event.data;
-    
-    if (type === 'FIELD_CONFIG_UPDATED' && config) {
-      onUpdate('config', config);
-    } else if (type === 'ADMIN_SETTINGS_UPDATED' && settings) {
-      onUpdate('admin', settings);
-    }
-  };
-
-  channel.addEventListener('message', handleMessage);
-
-  // cleanup 함수 반환
-  return () => {
-    channel.removeEventListener('message', handleMessage);
-    channel.close();
-  };
-};
-
-/**
- * 🔥 예시값 업데이트 함수 (관리자용)
- */
-export const updateFieldPlaceholder = async (fieldKey, newPlaceholder) => {
-  const config = loadFieldConfig();
-  
-  if (config[fieldKey]) {
-    config[fieldKey].placeholder = newPlaceholder;
-    return saveFieldConfig(config);
-  }
-  
-  return false;
-};
-
-/**
- * 🔥 랜덤값 업데이트 함수 (관리자용)
- */
-export const updateFieldRandomValues = async (fieldKey, newRandomValues) => {
-  const config = loadFieldConfig();
-  
-  if (config[fieldKey] && Array.isArray(newRandomValues)) {
-    config[fieldKey].randomValues = newRandomValues;
-    return saveFieldConfig(config);
-  }
-  
-  return false;
+export default {
+  loadFieldConfig,
+  saveFieldConfig,
+  loadAdminSettings,
+  saveAdminSettings,
+  toggleFieldVisibility,
+  updateFieldLabel,
+  updateFieldPlaceholder,
+  normalizeAspectRatio,
+  validateAndCleanFormData,
+  DEFAULT_FIELD_CONFIG
 };
