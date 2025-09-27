@@ -1,6 +1,7 @@
-// src/utils/fieldConfig.js - 영상설명 필드 완전 제거 + 예시값 관리자 편집 가능
+// src/utils/fieldConfig.js - 영상설명, 이미지설명 필드 완전 제거 + 이미지업로드 맨 마지막 순서 보장 + 실제 프론트 옵션과 일치
 
 const DEFAULT_FIELD_CONFIG = {
+  // 1. 브랜드 기본 정보
   brandName: {
     key: 'brandName',
     label: '브랜드명',
@@ -11,29 +12,19 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['삼성', 'LG', '현대', 'SK', 'KT', '네이버', '카카오', '쿠팡', '배달의민족', '토스']
   },
+  
+  // 2. 산업/제품 카테고리 - 주관식으로 변경 (options 제거)
   industryCategory: {
     key: 'industryCategory',
     label: '산업 카테고리',
     required: true,
     visible: true,
-    type: 'select',
-    options: [
-      { value: 'technology', label: '기술/IT' },
-      { value: 'finance', label: '금융/보험' },
-      { value: 'retail', label: '유통/소매' },
-      { value: 'food', label: '식품/음료' },
-      { value: 'fashion', label: '패션/뷰티' },
-      { value: 'automotive', label: '자동차' },
-      { value: 'healthcare', label: '헬스케어' },
-      { value: 'education', label: '교육' },
-      { value: 'entertainment', label: '엔터테인먼트' },
-      { value: 'real-estate', label: '부동산' },
-      { value: 'travel', label: '여행/관광' },
-      { value: 'other', label: '기타' }
-    ],
+    type: 'text',
+    placeholder: '예: 기술/IT, 금융/보험, 유통/소매',
     defaultValue: '',
-    randomValues: ['기술/IT', '금융/보험', '유통/소매', '식품/음료', '패션/뷰티']
+    randomValues: ['기술/IT', '금융/보험', '유통/소매', '식품/음료', '패션/뷰티', '자동차', '헬스케어', '교육', '엔터테인먼트', '부동산', '여행/관광']
   },
+  
   productServiceCategory: {
     key: 'productServiceCategory',
     label: '제품/서비스 카테고리',
@@ -44,6 +35,7 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['스마트폰', '세탁기', '자동차', '화장품', '음식배달', '금융서비스', '온라인쇼핑', '게임']
   },
+  
   productServiceName: {
     key: 'productServiceName',
     label: '제품명/서비스명',
@@ -54,6 +46,8 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['갤럭시 S24', '그램 노트북', '아반떼', '카카오페이', '배달의민족', '네이버웹툰', '토스뱅크']
   },
+  
+  // 3. 영상 설정
   videoPurpose: {
     key: 'videoPurpose',
     label: '영상 목적',
@@ -70,6 +64,8 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['브랜드 인지도 향상', '제품 홍보', '서비스 홍보', '구매 유도', '사용법 안내']
   },
+  
+  // 영상길이 - 실제 프론트 옵션만 (10초, 20초, 30초)
   videoLength: {
     key: 'videoLength',
     label: '영상 길이',
@@ -77,14 +73,15 @@ const DEFAULT_FIELD_CONFIG = {
     visible: true,
     type: 'select',
     options: [
-      { value: '10초', label: '10초 (숏폼)' },
-      { value: '15초', label: '15초 (인스타그램)' },
-      { value: '30초', label: '30초 (유튜브 숏츠)' },
-      { value: '60초', label: '60초 (긴 형태)' }
+      { value: '10초', label: '10초' },
+      { value: '20초', label: '20초' },
+      { value: '30초', label: '30초' }
     ],
     defaultValue: '',
-    randomValues: ['10초', '15초', '30초', '60초']
+    randomValues: ['10초', '20초', '30초']
   },
+  
+  // 영상비율 - 4:5 제거, 실제 프론트 옵션만
   aspectRatio: {
     key: 'aspectRatio',
     label: '영상 비율',
@@ -94,12 +91,13 @@ const DEFAULT_FIELD_CONFIG = {
     options: [
       { value: 'widescreen_16_9', label: '가로 (16:9)' },
       { value: 'square_1_1', label: '정사각형 (1:1)' },
-      { value: 'portrait_9_16', label: '세로 (9:16)' },
-      { value: 'portrait_4_5', label: '세로 (4:5)' }
+      { value: 'portrait_9_16', label: '세로 (9:16)' }
     ],
     defaultValue: '',
-    randomValues: ['가로 (16:9)', '정사각형 (1:1)', '세로 (9:16)', '세로 (4:5)']
+    randomValues: ['가로 (16:9)', '정사각형 (1:1)', '세로 (9:16)']
   },
+  
+  // 4. 타겟팅 정보
   coreTarget: {
     key: 'coreTarget',
     label: '핵심 타겟',
@@ -110,6 +108,7 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['20-30대 직장인', '30-40대 직장여성', '40-50대 중장년층', '대학생', 'MZ세대', '시니어층']
   },
+  
   coreDifferentiation: {
     key: 'coreDifferentiation', 
     label: '핵심 차별점',
@@ -120,6 +119,8 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['혁신적인 기술력', '합리적인 가격', '프리미엄 품질', '친환경', '편리함', '안전성', '디자인 우수성']
   },
+  
+  // 5. 추가 요구사항
   videoRequirements: {
     key: 'videoRequirements',
     label: '영상 요구사항',
@@ -131,7 +132,7 @@ const DEFAULT_FIELD_CONFIG = {
     randomValues: ['역동적인 분위기', '감성적인 톤앤매너', '전문적인 이미지', '트렌디한 스타일', '자연스러운 연출']
   },
 
-  // 🔥 통합된 이미지 업로드 필드 (브랜드 로고 + 제품 이미지 통합)
+  // 🔥 6. 맨 마지막: 이미지 업로드 (이미지 설명 필드 완전 삭제됨)
   imageUpload: { 
     key: 'imageUpload', 
     type: 'image', 
@@ -149,6 +150,7 @@ const DEFAULT_FIELD_CONFIG = {
     }
   }
   // 🔥 영상설명 필드 완전 제거됨 - videoDescription 삭제
+  // 🔥 이미지설명 필드 완전 제거됨 - imageUploadDesc 삭제
 };
 
 // LocalStorage 키
