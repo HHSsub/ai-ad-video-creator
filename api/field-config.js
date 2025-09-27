@@ -90,12 +90,6 @@ function getFieldConfiguration() {
         required: false,
         defaultValue: process.env.DEFAULT_VIDEO_LENGTH || '10초'
       },
-      videoAspectRatio: {
-        enabled: process.env.FIELD_VIDEO_ASPECT_RATIO_ENABLED !== 'false',
-        label: process.env.FIELD_VIDEO_ASPECT_RATIO_LABEL || '영상 비율',
-        required: false,
-        defaultValue: process.env.DEFAULT_VIDEO_ASPECT_RATIO || '가로 (16:9)'
-      },
       coreTarget: {
         enabled: process.env.FIELD_CORE_TARGET_ENABLED !== 'false',
         label: process.env.FIELD_CORE_TARGET_LABEL || '핵심 타겟',
