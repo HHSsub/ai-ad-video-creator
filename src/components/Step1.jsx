@@ -7,6 +7,8 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   const [editingLabel, setEditingLabel] = useState(null);
   const [tempLabel, setTempLabel] = useState('');
   const [adminSettings, setAdminSettings] = useState({});
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [tempDescription, setTempDescription] = useState('');
   const imageRef = useRef(null);
 
   // 관리자 권한 확인
@@ -18,21 +20,27 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
       setFieldConfig(data);
     } else if (type === 'admin') {
       setAdminSettings(data);
+      console.log('[Step1] Admin 설정 업데이트:', data);
     }
   }, []);
 
-  // 컴포넌트 마운트 시 설정 로드
+  // 컴포넌트 마운트 시 설정 로드 및 실시간 동기화 설정
   useEffect(() => {
     const config = loadFieldConfig();
     setFieldConfig(config);
 
+    // 숨겨진 필드들의 기본값 적용
     const defaultValues = applyDefaultValues(config);
     if (Object.keys(defaultValues).length > 0) {
       setFormData(prev => ({ ...prev, ...defaultValues }));
     }
 
+    // 서버에서 Admin 설정 로드
     loadAdminSettingsFromServer();
+
+    // 실시간 동기화 설정
     const cleanup = setupFieldConfigSync(handleSettingsUpdate);
+
     return cleanup;
   }, [handleSettingsUpdate, setFormData]);
 
@@ -44,10 +52,11 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
         const data = await response.json();
         if (data.success) {
           setAdminSettings(data.adminSettings);
+          console.log('[Step1] 서버 Admin 설정 로드됨:', data.adminSettings);
         }
       }
     } catch (error) {
-      console.error('Admin 설정 로드 오류:', error);
+      console.error('[Step1] Admin 설정 로드 오류:', error);
     }
   };
 
@@ -56,7 +65,7 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
     const imageConfig = adminSettings.imageUpload || {};
     const label = imageConfig.label || '이미지 업로드';
     
-    const descriptions = {
+    const descriptions = imageConfig.descriptions || {
       product: '제품일 때엔 제품 이미지를, 서비스 홍보일 때엔 브랜드 로고 이미지를 올려주세요',
       service: '서비스 홍보용 브랜드 로고 이미지를 올려주세요',
       brand: '브랜드 인지도 향상을 위한 로고 이미지를 올려주세요',
@@ -123,8 +132,8 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
     
     // 필수 필드 검증
     if (!formData.brandName?.trim()) newErrors.brandName = '브랜드명을 입력해주세요.';
-    if (!formData.industryCategory) newErrors.industryCategory = '산업 카테고리를 선택해주세요.';
-    if (!formData.productServiceCategory) newErrors.productServiceCategory = '제품/서비스 카테고리를 선택해주세요.';
+    if (!formData.industryCategory?.trim()) newErrors.industryCategory = '산업 카테고리를 입력해주세요.';
+    if (!formData.productServiceCategory?.trim()) newErrors.productServiceCategory = '제품/서비스 카테고리를 입력해주세요.';
     if (!formData.productServiceName?.trim()) newErrors.productServiceName = '제품명/서비스명을 입력해주세요.';
     if (!formData.videoPurpose) newErrors.videoPurpose = '영상 목적을 선택해주세요.';
     if (!formData.videoLength) newErrors.videoLength = '영상 길이를 선택해주세요.';
@@ -186,10 +195,12 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
     }));
   };
 
-  // 되돌리기 (초기화)
+  // 되돌리기 (전체 폼 완전 초기화)
   const resetForm = () => {
-    setFormData({});
+    const initialFormData = {};
+    setFormData(initialFormData);
     setErrors({});
+    console.log('폼이 완전히 초기화되었습니다.');
   };
 
   // 필드 렌더링 함수들
@@ -328,19 +339,14 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
     const fieldId = `field_${field}`;
     
     let options = [];
-    if (field === 'industryCategory') {
-      options = ['IT/소프트웨어', '금융', '제조업', '서비스업', '교육', '의료', '기타'];
-    } else if (field === 'productServiceCategory') {
-      options = ['전자제품', '의류', '식품', '화장품', '생활용품', '서비스', '기타'];
-    } else if (field === 'videoPurpose') {
+    if (field === 'videoPurpose') {
+      // 정확히 제품/서비스 2개만
       options = [
         { value: 'product', label: '제품' },
-        { value: 'service', label: '서비스 홍보' },
-        { value: 'brand', label: '브랜드 인지도 향상' },
-        { value: 'conversion', label: '구매 유도' },
-        { value: 'education', label: '사용법 안내' }
+        { value: 'service', label: '서비스' }
       ];
     } else if (field === 'videoLength') {
+      // 10초, 20초, 30초만 (5초 제거됨)
       options = ['10초', '20초', '30초'];
     } else if (field === 'aspectRatio') {
       options = [
@@ -422,8 +428,8 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
   // 필드 설정에 따라 표시할 필드들 결정
   const fieldsToRender = [
     { name: 'brandName', type: 'text' },
-    { name: 'industryCategory', type: 'select' },
-    { name: 'productServiceCategory', type: 'select' },
+    { name: 'industryCategory', type: 'text' },
+    { name: 'productServiceCategory', type: 'text' },
     { name: 'productServiceName', type: 'text' },
     { name: 'videoPurpose', type: 'select' },
     { name: 'videoLength', type: 'select' },
@@ -528,20 +534,18 @@ const Step1 = ({ formData, setFormData, onNext, user }) => {
           )}
         </div>
 
-        {/* 버튼 영역 */}
-        <div className="flex justify-between items-center pt-6 border-t border-gray-200">
-          <div className="flex gap-2">
-            <button
-              onClick={resetForm}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              되돌리기
-            </button>
-          </div>
+        {/* 버튼 영역 - 세로 1열로 복원 */}
+        <div className="flex flex-col gap-4 pt-6 border-t border-gray-200">
+          <button
+            onClick={resetForm}
+            className="w-full px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            되돌리기
+          </button>
           
           <button
             onClick={handleSubmit}
-            className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            className="w-full bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
             다음 단계 →
           </button>
