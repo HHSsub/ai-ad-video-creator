@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import styles from './Step3_module.css'; 
+import styles from '../styles/components/Step3_module.css';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 /*
