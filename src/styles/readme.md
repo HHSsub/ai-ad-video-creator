@@ -24,9 +24,9 @@ src/styles/
     └── utilities.css          # 헬퍼 클래스
 
 src/components/                 # React 컴포넌트용 CSS 모듈
-├── Step1.module.css           # Step1 컴포넌트 전용 스타일
-├── Step2.module.css           # Step2 컴포넌트 전용 스타일
-└── Step3.module.css           # Step3 컴포넌트 전용 스타일
+├── Step1_module.css           # Step1 컴포넌트 전용 스타일
+├── Step2_module.css           # Step2 컴포넌트 전용 스타일
+└── Step3_module.css           # Step3 컴포넌트 전용 스타일
 ```
 
 ## 🎨 디자인 시스템 특징
