@@ -61,8 +61,6 @@ class ApiKeyManager {
       'VITE_GOOGLE_API_KEY',
       'REACT_APP_GOOGLE_API_KEY',
       ...Array.from({length: 10}, (_, i) => `GEMINI_API_KEY_${i + 1}`),
-      ...Array.from({length: 10}, (_, i) => `VITE_GEMINI_API_KEY_${i + 1}`),
-      ...Array.from({length: 10}, (_, i) => `REACT_APP_GEMINI_API_KEY_${i + 1}`),
       ...Array.from({length: 10}, (_, i) => `GOOGLE_API_KEY_${i + 1}`),
       ...Array.from({length: 10}, (_, i) => `VITE_GOOGLE_API_KEY_${i + 1}`)
     ];
