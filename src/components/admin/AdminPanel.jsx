@@ -1,3 +1,5 @@
+// src/components/admin/AdminPanel.jsx - 전체 수정본
+
 import { useState, useEffect } from 'react';
 
 const AdminPanel = () => {
@@ -47,16 +49,32 @@ const AdminPanel = () => {
   // 선택된 버전이 변경되면 해당 프롬프트의 Gemini 응답 로드
   useEffect(() => {
     if (selectedVersion) {
-      loadGeminiResponses(selectedVersion.promptKey || getPromptKeyFromVersion(selectedVersion));
+      // 🔥 선택된 버전의 프롬프트 타입에 맞는 응답만 로드
+      const promptKey = selectedVersion.promptKey || getPromptKeyFromVersion(selectedVersion);
+      loadGeminiResponses(promptKey);
     }
   }, [selectedVersion]);
 
   const getPromptKeyFromVersion = (version) => {
-    // 버전 ID에서 프롬프트 키 추출
-    const parts = version.id.split('_');
+    // 버전 ID나 파일명에서 프롬프트 키 추출
+    if (version.id === 'current_prompt') {
+      return activeTab; // 현재 활성 탭의 프롬프트
+    }
+    
+    const filename = version.filename || version.id;
+    
+    // 파일명에서 step1/step2와 product/service 추출
+    if (filename.includes('step1') && filename.includes('product')) return 'step1_product';
+    if (filename.includes('step1') && filename.includes('service')) return 'step1_service';
+    if (filename.includes('step2') && filename.includes('product')) return 'step2_product';
+    if (filename.includes('step2') && filename.includes('service')) return 'step2_service';
+    
+    // 파일명 패턴으로 추출 (예: step1_product_2025_...)
+    const parts = filename.split('_');
     if (parts.length >= 2) {
       return `${parts[0]}_${parts[1]}`;
     }
+    
     return 'step1_product'; // fallback
   };
 
@@ -78,7 +96,6 @@ const AdminPanel = () => {
     }
   };
 
-  // 🔥 추가: 현재 프롬프트를 버전 히스토리 맨 위에 표시
   const loadVersions = async () => {
     setLoading(true);
     try {
@@ -86,21 +103,7 @@ const AdminPanel = () => {
       const data = await response.json();
       
       if (data.success) {
-        let allVersions = data.versions || [];
-        
-        // 🔥 현재 프롬프트를 가상 버전으로 맨 위에 추가
-        const currentPromptVersion = {
-          id: 'current_prompt',
-          filename: '현재 사용중인 프롬프트',
-          promptKey: activeTab,
-          timestamp: new Date().toISOString(),
-          preview: prompts[activeTab]?.substring(0, 200) + '...',
-          isCurrent: true, // 현재 프롬프트 표시용
-          versionFile: null
-        };
-        
-        allVersions.unshift(currentPromptVersion);
-        setVersions(allVersions);
+        setVersions(data.versions || []);
       } else {
         showMessage('error', '버전 목록 로드에 실패했습니다.');
       }
@@ -113,14 +116,18 @@ const AdminPanel = () => {
 
   const loadGeminiResponses = async (promptKey) => {
     try {
+      // 🔥 promptKey에 맞는 응답만 가져오기
       const response = await fetch(`/api/prompts/responses/${promptKey}`);
       const data = await response.json();
       
       if (data.success) {
-        setGeminiResponses(data.responses);
+        setGeminiResponses(data.responses || []);
+      } else {
+        setGeminiResponses([]); // 응답이 없으면 빈 배열
       }
     } catch (error) {
       console.error('Gemini 응답 로드 실패:', error);
+      setGeminiResponses([]);
     }
   };
 
@@ -153,22 +160,39 @@ const AdminPanel = () => {
     }
   };
 
-  const restoreVersion = async (versionId) => {
-    if (!confirm('이 버전으로 되돌리시겠습니까?')) return;
+  // 🔥 버전 되돌리기 기능 수정
+  const restoreVersion = async (version) => {
+    if (!version.versionFile) {
+      showMessage('error', '복원할 버전 파일이 없습니다.');
+      return;
+    }
+
+    if (!confirm(`이 버전으로 되돌리시겠습니까?\n${version.filename}`)) return;
 
     try {
+      const promptKey = getPromptKeyFromVersion(version);
+      
       const response = await fetch('/api/prompts/restore', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ versionId }),
+        body: JSON.stringify({ 
+          versionId: version.id,
+          versionFile: version.versionFile,
+          promptKey: promptKey
+        }),
       });
 
       const data = await response.json();
       
       if (data.success) {
         showMessage('success', '성공적으로 복원되었습니다.');
+        
+        // 🔥 복원된 프롬프트 탭으로 자동 전환
+        setActiveTab(promptKey);
+        
+        // 프롬프트와 버전 목록 새로고침
         loadPrompts();
         loadVersions();
       } else {
@@ -182,11 +206,8 @@ const AdminPanel = () => {
   const testPrompt = async (promptKey, step) => {
     setTestMode(true);
     try {
-      // 실제로는 Gemini API를 호출해야 하지만, 여기서는 모의 테스트
-      const testResponse = `[테스트 응답] ${promptKey} - ${step}단계\n현재 프롬프트로 생성된 응답입니다.\n시간: ${new Date().toLocaleString()}`;
-      
-      // 응답 저장
-      await fetch('/api/prompts/save-response', {
+      // API 호출하여 실제 Gemini 응답 생성
+      const response = await fetch('/api/prompts/test', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -195,14 +216,19 @@ const AdminPanel = () => {
           promptKey,
           step,
           formData: testFormData,
-          response: testResponse,
-          timestamp: Date.now()
+          promptContent: prompts[promptKey]
         })
       });
 
-      // 응답 목록 새로고침
-      loadGeminiResponses(promptKey);
-      showMessage('success', '프롬프트 테스트가 완료되었습니다.');
+      const data = await response.json();
+      
+      if (data.success) {
+        // 응답 목록 새로고침
+        loadGeminiResponses(promptKey);
+        showMessage('success', '프롬프트 테스트가 완료되었습니다.');
+      } else {
+        showMessage('error', data.message || '테스트 실패');
+      }
       
     } catch (error) {
       showMessage('error', '프롬프트 테스트에 실패했습니다.');
@@ -211,13 +237,24 @@ const AdminPanel = () => {
     }
   };
 
+  // 🔥 응답 상세 보기 수정 - 3단계 응답 모두 표시
   const viewResponseDetail = async (fileName) => {
     try {
       const response = await fetch(`/api/prompts/response-detail/${fileName}`);
       const data = await response.json();
       
       if (data.success) {
-        setSelectedResponse(data.data);
+        // 🔥 Step1과 Step2 응답을 구분하여 저장
+        const responseData = data.data;
+        
+        // rawStep1Response와 rawStep2Response가 있는지 확인
+        if (!responseData.rawStep1Response && !responseData.rawStep2Response) {
+          // 구버전 응답인 경우
+          responseData.rawStep1Response = '(Step1 응답 데이터가 없습니다)';
+          responseData.rawStep2Response = responseData.response || responseData.geminiResponse || '(응답 데이터 없음)';
+        }
+        
+        setSelectedResponse(responseData);
       }
     } catch (error) {
       showMessage('error', '응답 상세 정보 로드에 실패했습니다.');
@@ -289,113 +326,88 @@ const AdminPanel = () => {
                   {getCurrentPageVersions().map((version) => (
                     <div
                       key={version.id}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors
-                        ${
-                          selectedVersion?.id === version.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }
-                        ${version.isCurrent ? 'bg-green-50 border-green-400 ring-2 ring-green-300' : ''}
-                      `}
+                      className={`p-3 rounded-lg border cursor-pointer transition-colors relative group
+                        ${selectedVersion?.id === version.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
                       onClick={() => setSelectedVersion(version)}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-xs font-medium
-                          ${version.isCurrent ? 'text-green-700' : 'text-blue-600'}
-                        `}>
-                          {version.isCurrent
-                            ? `현재 ${promptLabels[activeTab]}`
-                            : promptLabels[version.promptKey] || version.filename
-                          }
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-sm font-medium text-gray-900 line-clamp-1">
+                          {version.filename}
                         </span>
-                        {version.isBackup && (
-                          <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">백업</span>
+                        {version.versionFile && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              restoreVersion(version);
+                            }}
+                            className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            되돌리기
+                          </button>
                         )}
                       </div>
-                      {version.isCurrent && (
-                        <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full mb-1">
-                          현재 사용중
-                        </span>
-                      )}
-                      <div className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500">
                         {formatDateTime(version.timestamp)}
-                      </div>
-                      <div className="text-xs text-gray-600 mt-1 line-clamp-2">
-                        {version.preview}
-                      </div>
-                      {version.isCurrent && (
-                        <div className="mt-2 text-xs">
-                          <button 
-                            className="text-blue-600 hover:text-blue-800"
-                            onClick={e => {
-                              e.stopPropagation();
-                              loadGeminiResponses(activeTab);
-                            }}
-                          >
-                            📊 현재 프롬프트의 Gemini 응답 보기
-                          </button>
-                        </div>
+                      </p>
+                      {version.preview && (
+                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                          {version.preview}
+                        </p>
                       )}
                     </div>
                   ))}
-        
-                  {/* 페이지네이션 */}
-                  {totalPages > 1 && (
-                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
-                      <button
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="text-sm text-blue-600 disabled:text-gray-400"
-                      >
-                        이전
-                      </button>
-                      <span className="text-sm text-gray-500">
-                        {currentPage} / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="text-sm text-blue-600 disabled:text-gray-400"
-                      >
-                        다음
-                      </button>
-                    </div>
-                  )}
+                </div>
+              )}
+
+              {/* 페이지네이션 */}
+              {totalPages > 1 && (
+                <div className="mt-4 flex justify-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                  >
+                    이전
+                  </button>
+                  <span className="px-3 py-1 text-sm">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                  >
+                    다음
+                  </button>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* 중앙: 프롬프트 편집 */}
+        {/* 중앙: 프롬프트 편집기 */}
         <div className="col-span-6">
           <div className="bg-white rounded-lg shadow">
-            {/* 4개 프롬프트 탭 */}
-            <div className="border-b border-gray-200">
-              <nav className="flex space-x-0">
+            <div className="px-4 py-3 border-b border-gray-200">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {Object.keys(promptLabels).map((key) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
-                    className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === key
-                        ? 'border-blue-500 text-blue-600 bg-blue-50'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
                     {promptLabels[key]}
                   </button>
                 ))}
-              </nav>
-            </div>
+              </div>
 
-            {/* 편집 영역 */}
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-medium text-gray-900">
-                  {promptLabels[activeTab]} 편집
-                </h2>
-                <div className="flex space-x-2">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">{promptLabels[activeTab]}</h3>
+                <div className="flex gap-2">
                   <button
                     onClick={() => testPrompt(activeTab, activeTab.includes('step1') ? 'step1' : 'step2')}
                     disabled={testMode}
@@ -416,7 +428,7 @@ const AdminPanel = () => {
               <textarea
                 value={prompts[activeTab]}
                 onChange={(e) => handlePromptChange(activeTab, e.target.value)}
-                className="w-full h-96 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full h-96 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-4"
                 placeholder="프롬프트 내용을 입력하세요..."
               />
 
@@ -436,7 +448,7 @@ const AdminPanel = () => {
             <div className="px-4 py-3 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">Gemini 응답</h3>
               <p className="text-sm text-gray-600">
-                {selectedVersion ? promptLabels[selectedVersion.promptKey || getPromptKeyFromVersion(selectedVersion)] : '버전을 선택하세요'}
+                {selectedVersion ? promptLabels[getPromptKeyFromVersion(selectedVersion)] : '버전을 선택하세요'}
               </p>
             </div>
 
@@ -444,7 +456,11 @@ const AdminPanel = () => {
               {!selectedVersion ? (
                 <p className="text-gray-500 text-center py-8">좌측에서 버전을 선택하세요.</p>
               ) : geminiResponses.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">응답 히스토리가 없습니다.</p>
+                <p className="text-gray-500 text-center py-8">
+                  {getPromptKeyFromVersion(selectedVersion).includes('service') 
+                    ? '해당 프롬프트의 응답 히스토리가 없습니다.' 
+                    : '응답 히스토리가 없습니다.'}
+                </p>
               ) : (
                 <div className="space-y-2">
                   {geminiResponses.map((response) => (
@@ -455,7 +471,7 @@ const AdminPanel = () => {
                     >
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-xs font-medium text-green-600">
-                          {response.step.toUpperCase()}
+                          {response.step?.toUpperCase() || 'RESPONSE'}
                         </span>
                         <span className="text-xs text-gray-500">
                           {formatDateTime(response.timestamp)}
@@ -473,14 +489,14 @@ const AdminPanel = () => {
         </div>
       </div>
 
-      {/* 응답 상세 보기 모달 */}
+      {/* 🔥 응답 상세 보기 모달 - 3단계 응답 모두 표시 */}
       {selectedResponse && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium text-gray-900">
-                  Gemini 응답 상세보기 - {selectedResponse.step.toUpperCase()}
+                  Gemini 응답 상세보기
                 </h3>
                 <button
                   onClick={() => setSelectedResponse(null)}
@@ -493,25 +509,46 @@ const AdminPanel = () => {
               </div>
             </div>
             
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              <div className="mb-4">
-                <h4 className="font-medium text-gray-900 mb-2">입력 데이터</h4>
+            <div className="p-6 overflow-y-auto max-h-[75vh]">
+              {/* 1) 입력 데이터 */}
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-2">1</span>
+                  입력 데이터
+                </h4>
                 <pre className="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto">
-                  {JSON.stringify(selectedResponse.formData, null, 2)}
+                  {JSON.stringify(selectedResponse.formData || selectedResponse.input || {}, null, 2)}
                 </pre>
               </div>
               
-              <div>
-                <h4 className="font-medium text-gray-900 mb-2">Gemini 응답</h4>
-                <div className="bg-gray-50 p-4 rounded-lg">
+              {/* 2) Step1 Gemini 응답 */}
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded mr-2">2</span>
+                  Step1 프롬프트 응답
+                </h4>
+                <div className="bg-green-50 p-4 rounded-lg">
                   <pre className="whitespace-pre-wrap text-sm">
-                    {selectedResponse.response}
+                    {selectedResponse.rawStep1Response || '(Step1 응답 데이터가 없습니다)'}
                   </pre>
                 </div>
               </div>
               
-              <div className="mt-4 text-xs text-gray-500">
-                생성 시간: {formatDateTime(selectedResponse.timestamp)}
+              {/* 3) Step2 Gemini 응답 */}
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                  <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded mr-2">3</span>
+                  Step2 프롬프트 응답
+                </h4>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <pre className="whitespace-pre-wrap text-sm">
+                    {selectedResponse.rawStep2Response || selectedResponse.response || '(Step2 응답 데이터가 없습니다)'}
+                  </pre>
+                </div>
+              </div>
+              
+              <div className="mt-4 text-xs text-gray-500 text-center">
+                생성 시간: {formatDateTime(selectedResponse.timestamp || new Date())}
               </div>
             </div>
           </div>
@@ -527,68 +564,24 @@ const AdminPanel = () => {
             </div>
             
             <div className="p-6">
+              {/* 테스트 데이터 입력 폼 */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">브랜드명</label>
-                  <input
-                    type="text"
-                    value={testFormData.brandName}
-                    onChange={(e) => setTestFormData(prev => ({...prev, brandName: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">산업 카테고리</label>
-                  <input
-                    type="text"
-                    value={testFormData.industryCategory}
-                    onChange={(e) => setTestFormData(prev => ({...prev, industryCategory: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">제품/서비스 카테고리</label>
-                  <input
-                    type="text"
-                    value={testFormData.productServiceCategory}
-                    onChange={(e) => setTestFormData(prev => ({...prev, productServiceCategory: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">영상 목적</label>
-                  <select
-                    value={testFormData.videoPurpose}
-                    onChange={(e) => setTestFormData(prev => ({...prev, videoPurpose: e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  >
-                    <option value="제품">제품</option>
-                    <option value="서비스">서비스</option>
-                  </select>
-                </div>
+                {Object.keys(testFormData).map((key) => (
+                  <div key={key}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {key}
+                    </label>
+                    <input
+                      type="text"
+                      value={testFormData[key]}
+                      onChange={(e) => setTestFormData(prev => ({...prev, [key]: e.target.value}))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                  </div>
+                ))}
               </div>
               
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">핵심 타겟</label>
-                <textarea
-                  value={testFormData.coreTarget}
-                  onChange={(e) => setTestFormData(prev => ({...prev, coreTarget: e.target.value}))}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">핵심 차별점</label>
-                <textarea
-                  value={testFormData.coreDifferentiation}
-                  onChange={(e) => setTestFormData(prev => ({...prev, coreDifferentiation: e.target.value}))}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={() => setTestMode(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
@@ -597,7 +590,7 @@ const AdminPanel = () => {
                 </button>
                 <button
                   onClick={() => testPrompt(activeTab, activeTab.includes('step1') ? 'step1' : 'step2')}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
                   테스트 실행
                 </button>
