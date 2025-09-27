@@ -2,16 +2,6 @@ import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-/*
-  🔥 주요 수정사항:
-  1. 비디오 생성 실패 시 3회 재시도 로직 추가
-  2. 개별 실패가 전체 프로세스 중단하지 않도록 개선
-  3. 실패한 이미지는 정적 이미지로 대체 처리
-  4. 상세한 에러 로깅 및 진행률 표시 개선
-  5. 무한 로딩 방지를 위한 타임아웃 및 강제 완료 로직
-  6. 🔥 NEW: 씬 순서 정렬 강화 (sceneNumber 기준)
-*/
-
 const Step3 = ({
   storyboard,
   selectedConceptId,
@@ -23,16 +13,16 @@ const Step3 = ({
 }) => {
   const styles = storyboard?.styles || [];
   const [logs, setLogs] = useState([]);
-  const [tasks, setTasks] = useState([]); // [{sceneNumber, taskId, duration, title, retryCount}]
+  const [tasks, setTasks] = useState([]);
   const [polling, setPolling] = useState(false);
   const [percent, setPercent] = useState(0);
   const [error, setError] = useState(null);
-  const [taskRetries, setTaskRetries] = useState(new Map()); // sceneNumber -> retryCount
+  const [taskRetries, setTaskRetries] = useState(new Map());
 
   const selected = styles.find(s => s.concept_id === selectedConceptId) || null;
-  const MAX_RETRIES = 3; // 🔥 최대 재시도 횟수
-  const RETRY_DELAY = 5000; // 🔥 재시도 간격 (5초)
-  const MAX_TOTAL_TIME = 300000; // 🔥 최대 총 처리 시간 (5분)
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 5000;
+  const MAX_TOTAL_TIME = 300000;
 
   const log = (m) => {
     const timestampedMsg = `[${new Date().toLocaleTimeString()}] ${m}`;
@@ -40,7 +30,6 @@ const Step3 = ({
     console.log(timestampedMsg);
   };
 
-  // 🔥 개별 비디오 태스크 생성 (재시도 로직 포함)
   const createVideoTask = async (img, retryCount = 0) => {
     const maxRetries = MAX_RETRIES;
     
@@ -56,7 +45,7 @@ const Step3 = ({
         };
       }
 
-      log(`🎬 Scene ${img.sceneNumber} 비디오 태스크 생성 중${retryCount > 0 ? ` (재시도 ${retryCount}/${maxRetries})` : ''}...`);
+      log(`🎬 Scene ${img.sceneNumber} 영상을 생성하고 있습니다${retryCount > 0 ? ` (재시도 ${retryCount}/${maxRetries})` : ''}...`);
       
       const response = await fetch(`${API_BASE}/api/image-to-video`, {
         method: 'POST',
@@ -86,18 +75,17 @@ const Step3 = ({
         const errorText = await response.text().catch(() => '');
         const errorMsg = `HTTP ${response.status}: ${errorText.slice(0, 100)}`;
         
-        // 🔥 재시도 가능한 에러인지 판단
         const retryableErrors = [429, 500, 502, 503, 504];
         const isRetryable = retryableErrors.includes(response.status) || 
                            errorText.toLowerCase().includes('timeout') ||
                            errorText.toLowerCase().includes('overload');
         
         if (isRetryable && retryCount < maxRetries) {
-          log(`⚠️ Scene ${img.sceneNumber}: ${errorMsg} - ${RETRY_DELAY/1000}초 후 재시도`);
+          log(`⚠️ Scene ${img.sceneNumber}: 잠시 후 다시 시도합니다`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
           return createVideoTask(img, retryCount + 1);
         } else {
-          log(`❌ Scene ${img.sceneNumber}: ${errorMsg} - 정적 이미지로 대체`);
+          log(`❌ Scene ${img.sceneNumber}: 정적 이미지로 대체됩니다`);
           return {
             success: false,
             useStaticImage: true,
@@ -109,7 +97,7 @@ const Step3 = ({
 
       const result = await response.json();
       if (result.success && result.task?.taskId) {
-        log(`✅ Scene ${img.sceneNumber}: 태스크 생성 성공 (${result.task.taskId})`);
+        log(`✅ Scene ${img.sceneNumber}: 영상 생성 작업 시작`);
         return {
           success: true,
           taskId: result.task.taskId,
@@ -119,11 +107,11 @@ const Step3 = ({
         };
       } else {
         if (retryCount < maxRetries) {
-          log(`⚠️ Scene ${img.sceneNumber}: 응답 이상 - ${RETRY_DELAY/1000}초 후 재시도`);
+          log(`⚠️ Scene ${img.sceneNumber}: 응답 오류 - 재시도 중`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
           return createVideoTask(img, retryCount + 1);
         } else {
-          log(`❌ Scene ${img.sceneNumber}: 태스크 생성 실패 - 정적 이미지로 대체`);
+          log(`❌ Scene ${img.sceneNumber}: 생성 실패 - 정적 이미지로 대체`);
           return {
             success: false,
             useStaticImage: true,
@@ -136,7 +124,7 @@ const Step3 = ({
       const errorMsg = error.message || 'Unknown error';
       
       if (retryCount < maxRetries) {
-        log(`⚠️ Scene ${img.sceneNumber}: ${errorMsg} - ${RETRY_DELAY/1000}초 후 재시도`);
+        log(`⚠️ Scene ${img.sceneNumber}: ${errorMsg} - 재시도 중`);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         return createVideoTask(img, retryCount + 1);
       } else {
@@ -153,12 +141,12 @@ const Step3 = ({
 
   const startGeneration = async () => {
     if (!selected) {
-      setError('컨셉을 먼저 선택하세요');
+      setError('먼저 컨셉을 선택해주세요');
       return;
     }
     if (isLoading) return;
     if (!Array.isArray(selected.images) || selected.images.length === 0) {
-      setError('선택된 컨셉에 생성된 이미지가 없습니다 (Step2 확인)');
+      setError('선택된 컨셉에 생성된 이미지가 없습니다');
       return;
     }
 
@@ -170,18 +158,16 @@ const Step3 = ({
     setTaskRetries(new Map());
     
     const startTime = Date.now();
-    log(`🚀 영상 태스크 생성 시작: ${selected.style} (이미지 ${selected.images.length}개)`);
+    log(`🚀 영상 클립 생성을 시작합니다: ${selected.style}`);
 
     try {
-      // 🔥 NEW: 이미지를 sceneNumber 순으로 정렬
       const sortedImages = [...selected.images].sort((a, b) => a.sceneNumber - b.sceneNumber);
-      log(`🔄 이미지 정렬 완료: Scene ${sortedImages.map(img => img.sceneNumber).join(', ')}`);
+      log(`📋 총 ${sortedImages.length}개 씬 처리 예정`);
 
       const newTasks = [];
       let successfulTasks = 0;
       let staticImageCount = 0;
 
-      // 🔥 모든 이미지에 대해 태스크 생성 (실패해도 계속 진행)
       for (let i = 0; i < sortedImages.length; i++) {
         const img = sortedImages[i];
         
@@ -192,10 +178,9 @@ const Step3 = ({
             newTasks.push(taskResult);
             successfulTasks++;
           } else if (taskResult.useStaticImage) {
-            // 🔥 정적 이미지로 대체 - 비디오 URL을 이미지 URL로 설정
             const targetImg = selected.images.find(si => si.sceneNumber === img.sceneNumber);
             if (targetImg) {
-              targetImg.videoUrl = targetImg.url; // 정적 이미지 사용
+              targetImg.videoUrl = targetImg.url;
               targetImg.isStaticVideo = true;
               targetImg.failureReason = taskResult.error;
               log(`📷 Scene ${img.sceneNumber}: 정적 이미지로 설정 완료`);
@@ -203,34 +188,30 @@ const Step3 = ({
             staticImageCount++;
           }
           
-          // 진행률 업데이트
           const progress = Math.round(((i + 1) / sortedImages.length) * 50);
           setPercent(progress);
           
         } catch (error) {
           log(`❌ Scene ${img.sceneNumber}: 예외 발생 - ${error.message}`);
-          // 개별 실패는 무시하고 계속 진행
         }
 
-        // API 부하 방지를 위한 짧은 딜레이
         if (i < sortedImages.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
       if (successfulTasks === 0 && staticImageCount === 0) {
-        throw new Error('모든 비디오 태스크 생성 실패');
+        throw new Error('모든 영상 클립 생성에 실패했습니다');
       }
 
       setTasks(newTasks);
       
       if (newTasks.length > 0) {
         setPolling(true);
-        log(`📋 총 ${newTasks.length}개 태스크 폴링 시작 (정적 이미지: ${staticImageCount}개)`);
+        log(`📊 ${newTasks.length}개 작업 진행 중 (정적: ${staticImageCount}개)`);
         setPercent(50);
       } else {
-        // 모든 이미지가 정적 이미지로 대체된 경우
-        log(`📋 모든 이미지가 정적 이미지로 처리됨 (${staticImageCount}개)`);
+        log(`📊 모든 씬이 정적 이미지로 처리됨 (${staticImageCount}개)`);
         setIsLoading(false);
         setPercent(100);
       }
@@ -239,19 +220,18 @@ const Step3 = ({
       const processingTime = Date.now() - startTime;
       setError(e.message);
       setIsLoading(false);
-      log(`❌ 전체 생성 실패 (${processingTime}ms): ${e.message}`);
+      log(`❌ 생성 실패 (${processingTime}ms): ${e.message}`);
     }
   };
 
-  // 🔥 개선된 폴링 로직 (타임아웃 및 강제 완료 포함)
   useEffect(() => {
     if (!polling || tasks.length === 0) return;
     
     let cancelled = false;
     let startTime = Date.now();
     let pollCount = 0;
-    const maxPollTime = MAX_TOTAL_TIME; // 5분 최대
-    const pollInterval = 5000; // 5초마다 폴링
+    const maxPollTime = MAX_TOTAL_TIME;
+    const pollInterval = 5000;
 
     const poll = async () => {
       if (cancelled) return;
@@ -259,9 +239,8 @@ const Step3 = ({
       pollCount++;
       const elapsedTime = Date.now() - startTime;
       
-      // 🔥 최대 시간 초과 체크
       if (elapsedTime > maxPollTime) {
-        log(`⏰ 최대 처리 시간 초과 (${Math.round(maxPollTime/1000)}초) - 현재 상태로 완료`);
+        log(`⏰ 최대 처리 시간 초과 - 현재 상태로 완료`);
         setPolling(false);
         setIsLoading(false);
         setPercent(100);
@@ -269,21 +248,20 @@ const Step3 = ({
       }
 
       try {
-        // 🔥 완료되지 않은 태스크만 확인
         const unfinished = tasks.filter(t => {
           const img = selected?.images?.find(im => im.sceneNumber === t.sceneNumber);
           return !(img && img.videoUrl && !img.isStaticVideo);
         });
 
         if (unfinished.length === 0) {
-          log('🎉 모든 비디오 완료!');
+          log('🎉 모든 영상 클립 생성 완료!');
           setPolling(false);
           setIsLoading(false);
           setPercent(100);
           return;
         }
 
-        log(`📊 폴링 ${pollCount}회차: 대기 중인 태스크 ${unfinished.length}개 (경과: ${Math.round(elapsedTime/1000)}초)`);
+        log(`📊 진행 중: ${unfinished.length}개 대기 (${Math.round(elapsedTime/1000)}초 경과)`);
 
         const response = await fetch(`${API_BASE}/api/video-status`, {
           method: 'POST',
@@ -305,11 +283,10 @@ const Step3 = ({
 
         const result = await response.json();
         if (!result.success) {
-          log(`⚠️ 상태 확인 에러: ${result.error}`);
+          log(`⚠️ 상태 확인 오류: ${result.error}`);
           return;
         }
 
-        // 🔥 완료된 세그먼트 처리
         let newCompletions = 0;
         for (const seg of (result.segments || [])) {
           if (seg.status === 'completed' && seg.videoUrl) {
@@ -318,21 +295,19 @@ const Step3 = ({
               target.videoUrl = seg.videoUrl;
               target.isStaticVideo = false;
               newCompletions++;
-              log(`✅ Scene ${seg.sceneNumber}: 비디오 완료`);
+              log(`✅ Scene ${seg.sceneNumber}: 영상 클립 완료`);
             }
           } else if (seg.status === 'failed') {
-            // 🔥 실패한 태스크는 정적 이미지로 대체
             const target = selected.images.find(img => img.sceneNumber === seg.sceneNumber);
             if (target && !target.videoUrl) {
-              target.videoUrl = target.url; // 정적 이미지로 대체
+              target.videoUrl = target.url;
               target.isStaticVideo = true;
               target.failureReason = seg.error || 'Video generation failed';
-              log(`❌ Scene ${seg.sceneNumber}: 비디오 실패 - 정적 이미지로 대체`);
+              log(`❌ Scene ${seg.sceneNumber}: 실패 - 정적 이미지로 대체`);
             }
           }
         }
 
-        // 🔥 진행률 업데이트
         const completedTasks = tasks.filter(t => {
           const img = selected.images.find(i => i.sceneNumber === t.sceneNumber);
           return !!img?.videoUrl;
@@ -342,12 +317,11 @@ const Step3 = ({
         setPercent(pollProgress);
 
         if (newCompletions > 0) {
-          log(`📈 새로 완료된 비디오: ${newCompletions}개 (전체: ${completedTasks}/${tasks.length})`);
+          log(`📈 새로 완료: ${newCompletions}개 (전체: ${completedTasks}/${tasks.length})`);
         }
 
-        // 🔥 모든 태스크 완료 체크
         if (completedTasks === tasks.length) {
-          log('🎉 모든 비디오 태스크 완료!');
+          log('🎉 모든 작업 완료!');
           setPolling(false);
           setIsLoading(false);
           setPercent(100);
@@ -358,10 +332,7 @@ const Step3 = ({
       }
     };
 
-    // 즉시 첫 폴링 실행
     poll();
-    
-    // 정기적 폴링 설정
     const interval = setInterval(poll, pollInterval);
     
     return () => {
@@ -370,192 +341,165 @@ const Step3 = ({
     };
   }, [polling, tasks, selected, setIsLoading]);
 
-  // 🔥 완료 상태 체크 (정적 이미지 포함)
   const allDone = tasks.length > 0 && selected?.images?.every(img => !!img.videoUrl);
   const completedCount = selected?.images?.filter(img => !!img.videoUrl).length || 0;
   const staticCount = selected?.images?.filter(img => img.isStaticVideo).length || 0;
 
-  // 🔥 NEW: 이미지를 sceneNumber 순으로 정렬하여 표시
   const sortedImages = selected?.images ? 
     [...selected.images].sort((a, b) => a.sceneNumber - b.sceneNumber) : [];
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <h2 className="text-2xl font-bold mb-4">3단계: 컨셉 선택 & 영상 클립 생성</h2>
-      
-      {error && (
-        <div className="bg-red-100 text-red-700 p-3 mb-4 rounded border">
-          <div className="font-semibold">❌ 오류</div>
-          <div className="text-sm">{error}</div>
-        </div>
-      )}
-
-      {/* 🔥 진행 상황 표시 개선 */}
-      {isLoading && (
-        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded">
-          <div className="flex justify-between items-center mb-2">
-            <span className="font-semibold text-blue-800">🎬 영상 클립 생성 중...</span>
-            <span className="text-blue-600">{percent}%</span>
-          </div>
-          <div className="w-full bg-blue-200 h-2 rounded overflow-hidden">
-            <div
-              className="h-2 bg-gradient-to-r from-indigo-500 to-pink-600 transition-all duration-300"
-              style={{ width: `${percent}%` }}
-            />
-          </div>
-          <div className="text-xs text-blue-600 mt-2">
-            완료: {completedCount}/{selected?.images?.length || 0} 
-            {staticCount > 0 && ` (정적 이미지: ${staticCount}개)`}
-          </div>
-        </div>
-      )}
-
-      <div className="grid md:grid-cols-3 gap-5 mb-6">
-        {styles.map(s => (
-          <div
-            key={s.concept_id}
-            onClick={() => !isLoading && setSelectedConceptId(s.concept_id)}
-            className={`border rounded p-3 cursor-pointer transition-all ${
-              selectedConceptId === s.concept_id
-                ? 'ring-2 ring-blue-500 bg-blue-50'
-                : 'hover:border-blue-300 hover:bg-gray-50'
-            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <div className="font-semibold mb-1">{s.style}</div>
-            <div className="text-xs text-gray-500 mb-2 line-clamp-3">
-              {s.summary}
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {(s.images || []).slice(0, 6).map(img => (
-                <img
-                  key={img.id}
-                  src={img.thumbnail || img.url}
-                  alt={`Scene ${img.sceneNumber}`}
-                  className="w-full h-20 object-cover rounded"
-                />
-              ))}
-            </div>
-            <div className="mt-2 text-xs text-gray-600">
-              Scenes: {s.imagePrompts?.length || 0} / Images: {(s.images || []).length}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {selected && (
-        <div className="mb-6">
-          <h3 className="font-semibold mb-2">
-            {selected.style} - Scene 상태 ({completedCount}/{selected.images.length} 완료)
-          </h3>
-          {/* 🔥 NEW: 정렬된 이미지로 표시 */}
-          <div className="grid md:grid-cols-5 gap-3">
-            {sortedImages.map(img => {
-              const hasVideo = !!img.videoUrl;
-              const isStatic = img.isStaticVideo;
-              
-              return (
-                <div
-                  key={img.id}
-                  className={`border rounded p-2 text-xs transition-all ${
-                    hasVideo 
-                      ? (isStatic ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200')
-                      : 'bg-gray-50 border-gray-200'
-                  }`}
-                >
-                  <img
-                    src={img.thumbnail || img.url}
-                    alt={`Scene ${img.sceneNumber}`}
-                    className="w-full h-24 object-cover rounded mb-1"
-                  />
-                  <div className="font-medium">Scene {img.sceneNumber}</div>
-                  <div className={`text-[10px] ${
-                    hasVideo 
-                      ? (isStatic ? 'text-yellow-600' : 'text-green-600')
-                      : 'text-gray-500'
-                  }`}>
-                    {hasVideo 
-                      ? (isStatic ? '🖼️ 정적 이미지' : '🎬 비디오 완료')
-                      : '⏳ 처리 중'
-                    }
-                  </div>
-                  
-                  {/* 🔥 실패 사유 표시 */}
-                  {img.failureReason && (
-                    <div className="text-[9px] text-red-500 mt-1" title={img.failureReason}>
-                      ❌ {img.failureReason.substring(0, 20)}...
-                    </div>
-                  )}
-                  
-                  {img.videoUrl && (
-                    <video
-                      src={img.videoUrl}
-                      className="w-full mt-1 rounded"
-                      controls
-                      muted
-                      poster={isStatic ? img.url : undefined}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black">
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
+          <h2 className="text-3xl font-bold mb-2 text-white">영상 클립 생성</h2>
+          <p className="text-gray-400 mb-6">원하는 컨셉을 선택하고 영상을 생성하세요</p>
           
-          {/* 🔥 상태 요약 */}
-          {completedCount > 0 && (
-            <div className="mt-3 p-2 bg-gray-100 rounded text-sm text-gray-700">
-              📊 완료 상태: 비디오 {completedCount - staticCount}개, 정적 이미지 {staticCount}개
-              {staticCount > 0 && (
-                <span className="text-yellow-600 ml-2">
-                  ℹ️ 일부 비디오 생성이 실패하여 정적 이미지로 대체되었습니다
-                </span>
-              )}
-              <div className="text-xs text-gray-500 mt-1">
-                📋 씬 순서: {sortedImages.map(img => `Scene${img.sceneNumber}`).join(' → ')}
+          {error && (
+            <div className="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg">
+              <div className="font-semibold">오류가 발생했습니다</div>
+              <div className="text-sm mt-1">{error}</div>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="mb-6 bg-blue-900/30 border border-blue-800 p-4 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold text-blue-300">영상 클립을 생성하고 있습니다...</span>
+                <span className="text-blue-400">{percent}%</span>
+              </div>
+              <div className="w-full bg-gray-700 h-2 rounded overflow-hidden">
+                <div
+                  className="h-2 bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <div className="text-xs text-blue-400 mt-2">
+                완료: {completedCount}/{selected?.images?.length || 0} 
+                {staticCount > 0 && ` (정적: ${staticCount}개)`}
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      <div className="flex justify-between pt-4 border-t">
-        <button 
-          onClick={onPrev} 
-          className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors" 
-          disabled={isLoading}
-        >
-          이전
-        </button>
-        
-        {!allDone ? (
-          <button
-            onClick={startGeneration}
-            disabled={!selected || isLoading}
-            className="px-6 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-700 hover:to-pink-700 transition-colors"
-          >
-            {selected
-              ? isLoading
-                ? `생성 중... (${percent}%)`
-                : '🎬 클립 생성 시작'
-              : '컨셉을 선택하세요'}
-          </button>
-        ) : (
-          <button
-            onClick={onNext}
-            className="px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
-          >
-            📹 합치기 단계로 이동
-          </button>
-        )}
+          <div className="grid md:grid-cols-3 gap-4 mb-6">
+            {styles.map(s => (
+              <div
+                key={s.concept_id}
+                onClick={() => !isLoading && setSelectedConceptId(s.concept_id)}
+                className={`border-2 rounded-xl p-4 cursor-pointer transition-all bg-gray-900/50 ${
+                  selectedConceptId === s.concept_id
+                    ? 'border-blue-500 shadow-lg shadow-blue-500/20'
+                    : 'border-gray-700 hover:border-gray-600'
+                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="font-semibold mb-1 text-white">{s.style}</div>
+                <div className="text-xs text-gray-400 mb-2 line-clamp-2">
+                  {s.summary || s.description}
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {(s.images || []).slice(0, 6).map(img => (
+                    <img
+                      key={img.id}
+                      src={img.thumbnail || img.url}
+                      alt={`Scene ${img.sceneNumber}`}
+                      className="w-full h-16 object-cover rounded"
+                    />
+                  ))}
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  씬: {s.images?.length || 0}개
+                </div>
+                {selectedConceptId === s.concept_id && (
+                  <div className="mt-2 text-xs text-blue-400 font-medium">✓ 선택됨</div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {selected && (
+            <div className="mb-6 bg-gray-900/50 rounded-lg p-4">
+              <h3 className="font-semibold mb-3 text-white">
+                {selected.style} - 씬 진행 상황 ({completedCount}/{selected.images.length})
+              </h3>
+              <div className="grid md:grid-cols-5 gap-3">
+                {sortedImages.map(img => {
+                  const hasVideo = !!img.videoUrl;
+                  const isStatic = img.isStaticVideo;
+                  
+                  return (
+                    <div
+                      key={img.id}
+                      className={`border rounded-lg p-2 text-xs transition-all ${
+                        hasVideo 
+                          ? (isStatic ? 'bg-yellow-900/30 border-yellow-700' : 'bg-green-900/30 border-green-700')
+                          : 'bg-gray-800 border-gray-700'
+                      }`}
+                    >
+                      <img
+                        src={img.thumbnail || img.url}
+                        alt={`Scene ${img.sceneNumber}`}
+                        className="w-full h-20 object-cover rounded mb-1"
+                      />
+                      <div className="font-medium text-gray-300">Scene {img.sceneNumber}</div>
+                      <div className={`text-[10px] ${
+                        hasVideo 
+                          ? (isStatic ? 'text-yellow-400' : 'text-green-400')
+                          : 'text-gray-500'
+                      }`}>
+                        {hasVideo 
+                          ? (isStatic ? '🖼️ 정적' : '🎬 완료')
+                          : '⏳ 처리 중'
+                        }
+                      </div>
+                      
+                      {img.videoUrl && (
+                        <video
+                          src={img.videoUrl}
+                          className="w-full mt-1 rounded bg-black"
+                          controls
+                          muted
+                          poster={isStatic ? img.url : undefined}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between pt-6 border-t border-gray-700">
+            <button 
+              onClick={onPrev} 
+              className="px-6 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors" 
+              disabled={isLoading}
+            >
+              이전 단계
+            </button>
+            
+            {!allDone ? (
+              <button
+                onClick={startGeneration}
+                disabled={!selected || isLoading}
+                className="px-8 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+              >
+                {selected
+                  ? isLoading
+                    ? `생성 중... (${percent}%)`
+                    : '🎬 클립 생성 시작'
+                  : '컨셉을 선택하세요'}
+              </button>
+            ) : (
+              <button
+                onClick={onNext}
+                className="px-8 py-3 rounded-lg bg-green-600 hover:bg-green-500 text-white transition-colors font-medium"
+              >
+                다음 단계로 →
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-
-      <details className="mt-6">
-        <summary className="cursor-pointer font-semibold text-gray-700 hover:text-gray-900">
-          📋 상세 로그 보기 ({logs.length}개)
-        </summary>
-        <div className="mt-2 h-48 overflow-auto bg-gray-900 text-green-300 p-3 text-xs font-mono whitespace-pre-wrap rounded border">
-          {logs.slice(-400).join('\n')}
-        </div>
-      </details>
     </div>
   );
 };
