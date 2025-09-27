@@ -1,7 +1,10 @@
 // api/storyboard-init.js - 완전 복구 (Part 1) - 영상설명 필드만 제거, 나머지 모든 로직 유지
+import 'dotenv/config';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
-import { safeCallGemini } from './utils/gemini-helper.js';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // 🔥 프롬프트 파일 매핑 - 제품/서비스 분기
 const PROMPT_FILE_MAPPING = {
