@@ -18,6 +18,7 @@ import loadMoodList from '../api/load-mood-list.js';
 import loadBgmList from '../api/load-bgm-list.js';
 import bgmStream from '../api/bgm-stream.js';
 import nanobanaCompose from '../api/nanobanana-compose.js';
+import adminConfig from '../api/admin-config.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +37,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key'],
   maxAge: 86400
 }));
+
+app.use('/api/admin-config', adminConfig);
 
 // Body parser 설정 강화
 app.use(bodyParser.json({ 
