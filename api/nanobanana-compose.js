@@ -1,5 +1,6 @@
 // api/nanobanana-compose.js - 합성 기능 개선 + 최신 Gemini 2.5 API 사용
-import { getApiKeyStatus, safeCallGemini } from './utils/gemini-helper.js';
+import { safeCallGemini, getApiKeyStatus } from '../src/utils/apiHelpers.js';
+
 
 // 🔥 Gemini를 이용한 이미지 합성 함수 - 2025년 최신 API 사용
 async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositingInfo) {
