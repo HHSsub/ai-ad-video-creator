@@ -1,6 +1,5 @@
-// src/utils/fieldConfig.js - 필드 설정 관리
+// src/utils/fieldConfig.js - 영상설명 필드 완전 제거 + 예시값 관리자 편집 가능
 
-// 🔥 통합된 필드 설정 (브랜드 로고, 제품 이미지를 하나로 통합)
 const DEFAULT_FIELD_CONFIG = {
   brandName: {
     key: 'brandName',
@@ -8,9 +7,9 @@ const DEFAULT_FIELD_CONFIG = {
     required: true,
     visible: true,
     type: 'text',
-    placeholder: '예: 삼성, LG, 네이버',
+    placeholder: '예: 삼성, LG, 현대',
     defaultValue: '',
-    randomValues: ['TechCorp', 'InnovateLab', 'FutureVision', 'SmartSolutions', 'NextGen', 'ProActive']
+    randomValues: ['삼성', 'LG', '현대', 'SK', 'KT', '네이버', '카카오', '쿠팡', '배달의민족', '토스']
   },
   industryCategory: {
     key: 'industryCategory',
@@ -18,39 +17,32 @@ const DEFAULT_FIELD_CONFIG = {
     required: true,
     visible: true,
     type: 'select',
-    placeholder: '산업 카테고리를 선택하세요',
     options: [
-      { value: 'technology', label: 'IT/기술' },
-      { value: 'healthcare', label: '헬스케어/의료' },
-      { value: 'finance', label: '금융' },
-      { value: 'education', label: '교육' },
+      { value: 'technology', label: '기술/IT' },
+      { value: 'finance', label: '금융/보험' },
       { value: 'retail', label: '유통/소매' },
       { value: 'food', label: '식품/음료' },
       { value: 'fashion', label: '패션/뷰티' },
       { value: 'automotive', label: '자동차' },
-      { value: 'real_estate', label: '부동산' },
+      { value: 'healthcare', label: '헬스케어' },
+      { value: 'education', label: '교육' },
       { value: 'entertainment', label: '엔터테인먼트' },
+      { value: 'real-estate', label: '부동산' },
+      { value: 'travel', label: '여행/관광' },
       { value: 'other', label: '기타' }
-    ]
+    ],
+    defaultValue: '',
+    randomValues: ['기술/IT', '금융/보험', '유통/소매', '식품/음료', '패션/뷰티']
   },
   productServiceCategory: {
     key: 'productServiceCategory',
     label: '제품/서비스 카테고리',
     required: true,
     visible: true,
-    type: 'select',
-    placeholder: '제품/서비스 카테고리를 선택하세요',
-    options: [
-      { value: 'mobile_app', label: '모바일 앱' },
-      { value: 'web_service', label: '웹 서비스' },
-      { value: 'physical_product', label: '실물 제품' },
-      { value: 'software', label: '소프트웨어' },
-      { value: 'consulting', label: '컨설팅' },
-      { value: 'education', label: '교육 서비스' },
-      { value: 'subscription', label: '구독 서비스' },
-      { value: 'marketplace', label: '마켓플레이스' },
-      { value: 'other', label: '기타' }
-    ]
+    type: 'text',
+    placeholder: '예: 스마트폰, 세탁기, 자동차',
+    defaultValue: '',
+    randomValues: ['스마트폰', '세탁기', '자동차', '화장품', '음식배달', '금융서비스', '온라인쇼핑', '게임']
   },
   productServiceName: {
     key: 'productServiceName',
@@ -58,9 +50,9 @@ const DEFAULT_FIELD_CONFIG = {
     required: true,
     visible: true,
     type: 'text',
-    placeholder: '예: iPhone 15, ChatGPT, 스타벅스 라떼',
+    placeholder: '예: 갤럭시 S24, 그램 노트북, 아반떼',
     defaultValue: '',
-    randomValues: ['SmartDevice Pro', 'AI Assistant Plus', 'Premium Service', 'Next Solution', 'Innovation Tool']
+    randomValues: ['갤럭시 S24', '그램 노트북', '아반떼', '카카오페이', '배달의민족', '네이버웹툰', '토스뱅크']
   },
   videoPurpose: {
     key: 'videoPurpose',
@@ -68,39 +60,45 @@ const DEFAULT_FIELD_CONFIG = {
     required: true,
     visible: true,
     type: 'select',
-    placeholder: '영상 제작 목적을 선택하세요',
     options: [
-      { value: 'product', label: '제품' },
-      { value: 'service', label: '서비스' },
-    ]
+      { value: 'brand', label: '브랜드 인지도 향상' },
+      { value: 'product', label: '제품 홍보' },
+      { value: 'service', label: '서비스 홍보' },
+      { value: 'conversion', label: '구매 유도' },
+      { value: 'education', label: '사용법 안내' }
+    ],
+    defaultValue: '',
+    randomValues: ['브랜드 인지도 향상', '제품 홍보', '서비스 홍보', '구매 유도', '사용법 안내']
   },
   videoLength: {
     key: 'videoLength',
     label: '영상 길이',
-    required: false,
+    required: true,
     visible: true,
     type: 'select',
-    placeholder: '영상 길이를 선택하세요',
-    defaultValue: '10초',
     options: [
-      { value: '10초', label: '10초 (표준)' },
-      { value: '15초', label: '15초 (상세)' },
-      { value: '30초', label: '30초 (긴 설명)' }
-    ]
+      { value: '10초', label: '10초 (숏폼)' },
+      { value: '15초', label: '15초 (인스타그램)' },
+      { value: '30초', label: '30초 (유튜브 숏츠)' },
+      { value: '60초', label: '60초 (긴 형태)' }
+    ],
+    defaultValue: '',
+    randomValues: ['10초', '15초', '30초', '60초']
   },
-  aspectRatioCode: {
-    key: 'aspectRatioCode',
+  aspectRatio: {
+    key: 'aspectRatio',
     label: '영상 비율',
-    required: false,
+    required: true,
     visible: true,
     type: 'select',
-    placeholder: '영상 비율을 선택하세요',
-    defaultValue: 'widescreen_16_9',
     options: [
       { value: 'widescreen_16_9', label: '가로 (16:9)' },
-      { value: 'vertical_9_16', label: '세로 (9:16)' },
-      { value: 'square_1_1', label: '정사각형 (1:1)' }
-    ]
+      { value: 'square_1_1', label: '정사각형 (1:1)' },
+      { value: 'portrait_9_16', label: '세로 (9:16)' },
+      { value: 'portrait_4_5', label: '세로 (4:5)' }
+    ],
+    defaultValue: '',
+    randomValues: ['가로 (16:9)', '정사각형 (1:1)', '세로 (9:16)', '세로 (4:5)']
   },
   coreTarget: {
     key: 'coreTarget',
@@ -144,19 +142,13 @@ const DEFAULT_FIELD_CONFIG = {
     descriptions: {
       product: '제품일 때엔 제품 이미지를, 서비스 홍보일 때엔 브랜드 로고 이미지를 올려주세요',
       service: '서비스 홍보용 브랜드 로고 이미지를 올려주세요',
+      brand: '브랜드 인지도 향상을 위한 로고 이미지를 올려주세요',
+      conversion: '구매 유도용 제품 이미지를 올려주세요',
+      education: '사용법 안내용 제품 이미지를 올려주세요',
       default: '제품일 때엔 제품 이미지를, 서비스 홍보일 때엔 브랜드 로고 이미지를 올려주세요'
     }
-  },
-  
-  // 🔥 이미지 설명 필드 (선택사항)
-  // imageUploadDesc: { 
-  //   key: 'imageUploadDesc', 
-  //   type: 'text', 
-  //   label: '이미지 설명', 
-  //   required: false, 
-  //   visible: false, // 기본적으로 숨김
-  //   placeholder: '이미지에 대한 설명을 입력하세요.' 
-  // }
+  }
+  // 🔥 영상설명 필드 완전 제거됨 - videoDescription 삭제
 };
 
 // LocalStorage 키
@@ -205,7 +197,7 @@ export const saveFieldConfig = (config) => {
 };
 
 /**
- * 🔥 Admin 설정 로드 (라벨, 설명문구 등)
+ * 🔥 Admin 설정 로드 (라벨, 설명문구, 예시값 등)
  */
 export const loadAdminSettings = () => {
   try {
@@ -220,15 +212,15 @@ export const loadAdminSettings = () => {
 };
 
 /**
- * 🔥 Admin 설정 저장 (라벨, 설명문구 등)
+ * 🔥 Admin 설정 저장 (라벨, 설명문구, 예시값 등)
  */
 export const saveAdminSettings = (settings) => {
   try {
     localStorage.setItem(ADMIN_SETTINGS_KEY, JSON.stringify(settings));
     
-    // 🔥 실시간 반영을 위한 브로드캐스트
+    // 🔥 실시간 동기화
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
-      const channel = new BroadcastChannel('admin-settings-updates');
+      const channel = new BroadcastChannel('field-config-updates');
       channel.postMessage({
         type: 'ADMIN_SETTINGS_UPDATED',
         settings: settings,
@@ -244,78 +236,73 @@ export const saveAdminSettings = (settings) => {
 };
 
 /**
- * 필드 설정 초기화
+ * 🔥 숨겨진 필드들에 대한 기본값 적용
  */
-export const resetFieldConfig = () => {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(ADMIN_SETTINGS_KEY);
-    return DEFAULT_FIELD_CONFIG;
-  } catch (error) {
-    console.error('필드 설정 초기화 오류:', error);
-    return DEFAULT_FIELD_CONFIG;
-  }
-};
-
-/**
- * 랜덤 값 생성
- */
-export const getRandomValue = (field) => {
-  const randomValues = field.randomValues;
-  if (randomValues && randomValues.length > 0) {
-    return randomValues[Math.floor(Math.random() * randomValues.length)];
-  }
-  return field.defaultValue;
-};
-
-/**
- * formData에 기본값/랜덤값 적용
- */
-export const applyDefaultValues = (fieldConfig) => {
-  const formData = {};
+export const applyDefaultValues = (config) => {
+  const defaultValues = {};
   
-  Object.values(fieldConfig).forEach(field => {
-    if (!field.visible) {
-      // 숨겨진 필드는 기본값 또는 랜덤값 적용
-      if (field.key === 'videoLength') {
-        formData[field.key] = '10초';
-      } else if (field.key === 'aspectRatioCode') {
-        formData[field.key] = 'widescreen_16_9';
-      } else {
-        formData[field.key] = getRandomValue(field);
-      }
+  Object.values(config).forEach(field => {
+    if (!field.visible && field.defaultValue !== undefined && field.defaultValue !== '') {
+      defaultValues[field.key] = field.defaultValue;
     }
   });
   
-  return formData;
+  return defaultValues;
 };
 
 /**
- * 🔥 BroadcastChannel을 이용한 실시간 설정 동기화
+ * 🔥 실시간 필드 설정 동기화 설정
  */
 export const setupFieldConfigSync = (onUpdate) => {
-  if (typeof window !== 'undefined' && window.BroadcastChannel) {
-    const configChannel = new BroadcastChannel('field-config-updates');
-    const adminChannel = new BroadcastChannel('admin-settings-updates');
+  if (typeof window === 'undefined' || !window.BroadcastChannel) {
+    return () => {}; // cleanup 함수
+  }
+
+  const channel = new BroadcastChannel('field-config-updates');
+  
+  const handleMessage = (event) => {
+    const { type, config, settings } = event.data;
     
-    configChannel.onmessage = (event) => {
-      if (event.data.type === 'FIELD_CONFIG_UPDATED') {
-        onUpdate('config', event.data.config);
-      }
-    };
-    
-    adminChannel.onmessage = (event) => {
-      if (event.data.type === 'ADMIN_SETTINGS_UPDATED') {
-        onUpdate('admin', event.data.settings);
-      }
-    };
-    
-    // 정리 함수 반환
-    return () => {
-      configChannel.close();
-      adminChannel.close();
-    };
+    if (type === 'FIELD_CONFIG_UPDATED' && config) {
+      onUpdate('config', config);
+    } else if (type === 'ADMIN_SETTINGS_UPDATED' && settings) {
+      onUpdate('admin', settings);
+    }
+  };
+
+  channel.addEventListener('message', handleMessage);
+
+  // cleanup 함수 반환
+  return () => {
+    channel.removeEventListener('message', handleMessage);
+    channel.close();
+  };
+};
+
+/**
+ * 🔥 예시값 업데이트 함수 (관리자용)
+ */
+export const updateFieldPlaceholder = async (fieldKey, newPlaceholder) => {
+  const config = loadFieldConfig();
+  
+  if (config[fieldKey]) {
+    config[fieldKey].placeholder = newPlaceholder;
+    return saveFieldConfig(config);
   }
   
-  return () => {}; // fallback
+  return false;
+};
+
+/**
+ * 🔥 랜덤값 업데이트 함수 (관리자용)
+ */
+export const updateFieldRandomValues = async (fieldKey, newRandomValues) => {
+  const config = loadFieldConfig();
+  
+  if (config[fieldKey] && Array.isArray(newRandomValues)) {
+    config[fieldKey].randomValues = newRandomValues;
+    return saveFieldConfig(config);
+  }
+  
+  return false;
 };
