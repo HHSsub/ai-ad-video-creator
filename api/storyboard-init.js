@@ -45,14 +45,9 @@ function mapAspectRatio(aspectRatio) {
     return 'square_1_1';
   }
   
-  if (cleanRatio.includes('9:16') || (cleanRatio.includes('세로') && !cleanRatio.includes('4:5'))) {
+  if (cleanRatio.includes('9:16') || cleanRatio.includes('세로')) {
     console.log('[mapAspectRatio] → portrait_9_16');
     return 'portrait_9_16';
-  }
-  
-  if (cleanRatio.includes('4:5') || (cleanRatio.includes('세로') && cleanRatio.includes('4:5'))) {
-    console.log('[mapAspectRatio] → portrait_4_5');
-    return 'portrait_4_5';
   }
 
   console.log('[mapAspectRatio] 기본값: widescreen_16_9');
@@ -65,7 +60,6 @@ function getWidthFromAspectRatio(aspectRatio) {
     'widescreen_16_9': 1344,
     'vertical_9_16': 768,
     'square_1_1': 1024,
-    'portrait_4_5': 1024
   };
   return resolutions[aspectRatio] || 1344;
 }
@@ -75,7 +69,6 @@ function getHeightFromAspectRatio(aspectRatio) {
     'widescreen_16_9': 768,
     'vertical_9_16': 1344,
     'square_1_1': 1024,
-    'portrait_4_5': 1280
   };
   return resolutions[aspectRatio] || 768;
 }
