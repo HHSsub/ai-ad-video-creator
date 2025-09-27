@@ -12,7 +12,8 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
   const [editingImageLabel, setEditingImageLabel] = useState(false);
   const [editingImageDesc, setEditingImageDesc] = useState(false);
   const [tempImageLabel, setTempImageLabel] = useState('');
-  const [tempImageDesc, setTempImageDesc] = useState('');
+  const [editingPlaceholder, setEditingPlaceholder] = useState(null);
+  const [tempPlaceholder, setTempPlaceholder] = useState('');
 
   const isAdmin = user?.role === 'admin';
 
@@ -34,7 +35,19 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
         } else if (event.data.type === 'ADMIN_SETTINGS_UPDATED') {
           setAdminSettings(event.data.settings);
         }
-      };
+      const handleLabelEdit = (fieldKey, newLabel) => {
+    const newSettings = {
+      ...adminSettings,
+      [fieldKey]: {
+        ...adminSettings[fieldKey],
+        label: newLabel
+      }
+    };
+    setAdminSettings(newSettings);
+    saveAdminSettings(newSettings);
+    setEditingLabel(null);
+    setTempLabel('');
+  };
 
       channel.addEventListener('message', handleConfigUpdate);
       return () => {
@@ -76,18 +89,18 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     saveFieldConfig(newConfig);
   };
 
-  const handleLabelEdit = (fieldKey, newLabel) => {
-    const newSettings = {
-      ...adminSettings,
+  const handlePlaceholderEdit = (fieldKey, newPlaceholder) => {
+    const newConfig = {
+      ...fieldConfig,
       [fieldKey]: {
-        ...adminSettings[fieldKey],
-        label: newLabel
+        ...fieldConfig[fieldKey],
+        placeholder: newPlaceholder
       }
     };
-    setAdminSettings(newSettings);
-    saveAdminSettings(newSettings);
-    setEditingLabel(null);
-    setTempLabel('');
+    setFieldConfig(newConfig);
+    saveFieldConfig(newConfig);
+    setEditingPlaceholder(null);
+    setTempPlaceholder('');
   };
 
   // 🔥 통합된 이미지 업로드 설정 (실시간 Admin 반영)
@@ -215,6 +228,15 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
                   편집
                 </button>
                 <button
+                  onClick={() => {
+                    setEditingPlaceholder(field.key);
+                    setTempPlaceholder(field.placeholder || '');
+                  }}
+                  className="text-green-600 hover:text-green-700 text-xs"
+                >
+                  힌트편집
+                </button>
+                <button
                   onClick={() => handleHideField(field.key)}
                   className="text-red-600 hover:text-red-700 text-xs"
                 >
@@ -229,9 +251,40 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
         type="text"
         value={formData[field.key] || ''}
         onChange={(e) => handleInputChange(field.key, e.target.value)}
-        placeholder={field.placeholder}
+        placeholder={editingPlaceholder === field.key ? tempPlaceholder : field.placeholder}
         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       />
+      
+      {/* Placeholder 편집 UI */}
+      {editingPlaceholder === field.key && (
+        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={tempPlaceholder}
+              onChange={(e) => setTempPlaceholder(e.target.value)}
+              className="flex-1 text-sm px-2 py-1 border border-green-300 rounded"
+              placeholder="새로운 힌트 텍스트 입력"
+              autoFocus
+            />
+            <button
+              onClick={() => handlePlaceholderEdit(field.key, tempPlaceholder)}
+              className="text-green-600 hover:text-green-700 text-xs px-2 py-1 border border-green-300 rounded"
+            >
+              저장
+            </button>
+            <button
+              onClick={() => {
+                setEditingPlaceholder(null);
+                setTempPlaceholder('');
+              }}
+              className="text-gray-600 hover:text-gray-700 text-xs px-2 py-1 border border-gray-300 rounded"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
       {errors[field.key] && (
         <p className="text-sm text-red-600">{errors[field.key]}</p>
       )}
@@ -258,6 +311,15 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
               편집
             </button>
             <button
+              onClick={() => {
+                setEditingPlaceholder(field.key);
+                setTempPlaceholder(field.placeholder || '');
+              }}
+              className="text-green-600 hover:text-green-700 text-xs"
+            >
+              힌트편집
+            </button>
+            <button
               onClick={() => handleHideField(field.key)}
               className="text-red-600 hover:text-red-700 text-xs"
             >
@@ -269,10 +331,41 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       <textarea
         value={formData[field.key] || ''}
         onChange={(e) => handleInputChange(field.key, e.target.value)}
-        placeholder={field.placeholder}
+        placeholder={editingPlaceholder === field.key ? tempPlaceholder : field.placeholder}
         rows={3}
         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
       />
+      
+      {/* Placeholder 편집 UI */}
+      {editingPlaceholder === field.key && (
+        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={tempPlaceholder}
+              onChange={(e) => setTempPlaceholder(e.target.value)}
+              className="flex-1 text-sm px-2 py-1 border border-green-300 rounded"
+              placeholder="새로운 힌트 텍스트 입력"
+              autoFocus
+            />
+            <button
+              onClick={() => handlePlaceholderEdit(field.key, tempPlaceholder)}
+              className="text-green-600 hover:text-green-700 text-xs px-2 py-1 border border-green-300 rounded"
+            >
+              저장
+            </button>
+            <button
+              onClick={() => {
+                setEditingPlaceholder(null);
+                setTempPlaceholder('');
+              }}
+              className="text-gray-600 hover:text-gray-700 text-xs px-2 py-1 border border-gray-300 rounded"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
       {errors[field.key] && (
         <p className="text-sm text-red-600">{errors[field.key]}</p>
       )}
@@ -326,7 +419,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
   );
 
   // 🔥 통합된 이미지 업로드 필드 렌더링 (실시간 Admin 설정 반영)
-  const renderImageField = (field, descField) => {
+  const renderImageField = (field) => {
     const { label, description } = getImageUploadConfig();
 
     return (
