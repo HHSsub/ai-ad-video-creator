@@ -1,7 +1,7 @@
 // src/components/Step2.jsx - 함수 순서 수정 + Gemini JSON 완전 활용 + 이미지 필드 완전 통합(imageUpload만 사용, 구버전 productImage/brandLogo 완전 제거)
 import { useState } from 'react';
 import PropTypes from 'prop-types';
-import styles from '../styles/components/Step2_module.css';
+import styles from '../styles/components/Step2.module.css';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 // 스피너 오버레이 컴포넌트
