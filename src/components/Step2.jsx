@@ -91,7 +91,6 @@ function getAspectRatioCode(videoAspectRatio) {
     console.log('[getAspectRatioCode] → square_1_1');
     return 'square_1_1';
   }
-  }
   
   console.log('[getAspectRatioCode] 매칭 실패, 기본값: widescreen_16_9');
   return 'widescreen_16_9';
