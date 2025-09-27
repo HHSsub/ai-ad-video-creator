@@ -81,7 +81,7 @@ const DEFAULT_FIELD_CONFIG = {
     randomValues: ['10초', '20초', '30초']
   },
   
-  // 영상비율 - 4:5 제거, 실제 프론트 옵션만
+  // 영상비율 - 4:5 제거, 실제 프론트 옵션만, videoAspectRatio 제거하고 aspectRatio 하나만 사용
   aspectRatio: {
     key: 'aspectRatio',
     label: '영상 비율',
@@ -151,6 +151,7 @@ const DEFAULT_FIELD_CONFIG = {
   }
   // 🔥 영상설명 필드 완전 제거됨 - videoDescription 삭제
   // 🔥 이미지설명 필드 완전 제거됨 - imageUploadDesc 삭제
+  // 🔥 videoAspectRatio 필드 완전 제거됨 - aspectRatio 하나만 사용
 };
 
 // LocalStorage 키
