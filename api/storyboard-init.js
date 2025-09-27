@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
+import { safeCallGemini, getApiKeyStatus } from '../src/utils/apiHelpers.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
