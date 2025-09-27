@@ -1,6 +1,7 @@
 // src/components/Step1.jsx - 영상설명 필드 영구삭제됨 + 1열 세로배치로 수정 + placeholder 편집 기능 추가
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import styles from './Step1_module.css'; 
 import { loadFieldConfig, saveFieldConfig, loadAdminSettings, saveAdminSettings } from '../utils/fieldConfig';
 
 const Step1 = ({ formData, setFormData, user, onNext }) => {
