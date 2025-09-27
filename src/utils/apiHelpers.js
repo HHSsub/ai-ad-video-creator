@@ -39,19 +39,13 @@ function isRetryableError(error, statusCode) {
  * 🔥 환경변수에서 텍스트용 Gemini 모델 가져오기 (Pro 우선)
  */
 function getTextGeminiModel() {
-  const model = process.env.GEMINI_MODEL || 
-                process.env.VITE_GEMINI_MODEL || 
-                process.env.REACT_APP_GEMINI_MODEL || 
-                'gemini-2.5-pro';
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
   console.log(`[getTextGeminiModel] 텍스트용 모델 선택: ${model}`);
   return model;
 }
 
 function getFallbackTextModel() {
-  const model = process.env.FALLBACK_GEMINI_MODEL || 
-                process.env.VITE_FALLBACK_GEMINI_MODEL || 
-                process.env.REACT_APP_FALLBACK_GEMINI_MODEL || 
-                'gemini-2.5-flash';
+  const model = process.env.FALLBACK_GEMINI_MODEL || 'gemini-2.5-flash';
   console.log(`[getFallbackTextModel] 폴백 텍스트 모델: ${model}`);
   return model;
 }
