@@ -308,6 +308,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-username': user.username  // 🔥 이 한 줄만 추가
         },
         body: JSON.stringify(apiPayload),
       });
