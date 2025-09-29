@@ -1,0 +1,20 @@
+{
+  "admin": {
+    "id": "admin",
+    "password": "Upnexx!!",
+    "role": "admin",
+    "name": "관리자",
+    "usageLimit": null,
+    "usageCount": 0,
+    "lastResetDate": "2025-09-29"
+  },
+  "guest": {
+    "id": "guest",
+    "password": "guest1234",
+    "role": "user",
+    "name": "게스트",
+    "usageLimit": 3,
+    "usageCount": 0,
+    "lastResetDate": "2025-09-29"
+  }
+}
