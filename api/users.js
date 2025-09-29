@@ -3,7 +3,6 @@ import path from 'path';
 
 const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
 
-// 사용자 데이터 로드
 function loadUsers() {
   try {
     if (!fs.existsSync(USERS_FILE)) {
@@ -12,7 +11,6 @@ function loadUsers() {
         fs.mkdirSync(dir, { recursive: true });
       }
       
-      // 기본 사용자 데이터 생성
       const defaultUsers = {
         admin: {
           id: 'admin',
@@ -46,7 +44,6 @@ function loadUsers() {
   }
 }
 
-// 사용자 데이터 저장
 function saveUsers(users) {
   try {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
@@ -57,38 +54,22 @@ function saveUsers(users) {
   }
 }
 
-// 일일 리셋 체크 (자정 기준)
 function checkAndResetDaily(user) {
   const today = new Date().toISOString().split('T')[0];
   
   if (user.lastResetDate !== today) {
     user.usageCount = 0;
     user.lastResetDate = today;
-    return true; // 리셋됨
+    return true;
   }
   
-  return false; // 리셋 불필요
-}
-
-// 관리자 권한 체크 미들웨어
-function requireAdmin(req, res, next) {
-  const user = req.user; // 로그인 정보에서 가져옴 (App.jsx의 localStorage 'user')
-  
-  if (!user || user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      message: '관리자 권한이 필요합니다.'
-    });
-  }
-  
-  next();
+  return false;
 }
 
 export default async function handler(req, res) {
-  // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-username');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -96,11 +77,9 @@ export default async function handler(req, res) {
 
   const users = loadUsers();
   
-  // 간단한 권한 체크 (요청 헤더에서 username 확인)
   const currentUsername = req.headers['x-username'] || req.body?.currentUsername || req.query?.currentUsername;
   const currentUser = users[currentUsername];
   
-  // GET: 전체 사용자 조회 (admin만)
   if (req.method === 'GET') {
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
@@ -109,7 +88,6 @@ export default async function handler(req, res) {
       });
     }
     
-    // 비밀번호 제외하고 반환
     const userList = Object.keys(users).map(username => {
       const { password, ...userInfo } = users[username];
       return { username, ...userInfo };
@@ -121,7 +99,6 @@ export default async function handler(req, res) {
     });
   }
   
-  // POST: 신규 사용자 추가 (admin만)
   if (req.method === 'POST') {
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
@@ -167,7 +144,6 @@ export default async function handler(req, res) {
     });
   }
   
-  // PUT: 사용자 정보 수정 (admin만)
   if (req.method === 'PUT') {
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
@@ -186,7 +162,6 @@ export default async function handler(req, res) {
       });
     }
     
-    // 수정 가능한 필드만 업데이트
     if (password) users[username].password = password;
     if (name) users[username].name = name;
     if (usageLimit !== undefined) {
@@ -204,7 +179,6 @@ export default async function handler(req, res) {
     });
   }
   
-  // DELETE: 사용자 삭제 (admin만, admin 본인은 삭제 불가)
   if (req.method === 'DELETE') {
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
@@ -246,7 +220,6 @@ export default async function handler(req, res) {
   });
 }
 
-// 사용 횟수 체크 함수 (외부에서 import하여 사용)
 export function checkUsageLimit(username) {
   const users = loadUsers();
   const user = users[username];
@@ -258,21 +231,17 @@ export function checkUsageLimit(username) {
     };
   }
   
-  // 일일 리셋 체크
   checkAndResetDaily(user);
   saveUsers(users);
   
-  // admin은 무제한
   if (user.role === 'admin') {
     return { allowed: true };
   }
   
-  // 제한이 설정되지 않은 경우 허용
   if (user.usageLimit === null || user.usageLimit === undefined) {
     return { allowed: true };
   }
   
-  // 제한 체크
   if (user.usageCount >= user.usageLimit) {
     return {
       allowed: false,
@@ -286,14 +255,12 @@ export function checkUsageLimit(username) {
   };
 }
 
-// 사용 횟수 증가 함수
 export function incrementUsage(username) {
   const users = loadUsers();
   const user = users[username];
   
   if (!user) return false;
   
-  // 일일 리셋 체크
   checkAndResetDaily(user);
   
   user.usageCount += 1;
