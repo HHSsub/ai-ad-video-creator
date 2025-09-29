@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 import { safeCallGemini, getApiKeyStatus } from '../src/utils/apiHelpers.js';
+import { checkUsageLimit, incrementUsage } from './users.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -460,6 +461,21 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // 🔥 사용 횟수 체크 추가 (여기만 추가)
+  const username = req.headers['x-username'] || req.body?.username;
+  
+  if (username) {
+    const usageCheck = checkUsageLimit(username);
+    
+    if (!usageCheck.allowed) {
+      return res.status(403).json({
+        success: false,
+        error: usageCheck.message || '사용 횟수를 초과했습니다.',
+        usageLimitExceeded: true
+      });
+    }
   }
 
   if (req.method !== 'POST') {
