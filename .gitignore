@@ -15,6 +15,16 @@ dist-ssr
 .env
 env
 
+# 🔥 사용자 정보 보안 (절대 커밋하지 않음)
+config/users.json
+config/runtime-admin-settings.json
+config/runtime-field-config.json
+
+# 임시 파일들
+tmp/
+storage/
+public/gemini_responses/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
