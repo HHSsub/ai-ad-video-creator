@@ -112,21 +112,27 @@ const UserManagement = ({ currentUser }) => {
           currentUsername: currentUser.username
         })
       });
-
+  
       const data = await response.json();
-
+  
       if (!response.ok) {
         throw new Error(data.message || '사용자 수정에 실패했습니다.');
       }
-
+  
       alert('사용자 정보가 수정되었습니다.');
       setModalOpen(false);
-      loadUsers();
+      
+      // 🔥 강제 새로고침 추가 (캐시 무시)
+      await loadUsers();
+      
+      // 🔥 또는 페이지 전체 새로고침
+      // window.location.reload();
+      
     } catch (err) {
       alert(err.message);
     }
   };
-
+    
   const handleDeleteUser = async (username) => {
     if (!confirm(`정말로 "${username}" 사용자를 삭제하시겠습니까?`)) {
       return;
