@@ -4,6 +4,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
+import usersApi from '../api/users.js'; // 🔥 이 한 줄만 추가
 
 // API 핸들러 import
 import storyboardInit from '../api/storyboard-init.js';
