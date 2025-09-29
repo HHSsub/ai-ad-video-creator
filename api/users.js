@@ -8,7 +8,7 @@ const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
 function loadUsers() {
   try {
     if (!fs.existsSync(USERS_FILE)) {
-      console.error('[users] ❌ config/users.json 파일이 없습니다. 서버에 파일을 생성해주세요.');
+      console.error('[users] ❌ config/users.json 파일이 없습니다.');
       throw new Error('사용자 설정 파일이 없습니다. 관리자에게 문의하세요.');
     }
     
@@ -145,7 +145,13 @@ router.put('/', (req, res) => {
     }
     
     const { username } = req.query;
-    const { password, name, usageLimit } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: 'username 파라미터가 필요합니다.'
+      });
+    }
     
     if (!users[username]) {
       return res.status(404).json({
@@ -154,15 +160,25 @@ router.put('/', (req, res) => {
       });
     }
     
-    if (password) users[username].password = password;
-    if (name) users[username].name = name;
-    if (usageLimit !== undefined) {
-      users[username].usageLimit = usageLimit === null || usageLimit === '' ? null : parseInt(usageLimit);
+    // 🔥 req.body에서 안전하게 가져오기 (password는 선택사항)
+    const updateData = req.body || {};
+    
+    if (updateData.password) {
+      users[username].password = updateData.password;
+    }
+    
+    if (updateData.name) {
+      users[username].name = updateData.name;
+    }
+    
+    if (updateData.hasOwnProperty('usageLimit')) {
+      const limit = updateData.usageLimit;
+      users[username].usageLimit = (limit === null || limit === '' || limit === undefined) ? null : parseInt(limit);
     }
     
     saveUsers(users);
     
-    console.log(`✅ 사용자 정보 수정: ${username}`);
+    console.log(`✅ 사용자 정보 수정: ${username}`, updateData);
     
     res.json({
       success: true,
@@ -192,6 +208,13 @@ router.delete('/', (req, res) => {
     }
     
     const { username } = req.query;
+    
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: 'username 파라미터가 필요합니다.'
+      });
+    }
     
     if (username === 'admin') {
       return res.status(400).json({
