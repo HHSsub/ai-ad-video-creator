@@ -97,6 +97,7 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   try {
     console.log('[users POST] 요청 받음');
+    console.log('[users POST] body:', req.body);
     const users = loadUsers();
     const currentUsername = req.headers['x-username'];
     const currentUser = users[currentUsername];
@@ -163,6 +164,7 @@ router.put('/', (req, res) => {
     console.log('[users PUT] 요청 받음');
     console.log('[users PUT] query:', req.query);
     console.log('[users PUT] body:', req.body);
+    console.log('[users PUT] headers:', req.headers);
     
     const users = loadUsers();
     const currentUsername = req.headers['x-username'];
@@ -191,7 +193,7 @@ router.put('/', (req, res) => {
       });
     }
     
-    console.log('[users PUT] 수정 전:', users[username]);
+    console.log('[users PUT] 수정 전:', JSON.stringify(users[username], null, 2));
     
     const updateData = req.body || {};
     
@@ -208,7 +210,7 @@ router.put('/', (req, res) => {
       users[username].usageLimit = (limit === null || limit === '' || limit === undefined) ? null : parseInt(limit);
     }
     
-    console.log('[users PUT] 수정 후:', users[username]);
+    console.log('[users PUT] 수정 후:', JSON.stringify(users[username], null, 2));
     
     const saved = saveUsers(users);
     
