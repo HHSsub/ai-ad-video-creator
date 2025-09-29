@@ -74,34 +74,17 @@ app.post('/api/auth/login', (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // 🔥 users.json 파일에서 사용자 로드
     const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
-    let users = {};
     
-    if (fs.existsSync(USERS_FILE)) {
-      users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    } else {
-      // 기본 사용자 (초기 설정)
-      users = {
-        admin: { 
-          id: 'admin',
-          password: 'Upnexx!!', 
-          role: 'admin', 
-          name: '관리자',
-          usageLimit: null,
-          usageCount: 0
-        },
-        guest: { 
-          id: 'guest',
-          password: 'guest1234', 
-          role: 'user', 
-          name: '게스트',
-          usageLimit: 3,
-          usageCount: 0
-        }
-      };
+    if (!fs.existsSync(USERS_FILE)) {
+      console.error('[auth/login] ❌ config/users.json 파일이 없습니다.');
+      return res.status(500).json({
+        success: false,
+        message: '서버 설정 오류입니다. 관리자에게 문의하세요.'
+      });
     }
 
+    const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
     const user = users[username];
 
     if (user && user.password === password) {
