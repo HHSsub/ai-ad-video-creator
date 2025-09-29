@@ -34,12 +34,13 @@ app.use((req, res, next) => {
 // CORS 설정
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key'],
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key', 'x-username'], // 🔥 x-username 추가
   maxAge: 86400
 }));
 
 app.use('/api/admin-config', adminConfig);
+app.use('/api/users', usersApi); // 🔥 이 한 줄만 추가
 
 // Body parser 설정 강화
 app.use(bodyParser.json({ 
@@ -73,10 +74,33 @@ app.post('/api/auth/login', (req, res) => {
   try {
     const { username, password } = req.body;
 
-    const users = {
-      admin: { password: 'Upnexx!!', role: 'admin', name: '관리자' },
-      guest: { password: 'guest1234', role: 'user', name: '게스트' }
-    };
+    // 🔥 users.json 파일에서 사용자 로드
+    const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
+    let users = {};
+    
+    if (fs.existsSync(USERS_FILE)) {
+      users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    } else {
+      // 기본 사용자 (초기 설정)
+      users = {
+        admin: { 
+          id: 'admin',
+          password: 'Upnexx!!', 
+          role: 'admin', 
+          name: '관리자',
+          usageLimit: null,
+          usageCount: 0
+        },
+        guest: { 
+          id: 'guest',
+          password: 'guest1234', 
+          role: 'user', 
+          name: '게스트',
+          usageLimit: 3,
+          usageCount: 0
+        }
+      };
+    }
 
     const user = users[username];
 
@@ -85,9 +109,11 @@ app.post('/api/auth/login', (req, res) => {
       res.json({
         success: true,
         user: {
-          username,
+          username: user.id,
           role: user.role,
-          name: user.name
+          name: user.name,
+          usageLimit: user.usageLimit,
+          usageCount: user.usageCount
         }
       });
     } else {
