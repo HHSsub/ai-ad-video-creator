@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Login from './components/auth/Login';
 import AdminPanel from './components/admin/AdminPanel';
+import UserManagement from './components/admin/UserManagement';
 import Step1 from './components/Step1';
 import Step2 from './components/Step2';
 import Step3 from './components/Step3';
@@ -49,6 +50,61 @@ function App() {
     return <Login onLogin={handleLogin} />;
   }
 
+  if (currentView === 'users') {
+    return (
+      <div className="min-h-screen bg-[#0A0A0B]">
+        <nav className="bg-black/50 backdrop-blur-md border-b border-gray-800">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center space-x-8">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg"></div>
+                  <h1 className="text-xl font-bold text-white">AI Studio</h1>
+                </div>
+                <div className="flex space-x-1">
+                  <button
+                    onClick={() => setCurrentView('main')}
+                    className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                  >
+                    메인
+                  </button>
+                  {user.role === 'admin' && (
+                    <>
+                      <button
+                        onClick={() => setCurrentView('admin')}
+                        className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                      >
+                        프롬프트관리
+                      </button>
+                      <button
+                        onClick={() => setCurrentView('users')}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600/20 border border-blue-500/50 rounded-lg"
+                      >
+                        사용자관리
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                <span className="text-sm text-gray-400">
+                  {user.name} ({user.role === 'admin' ? '관리자' : '사용자'})
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  로그아웃
+                </button>
+              </div>
+            </div>
+          </div>
+        </nav>
+        <UserManagement currentUser={user} />
+      </div>
+    );
+  }
+
   if (currentView === 'admin') {
     return (
       <div className="min-h-screen bg-[#0A0A0B]">
@@ -68,12 +124,20 @@ function App() {
                     메인
                   </button>
                   {user.role === 'admin' && (
-                    <button
-                      onClick={() => setCurrentView('admin')}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600/20 border border-blue-500/50 rounded-lg"
-                    >
-                      관리자
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setCurrentView('admin')}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600/20 border border-blue-500/50 rounded-lg"
+                      >
+                        프롬프트관리
+                      </button>
+                      <button
+                        onClick={() => setCurrentView('users')}
+                        className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                      >
+                        사용자관리
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -164,12 +228,20 @@ function App() {
 
             <div className="flex items-center gap-4">
               {user.role === 'admin' && (
-                <button
-                  onClick={() => setCurrentView('admin')}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-                >
-                  프롬프트관리
-                </button>
+                <>
+                  <button
+                    onClick={() => setCurrentView('admin')}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  >
+                    프롬프트관리
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('users')}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  >
+                    사용자관리
+                  </button>
+                </>
               )}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-400">
@@ -232,6 +304,7 @@ function App() {
               setStoryboard={setStoryboard}
               isLoading={isLoading}
               setIsLoading={setIsLoading}
+              user={user}
               onPrev={prev}
               onNext={() => {
                 console.log('Step2 완료, storyboard styles:', storyboard?.styles?.length);
