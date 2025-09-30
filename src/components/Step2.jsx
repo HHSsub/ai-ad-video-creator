@@ -225,8 +225,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const videoPurpose = formData.videoPurpose || 'product';
       const promptFiles = getPromptFiles(videoPurpose);
 
-      log(`📝 프롬프트 파일: step1=${promptFiles.step1}, step2=${promptFiles.step2}`);
-
       progressManager.startPhase('STEP1');
       log('아이디어를 구상하고 있습니다...');
       updateProgress('STEP1', 0.1);
