@@ -16,10 +16,10 @@ const PROMPT_FILE_MAPPING = {
 // 영상 길이에 따른 씬 수 결정
 function getSceneCount(videoLength) {
   const lengthNumber = parseInt(videoLength);
-  if (lengthNumber <= 15) return 3;
-  if (lengthNumber <= 30) return 4;
-  if (lengthNumber <= 60) return 6;
-  return 8;
+  if (lengthNumber == 10) return 5;
+  if (lengthNumber == 20) return 10;
+  if (lengthNumber == 30) return 15;
+  return 5;
 }
 
 // 종횡비 코드 매핑
