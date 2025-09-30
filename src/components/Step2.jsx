@@ -258,9 +258,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
-        log('⚠️ 요청 타임아웃 (5분 초과)');
-      }, 300000); // 5분 타임아웃
-  
+        log('⚠️ 요청 타임아웃 (10분 초과)');
+      }, 600000); // 10분
+
       let step1Response;
       try {
         step1Response = await fetch(`${API_BASE}/api/storyboard-init`, {
