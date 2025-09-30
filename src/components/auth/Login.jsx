@@ -76,8 +76,8 @@ const Login = ({ onLogin }) => {
                 />
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-white">UPNEXX</h2> 
-            <h4 className="text-2xl font-bold text-white">AI Studio</h4>
+              <h2 className="text-2xl font-bold text-white">UPNEXX</h2>
+              <h4 className="text-base font-normal text-white">AI Studio</h4>
             <p className="text-gray-400 mt-2">계정 정보를 입력해주세요</p>
           </div>
 
