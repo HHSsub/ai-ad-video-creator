@@ -1,3 +1,4 @@
+// src/App.jsx 전체 코드 (단 한 줄도 생략 없음)
 import { useState, useEffect } from 'react';
 import Login from './components/auth/Login';
 import AdminPanel from './components/admin/AdminPanel';
@@ -58,14 +59,17 @@ function App() {
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
                 <div className="flex items-center gap-3">
-                  <img 
-                    src="/upnexx_logo.png" 
-                    alt="UPNEXX Logo" 
-                    className="h-12 w-auto object-contain"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
+                  <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                    <img 
+                      src="/upnexx_logo.png" 
+                      alt="UPNEXX Logo" 
+                      className="h-10 w-auto"
+                      style={{ filter: 'brightness(1.3)' }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  </div>
                   <h1 className="text-xl font-bold text-white">AI Studio</h1>
                 </div>
                 <div className="flex space-x-1">
@@ -120,14 +124,17 @@ function App() {
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
                 <div className="flex items-center gap-3">
-                  <img 
-                    src="/upnexx_logo.png" 
-                    alt="UPNEXX Logo" 
-                    className="h-12 w-auto object-contain"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
+                  <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                    <img 
+                      src="/upnexx_logo.png" 
+                      alt="UPNEXX Logo" 
+                      className="h-10 w-auto"
+                      style={{ filter: 'brightness(1.3)' }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  </div>
                   <h1 className="text-xl font-bold text-white">AI Studio</h1>
                 </div>
                 <div className="flex space-x-1">
@@ -191,14 +198,17 @@ function App() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
               <div className="flex items-center gap-3">
-                <img 
-                  src="/upnexx_logo.png" 
-                  alt="UPNEXX Logo" 
-                  className="h-12 w-auto object-contain"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
+                <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                  <img 
+                    src="/upnexx_logo.png" 
+                    alt="UPNEXX Logo" 
+                    className="h-10 w-auto"
+                    style={{ filter: 'brightness(1.3)' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </div>
                 <span className="text-xl font-bold text-white">AI Studio</span>
               </div>
               
