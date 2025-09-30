@@ -1,3 +1,4 @@
+// src/components/auth/Login.jsx 전체 코드 (161줄 전체)
 import { useState } from 'react';
 import PropTypes from 'prop-types';
 
@@ -61,19 +62,19 @@ const Login = ({ onLogin }) => {
       <div className="max-w-md w-full space-y-8 relative">
         <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
           <div className="text-center mb-8">
-            {/* z+ (로고 이미지로 교체) */}
-            <div className="flex flex-col items-center mb-6">
-              <img
-                src="/upnexx_logo.png"
-                alt="Upnexx Logo"
-                className="h-20 w-auto object-contain mb-4"
-                style={{ background: 'transparent' }}
-                onError={(e) => {
-                  console.error('Logo load failed');
-                  e.target.style.display = 'none';
-                }}
-              />
-              <h2 className="text-2xl font-bold text-white">UPNEXX AI Studio</h2>
+            <div className="flex justify-center mb-6">
+              <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                <img
+                  src="/upnexx_logo.png"
+                  alt="Upnexx Logo"
+                  className="h-20 w-auto"
+                  style={{ filter: 'brightness(1.3) drop-shadow(0 0 10px rgba(255,255,255,0.5))' }}
+                  onError={(e) => {
+                    console.error('Logo load failed');
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
             </div>
             <h2 className="text-2xl font-bold text-white">UPNEXX AI Studio</h2>
             <p className="text-gray-400 mt-2">계정 정보를 입력해주세요</p>
