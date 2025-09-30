@@ -134,7 +134,6 @@ function App() {
                       }}
                     />
                   </div>
-                  <h1 className="text-xl font-bold text-white">AI Studio</h1>
                 </div>
                 <div className="flex space-x-1">
                   <button
