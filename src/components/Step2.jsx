@@ -167,7 +167,7 @@ const getUnifiedImageData = (formData) => {
   };
 };
 
-const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading }) => {
+const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading, user }) => {
   const [percent, setPercent] = useState(0);
   const [logs, setLogs] = useState([]);
   const [imagesDone, setImagesDone] = useState(0);
