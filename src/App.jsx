@@ -360,7 +360,7 @@ function App() {
               © 2025 AI Studio. Professional AI Video Generation Platform
             </div>
             <div className="flex items-center gap-6 text-xs text-gray-500">
-              <span>Powered by AI</span>
+              <span>Powered by nexxii</span>
               <span>•</span>
               <span>Version 2.0</span>
             </div>
