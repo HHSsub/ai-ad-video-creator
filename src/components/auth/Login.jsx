@@ -68,6 +68,11 @@ const Login = ({ onLogin }) => {
                 alt="Upnexx Logo"
                 className="h-12 w-12 object-contain"
                 style={{ background: 'transparent' }}
+                onError={(e) => {
+                  console.error('Logo failed to load:', e);
+                  e.target.onerror = null;
+                  e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="%234F46E5"/></svg>';
+                }}
               />
             </div>
             <h2 className="text-2xl font-bold text-white">UPNEXX AI Studio</h2>
