@@ -92,331 +92,158 @@ function detectProductCompositingScenes(phase1_output, videoPurpose) {
       }
 
       // PRODUCT COMPOSITING SCENE 감지
-      if (line.includes('[PRODUCT COMPOSITING SCENE]') && currentSceneNumber) {
+      if (line.includes('[PRODUCT COMPOSITING SCENE]') || 
+          line.includes('제품 합성') || 
+          line.includes('Product Compositing')) {
         compositingScenes.push({
-          sceneNumber: currentSceneNumber,
-          context: line,
+          sceneNumber: currentSceneNumber || compositingScenes.length + 1,
+          lineNumber: i + 1,
+          content: line.trim(),
+          type: 'product_compositing',
           explicit: true,
+          context: `제품 합성 씬 ${currentSceneNumber || compositingScenes.length + 1}`,
           videoPurpose: videoPurpose
         });
-        console.log(`[detectProductCompositingScenes] 발견: Scene ${currentSceneNumber}`);
+      }
+
+      // 암시적 합성 씬 감지 (제품이 필요한 상황)
+      if ((videoPurpose === 'product' || videoPurpose === 'conversion') && 
+          currentSceneNumber && 
+          (line.includes('제품') || 
+           line.includes('product') || 
+           line.includes('상품'))) {
+        
+        const hasExplicitCompositing = compositingScenes.some(cs => cs.sceneNumber === currentSceneNumber && cs.explicit);
+        if (!hasExplicitCompositing) {
+          compositingScenes.push({
+            sceneNumber: currentSceneNumber,
+            lineNumber: i + 1,
+            content: line.trim(),
+            type: 'product_compositing',
+            explicit: false,
+            context: `제품 노출 씬 ${currentSceneNumber}`,
+            videoPurpose: videoPurpose
+          });
+        }
       }
     }
+
+    console.log(`[detectProductCompositingScenes] 감지된 합성 씬: ${compositingScenes.length}개`);
+    return compositingScenes;
+
   } catch (error) {
-    console.error('[detectProductCompositingScenes] 파싱 오류:', error);
+    console.error('[detectProductCompositingScenes] 오류:', error);
+    return [];
   }
-
-  // 기본 합성 씬 (2번째 씬)이 없으면 추가
-  if (compositingScenes.length === 0) {
-    compositingScenes.push({
-      sceneNumber: 2,
-      context: '[PRODUCT COMPOSITING SCENE] 기본 설정',
-      explicit: false,
-      videoPurpose: videoPurpose
-    });
-    console.log('[detectProductCompositingScenes] 기본 Scene 2 추가');
-  }
-
-  return compositingScenes;
 }
 
 // 컨셉 블록 추출
-function extractConceptBlocks(phase1_output) {
-  const conceptBlocks = [];
-  const defaultConcepts = [
-    { concept_name: '욕망의 시각화', style: 'Dreamy Ethereal Photography' },
-    { concept_name: '이질적 조합의 미학', style: 'Modern Surrealist Photography' },
-    { concept_name: '핵심 가치의 극대화', style: 'Dynamic Action Photography' },
-    { concept_name: '기회비용의 시각화', style: 'Gritty Cinematic Realism' },
-    { concept_name: '트렌드 융합', style: 'Vibrant Candid Flash Photography' },
-    { concept_name: '파격적 반전', style: 'Dramatic Film Noir Still' }
-  ];
-
-  try {
-    const conceptPattern = /### (.+?):\s*(.+?)(?=\n###|\n\n|$)/gs;
-    let match;
-    
-    while ((match = conceptPattern.exec(phase1_output)) !== null) {
-      const conceptName = match[1].trim();
-      const conceptContent = match[2].trim();
-      
-      conceptBlocks.push({
-        concept_name: conceptName,
-        content: conceptContent
-      });
+function extractConceptBlocks(content) {
+  const blocks = [];
+  const lines = content.split('\n');
+  let currentBlock = null;
+  
+  lines.forEach((line, index) => {
+    if (line.includes('컨셉') && (line.includes('#') || line.includes('번'))) {
+      if (currentBlock) {
+        blocks.push(currentBlock);
+      }
+      currentBlock = {
+        startLine: index + 1,
+        title: line.trim(),
+        content: [line]
+      };
+    } else if (currentBlock) {
+      currentBlock.content.push(line);
     }
-  } catch (error) {
-    console.error('[extractConceptBlocks] 파싱 오류:', error);
+  });
+  
+  if (currentBlock) {
+    blocks.push(currentBlock);
   }
-
-  // 기본값 반환 (파싱 실패 시)
-  if (conceptBlocks.length === 0) {
-    console.log('[extractConceptBlocks] 기본 컨셉 사용');
-    return defaultConcepts;
-  }
-
-  console.log(`[extractConceptBlocks] 추출된 컨셉: ${conceptBlocks.length}개`);
-  return conceptBlocks;
+  
+  return blocks;
 }
 
-// STEP2 프롬프트 구성 - public 폴더 프롬프트 사용 (복구)
-function buildFinalPrompt(phase1_output, conceptBlocks, formData, sceneCountPerConcept, step2PromptContent) {
-  // 🔥 관리자가 수정한 step2 프롬프트 내용 사용
-  let finalPrompt = step2PromptContent;
-
-  // 🔥 변수 치환
-  const variables = {
-    brandName: formData.brandName,
-    industryCategory: formData.industryCategory,
-    productServiceCategory: formData.productServiceCategory,
-    productServiceName: formData.productServiceName,
-    videoPurpose: formData.videoPurpose,
-    videoLength: formData.videoLength,
-    coreTarget: formData.coreTarget,
-    coreDifferentiation: formData.coreDifferentiation,
-    videoRequirements: formData.videoRequirements || '특별한 요구사항 없음',
-    imageRef: formData.imageRef ? '업로드됨' : '업로드 안됨',
-    aspectRatioCode: mapAspectRatio(formData.aspectRatio),
-    phase1_output: phase1_output,
-    sceneCountPerConcept: sceneCountPerConcept,
-    sceneCount: sceneCountPerConcept // 추가 변수
-  };
-
-  // 프롬프트 템플릿에서 변수 치환
-  for (const [key, value] of Object.entries(variables)) {
-    const placeholder = `{${key}}`;
-    finalPrompt = finalPrompt.replace(new RegExp(placeholder, 'g'), value);
-  }
-
+// 최종 프롬프트 구성
+function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, step2Template) {
+  let finalPrompt = step2Template;
+  
+  // 변수 치환
+  finalPrompt = finalPrompt.replace('{phase1_output}', phase1Output);
+  finalPrompt = finalPrompt.replace('{sceneCount}', sceneCount);
+  finalPrompt = finalPrompt.replace('{brandName}', requestBody.brandName || '');
+  finalPrompt = finalPrompt.replace('{videoPurpose}', requestBody.videoPurpose || '');
+  
   return finalPrompt;
 }
 
-// 🔥 멀티 컨셉 JSON 파싱 (완전 복구)
-function parseMultiConceptJSON(responseText) {
+// JSON 파싱 함수
+function parseMultiConceptJSON(text) {
   try {
-    console.log('[parseMultiConceptJSON] JSON 파싱 시작');
-    
-    // JSON 블록 추출 시도
-    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                     responseText.match(/\{[\s\S]*\}/);
-    
+    // JSON 블록 찾기
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
-      const jsonStr = jsonMatch[1] || jsonMatch[0];
-      const parsed = JSON.parse(jsonStr);
-      
-      if (parsed.concepts && Array.isArray(parsed.concepts)) {
-        console.log(`[parseMultiConceptJSON] JSON 파싱 성공: ${parsed.concepts.length}개 컨셉`);
-        return parsed;
-      }
+      return JSON.parse(jsonMatch[1]);
     }
-
-    console.warn('[parseMultiConceptJSON] JSON 형식 파싱 실패, 수동 파싱 시도');
-
-    // 🔥 수동 파싱 로직 (복구)
-    const concepts = [];
-    const lines = responseText.split('\n');
-
-    let currentConcept = null;
-    let currentScene = null;
-    let isInImagePrompt = false;
-    let isInMotionPrompt = false;
-    let isInCopy = false;
-    let jsonBuffer = '';
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
-
-      // 컨셉 시작 감지
-      if (trimmed.includes('컨셉:') || trimmed.includes('Concept:') || trimmed.match(/^[\d]+\.\s/)) {
-        if (currentConcept) {
-          if (currentScene) currentConcept.scenes.push(currentScene);
-          concepts.push(currentConcept);
-        }
-        
-        const conceptName = trimmed.replace(/^\d+\.\s*/, '').replace(/컨셉:\s*/, '').replace(/Concept:\s*/, '').trim();
-        currentConcept = {
-          name: conceptName,
-          style: getStyleFromConceptName(conceptName),
-          scenes: []
-        };
-        currentScene = null;
-        continue;
-      }
-
-      // 씬 시작 감지
-      const sceneMatch = trimmed.match(/S#(\d+)|Scene\s*(\d+)|씬\s*(\d+)/i);
-      if (sceneMatch && currentConcept) {
-        if (currentScene) currentConcept.scenes.push(currentScene);
-        
-        currentScene = {
-          scene_number: parseInt(sceneMatch[1] || sceneMatch[2] || sceneMatch[3], 10),
-          image_prompt: '',
-          motion_prompt: '',
-          copy: ''
-        };
-        continue;
-      }
-
-      // JSON 블록 감지 및 처리
-      if (trimmed.startsWith('{')) {
-        isInImagePrompt = trimmed.includes('"prompt"');
-        isInMotionPrompt = trimmed.includes('"motion"') || trimmed.includes('Motion');
-        isInCopy = trimmed.includes('"copy"');
-        jsonBuffer = line;
-        
-        if (trimmed.endsWith('}')) {
-          // 한 줄 JSON
-          try {
-            const parsed = JSON.parse(trimmed);
-            if (currentScene) {
-              if (parsed.prompt) currentScene.image_prompt = parsed.prompt;
-              if (parsed.motion || parsed.motionPrompt) currentScene.motion_prompt = parsed.motion || parsed.motionPrompt;
-              if (parsed.copy) currentScene.copy = parsed.copy;
-            }
-          } catch (e) {
-            console.warn('[parseMultiConceptJSON] 한 줄 JSON 파싱 실패:', e.message);
-          }
-          isInImagePrompt = isInMotionPrompt = isInCopy = false;
-          jsonBuffer = '';
-        }
-        continue;
-      }
-
-      // 멀티라인 JSON 처리
-      if ((isInImagePrompt || isInMotionPrompt || isInCopy) && jsonBuffer) {
-        jsonBuffer += '\n' + line;
-        
-        if (trimmed.endsWith('}')) {
-          try {
-            const parsed = JSON.parse(jsonBuffer);
-            if (currentScene) {
-              if (parsed.prompt) currentScene.image_prompt = parsed.prompt;
-              if (parsed.motion || parsed.motionPrompt) currentScene.motion_prompt = parsed.motion || parsed.motionPrompt;
-              if (parsed.copy) currentScene.copy = parsed.copy;
-            }
-          } catch (e) {
-            console.warn('[parseMultiConceptJSON] 멀티라인 JSON 파싱 실패:', e.message);
-          }
-          isInImagePrompt = isInMotionPrompt = isInCopy = false;
-          jsonBuffer = '';
-        }
-        continue;
-      }
+    
+    // 직접 JSON 찾기
+    const directMatch = text.match(/\{[\s\S]*\}/);
+    if (directMatch) {
+      return JSON.parse(directMatch[0]);
     }
-
-    // 마지막 컨셉과 씬 추가
-    if (currentScene && currentConcept) currentConcept.scenes.push(currentScene);
-    if (currentConcept) concepts.push(currentConcept);
-
-    if (concepts.length > 0) {
-      console.log(`[parseMultiConceptJSON] 수동 파싱 성공: ${concepts.length}개 컨셉`);
-      return { concepts };
-    }
-
-    throw new Error('컨셉을 찾을 수 없음');
-
+    
+    return null;
   } catch (error) {
-    console.error('[parseMultiConceptJSON] 전체 파싱 실패:', error.message);
+    console.error('JSON 파싱 오류:', error);
     return null;
   }
 }
 
-// 🔥 스타일 구성 (완전 복구)
-function buildStylesFromConceptJson(mcJson, sceneCount, compositingScenes, formData) {
-  const styles = [];
-
-  mcJson.concepts.forEach((concept, conceptIndex) => {
-    const conceptId = conceptIndex + 1;
-    
-    // 이미지 프롬프트 구성
-    const imagePrompts = [];
-    
-    if (concept.scenes && Array.isArray(concept.scenes)) {
-      concept.scenes.forEach((scene, sceneIndex) => {
-        const sceneNumber = scene.scene_number || (sceneIndex + 1);
-        
-        // 합성 컨텍스트 결정
-        const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === sceneNumber);
-        const compositingContext = isCompositingScene ? 
-          `[PRODUCT COMPOSITING SCENE] ${scene.image_prompt}` : 
-          scene.image_prompt;
-
-        imagePrompts.push({
-          sceneNumber: sceneNumber,
-          title: `Scene ${sceneNumber}`,
-          duration: 2,
-          prompt: scene.image_prompt || `${concept.name} scene ${sceneNumber}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting.`,
-          negative_prompt: "blurry, low quality, watermark, logo, text, cartoon, distorted",
-          styling: { style: "photo", color: "color", lighting: "natural" },
-          size: mapAspectRatio(formData.aspectRatio || 'widescreen_16_9'),
-          width: getWidthFromAspectRatio(mapAspectRatio(formData.aspectRatio || 'widescreen_16_9')),
-          height: getHeightFromAspectRatio(mapAspectRatio(formData.aspectRatio || 'widescreen_16_9')),
-          guidance_scale: 7.5,
-          seed: Math.floor(10000 + Math.random() * 90000),
-          filter_nsfw: true,
-          motion_prompt: scene.motion_prompt || "Subtle camera drift, slow and elegant movement.",
-          copy: scene.copy || `씬 ${sceneNumber}`,
-          timecode: `00:${String((sceneNumber-1)*2).padStart(2,'0')}-00:${String(sceneNumber*2).padStart(2,'0')}`,
-          compositingContext: compositingContext,
-          isCompositing: isCompositingScene,
-          compositingInfo: isCompositingScene ? {
-            compositingContext: compositingScenes.find(cs => cs.sceneNumber === sceneNumber)?.context || '[PRODUCT COMPOSITING SCENE]',
-            explicit: compositingScenes.find(cs => cs.sceneNumber === sceneNumber)?.explicit || false,
-            videoPurpose: formData.videoPurpose
-          } : null
-        });
-      });
-    }
-
-    const styleFromName = getStyleFromConceptName(concept.name);
-    
-    styles.push({
-      id: conceptId,
-      concept_id: conceptId,
-      conceptId: conceptId,
-      conceptName: concept.name,
-      style: concept.style || styleFromName,
-      headline: `${concept.name} 헤드라인`,
-      description: `${formData.videoPurpose} 광고를 위한 ${concept.name} 접근법`,
-      copy: concept.scenes?.[0]?.copy || null,
-      imagePrompts: imagePrompts,
-      images: [],
-      metadata: {
-        videoPurpose: formData.videoPurpose,
-        conceptType: concept.name,
-        sceneCount: sceneCount
-      }
-    });
-  });
-
-  console.log(`[buildStylesFromConceptJson] 구성된 스타일: ${styles.length}개`);
-  return styles;
-}
-
-// 컨셉명에서 스타일 매핑
-function getStyleFromConceptName(conceptName) {
-  const styleMap = {
-    '욕망의 시각화': 'Dreamy Ethereal Photography',
-    '이질적 조합의 미학': 'Modern Surrealist Photography',
-    '핵심 가치의 극대화': 'Dynamic Action Photography',
-    '기회비용의 시각화': 'Gritty Cinematic Realism',
-    '트렌드 융합': 'Vibrant Candid Flash Photography',
-    '파격적 반전': 'Dramatic Film Noir Still'
-  };
-
-  for (const [key, style] of Object.entries(styleMap)) {
-    if (conceptName?.includes(key)) {
-      return style;
-    }
+// 안전한 Gemini API 호출
+async function safeCallGemini(prompt, options = {}) {
+  const { label = 'gemini-call', maxRetries = 3 } = options;
+  
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_1;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  return 'Commercial Photography';
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[${label}] Gemini API 호출 시도 ${attempt}/${maxRetries}`);
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      if (!text || text.length < 10) {
+        throw new Error('Gemini 응답이 너무 짧습니다.');
+      }
+
+      console.log(`[${label}] 성공: ${text.length} chars`);
+      return { text };
+
+    } catch (error) {
+      console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw new Error(`Gemini API 호출 실패: ${error.message}`);
+      }
+      
+      // 재시도 전 대기
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
 }
 
-// 합성 정보 분석 (imageRef 사용)
+// 합성 정보 분석
 function analyzeCompositingInfo(formData, compositingScenes) {
   return {
+    needsCompositing: compositingScenes.length > 0,
     hasProductImage: !!(formData.imageRef && formData.imageRef.url),
     hasBrandLogo: !!(formData.imageRef && formData.imageRef.url),
     scenes: compositingScenes,
@@ -451,12 +278,112 @@ function getPromptFiles(videoPurpose) {
   };
 }
 
+// 🔥 Z+ 추가: 사용자 파일 경로 및 함수들
+const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
+
+function loadUsers() {
+  try {
+    if (!fs.existsSync(USERS_FILE)) {
+      console.error('[storyboard-init] 사용자 파일이 없습니다:', USERS_FILE);
+      return {};
+    }
+    
+    const data = fs.readFileSync(USERS_FILE, 'utf8');
+    const users = JSON.parse(data);
+    console.log('[storyboard-init] 사용자 데이터 로드 완료');
+    return users;
+  } catch (error) {
+    console.error('[storyboard-init] 사용자 데이터 로드 오류:', error);
+    return {};
+  }
+}
+
+function saveUsers(users) {
+  try {
+    const data = JSON.stringify(users, null, 2);
+    fs.writeFileSync(USERS_FILE, data, 'utf8');
+    console.log('[storyboard-init] 사용자 데이터 저장 완료');
+    return true;
+  } catch (error) {
+    console.error('[storyboard-init] 사용자 데이터 저장 오류:', error);
+    return false;
+  }
+}
+
+function checkAndResetDaily(user) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  if (user.lastResetDate !== today) {
+    user.usageCount = 0;
+    user.lastResetDate = today;
+    console.log('[storyboard-init] 일일 리셋:', user.id);
+    return true;
+  }
+  
+  return false;
+}
+
+// 🔥 Z+ 추가: checkUsageLimit 함수 정의
+function checkUsageLimit(username) {
+  try {
+    if (!username) {
+      console.warn('[storyboard-init] username이 없습니다');
+      return { allowed: false, message: '사용자 정보가 없습니다.' };
+    }
+
+    const users = loadUsers();
+    const user = users[username];
+
+    if (!user) {
+      console.warn('[storyboard-init] 사용자를 찾을 수 없습니다:', username);
+      return { allowed: false, message: '존재하지 않는 사용자입니다.' };
+    }
+
+    // 관리자는 무제한 사용
+    if (user.role === 'admin') {
+      console.log('[storyboard-init] 관리자 사용자:', username);
+      return { allowed: true };
+    }
+
+    // 일일 리셋 체크
+    const resetNeeded = checkAndResetDaily(user);
+    
+    // 사용 횟수 제한 확인
+    const currentUsage = user.usageCount || 0;
+    const usageLimit = user.usageLimit;
+
+    if (usageLimit !== null && usageLimit !== undefined) {
+      if (currentUsage >= usageLimit) {
+        console.warn('[storyboard-init] 사용 횟수 초과:', username, currentUsage, '/', usageLimit);
+        return { 
+          allowed: false, 
+          message: `일일 사용 횟수를 초과했습니다. (${currentUsage}/${usageLimit})` 
+        };
+      }
+    }
+
+    // 사용 횟수 증가
+    user.usageCount = currentUsage + 1;
+    
+    if (resetNeeded || currentUsage < usageLimit) {
+      saveUsers(users);
+    }
+
+    console.log('[storyboard-init] 사용 허용:', username, user.usageCount, '/', usageLimit || '무제한');
+    return { allowed: true };
+
+  } catch (error) {
+    console.error('[storyboard-init] 사용 횟수 체크 오류:', error);
+    return { allowed: false, message: '서버 오류가 발생했습니다.' };
+  }
+}
+
 // 🔥 메인 핸들러 함수 (완전 복구)
 export default async function handler(req, res) {
   // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
 
   if (req.method === 'OPTIONS') {
@@ -628,55 +555,39 @@ export default async function handler(req, res) {
     console.log("[storyboard-init] 📊 JSON 파싱 결과:", mcJson);
 
     let styles = [];
-    if (mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length === 6) {
-      // 🔥 합성 정보 포함하여 styles 구성
-      styles = buildStylesFromConceptJson(mcJson, sceneCountPerConcept, compositingScenes, req.body);
-      console.log(`[storyboard-init] ✅ 스타일 구성 완료: ${styles.length}개`);
-      console.log('[storyboard-init] ✅ multi-concept JSON 파싱 성공 (6 concepts)');
-    } else {
-      console.warn('[storyboard-init] ⚠️ multi-concept JSON 파싱 실패 → 기본 구조 생성');
-
-      // 🔥 기본 구조 생성 (복구)
-      const defaultConcepts = [
-        { concept_name: '욕망의 시각화', style: 'Dreamy Ethereal Photography' },
-        { concept_name: '이질적 조합의 미학', style: 'Modern Surrealist Photography' },
-        { concept_name: '핵심 가치의 극대화', style: 'Dynamic Action Photography' },
-        { concept_name: '기회비용의 시각화', style: 'Gritty Cinematic Realism' },
-        { concept_name: '트렌드 융합', style: 'Vibrant Candid Flash Photography' },
-        { concept_name: '파격적 반전', style: 'Dramatic Film Noir Still' }
-      ];
-
-      styles = defaultConcepts.map((concept, index) => {
+    if (mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length > 0) {
+      // 컨셉 데이터를 스타일 배열로 변환
+      styles = mcJson.concepts.map((concept, index) => {
         const imagePrompts = [];
+        
+        // 각 컨셉의 씬을 이미지 프롬프트로 변환
         for (let i = 1; i <= sceneCountPerConcept; i++) {
-          const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === i);
-          imagePrompts.push({
-            sceneNumber: i,
-            title: `Scene ${i}`,
-            duration: 2,
-            prompt: `${concept.concept_name} placeholder scene ${i}. Insanely detailed, hyper-realistic, 8K, sharp focus, cinematic lighting. Shot by ARRI Alexa Mini with a 50mm lens.`,
-            negative_prompt: "blurry, low quality, watermark, logo, text, cartoon, distorted",
-            styling: { style: "photo", color: "color", lighting: "natural" },
-            size: mapAspectRatio(req.body.aspectRatio || 'widescreen_16_9'),
-            width: getWidthFromAspectRatio(mapAspectRatio(req.body.aspectRatio || 'widescreen_16_9')),
-            height: getHeightFromAspectRatio(mapAspectRatio(req.body.aspectRatio || 'widescreen_16_9')),
-            guidance_scale: 7.5,
-            seed: Math.floor(10000 + Math.random() * 90000),
-            filter_nsfw: true,
-            motion_prompt: "Subtle camera drift, slow and elegant movement.",
-            copy: `씬 ${i}`,
-            timecode: `00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
-            compositingContext: isCompositingScene ? 
-              `[PRODUCT COMPOSITING SCENE] ${concept.concept_name} scene ${i}` : 
-              `${concept.concept_name} scene ${i}`,
-            // 🔥 합성 정보 추가
-            isCompositing: isCompositingScene,
-            compositingInfo: isCompositingScene ? {
-              compositingContext: compositingScenes.find(cs => cs.sceneNumber === i)?.context || '[PRODUCT COMPOSITING SCENE]',
-              explicit: compositingScenes.find(cs => cs.sceneNumber === i)?.explicit || false,
-              videoPurpose: videoPurpose
-            } : null
-          });
+          const sceneKey = `scene_${i}`;
+          const scene = concept[sceneKey];
+          
+          if (scene) {
+            // 합성 씬 확인
+            const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === i);
+            
+            imagePrompts.push({
+              sceneNumber: i,
+              title: scene.title || `씬 ${i}`,
+              prompt: scene.image_prompt?.prompt || `${concept.concept_name} scene ${i}`,
+              negative_prompt: scene.image_prompt?.negative_prompt || "blurry, low quality",
+              motion_prompt: scene.motion_prompt?.prompt || "subtle camera movement",
+              copy: scene.copy?.copy || `씬 ${i}`,
+              timecode: `00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
+              compositingContext: isCompositingScene ? 
+                `[PRODUCT COMPOSITING SCENE] ${concept.concept_name} scene ${i}` : 
+                `${concept.concept_name} scene ${i}`,
+              // 🔥 합성 정보 추가
+              isCompositing: isCompositingScene,
+              compositingInfo: isCompositingScene ? {
+                compositingContext: compositingScenes.find(cs => cs.sceneNumber === i)?.context || '[PRODUCT COMPOSITING SCENE]',
+                explicit: compositingScenes.find(cs => cs.sceneNumber === i)?.explicit || false,
+                videoPurpose: videoPurpose
+              } : null
+            });
         }
 
         return {
@@ -720,7 +631,7 @@ export default async function handler(req, res) {
       brandName,
       totalConcepts: styles.length,
       compositingScenes: compositingScenes.length,
-      hasImageUpload: !!imageRef
+      hasImageUpload: !imageRef
     };
 
     const processingTimeMs = Date.now() - startTime;
