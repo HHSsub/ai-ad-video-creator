@@ -3,8 +3,6 @@ import 'dotenv/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
-import { safeCallGemini, getApiKeyStatus } from '../src/utils/apiHelpers.js';
-import { checkUsageLimit, incrementUsage } from './users.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -425,7 +423,7 @@ export default async function handler(req, res) {
       coreTarget,
       coreDifferentiation,
       videoRequirements = '',
-      imageRef = null, // 🔥 imageRef로 통합
+      imageRef = null,
       aspectRatioCode = 'widescreen_16_9'
     } = req.body;
 
@@ -580,7 +578,6 @@ export default async function handler(req, res) {
               compositingContext: isCompositingScene ? 
                 `[PRODUCT COMPOSITING SCENE] ${concept.concept_name} scene ${i}` : 
                 `${concept.concept_name} scene ${i}`,
-              // 🔥 합성 정보 추가
               isCompositing: isCompositingScene,
               compositingInfo: isCompositingScene ? {
                 compositingContext: compositingScenes.find(cs => cs.sceneNumber === i)?.context || '[PRODUCT COMPOSITING SCENE]',
@@ -588,6 +585,7 @@ export default async function handler(req, res) {
                 videoPurpose: videoPurpose
               } : null
             });
+          }
         }
 
         return {
@@ -625,13 +623,13 @@ export default async function handler(req, res) {
       aspectRatio: mapAspectRatio(req.body.aspectRatio || aspectRatioCode),
       generatedAt: new Date().toISOString(),
       processingTimeMs: Date.now() - startTime,
-      geminiModel: "gemini-2.5-pro",
+      geminiModel: "gemini-2.5-flash",
       step1Length: phase1_output.length,
       step2Length: step2.text.length,
       brandName,
       totalConcepts: styles.length,
       compositingScenes: compositingScenes.length,
-      hasImageUpload: !imageRef
+      hasImageUpload: !!imageRef
     };
 
     const processingTimeMs = Date.now() - startTime;
