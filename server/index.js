@@ -24,8 +24,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use((req, res, next) => {
-  req.setTimeout(300000);
-  res.setTimeout(300000);
+  req.setTimeout(600000);  // 300000 → 600000 (타임아웃기준 10분)
+  res.setTimeout(600000);
   next();
 });
 
@@ -33,6 +33,7 @@ app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key', 'x-username'],
+  credentials: true,  // 🔥 추가
   maxAge: 86400
 }));
 
