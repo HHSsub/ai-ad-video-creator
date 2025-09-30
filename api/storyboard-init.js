@@ -682,22 +682,34 @@ export default async function handler(req, res) {
       }
     };
 
-    // 🔥 에러 타입별 처리 (복구)
-    if (error.message.includes('API_KEY') || error.message.includes('GEMINI_API_KEY')) {
-      errorResponse.error = 'Gemini API 키가 설정되지 않았습니다. 환경변수를 확인해주세요.';
-      return res.status(500).json(errorResponse);
+    const errorMsg = error.message.toLowerCase();
+    
+    if (errorMsg.includes('api_key') || errorMsg.includes('gemini_api_key') || errorMsg.includes('consumer') || errorMsg.includes('suspended')) {
+      errorResponse.error = 'API 할당량에 문제가 있습니다. 관리자에게 문의하세요.';
+      errorResponse.errorCode = 'API_QUOTA_ERROR';
+      return res.status(503).json(errorResponse);
     }
 
-    if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('429')) {
-      errorResponse.error = 'API 사용량 한도를 초과했습니다. 잠시 후 다시 시도해주세요.';
+    if (errorMsg.includes('quota') || errorMsg.includes('limit') || errorMsg.includes('429')) {
+      errorResponse.error = 'API 할당량을 초과했습니다. 관리자에게 문의하세요.';
+      errorResponse.errorCode = 'API_QUOTA_EXCEEDED';
       return res.status(429).json(errorResponse);
     }
 
-    if (error.message.includes('timeout') || error.message.includes('TIMEOUT')) {
+    if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
       errorResponse.error = 'API 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+      errorResponse.errorCode = 'TIMEOUT_ERROR';
       return res.status(408).json(errorResponse);
     }
 
+    if (errorMsg.includes('403') || errorMsg.includes('forbidden') || errorMsg.includes('permission')) {
+      errorResponse.error = 'API 권한에 문제가 있습니다. 관리자에게 문의하세요.';
+      errorResponse.errorCode = 'API_PERMISSION_ERROR';
+      return res.status(403).json(errorResponse);
+    }
+
+    errorResponse.error = '스토리보드 생성 중 오류가 발생했습니다. 관리자에게 문의하세요.';
+    errorResponse.errorCode = 'UNKNOWN_ERROR';
     return res.status(500).json(errorResponse);
   }
 }
