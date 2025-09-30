@@ -220,7 +220,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     const startTime = Date.now();
   
     try {
-      log('🚀 스토리보드 생성을 시작합니다...');
+      log('🚀 스토리보드 생성을 시작합니다...');  // Step2 대기자를 위한 메세지 추가하는 위치
+      log('⏱️ 대기시간은 약 10분 내외입니다'); 
+      log('☕ 잠시만 기다려주세요...');        
   
       const videoPurpose = formData.videoPurpose || 'product';
       const promptFiles = getPromptFiles(videoPurpose);
