@@ -260,8 +260,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
-        log('⚠️ 요청 타임아웃 (10분 초과)');
-      }, 600000); // 10분
+        log('⚠️ 요청 타임아웃 (30분 초과)');
+      }, 1800000); // 30분
 
       let step1Response;
       try {
