@@ -1,23 +1,25 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 const SpinnerOverlay = ({ title, percent, lines }) => (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center">
-    <div className="w-full max-w-2xl bg-gray-800/90 rounded-xl p-6 text-white border border-gray-700">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <span className="text-sm text-blue-400">{percent}%</span>
-      </div>
-      <div className="w-full bg-gray-700 rounded h-2 mt-3 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-400 h-2 transition-all duration-300" style={{ width: `${percent}%` }} />
-      </div>
-      <details className="mt-4 text-sm text-gray-300" open>
-        <summary className="cursor-pointer select-none">진행 상황</summary>
-        <div className="mt-2 h-40 overflow-auto bg-gray-900 rounded p-2 font-mono text-xs whitespace-pre-wrap text-gray-400">
-          {(lines || []).slice(-200).join('\n')}
+  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[9999]">
+    <div className="bg-gray-800 rounded-lg p-6 text-center border border-gray-700 max-w-md w-full">
+      <div className="relative mb-4">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-white font-bold">{Math.round(percent)}%</span>
         </div>
-      </details>
+      </div>
+      <p className="text-gray-300 mb-2">{title}</p>
+      {lines && lines.length > 0 && (
+        <div className="max-h-32 overflow-y-auto text-xs text-left bg-gray-900 p-2 rounded mt-2">
+          {lines.slice(-10).map((line, idx) => (
+            <div key={idx} className="text-green-400 font-mono">{line}</div>
+          ))}
+        </div>
+      )}
     </div>
   </div>
 );
@@ -25,112 +27,55 @@ const SpinnerOverlay = ({ title, percent, lines }) => (
 SpinnerOverlay.propTypes = {
   title: PropTypes.string,
   percent: PropTypes.number,
-  lines: PropTypes.arrayOf(PropTypes.string),
+  lines: PropTypes.array,
 };
 
 class ProgressManager {
   constructor() {
     this.phases = {
-      STEP1: { start: 0, end: 25, current: 0 },
-      STEP2: { start: 25, end: 50, current: 25 },
-      IMAGES: { start: 50, end: 80, current: 50 },
-      COMPOSE: { start: 80, end: 100, current: 80 }
+      STEP1: { weight: 0.25, progress: 0, completed: false },
+      STEP2: { weight: 0.25, progress: 0, completed: false },
+      RENDER: { weight: 0.3, progress: 0, completed: false },
+      COMPOSE: { weight: 0.2, progress: 0, completed: false }
     };
-    this.currentPhase = 'STEP1';
   }
 
   startPhase(phaseName) {
-    this.currentPhase = phaseName;
-    this.phases[phaseName].current = this.phases[phaseName].start;
-    return this.phases[phaseName].start;
+    if (this.phases[phaseName]) {
+      this.phases[phaseName].progress = 0;
+      this.phases[phaseName].completed = false;
+    }
   }
 
   updatePhase(phaseName, progress) {
-    const phase = this.phases[phaseName];
-    const range = phase.end - phase.start;
-    phase.current = phase.start + (range * Math.min(1, Math.max(0, progress)));
-    return Math.round(phase.current);
+    if (this.phases[phaseName]) {
+      this.phases[phaseName].progress = Math.min(1, Math.max(0, progress));
+    }
+    return this.getTotalProgress();
   }
 
   completePhase(phaseName) {
-    this.phases[phaseName].current = this.phases[phaseName].end;
-    return this.phases[phaseName].end;
-  }
-
-  getCurrentProgress() {
-    return Math.round(this.phases[this.currentPhase].current);
-  }
-}
-
-function getAspectRatioCode(videoAspectRatio) {
-  console.log(`[getAspectRatioCode] 입력: "${videoAspectRatio}"`);
-  
-  if (!videoAspectRatio || typeof videoAspectRatio !== 'string') {
-    console.log('[getAspectRatioCode] 기본값 사용: widescreen_16_9');
-    return 'widescreen_16_9';
-  }
-  
-  const normalized = videoAspectRatio.toLowerCase().trim();
-  
-  if (normalized.includes('16:9') || normalized.includes('가로')) {
-    console.log('[getAspectRatioCode] → widescreen_16_9');
-    return 'widescreen_16_9';
-  }
-  
-  if (normalized.includes('9:16') || normalized.includes('세로') || normalized.includes('vertical')) {
-    console.log('[getAspectRatioCode] → vertical_9_16'); 
-    return 'vertical_9_16';
-  }
-  
-  if (normalized.includes('1:1') || normalized.includes('정사각형') || normalized.includes('square')) {
-    console.log('[getAspectRatioCode] → square_1_1');
-    return 'square_1_1';
-  }
-  
-  console.log('[getAspectRatioCode] 매칭 실패, 기본값: widescreen_16_9');
-  return 'widescreen_16_9';
-}
-
-async function runSafeWorkerPool(tasks, concurrency, onProgress) {
-  let completed = 0;
-  let failed = 0;
-  const total = tasks.length;
-
-  const runTask = async (task) => {
-    try {
-      await task();
-      completed++;
-    } catch (error) {
-      console.error('Task 실행 실패:', error);
-      failed++;
-    } finally {
-      if (onProgress) onProgress(completed, failed, total);
+    if (this.phases[phaseName]) {
+      this.phases[phaseName].progress = 1;
+      this.phases[phaseName].completed = true;
     }
-  };
-
-  const activePromises = [];
-  for (const task of tasks) {
-    if (activePromises.length >= concurrency) {
-      await Promise.race(activePromises);
-      const resolvedIndex = activePromises.findIndex(p => p.isResolved);
-      if (resolvedIndex >= 0) {
-        activePromises.splice(resolvedIndex, 1);
-      }
-    }
-    
-    const promise = runTask(task);
-    promise.then(() => { promise.isResolved = true; });
-    activePromises.push(promise);
+    return this.getTotalProgress();
   }
 
-  await Promise.all(activePromises);
+  getTotalProgress() {
+    let total = 0;
+    for (const phase of Object.values(this.phases)) {
+      total += phase.weight * phase.progress;
+    }
+    return Math.round(total * 100);
+  }
 }
 
 function getPromptFiles(videoPurpose) {
-  console.log(`[getPromptFiles] videoPurpose: ${videoPurpose}`);
+  console.log('[getPromptFiles] videoPurpose:', videoPurpose);
   
-  if (videoPurpose === 'product') {
-    console.log('[getPromptFiles] → 제품용 프롬프트');
+  if (videoPurpose === 'product' || videoPurpose === 'conversion') {
+    console.log('[getPromptFiles] → 제품/전환용 프롬프트');
     return {
       step1: 'step1_product',
       step2: 'step2_product'
@@ -208,93 +153,101 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
   const composeSingleImageSafely = async (imageObj, style, compositingInfo, retryCount = 0, maxRetries = 2) => {
     if (!imageObj.isCompositingScene || !imageObj.compositingInfo) {
-      return imageObj;
+      return { ...imageObj, compositingSuccess: false };
     }
-    const overlayImageData = getOverlayImageData(compositingInfo);
-    if (!overlayImageData) {
-      return imageObj;
-    }
+
     try {
-      const requestDelay = Math.random() * 3000 + 2000;
-      await new Promise(resolve => setTimeout(resolve, requestDelay));
-      const requestPayload = {
-        baseImageUrl: imageObj.url,
-        overlayImageData: overlayImageData,
-        compositingInfo: imageObj.compositingInfo,
-        sceneNumber: imageObj.sceneNumber,
-        conceptId: style.concept_id
-      };
-      const response = await fetch(`${API_BASE}/api/nanobanana-compose`, {
+      const overlayImageData = getOverlayImageData(imageObj.compositingInfo);
+      if (!overlayImageData) {
+        log(`❌ Scene ${imageObj.sceneNumber}: 합성용 이미지 없음`);
+        return { ...imageObj, compositingSuccess: false };
+      }
+
+      log(`🎨 Scene ${imageObj.sceneNumber} 이미지 합성 중... ${retryCount > 0 ? `(재시도 ${retryCount}/${maxRetries})` : ''}`);
+
+      const composeResponse = await fetch(`${API_BASE}/api/nanobanana-compose`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestPayload)
+        body: JSON.stringify({
+          baseImageUrl: imageObj.url,
+          overlayImageData: overlayImageData,
+          sceneNumber: imageObj.sceneNumber,
+          title: imageObj.title,
+          prompt: imageObj.prompt || imageObj.image_prompt?.prompt,
+          compositionSettings: imageObj.compositingInfo.compositionSettings || {},
+        }),
       });
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
+
+      if (!composeResponse.ok) {
+        const errorData = await composeResponse.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${composeResponse.status}`);
       }
-      const result = await response.json();
-      if (result.success && result.composedImageUrl) {
-        return {
-          ...imageObj,
-          url: result.composedImageUrl,
-          thumbnail: result.composedImageUrl,
-          isComposed: true,
-          compositionMetadata: result.metadata,
-          originalUrl: imageObj.url,
-          compositingSuccess: true
-        };
+
+      const composeResult = await composeResponse.json();
+
+      if (composeResult.success && composeResult.composedImageUrl) {
+        imageObj.url = composeResult.composedImageUrl;
+        imageObj.compositingSuccess = true;
+        log(`✅ Scene ${imageObj.sceneNumber} 합성 완료`);
+        return imageObj;
       } else {
-        throw new Error(`합성 결과 없음: ${JSON.stringify(result)}`);
+        throw new Error('합성 결과 없음');
       }
     } catch (error) {
-      const retryableErrors = ['429', '500', '502', '503', '504', 'timeout'];
-      const shouldRetry = retryableErrors.some(code => error.message.includes(code));
-      if (retryCount < maxRetries && shouldRetry) {
-        const retryDelay = (retryCount + 1) * 5000;
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      log(`❌ Scene ${imageObj.sceneNumber} 합성 실패: ${error.message}`);
+
+      if (retryCount < maxRetries) {
+        log(`🔄 Scene ${imageObj.sceneNumber} 재시도 중... (${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
         return composeSingleImageSafely(imageObj, style, compositingInfo, retryCount + 1, maxRetries);
-      } else {
-        return {
-          ...imageObj,
-          isComposed: false,
-          compositingSuccess: false,
-          compositionError: error.message
-        };
       }
+
+      imageObj.compositingSuccess = false;
+      return imageObj;
     }
   };
 
   const handleGenerateStoryboard = async () => {
-    if (isBusy) return;
-
-    const startTime = Date.now();
     setIsLoading?.(true);
+    setError('');
     setPercent(0);
     setLogs([]);
     setImagesDone(0);
     setImagesFail(0);
-    setError('');
+    setDebugInfo(null);
+    setStyles([]);
+
+    const startTime = Date.now();
 
     try {
-      log('🎬 AI 광고 영상 스토리보드 생성을 시작합니다');
-      log(`📋 브랜드: ${formData.brandName} | 목적: ${formData.videoPurpose} | 길이: ${formData.videoLength}`);
+      log('🚀 스토리보드 생성을 시작합니다...');
 
-      const promptFiles = getPromptFiles(formData.videoPurpose);
+      const videoPurpose = formData.videoPurpose || 'product';
+      const promptFiles = getPromptFiles(videoPurpose);
+
+      log(`📝 프롬프트 파일: step1=${promptFiles.step1}, step2=${promptFiles.step2}`);
 
       progressManager.startPhase('STEP1');
       log('아이디어를 구상하고 있습니다...');
       updateProgress('STEP1', 0.1);
 
       const step1ProgressInterval = setInterval(() => {
-        const currentProgress = progressManager.phases.STEP1.current;
-        if (currentProgress < 24) {
-          updateProgress('STEP1', Math.min(0.9, (currentProgress) / 25 + 0.1));
+        const currentProgress = progressManager.phases.STEP1.progress;
+        if (currentProgress < 0.9 && !progressManager.phases.STEP1.completed) {
+          updateProgress('STEP1', currentProgress + 0.05);
         }
-      }, 800);
+      }, 1000);
 
       const apiPayload = {
-        ...formData,
+        brandName: formData.brandName || '',
+        industryCategory: formData.industryCategory || '',
+        productServiceCategory: formData.productServiceCategory || '',
+        productServiceName: formData.productServiceName || '',
+        videoPurpose: videoPurpose,
+        videoLength: formData.videoLength || '10초',
+        coreTarget: formData.coreTarget || '',
+        coreDifferentiation: formData.coreDifferentiation || '',
+        aspectRatioCode: formData.aspectRatioCode || 'widescreen_16_9',
         imageUpload: formData.imageUpload ? {
           name: formData.imageUpload.name,
           size: formData.imageUpload.size,
@@ -307,7 +260,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-username': user.username  // 🔥 이 한 줄만 추가
+          'x-username': user.username
         },
         body: JSON.stringify(apiPayload),
       });
@@ -374,131 +327,88 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         }
       }
 
-      const perStyle = finalStyles.length > 0 ? (finalStyles[0].imagePrompts?.length || 0) : 0;
+      const perStyle = finalStyles.length > 0 ? finalStyles[0].images?.length || 0 : 0;
       const totalImages = finalStyles.length * perStyle;
+
       if (totalImages > 0) {
-        progressManager.startPhase('IMAGES');
-        log('이미지를 생성하고 있습니다...');
-        updateProgress('IMAGES', 0.1);
+        progressManager.startPhase('RENDER');
+        log(`📸 이미지 생성 중... (총 ${totalImages}개)`);
 
         let successImages = 0;
         let failedImages = 0;
 
-        finalStyles.forEach(style => {
-          if (!style.images) style.images = [];
-        });
+        for (let styleIdx = 0; styleIdx < finalStyles.length; styleIdx++) {
+          const style = finalStyles[styleIdx];
+          const images = style.images || [];
 
-        const imageTasks = [];
-        finalStyles.forEach(style => {
-          style.imagePrompts.forEach(p => {
-            imageTasks.push(async () => {
-              try {
-                let promptToSend = p.prompt || p.image_prompt?.prompt || 'Professional commercial photo, 8K, high quality';
-                if (p.styling) {
-                  const styleInfo = [];
-                  if (p.styling.style) styleInfo.push(p.styling.style);
-                  if (p.styling.color) styleInfo.push(p.styling.color);
-                  if (p.styling.lighting) styleInfo.push(`${p.styling.lighting} lighting`);
-                  if (styleInfo.length > 0) {
-                    promptToSend += `, ${styleInfo.join(', ')}`;
-                  }
-                }
-                promptToSend += '. Professional advertising photography, 8K, ultra-detailed, masterpiece.';
-                const res = await fetch(`${API_BASE}/api/storyboard-render-image`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    imagePrompt: {
-                      prompt: promptToSend,
-                      aspect_ratio: getAspectRatioCode(formData.aspectRatioCode),
-                      guidance_scale: p.guidance_scale || 2.5,
-                      seed: p.seed || Math.floor(10000 + Math.random() * 90000)
-                    },
-                    sceneNumber: p.sceneNumber,
-                    conceptId: style.concept_id || style.id
-                  })
-                });
+          for (let imgIdx = 0; imgIdx < images.length; imgIdx++) {
+            const img = images[imgIdx];
+            try {
+              log(`🎨 [Style ${styleIdx + 1}/${finalStyles.length}] Scene ${img.sceneNumber} 이미지 생성 중...`);
 
-                if (res.ok) {
-                  const data = await res.json();
-                  if (data.success && data.url) {
-                    const imageObj = {
-                      id: `${style.style || style.conceptName || 'style'}-${p.sceneNumber}`.toLowerCase().replace(/\s+/g, '-'),
-                      title: p.title || `Scene ${p.sceneNumber}`,
-                      style: style.style || 'Commercial Photography',
-                      copy: p.copy || `씬 ${p.sceneNumber}`,
-                      timecode: p.timecode || `00:${String((p.sceneNumber-1)*2).padStart(2,'0')}-00:${String(p.sceneNumber*2).padStart(2,'0')}`,
-                      negative_prompt: p.negative_prompt || "blurry, low quality",
-                      size: p.size || `${p.width || 1024}x${p.height || 1024}`,
-                      seed: `${p.seed || Math.floor(Math.random() * 1000000)}`,
-                      filter: p.styling?.style || 'photo',
-                      url: data.url,
-                      thumbnail: data.url,
-                      prompt: promptToSend,
-                      duration: p.duration || 2,
-                      sceneNumber: p.sceneNumber,
-                      isCompositingScene: p.isCompositingScene || false,
-                      compositingInfo: p.compositingInfo || null,
-                      originalGeminiData: {
-                        styling: p.styling,
-                        guidance_scale: p.guidance_scale,
-                        motion_prompt: p.motion_prompt,
-                        filter_nsfw: p.filter_nsfw
-                      }
-                    };
+              const renderResponse = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-username': user.username
+                },
+                body: JSON.stringify({
+                  image_prompt: img.image_prompt,
+                  sceneNumber: img.sceneNumber,
+                  aspectRatio: formData.aspectRatioCode || 'widescreen_16_9',
+                  title: img.title
+                }),
+              });
 
-                    style.images.push(imageObj);
-                    successImages++;
-                    setImagesDone(prev => prev + 1);
-                    log(`✅ Scene ${p.sceneNumber} 이미지 생성 완료`);
-                  } else {
-                    throw new Error(data.error || '이미지 생성 실패');
-                  }
+              if (renderResponse.ok) {
+                const result = await renderResponse.json();
+                if (result.success && result.url) {
+                  img.url = result.url;
+                  successImages++;
+                  setImagesDone(successImages);
+                  log(`✅ Scene ${img.sceneNumber} 이미지 생성 성공`);
                 } else {
-                  const errorText = await res.text().catch(() => '');
-                  throw new Error(`이미지 생성 오류`);
+                  failedImages++;
+                  setImagesFail(failedImages);
+                  log(`❌ Scene ${img.sceneNumber} 이미지 생성 실패`);
                 }
-              } catch (error) {
+              } else {
                 failedImages++;
-                setImagesFail(prev => prev + 1);
-                log(`❌ Scene ${p.sceneNumber} 이미지 생성 실패`);
+                setImagesFail(failedImages);
+                log(`❌ Scene ${img.sceneNumber} 이미지 생성 실패`);
               }
-            });
-          });
-        });
-
-        await runSafeWorkerPool(imageTasks, 3, (completed, failed, total) => {
-          const progress = (completed + failed) / total;
-          updateProgress('IMAGES', progress);
-        });
-
-        finalStyles.forEach(style => {
-          if (style.images) {
-            style.images.sort((a, b) => a.sceneNumber - b.sceneNumber);
-          }
-        });
-
-        progressManager.completePhase('IMAGES');
-        setPercent(80);
-        log(`🎨 이미지 생성 완료: 성공 ${successImages}개, 실패 ${failedImages}개`);
-
-        const totalCompositingScenes = finalCompositingInfo?.totalCompositingScenes || 0;
-        if (imageInfo.hasImage && totalCompositingScenes > 0) {
-          progressManager.startPhase('COMPOSE');
-          log('이미지 합성을 진행하고 있습니다...');
-          updateProgress('COMPOSE', 0.1);
-
-          const allCompositingImages = [];
-          finalStyles.forEach(style => {
-            if (style.images) {
-              const compositingScenes = style.images.filter(img =>
-                img.isCompositingScene &&
-                img.compositingInfo &&
-                img.url
-              );
-              allCompositingImages.push(...compositingScenes);
+            } catch (e) {
+              failedImages++;
+              setImagesFail(failedImages);
+              log(`❌ Scene ${img.sceneNumber} 이미지 생성 오류`);
             }
-          });
+
+            const progress = (successImages + failedImages) / totalImages;
+            updateProgress('RENDER', Math.min(0.9, progress));
+
+            if (imgIdx < images.length - 1 || styleIdx < finalStyles.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+          }
+        }
+
+        progressManager.completePhase('RENDER');
+        setPercent(80);
+        log(`✅ 이미지 생성 완료: 성공 ${successImages}개, 실패 ${failedImages}개`);
+
+        const allCompositingImages = [];
+        for (const style of finalStyles) {
+          const images = style.images || [];
+          for (const img of images) {
+            if (img.isCompositingScene && img.compositingInfo) {
+              allCompositingImages.push(img);
+            }
+          }
+        }
+
+        if (allCompositingImages.length > 0 && imageInfo.hasImage) {
+          progressManager.startPhase('COMPOSE');
+          log(`🎨 이미지 합성 중... (총 ${allCompositingImages.length}개)`);
 
           let compositingSuccess = 0;
           let compositingFailed = 0;
@@ -506,10 +416,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           for (let i = 0; i < allCompositingImages.length; i++) {
             const imageObj = allCompositingImages[i];
 
-            if (!imageObj.compositingInfo.productImageData && imageInfo.imageData && (formData.videoPurpose === 'product' || formData.videoPurpose === 'conversion')) {
-              imageObj.compositingInfo.productImageData = imageInfo.imageData;
-            }
-            if (!imageObj.compositingInfo.brandLogoData && imageInfo.imageData && !(formData.videoPurpose === 'product' || formData.videoPurpose === 'conversion')) {
+            if (imageObj.compositingInfo && (formData.videoPurpose === 'product' || formData.videoPurpose === 'conversion')) {
               imageObj.compositingInfo.brandLogoData = imageInfo.imageData;
             }
 
@@ -569,6 +476,15 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         setStoryboard?.(finalStoryboard);
         setStyles(finalStyles);
 
+        // 🔥🔥🔥 핵심 수정: 모든 작업 완료 후 자동으로 다음 단계로 이동
+        log('🚀 다음 단계로 자동 이동합니다...');
+        setIsLoading?.(false);
+        
+        // 약간의 딜레이 후 다음 단계로 이동 (사용자가 완료 메시지를 볼 수 있도록)
+        setTimeout(() => {
+          onNext?.();
+        }, 1500);
+
       } else {
         setPercent(100);
 
@@ -588,6 +504,14 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         };
         setStoryboard?.(finalStoryboard);
         setStyles(finalStyles);
+
+        // 🔥🔥🔥 핵심 수정: 이미지가 없는 경우에도 자동으로 다음 단계로 이동
+        log('🚀 다음 단계로 자동 이동합니다...');
+        setIsLoading?.(false);
+        
+        setTimeout(() => {
+          onNext?.();
+        }, 1500);
       }
 
     } catch (e) {
@@ -655,39 +579,55 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             </div>
           )}
 
+          {debugInfo && (
+            <details className="mb-6 bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+              <summary className="cursor-pointer text-gray-400 hover:text-white text-sm font-medium">
+                디버그 정보 보기
+              </summary>
+              <pre className="mt-2 text-xs text-gray-400 overflow-auto max-h-64">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </details>
+          )}
+
           {styles && styles.length > 0 && (
             <div className="mb-6">
-              <h3 className="font-semibold mb-3 text-white">생성된 컨셉 ({styles.length}개)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {styles.map((style, index) => (
-                  <div key={style.id || index} className="border border-gray-700 rounded-lg p-4 bg-gray-900/50">
-                    <h4 className="font-medium text-sm mb-2 text-white">{style.conceptName || style.style}</h4>
-                    <p className="text-xs text-gray-400 mb-2">{style.description}</p>
-                    
-                    {style.conceptHeadline && (
-                      <div className="bg-blue-900/30 border border-blue-800 rounded p-2 mb-2">
-                        <p className="text-xs font-medium text-blue-300">컨셉 헤드라인</p>
-                        <p className="text-sm text-blue-200">{style.conceptHeadline}</p>
-                      </div>
-                    )}
-                    
-                    <div className="text-xs text-gray-500">
-                      <p>씬 수: {style.images?.length || style.imagePrompts?.length || 0}개</p>
-                      {style.images && style.images.length > 0 && (
-                        <div className="grid grid-cols-2 gap-1 mt-2">
+              <h3 className="text-xl font-semibold text-white mb-4">생성된 컨셉 미리보기</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {styles.map((style, idx) => (
+                  <div key={idx} className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-white">컨셉 {idx + 1}</h4>
+                      <span className="text-xs text-gray-500">ID: {style.concept_id}</span>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-2">
+                      {style.concept_title || '제목 없음'}
+                    </p>
+                    <p className="text-xs text-gray-500 mb-3">
+                      {style.concept_description || '설명 없음'}
+                    </p>
+                    <div className="text-xs text-gray-600">
+                      씬 수: {style.images?.length || 0}개
+                    </div>
+                    {style.images && style.images.length > 0 && (
+                      <div className="mt-3">
+                        <div className="grid grid-cols-2 gap-2">
                           {style.images.slice(0, 4).map((img, imgIdx) => (
                             <div key={imgIdx} className="relative">
-                              <img 
-                                src={img.thumbnail || img.url} 
+                              <img
+                                src={img.url || '/placeholder.png'}
                                 alt={`Scene ${img.sceneNumber}`}
-                                className="w-full h-16 object-cover rounded border border-gray-700"
+                                className="w-full h-20 object-cover rounded border border-gray-700"
+                                onError={(e) => {
+                                  e.target.src = '/placeholder.png';
+                                }}
                                 loading="lazy"
                               />
                             </div>
                           ))}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -733,7 +673,7 @@ Step2.propTypes = {
   setStoryboard: PropTypes.func,
   setIsLoading: PropTypes.func,
   isLoading: PropTypes.bool,
-  user: PropTypes.object.isRequired,  // ← 이 줄만 추가
+  user: PropTypes.object.isRequired, 
 };
 
 export default Step2;
