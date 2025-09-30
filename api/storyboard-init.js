@@ -201,41 +201,37 @@ function parseMultiConceptJSON(text) {
 // 안전한 Gemini API 호출
 async function safeCallGemini(prompt, options = {}) {
   const { label = 'gemini-call', maxRetries = 3 } = options;
-  
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_1;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
+  let lastError;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[${label}] Gemini API 호출 시도 ${attempt}/${maxRetries}`);
-      
+      // apiKeyManager에서 최적 키 선택
+      const { key: apiKey, index: keyIndex } = apiKeyManager.selectBestGeminiKey();
+      console.log(`[${label}] Gemini API 호출 시도 ${attempt}/${maxRetries} (키: ${keyIndex})`);
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
-
       if (!text || text.length < 10) {
         throw new Error('Gemini 응답이 너무 짧습니다.');
       }
-
       console.log(`[${label}] 성공: ${text.length} chars`);
+      // 성공 기록
+      apiKeyManager.markKeySuccess('gemini', keyIndex);
       return { text };
-
     } catch (error) {
-      console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
-      
-      if (attempt === maxRetries) {
-        throw new Error(`Gemini API 호출 실패: ${error.message}`);
+      lastError = error;
+      console.log(`[${label}] 시도 ${attempt} 실패:`, error.message);
+      // 에러 기록 (키 인덱스 있으면)
+      if (error.keyIndex !== undefined) {
+        apiKeyManager.markKeyError('gemini', error.keyIndex, error.message);
       }
-      
-      // 재시도 전 대기
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
   }
+  throw new Error(`Gemini API 호출 실패: ${lastError.message}`);
 }
 
 // 합성 정보 분석
