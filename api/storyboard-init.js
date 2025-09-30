@@ -5,8 +5,6 @@ import fs from 'fs';
 import path from 'path';
 import { apiKeyManager } from '../src/utils/apiKeyManager.js';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 // 🔥 프롬프트 파일 매핑 - 제품/서비스 분기
 const PROMPT_FILE_MAPPING = {
   'step1_product': 'Prompt_step1_product.txt',  // 대문자 P 추가
