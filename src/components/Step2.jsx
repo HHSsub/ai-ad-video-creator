@@ -207,7 +207,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     }
   };
 
-  const handleGenerateStoryboard = async () => {
+    const handleGenerateStoryboard = async () => {
     setIsLoading?.(true);
     setError('');
     setPercent(0);
@@ -216,27 +216,26 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     setImagesFail(0);
     setDebugInfo(null);
     setStyles([]);
-
+  
     const startTime = Date.now();
-
+  
     try {
       log('🚀 스토리보드 생성을 시작합니다...');
-
+  
       const videoPurpose = formData.videoPurpose || 'product';
       const promptFiles = getPromptFiles(videoPurpose);
-
+  
       progressManager.startPhase('STEP1');
       log('아이디어를 구상하고 있습니다...');
       updateProgress('STEP1', 0.05);
-
-      // 🔥🔥🔥 수정: 2초마다 2%씩만 증가 (훨씬 느리게)
+  
       const step1ProgressInterval = setInterval(() => {
         const currentProgress = progressManager.phases.STEP1.progress;
         if (currentProgress < 0.85 && !progressManager.phases.STEP1.completed) {
-          updateProgress('STEP1', currentProgress + 0.02);  // 0.05 → 0.02
+          updateProgress('STEP1', currentProgress + 0.02);
         }
-      }, 2000);  // 1000ms → 2000ms
-
+      }, 2000);
+  
       const apiPayload = {
         brandName: formData.brandName || '',
         industryCategory: formData.industryCategory || '',
@@ -254,18 +253,43 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         } : null,
         promptType: promptFiles.step1
       };
-
-      const step1Response = await fetch(`${API_BASE}/api/storyboard-init`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-username': user.username
-        },
-        body: JSON.stringify(apiPayload),
-      });
-
+  
+      // 🔥🔥🔥 핵심 수정: AbortController로 타임아웃 제어
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        log('⚠️ 요청 타임아웃 (5분 초과)');
+      }, 300000); // 5분 타임아웃
+  
+      let step1Response;
+      try {
+        step1Response = await fetch(`${API_BASE}/api/storyboard-init`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-username': user.username
+          },
+          body: JSON.stringify(apiPayload),
+          signal: controller.signal,  // 🔥 타임아웃 제어
+          // 🔥🔥🔥 추가: keep-alive 설정
+          keepalive: true
+        });
+      } catch (fetchError) {
+        clearInterval(step1ProgressInterval);
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          throw new Error('요청 시간이 너무 오래 걸렸습니다. 다시 시도해주세요.');
+        }
+        throw new Error('서버에 연결할 수 없습니다. 네트워크를 확인해주세요.');
+      }
+  
+      clearTimeout(timeoutId);
       clearInterval(step1ProgressInterval);
-
+  
+      // 🔥🔥🔥 추가: 응답 상태 확인 강화
+      log(`📡 서버 응답 상태: ${step1Response.status} ${step1Response.statusText}`);
+  
       if (!step1Response.ok) {
         let errorMessage = '스토리보드 생성에 실패했습니다';
         try {
@@ -273,37 +297,47 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           if (errorData.error) {
             errorMessage = errorData.error;
           }
+          log(`❌ 서버 오류: ${errorMessage}`);
         } catch (e) {
-          // JSON 파싱 실패 시 기본 메시지 사용
+          log(`❌ HTTP ${step1Response.status}: ${step1Response.statusText}`);
         }
         throw new Error(errorMessage);
       }
-
+  
       let initData;
       try {
+        // 🔥🔥🔥 수정: 응답 읽기 전에 크기 확인
+        const contentLength = step1Response.headers.get('content-length');
+        log(`📦 응답 크기: ${contentLength ? `${(contentLength / 1024).toFixed(2)} KB` : '알 수 없음'}`);
+        
         const responseText = await step1Response.text();
+        log(`✅ 응답 수신 완료: ${responseText.length} chars`);
+        
         if (!responseText.trim()) {
-          throw new Error('서버 응답을 받지 못했습니다');
+          throw new Error('서버 응답이 비어있습니다');
         }
+        
         initData = JSON.parse(responseText);
+        log('✅ JSON 파싱 성공');
       } catch (parseError) {
+        log(`❌ 파싱 오류: ${parseError.message}`);
         throw new Error('서버 응답을 처리할 수 없습니다');
       }
-
+  
       if (!initData.success) {
         throw new Error(initData.error || '스토리보드 생성 실패');
       }
-
+  
       if (!initData.styles || !Array.isArray(initData.styles)) {
         throw new Error('스토리보드 데이터 형식이 올바르지 않습니다');
       }
-
+  
       const { styles, metadata, compositingInfo } = initData;
-
+  
       progressManager.completePhase('STEP1');
       updateProgress('STEP1', 1.0);
       log('✅ 아이디어 구상 완료');
-
+      
       progressManager.startPhase('STEP2');
       log('컨셉을 개발하고 있습니다...');
       updateProgress('STEP2', 0.1);
