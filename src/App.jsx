@@ -58,7 +58,14 @@ function App() {
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg"></div>
+                  <img 
+                    src="/upnexx_logo.png" 
+                    alt="UPNEXX Logo" 
+                    className="h-8 w-8 object-contain"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                   <h1 className="text-xl font-bold text-white">AI Studio</h1>
                 </div>
                 <div className="flex space-x-1">
@@ -113,7 +120,14 @@ function App() {
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg"></div>
+                  <img 
+                    src="/upnexx_logo.png" 
+                    alt="UPNEXX Logo" 
+                    className="h-8 w-8 object-contain"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                   <h1 className="text-xl font-bold text-white">AI Studio</h1>
                 </div>
                 <div className="flex space-x-1">
@@ -177,7 +191,14 @@ function App() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg"></div>
+                <img 
+                  src="/upnexx_logo.png" 
+                  alt="UPNEXX Logo" 
+                  className="h-8 w-8 object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
                 <span className="text-xl font-bold text-white">AI Studio</span>
               </div>
               
@@ -322,7 +343,7 @@ function App() {
               isLoading={isLoading}
               setIsLoading={setIsLoading}
               onPrev={prev}
-              user={user}  // ✅ user props 전달
+              user={user}
               onNext={() => {
                 if (!selectedConceptId) {
                   alert('컨셉을 선택해주세요.');
@@ -341,7 +362,7 @@ function App() {
               selectedConceptId={selectedConceptId}
               formData={formData}
               onPrev={prev}
-              user={user}  // ✅ user props 전달
+              user={user}
               onReset={() => {
                 setStep(1);
                 setFormData({});
