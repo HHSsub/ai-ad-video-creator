@@ -57,11 +57,11 @@ function App() {
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <img 
                     src="/upnexx_logo.png" 
                     alt="UPNEXX Logo" 
-                    className="h-10 w-auto object-contain"
+                    className="h-12 w-auto object-contain"
                     onError={(e) => {
                       e.target.style.display = 'none';
                     }}
@@ -119,11 +119,11 @@ function App() {
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <img 
                     src="/upnexx_logo.png" 
                     alt="UPNEXX Logo" 
-                    className="h-10 w-auto object-contain"
+                    className="h-12 w-auto object-contain"
                     onError={(e) => {
                       e.target.style.display = 'none';
                     }}
@@ -190,11 +190,11 @@ function App() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <img 
                   src="/upnexx_logo.png" 
                   alt="UPNEXX Logo" 
-                  className="h-10 w-autp object-contain"
+                  className="h-12 w-auto object-contain"
                   onError={(e) => {
                     e.target.style.display = 'none';
                   }}
