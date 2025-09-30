@@ -726,6 +726,7 @@ Step2.propTypes = {
   setStoryboard: PropTypes.func,
   setIsLoading: PropTypes.func,
   isLoading: PropTypes.bool,
+  user: PropTypes.object.isRequired,  // ← 이 줄만 추가
 };
 
 export default Step2;
