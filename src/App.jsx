@@ -207,7 +207,6 @@ function App() {
                     }}
                   />
                 </div>
-                <span className="text-xl font-bold text-white">AI Studio</span>
               </div>
               
               <div className="hidden md:flex items-center gap-1">
@@ -388,12 +387,11 @@ function App() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div className="text-xs text-gray-500">
-              © 2025 AI Studio. Professional AI Video Generation Platform
+              © 2025 UPNEXX. Professional AI Video Generation Platform
             </div>
             <div className="flex items-center gap-6 text-xs text-gray-500">
-              <span>Powered by nexxii</span>
+              <span>Powered by Nexxii</span>
               <span>•</span>
-              <span>Version 2.0</span>
             </div>
           </div>
         </div>
