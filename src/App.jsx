@@ -61,7 +61,7 @@ function App() {
                   <img 
                     src="/upnexx_logo.png" 
                     alt="UPNEXX Logo" 
-                    className="h-8 w-8 object-contain"
+                    className="h-10 w-auto object-contain"
                     onError={(e) => {
                       e.target.style.display = 'none';
                     }}
@@ -123,7 +123,7 @@ function App() {
                   <img 
                     src="/upnexx_logo.png" 
                     alt="UPNEXX Logo" 
-                    className="h-8 w-8 object-contain"
+                    className="h-10 w-auto object-contain"
                     onError={(e) => {
                       e.target.style.display = 'none';
                     }}
@@ -194,7 +194,7 @@ function App() {
                 <img 
                   src="/upnexx_logo.png" 
                   alt="UPNEXX Logo" 
-                  className="h-8 w-8 object-contain"
+                  className="h-10 w-autp object-contain"
                   onError={(e) => {
                     e.target.style.display = 'none';
                   }}
