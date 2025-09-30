@@ -33,10 +33,10 @@ SpinnerOverlay.propTypes = {
 class ProgressManager {
   constructor() {
     this.phases = {
-      STEP1: { weight: 0.25, progress: 0, completed: false },
-      STEP2: { weight: 0.25, progress: 0, completed: false },
-      RENDER: { weight: 0.3, progress: 0, completed: false },
-      COMPOSE: { weight: 0.2, progress: 0, completed: false }
+      STEP1: { weight: 0.15, progress: 0, completed: false },    // 25% → 15% (느리게)
+      STEP2: { weight: 0.15, progress: 0, completed: false },    // 25% → 15% (느리게)
+      RENDER: { weight: 0.45, progress: 0, completed: false },   // 30% → 45% (빠르게)
+      COMPOSE: { weight: 0.25, progress: 0, completed: false }   // 20% → 25% (유지)
     };
   }
 
@@ -227,14 +227,15 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
       progressManager.startPhase('STEP1');
       log('아이디어를 구상하고 있습니다...');
-      updateProgress('STEP1', 0.1);
+      updateProgress('STEP1', 0.05);
 
+      // 🔥🔥🔥 수정: 2초마다 2%씩만 증가 (훨씬 느리게)
       const step1ProgressInterval = setInterval(() => {
         const currentProgress = progressManager.phases.STEP1.progress;
-        if (currentProgress < 0.9 && !progressManager.phases.STEP1.completed) {
-          updateProgress('STEP1', currentProgress + 0.05);
+        if (currentProgress < 0.85 && !progressManager.phases.STEP1.completed) {
+          updateProgress('STEP1', currentProgress + 0.02);  // 0.05 → 0.02
         }
-      }, 1000);
+      }, 2000);  // 1000ms → 2000ms
 
       const apiPayload = {
         brandName: formData.brandName || '',
@@ -300,7 +301,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       const { styles, metadata, compositingInfo } = initData;
 
       progressManager.completePhase('STEP1');
-      setPercent(25);
+      updateProgress('STEP1', 1.0);
       log('✅ 아이디어 구상 완료');
 
       progressManager.startPhase('STEP2');
@@ -310,7 +311,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       progressManager.completePhase('STEP2');
-      setPercent(50);
+      updateProgress('STEP2', 1.0);
       log('✅ 컨셉 개발 완료');
 
       const finalStyles = styles;
@@ -382,7 +383,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             }
 
             const progress = (successImages + failedImages) / totalImages;
-            updateProgress('RENDER', Math.min(0.9, progress));
+            updateProgress('RENDER', Math.min(0.95, progress));
 
             if (imgIdx < images.length - 1 || styleIdx < finalStyles.length - 1) {
               await new Promise(resolve => setTimeout(resolve, 1500));
@@ -391,7 +392,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         }
 
         progressManager.completePhase('RENDER');
-        setPercent(80);
+        updateProgress('RENDER', 1.0);
         log(`✅ 이미지 생성 완료: 성공 ${successImages}개, 실패 ${failedImages}개`);
 
         const allCompositingImages = [];
@@ -440,13 +441,13 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               compositingFailed++;
               log(`❌ Scene ${imageObj.sceneNumber} 합성 오류`);
             }
-
-            updateProgress('COMPOSE', Math.min(0.9, (i + 1) / allCompositingImages.length));
           }
           log(`📊 이미지 합성 완료: 성공 ${compositingSuccess}개, 실패 ${compositingFailed}개`);
           progressManager.completePhase('COMPOSE');
+          updateProgress('COMPOSE', 1.0);
         } else {
           progressManager.completePhase('COMPOSE');
+          updateProgress('COMPOSE', 1.0);
         }
 
         setPercent(100);
@@ -474,14 +475,17 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         setStoryboard?.(finalStoryboard);
         setStyles(finalStyles);
 
-        // 🔥🔥🔥 핵심 수정: 모든 작업 완료 후 자동으로 다음 단계로 이동
+        // 🔥🔥🔥 핵심 수정: 로딩 종료를 먼저 하고, 그 다음 자동 이동
         log('🚀 다음 단계로 자동 이동합니다...');
-        setIsLoading?.(false);
         
-        // 약간의 딜레이 후 다음 단계로 이동 (사용자가 완료 메시지를 볼 수 있도록)
+        // setTimeout 내부에서 로딩 종료 + 페이지 이동
         setTimeout(() => {
-          onNext?.();
-        }, 1500);
+          setIsLoading?.(false);  // 먼저 로딩 종료
+          if (onNext) {
+            console.log('🎯 Step2 → Step3 자동 이동 실행');
+            onNext();
+          }
+        }, 2000);  // 2초 후 자동 이동
 
       } else {
         setPercent(100);
@@ -503,19 +507,23 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         setStoryboard?.(finalStoryboard);
         setStyles(finalStyles);
 
-        // 🔥🔥🔥 핵심 수정: 이미지가 없는 경우에도 자동으로 다음 단계로 이동
+        // 🔥🔥🔥 핵심 수정: 이미지가 없는 경우도 동일하게 처리
         log('🚀 다음 단계로 자동 이동합니다...');
-        setIsLoading?.(false);
         
         setTimeout(() => {
-          onNext?.();
-        }, 1500);
+          setIsLoading?.(false);
+          if (onNext) {
+            console.log('🎯 Step2 → Step3 자동 이동 실행 (이미지 없음)');
+            onNext();
+          }
+        }, 2000);
       }
 
     } catch (e) {
       setError(e.message);
       setIsLoading?.(false);
       setPercent(0);
+      log(`❌ 오류 발생: ${e.message}`);
     }
   };
 
@@ -648,14 +656,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               >
                 {getButtonText()}
               </button>
-              {styles && styles.length > 0 && !isBusy && (
-                <button
-                  onClick={onNext}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-medium"
-                >
-                  다음 단계
-                </button>
-              )}
             </div>
           </div>
         </div>
