@@ -24,8 +24,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use((req, res, next) => {
-  req.setTimeout(600000);  // 300000 → 600000 (타임아웃기준 10분)
-  res.setTimeout(600000);
+  req.setTimeout(1800000);  // 600000 → 1800000 (타임아웃기준 30분)
+  res.setTimeout(1800000);
   next();
 });
 
