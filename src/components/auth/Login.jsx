@@ -61,12 +61,16 @@ const Login = ({ onLogin }) => {
       <div className="max-w-md w-full space-y-8 relative">
         <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
           <div className="text-center mb-8">
-            <div className="mx-auto h-16 w-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
-              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+            {/* z+ (로고 이미지로 교체) */}
+            <div className="mx-auto h-16 w-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4 overflow-hidden">
+              <img
+                src="/upnexx_logo.png"
+                alt="Upnexx Logo"
+                className="h-12 w-12 object-contain"
+                style={{ background: 'transparent' }}
+              />
             </div>
-            <h2 className="text-2xl font-bold text-white">AI Studio</h2>
+            <h2 className="text-2xl font-bold text-white">UPNEXX AI Studio</h2>
             <p className="text-gray-400 mt-2">계정 정보를 입력해주세요</p>
           </div>
 
@@ -107,7 +111,7 @@ const Login = ({ onLogin }) => {
               <div className="bg-red-900/30 border border-red-800 rounded-lg p-3">
                 <div className="flex">
                   <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L10 10.586l-1.293-1.293a1 1 0 00-1.414 0z" clipRule="evenodd" />
                   </svg>
                   <p className="ml-2 text-sm text-red-300">{error}</p>
                 </div>
@@ -117,7 +121,7 @@ const Login = ({ onLogin }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               {loading ? (
                 <div className="flex items-center justify-center">
