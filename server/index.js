@@ -33,7 +33,7 @@ app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key', 'x-username'],
-  credentials: true,  // 🔥 추가
+  // credentials: true,  // 🔥 추가
   maxAge: 86400
 }));
 
