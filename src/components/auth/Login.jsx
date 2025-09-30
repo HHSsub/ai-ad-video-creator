@@ -62,18 +62,18 @@ const Login = ({ onLogin }) => {
         <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
           <div className="text-center mb-8">
             {/* z+ (로고 이미지로 교체) */}
-            <div className="mx-auto h-16 w-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4 overflow-hidden">
+            <div className="flex flex-col items-center mb-6">
               <img
                 src="/upnexx_logo.png"
                 alt="Upnexx Logo"
-                className="h-12 w-12 object-contain"
+                className="h-20 w-auto object-contain mb-4"
                 style={{ background: 'transparent' }}
                 onError={(e) => {
-                  console.error('Logo failed to load:', e);
-                  e.target.onerror = null;
-                  e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="%234F46E5"/></svg>';
+                  console.error('Logo load failed');
+                  e.target.style.display = 'none';
                 }}
               />
+              <h2 className="text-2xl font-bold text-white">UPNEXX AI Studio</h2>
             </div>
             <h2 className="text-2xl font-bold text-white">UPNEXX AI Studio</h2>
             <p className="text-gray-400 mt-2">계정 정보를 입력해주세요</p>
