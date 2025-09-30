@@ -322,6 +322,7 @@ function App() {
               isLoading={isLoading}
               setIsLoading={setIsLoading}
               onPrev={prev}
+              user={user}  // ✅ user props 전달
               onNext={() => {
                 if (!selectedConceptId) {
                   alert('컨셉을 선택해주세요.');
@@ -340,6 +341,7 @@ function App() {
               selectedConceptId={selectedConceptId}
               formData={formData}
               onPrev={prev}
+              user={user}  // ✅ user props 전달
               onReset={() => {
                 setStep(1);
                 setFormData({});
