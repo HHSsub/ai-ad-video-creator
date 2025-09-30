@@ -75,7 +75,9 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     saveFieldConfig(newConfig);
   };
 
+ // ✅ 라벨 편집 함수 수정 - 모든 필드에 대해 작동하도록
   const handleLabelEdit = (fieldKey, newLabel) => {
+    // 1. adminSettings에 저장
     const newSettings = {
       ...adminSettings,
       [fieldKey]: {
@@ -85,6 +87,18 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setAdminSettings(newSettings);
     saveAdminSettings(newSettings);
+
+    // 2. fieldConfig에도 업데이트 (즉시 반영을 위해)
+    const newConfig = {
+      ...fieldConfig,
+      [fieldKey]: {
+        ...fieldConfig[fieldKey],
+        label: newLabel
+      }
+    };
+    setFieldConfig(newConfig);
+    saveFieldConfig(newConfig);
+
     setEditingLabel(null);
     setTempLabel('');
   };
@@ -296,41 +310,71 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       )}
     </div>
   );
+
 const renderTextAreaField = (field) => (
     <div key={field.key} className="group mb-8">
       <div className="flex items-center justify-between mb-4">
-        <label className="text-lg font-semibold text-white tracking-wide mb-1 block">
-          {field.label}
-          {field.required && <span className="text-red-400 ml-2 text-xl">*</span>}
-        </label>
-
-        {isAdmin && (
-          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+        {editingLabel === field.key ? (
+          <div className="flex items-center gap-3 flex-1">
+            <input
+              type="text"
+              value={tempLabel}
+              onChange={(e) => setTempLabel(e.target.value)}
+              className="text-lg font-semibold text-white bg-gray-900/90 border border-gray-600/50 rounded-xl px-4 py-2 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 backdrop-blur-sm"
+              autoFocus
+            />
             <button
-              onClick={() => {
-                setEditingLabel(field.key);
-                setTempLabel(field.label);
-              }}
-              className="text-blue-300 hover:text-blue-200 text-xs px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+              onClick={() => handleLabelEdit(field.key, tempLabel)}
+              className="text-blue-300 hover:text-blue-200 text-sm px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
             >
-              편집
+              저장
             </button>
             <button
               onClick={() => {
-                setEditingPlaceholder(field.key);
-                setTempPlaceholder(field.placeholder || '');
+                setEditingLabel(null);
+                setTempLabel('');
               }}
-              className="text-emerald-300 hover:text-emerald-200 text-xs px-3 py-1.5 bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+              className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
             >
-              힌트편집
-            </button>
-            <button
-              onClick={() => handleHideField(field.key)}
-              className="text-red-300 hover:text-red-200 text-xs px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
-            >
-              숨기기
+              취소
             </button>
           </div>
+        ) : (
+          <>
+            <label className="text-lg font-semibold text-white tracking-wide mb-1 block">
+              {getDisplayLabel(field)}
+              {field.required && <span className="text-red-400 ml-2 text-xl">*</span>}
+            </label>
+
+            {isAdmin && (
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <button
+                  onClick={() => {
+                    setEditingLabel(field.key);
+                    setTempLabel(getDisplayLabel(field));
+                  }}
+                  className="text-blue-300 hover:text-blue-200 text-xs px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+                >
+                  편집
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingPlaceholder(field.key);
+                    setTempPlaceholder(field.placeholder || '');
+                  }}
+                  className="text-emerald-300 hover:text-emerald-200 text-xs px-3 py-1.5 bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+                >
+                  힌트편집
+                </button>
+                <button
+                  onClick={() => handleHideField(field.key)}
+                  className="text-red-300 hover:text-red-200 text-xs px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+                >
+                  숨기기
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
       
@@ -389,29 +433,58 @@ const renderTextAreaField = (field) => (
   const renderSelectField = (field) => (
     <div key={field.key} className="group mb-8">
       <div className="flex items-center justify-between mb-4">
-        <label className="text-lg font-semibold text-white tracking-wide mb-1 block">
-          {field.label}
-          {field.required && <span className="text-red-400 ml-2 text-xl">*</span>}
-        </label>
-
-        {isAdmin && field.key !== 'industryCategory' && field.key !== 'productServiceCategory' && (
-          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+        {editingLabel === field.key ? (
+          <div className="flex items-center gap-3 flex-1">
+            <input
+              type="text"
+              value={tempLabel}
+              onChange={(e) => setTempLabel(e.target.value)}
+              className="text-lg font-semibold text-white bg-gray-900/90 border border-gray-600/50 rounded-xl px-4 py-2 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 backdrop-blur-sm"
+              autoFocus
+            />
+            <button
+              onClick={() => handleLabelEdit(field.key, tempLabel)}
+              className="text-blue-300 hover:text-blue-200 text-sm px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
+            >
+              저장
+            </button>
             <button
               onClick={() => {
-                setEditingLabel(field.key);
-                setTempLabel(field.label);
+                setEditingLabel(null);
+                setTempLabel('');
               }}
-              className="text-blue-300 hover:text-blue-200 text-xs px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+              className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
             >
-              편집
-            </button>
-            <button
-              onClick={() => handleHideField(field.key)}
-              className="text-red-300 hover:text-red-200 text-xs px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
-            >
-              숨기기
+              취소
             </button>
           </div>
+        ) : (
+          <>
+            <label className="text-lg font-semibold text-white tracking-wide mb-1 block">
+              {getDisplayLabel(field)}
+              {field.required && <span className="text-red-400 ml-2 text-xl">*</span>}
+            </label>
+
+            {isAdmin && (
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <button
+                  onClick={() => {
+                    setEditingLabel(field.key);
+                    setTempLabel(getDisplayLabel(field));
+                  }}
+                  className="text-blue-300 hover:text-blue-200 text-xs px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+                >
+                  편집
+                </button>
+                <button
+                  onClick={() => handleHideField(field.key)}
+                  className="text-red-300 hover:text-red-200 text-xs px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+                >
+                  숨기기
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
       
