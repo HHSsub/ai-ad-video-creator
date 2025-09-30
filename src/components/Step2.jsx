@@ -281,7 +281,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       log(`📋 브랜드: ${formData.brandName} | 목적: ${formData.videoPurpose} | 길이: ${formData.videoLength}`);
 
       const promptFiles = getPromptFiles(formData.videoPurpose);
-      log(`📝 선택된 프롬프트: ${promptFiles.step1} → ${promptFiles.step2}`);
 
       progressManager.startPhase('STEP1');
       log('아이디어를 구상하고 있습니다...');
@@ -316,8 +315,16 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       clearInterval(step1ProgressInterval);
 
       if (!step1Response.ok) {
-        const errorText = await step1Response.text().catch(() => '');
-        throw new Error(`스토리보드 생성에 실패했습니다`);
+        let errorMessage = '스토리보드 생성에 실패했습니다';
+        try {
+          const errorData = await step1Response.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (e) {
+          // JSON 파싱 실패 시 기본 메시지 사용
+        }
+        throw new Error(errorMessage);
       }
 
       let initData;
