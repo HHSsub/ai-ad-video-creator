@@ -183,148 +183,85 @@ function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, 
 }
 
 // 🔥🔥🔥 완전히 재작성된 JSON 파싱 함수 (마크다운 대응)
+// parseMultiConceptJSON 함수를 다음으로 완전 교체:
+
 function parseMultiConceptJSON(text) {
   try {
     console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
+    console.log('[parseMultiConceptJSON] 텍스트 미리보기:', text.substring(0, 500));
     
-    // 1단계: JSON 코드 블록 찾기 (```json ... ```)
-    const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonBlockMatch) {
-      console.log('[parseMultiConceptJSON] JSON 코드 블록 발견');
+    // 🔥 1단계: ```json ... ``` 코드 블록 추출
+    const jsonBlockMatches = text.matchAll(/```json\s*([\s\S]*?)\s*```/g);
+    const jsonBlocks = Array.from(jsonBlockMatches);
+    
+    if (jsonBlocks.length > 0) {
+      console.log(`[parseMultiConceptJSON] JSON 코드 블록 ${jsonBlocks.length}개 발견`);
+      
+      // 가장 큰 JSON 블록 선택
+      let largestBlock = jsonBlocks[0][1];
+      for (const block of jsonBlocks) {
+        if (block[1].length > largestBlock.length) {
+          largestBlock = block[1];
+        }
+      }
+      
+      console.log('[parseMultiConceptJSON] 가장 큰 JSON 블록 길이:', largestBlock.length);
+      console.log('[parseMultiConceptJSON] JSON 블록 미리보기:', largestBlock.substring(0, 300));
+      
       try {
-        const parsed = JSON.parse(jsonBlockMatch[1]);
+        const parsed = JSON.parse(largestBlock);
         if (parsed && parsed.concepts && Array.isArray(parsed.concepts)) {
           console.log('[parseMultiConceptJSON] ✅ JSON 코드 블록 파싱 성공, 컨셉 수:', parsed.concepts.length);
+          
+          // 각 컨셉의 씬 수 검증
+          parsed.concepts.forEach((concept, idx) => {
+            const sceneKeys = Object.keys(concept).filter(k => k.startsWith('scene_'));
+            console.log(`[parseMultiConceptJSON] 컨셉 ${idx + 1} 씬 수:`, sceneKeys.length);
+          });
+          
           return parsed;
+        } else {
+          console.warn('[parseMultiConceptJSON] JSON 파싱 성공했으나 concepts 배열 없음');
         }
       } catch (e) {
-        console.warn('[parseMultiConceptJSON] JSON 코드 블록 파싱 실패:', e.message);
+        console.error('[parseMultiConceptJSON] JSON 파싱 오류:', e.message);
+        console.error('[parseMultiConceptJSON] 파싱 실패한 JSON 일부:', largestBlock.substring(0, 500));
       }
     }
     
-    // 2단계: 마크다운에서 JSON 구조 추출
-    console.log('[parseMultiConceptJSON] 마크다운 파싱 시도');
-    const concepts = [];
-    
-    // 컨셉별로 분리
-    const conceptSections = text.split(/##\s*(?:Concept|컨셉)\s*(\d+)/i);
-    
-    console.log('[parseMultiConceptJSON] 감지된 섹션 수:', conceptSections.length);
-    
-    for (let i = 1; i < conceptSections.length; i += 2) {
-      const conceptNumber = parseInt(conceptSections[i]);
-      const conceptContent = conceptSections[i + 1];
+    // 🔥 2단계: 직접 {...} JSON 객체 추출
+    try {
+      // 가장 바깥쪽 { } 찾기
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
       
-      if (!conceptContent) continue;
-      
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 파싱 중...`);
-      
-      const concept = {
-        concept_id: conceptNumber,
-        concept_name: `Concept ${conceptNumber}`,
-        style: 'Commercial Photography'
-      };
-      
-      // 컨셉 이름 추출
-      const nameMatch = conceptContent.match(/(?:Concept Headline|컨셉 헤드라인)[:\s]*(.+?)(?:\n|$)/i);
-      if (nameMatch) {
-        concept.concept_name = nameMatch[1].trim();
-      }
-      
-      // 씬별 데이터 추출
-      const sceneSections = conceptContent.split(/###\s*S#(\d+)/i);
-      
-      for (let j = 1; j < sceneSections.length; j += 2) {
-        const sceneNumber = parseInt(sceneSections[j]);
-        const sceneContent = sceneSections[j + 1];
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const jsonCandidate = text.substring(firstBrace, lastBrace + 1);
+        console.log('[parseMultiConceptJSON] 직접 JSON 추출 시도, 길이:', jsonCandidate.length);
         
-        if (!sceneContent) continue;
-        
-        const sceneKey = `scene_${sceneNumber}`;
-        const sceneData = {
-          title: `Scene ${sceneNumber}`,
-          image_prompt: {
-            prompt: '',
-            negative_prompt: 'blurry, low quality, watermark, text, logo',
-            num_images: 1,
-            guidance_scale: 7.5,
-            seed: Math.floor(10000 + Math.random() * 90000)
-          },
-          motion_prompt: {
-            prompt: 'subtle camera movement'
-          },
-          copy: {
-            copy: `씬 ${sceneNumber}`
-          }
-        };
-        
-        // Image Prompt JSON 추출
-        const imagePromptMatch = sceneContent.match(/\{[\s\S]*?"prompt"[\s\S]*?\}/);
-        if (imagePromptMatch) {
-          try {
-            const imagePromptJSON = JSON.parse(imagePromptMatch[0]);
-            sceneData.image_prompt = {
-              ...sceneData.image_prompt,
-              ...imagePromptJSON
-            };
-            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 이미지 프롬프트 추출 성공`);
-          } catch (e) {
-            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 이미지 프롬프트 파싱 실패`);
-          }
-        }
-        
-        // Motion Prompt JSON 추출
-        const motionPromptMatch = sceneContent.match(/(?:Motion Prompt|Image-to-Video)[:\s\S]*?\{[\s\S]*?"prompt"[\s\S]*?\}/i);
-        if (motionPromptMatch) {
-          try {
-            const motionJSON = JSON.parse(motionPromptMatch[0].match(/\{[\s\S]*?\}/)[0]);
-            sceneData.motion_prompt = motionJSON;
-            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 모션 프롬프트 추출 성공`);
-          } catch (e) {
-            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 모션 프롬프트 파싱 실패`);
-          }
-        }
-        
-        // Scene Copy JSON 추출
-        const copyMatch = sceneContent.match(/(?:Scene Copy|카피)[:\s\S]*?\{[\s\S]*?"copy"[\s\S]*?\}/i);
-        if (copyMatch) {
-          try {
-            const copyJSON = JSON.parse(copyMatch[0].match(/\{[\s\S]*?\}/)[0]);
-            sceneData.copy = copyJSON;
-            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 카피 추출 성공`);
-          } catch (e) {
-            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 카피 파싱 실패`);
-          }
-        }
-        
-        concept[sceneKey] = sceneData;
-      }
-      
-      concepts.push(concept);
-      console.log(`[parseMultiConceptJSON] ✅ 컨셉 ${conceptNumber} 완료, 씬 수:`, Object.keys(concept).filter(k => k.startsWith('scene_')).length);
-    }
-    
-    if (concepts.length > 0) {
-      console.log('[parseMultiConceptJSON] ✅ 마크다운 파싱 성공, 총 컨셉 수:', concepts.length);
-      return { concepts };
-    }
-    
-    // 3단계: 직접 JSON 객체 찾기
-    const directMatch = text.match(/\{[\s\S]*"concepts"[\s\S]*\}/);
-    if (directMatch) {
-      console.log('[parseMultiConceptJSON] 직접 JSON 객체 발견');
-      try {
-        const parsed = JSON.parse(directMatch[0]);
+        const parsed = JSON.parse(jsonCandidate);
         if (parsed && parsed.concepts && Array.isArray(parsed.concepts)) {
           console.log('[parseMultiConceptJSON] ✅ 직접 JSON 파싱 성공, 컨셉 수:', parsed.concepts.length);
           return parsed;
         }
-      } catch (e) {
-        console.warn('[parseMultiConceptJSON] 직접 JSON 파싱 실패:', e.message);
       }
+    } catch (e) {
+      console.warn('[parseMultiConceptJSON] 직접 JSON 추출 실패:', e.message);
     }
     
-    console.error('[parseMultiConceptJSON] ❌ 모든 파싱 시도 실패');
+    // 🔥 3단계: 폴백 - 빈 구조 반환 (디버깅용)
+    console.error('[parseMultiConceptJSON] ❌ 모든 파싱 방법 실패');
+    console.error('[parseMultiConceptJSON] Gemini 응답 전체 저장 (디버깅용)');
+    
+    // 디버깅: 전체 응답을 파일로 저장
+    if (typeof process !== 'undefined' && process.cwd) {
+      const fs = require('fs');
+      const path = require('path');
+      const debugPath = path.join(process.cwd(), 'debug_gemini_response.txt');
+      fs.writeFileSync(debugPath, text, 'utf-8');
+      console.log('[parseMultiConceptJSON] 전체 응답 저장됨:', debugPath);
+    }
+    
     return null;
     
   } catch (error) {
