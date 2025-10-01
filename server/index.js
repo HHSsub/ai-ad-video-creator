@@ -1,9 +1,25 @@
 import 'dotenv/config';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
+
+// 🔥 현재 파일 경로 설정
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// 🔥 .env 파일 명시적 로드
+import dotenv from 'dotenv';
+const envPath = resolve(__dirname, '..', '.env');
+dotenv.config({ path: envPath });
+
+console.log('🔑 환경변수 로드:', {
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY?.substring(0, 15) + '...',
+  FREEPIK_API_KEY: process.env.FREEPIK_API_KEY ? '✅' : '❌'
+});
 
 import usersApi from '../api/users.js';
 import storyboardInit from '../api/storyboard-init.js';
@@ -20,22 +36,11 @@ import bgmStream from '../api/bgm-stream.js';
 import nanobanaCompose from '../api/nanobanana-compose.js';
 import adminConfig from '../api/admin-config.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// 프로젝트 루트의 .env 로드
-config({ path: join(__dirname, '..', '.env') });
-
-console.log('🔑 환경변수 로드:', {
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY?.substring(0, 15) + '...',
-  FREEPIK_API_KEY: process.env.FREEPIK_API_KEY ? '✅' : '❌'
-});
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use((req, res, next) => {
-  req.setTimeout(1800000);  // 600000 → 1800000 (타임아웃기준 30분)
+  req.setTimeout(1800000);
   res.setTimeout(1800000);
   next();
 });
@@ -44,7 +49,6 @@ app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-freepik-api-key', 'x-username'],
-  // credentials: true,  // 🔥 추가
   maxAge: 86400
 }));
 
