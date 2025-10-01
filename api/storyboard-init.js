@@ -1,25 +1,29 @@
-// api/storyboard-init.js - 완전 복구 (Part 1) - 영상설명 필드만 제거, 나머지 모든 로직 유지
+// api/storyboard-init.js - 완전 수정 (영상길이 나누기 2 로직 + JSON 파싱 개선)
 import 'dotenv/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
-import { apiKeyManager } from '../src/utils/apiKeyManager.js';
 
-// 🔥 프롬프트 파일 매핑 - 제품/서비스 분기
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// 🔥 프롬프트 파일 매핑
 const PROMPT_FILE_MAPPING = {
-  'step1_product': 'Prompt_step1_product.txt',  // 대문자 P 추가
+  'step1_product': 'Prompt_step1_product.txt',
   'step1_service': 'Prompt_step1_service.txt',
   'step2_product': 'Prompt_step2_product.txt',
   'step2_service': 'Prompt_step2_service.txt'
 };
 
-// 영상 길이에 따른 씬 수 결정
+// 🔥🔥🔥 영상 길이에 따른 씬 수 결정 - 영상길이 나누기 2
 function getSceneCount(videoLength) {
   const lengthNumber = parseInt(videoLength);
-  if (lengthNumber == 10) return 5;
-  if (lengthNumber == 20) return 10;
-  if (lengthNumber == 30) return 15;
-  return 5;
+  console.log(`[getSceneCount] 입력: ${videoLength} → ${lengthNumber}초`);
+  
+  // 영상 길이 나누기 2 = 씬 수
+  const sceneCount = Math.floor(lengthNumber / 2);
+  
+  console.log(`[getSceneCount] 결과: ${lengthNumber}초 ÷ 2 = ${sceneCount}씬`);
+  return sceneCount;
 }
 
 // 종횡비 코드 매핑
@@ -33,17 +37,17 @@ function mapAspectRatio(aspectRatio) {
 
   const cleanRatio = aspectRatio.toLowerCase().trim();
   
-  if (cleanRatio.includes('16:9') || cleanRatio.includes('가로')) {
+  if (cleanRatio.includes('16:9') || cleanRatio.includes('가로') || cleanRatio.includes('widescreen')) {
     console.log('[mapAspectRatio] → widescreen_16_9');
     return 'widescreen_16_9';
   }
   
-  if (cleanRatio.includes('1:1') || cleanRatio.includes('정사각형')) {
+  if (cleanRatio.includes('1:1') || cleanRatio.includes('정사각형') || cleanRatio.includes('square')) {
     console.log('[mapAspectRatio] → square_1_1');
     return 'square_1_1';
   }
   
-  if (cleanRatio.includes('9:16') || cleanRatio.includes('세로')) {
+  if (cleanRatio.includes('9:16') || cleanRatio.includes('세로') || cleanRatio.includes('portrait')) {
     console.log('[mapAspectRatio] → portrait_9_16');
     return 'portrait_9_16';
   }
@@ -52,12 +56,13 @@ function mapAspectRatio(aspectRatio) {
   return 'widescreen_16_9';
 }
 
-// 🔥 해상도 매핑 함수들 (복구)
+// 해상도 매핑 함수들
 function getWidthFromAspectRatio(aspectRatio) {
   const resolutions = {
     'widescreen_16_9': 1344,
     'vertical_9_16': 768,
     'square_1_1': 1024,
+    'portrait_9_16': 768
   };
   return resolutions[aspectRatio] || 1344;
 }
@@ -67,6 +72,7 @@ function getHeightFromAspectRatio(aspectRatio) {
     'widescreen_16_9': 768,
     'vertical_9_16': 1344,
     'square_1_1': 1024,
+    'portrait_9_16': 1344
   };
   return resolutions[aspectRatio] || 768;
 }
@@ -88,7 +94,7 @@ function detectProductCompositingScenes(phase1_output, videoPurpose) {
         currentSceneNumber = parseInt(sceneMatch[1] || sceneMatch[2] || sceneMatch[3], 10);
       }
 
-      // PRODUCT COMPOSITING SCENE 감지
+      // 🔥 명시적 PRODUCT COMPOSITING SCENE만 감지
       if (line.includes('[PRODUCT COMPOSITING SCENE]') || 
           line.includes('제품 합성') || 
           line.includes('Product Compositing')) {
@@ -103,29 +109,29 @@ function detectProductCompositingScenes(phase1_output, videoPurpose) {
         });
       }
 
-      // 암시적 합성 씬 감지 (제품이 필요한 상황)
+      // 🔥 암시적 합성 씬 감지 - 주석처리 (로그만 출력)
+      // if ((videoPurpose === 'product' || videoPurpose === 'conversion') && 
+      //     currentSceneNumber && 
+      //     (line.includes('제품') || line.includes('product') || line.includes('상품'))) {
+      //   
+      //   const hasExplicitCompositing = compositingScenes.some(cs => cs.sceneNumber === currentSceneNumber && cs.explicit);
+      //   if (!hasExplicitCompositing) {
+      //     console.log(`[detectProductCompositingScenes] 제품 노출 감지 (씬 ${currentSceneNumber}): ${line.substring(0, 50)}...`);
+      //   }
+      // }
+      
+      // 🔥 제품 노출 씬 로그만 출력
       if ((videoPurpose === 'product' || videoPurpose === 'conversion') && 
           currentSceneNumber && 
-          (line.includes('제품') || 
-           line.includes('product') || 
-           line.includes('상품'))) {
-        
+          (line.includes('제품') || line.includes('product') || line.includes('상품'))) {
         const hasExplicitCompositing = compositingScenes.some(cs => cs.sceneNumber === currentSceneNumber && cs.explicit);
         if (!hasExplicitCompositing) {
-          compositingScenes.push({
-            sceneNumber: currentSceneNumber,
-            lineNumber: i + 1,
-            content: line.trim(),
-            type: 'product_compositing',
-            explicit: false,
-            context: `제품 노출 씬 ${currentSceneNumber}`,
-            videoPurpose: videoPurpose
-          });
+          console.log(`[detectProductCompositingScenes] 💡 제품 노출 씬 감지 (씬 ${currentSceneNumber}): ${line.substring(0, 80)}...`);
         }
       }
     }
 
-    console.log(`[detectProductCompositingScenes] 감지된 합성 씬: ${compositingScenes.length}개`);
+    console.log(`[detectProductCompositingScenes] ✅ 명시적 합성 씬: ${compositingScenes.length}개`);
     return compositingScenes;
 
   } catch (error) {
@@ -167,32 +173,162 @@ function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, 
   let finalPrompt = step2Template;
   
   // 변수 치환
-  finalPrompt = finalPrompt.replace('{phase1_output}', phase1Output);
-  finalPrompt = finalPrompt.replace('{sceneCount}', sceneCount);
-  finalPrompt = finalPrompt.replace('{brandName}', requestBody.brandName || '');
-  finalPrompt = finalPrompt.replace('{videoPurpose}', requestBody.videoPurpose || '');
+  finalPrompt = finalPrompt.replace(/{phase1_output}/g, phase1Output);
+  finalPrompt = finalPrompt.replace(/{sceneCount}/g, sceneCount);
+  finalPrompt = finalPrompt.replace(/{brandName}/g, requestBody.brandName || '');
+  finalPrompt = finalPrompt.replace(/{videoPurpose}/g, requestBody.videoPurpose || '');
+  finalPrompt = finalPrompt.replace(/{videoLength}/g, requestBody.videoLength || '10');
   
   return finalPrompt;
 }
 
-// JSON 파싱 함수
+// 🔥🔥🔥 완전히 재작성된 JSON 파싱 함수 (마크다운 대응)
 function parseMultiConceptJSON(text) {
   try {
-    // JSON 블록 찾기
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1]);
+    console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
+    
+    // 1단계: JSON 코드 블록 찾기 (```json ... ```)
+    const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch) {
+      console.log('[parseMultiConceptJSON] JSON 코드 블록 발견');
+      try {
+        const parsed = JSON.parse(jsonBlockMatch[1]);
+        if (parsed && parsed.concepts && Array.isArray(parsed.concepts)) {
+          console.log('[parseMultiConceptJSON] ✅ JSON 코드 블록 파싱 성공, 컨셉 수:', parsed.concepts.length);
+          return parsed;
+        }
+      } catch (e) {
+        console.warn('[parseMultiConceptJSON] JSON 코드 블록 파싱 실패:', e.message);
+      }
     }
     
-    // 직접 JSON 찾기
-    const directMatch = text.match(/\{[\s\S]*\}/);
+    // 2단계: 마크다운에서 JSON 구조 추출
+    console.log('[parseMultiConceptJSON] 마크다운 파싱 시도');
+    const concepts = [];
+    
+    // 컨셉별로 분리
+    const conceptSections = text.split(/##\s*(?:Concept|컨셉)\s*(\d+)/i);
+    
+    console.log('[parseMultiConceptJSON] 감지된 섹션 수:', conceptSections.length);
+    
+    for (let i = 1; i < conceptSections.length; i += 2) {
+      const conceptNumber = parseInt(conceptSections[i]);
+      const conceptContent = conceptSections[i + 1];
+      
+      if (!conceptContent) continue;
+      
+      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 파싱 중...`);
+      
+      const concept = {
+        concept_id: conceptNumber,
+        concept_name: `Concept ${conceptNumber}`,
+        style: 'Commercial Photography'
+      };
+      
+      // 컨셉 이름 추출
+      const nameMatch = conceptContent.match(/(?:Concept Headline|컨셉 헤드라인)[:\s]*(.+?)(?:\n|$)/i);
+      if (nameMatch) {
+        concept.concept_name = nameMatch[1].trim();
+      }
+      
+      // 씬별 데이터 추출
+      const sceneSections = conceptContent.split(/###\s*S#(\d+)/i);
+      
+      for (let j = 1; j < sceneSections.length; j += 2) {
+        const sceneNumber = parseInt(sceneSections[j]);
+        const sceneContent = sceneSections[j + 1];
+        
+        if (!sceneContent) continue;
+        
+        const sceneKey = `scene_${sceneNumber}`;
+        const sceneData = {
+          title: `Scene ${sceneNumber}`,
+          image_prompt: {
+            prompt: '',
+            negative_prompt: 'blurry, low quality, watermark, text, logo',
+            num_images: 1,
+            guidance_scale: 7.5,
+            seed: Math.floor(10000 + Math.random() * 90000)
+          },
+          motion_prompt: {
+            prompt: 'subtle camera movement'
+          },
+          copy: {
+            copy: `씬 ${sceneNumber}`
+          }
+        };
+        
+        // Image Prompt JSON 추출
+        const imagePromptMatch = sceneContent.match(/\{[\s\S]*?"prompt"[\s\S]*?\}/);
+        if (imagePromptMatch) {
+          try {
+            const imagePromptJSON = JSON.parse(imagePromptMatch[0]);
+            sceneData.image_prompt = {
+              ...sceneData.image_prompt,
+              ...imagePromptJSON
+            };
+            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 이미지 프롬프트 추출 성공`);
+          } catch (e) {
+            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 이미지 프롬프트 파싱 실패`);
+          }
+        }
+        
+        // Motion Prompt JSON 추출
+        const motionPromptMatch = sceneContent.match(/(?:Motion Prompt|Image-to-Video)[:\s\S]*?\{[\s\S]*?"prompt"[\s\S]*?\}/i);
+        if (motionPromptMatch) {
+          try {
+            const motionJSON = JSON.parse(motionPromptMatch[0].match(/\{[\s\S]*?\}/)[0]);
+            sceneData.motion_prompt = motionJSON;
+            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 모션 프롬프트 추출 성공`);
+          } catch (e) {
+            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 모션 프롬프트 파싱 실패`);
+          }
+        }
+        
+        // Scene Copy JSON 추출
+        const copyMatch = sceneContent.match(/(?:Scene Copy|카피)[:\s\S]*?\{[\s\S]*?"copy"[\s\S]*?\}/i);
+        if (copyMatch) {
+          try {
+            const copyJSON = JSON.parse(copyMatch[0].match(/\{[\s\S]*?\}/)[0]);
+            sceneData.copy = copyJSON;
+            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 카피 추출 성공`);
+          } catch (e) {
+            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNumber} 씬 ${sceneNumber} 카피 파싱 실패`);
+          }
+        }
+        
+        concept[sceneKey] = sceneData;
+      }
+      
+      concepts.push(concept);
+      console.log(`[parseMultiConceptJSON] ✅ 컨셉 ${conceptNumber} 완료, 씬 수:`, Object.keys(concept).filter(k => k.startsWith('scene_')).length);
+    }
+    
+    if (concepts.length > 0) {
+      console.log('[parseMultiConceptJSON] ✅ 마크다운 파싱 성공, 총 컨셉 수:', concepts.length);
+      return { concepts };
+    }
+    
+    // 3단계: 직접 JSON 객체 찾기
+    const directMatch = text.match(/\{[\s\S]*"concepts"[\s\S]*\}/);
     if (directMatch) {
-      return JSON.parse(directMatch[0]);
+      console.log('[parseMultiConceptJSON] 직접 JSON 객체 발견');
+      try {
+        const parsed = JSON.parse(directMatch[0]);
+        if (parsed && parsed.concepts && Array.isArray(parsed.concepts)) {
+          console.log('[parseMultiConceptJSON] ✅ 직접 JSON 파싱 성공, 컨셉 수:', parsed.concepts.length);
+          return parsed;
+        }
+      } catch (e) {
+        console.warn('[parseMultiConceptJSON] 직접 JSON 파싱 실패:', e.message);
+      }
     }
     
+    console.error('[parseMultiConceptJSON] ❌ 모든 파싱 시도 실패');
     return null;
+    
   } catch (error) {
-    console.error('JSON 파싱 오류:', error);
+    console.error('[parseMultiConceptJSON] ❌ 전체 파싱 오류:', error);
     return null;
   }
 }
@@ -200,53 +336,62 @@ function parseMultiConceptJSON(text) {
 // 안전한 Gemini API 호출
 async function safeCallGemini(prompt, options = {}) {
   const { label = 'gemini-call', maxRetries = 3 } = options;
-  let lastError;
+  
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_1;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // apiKeyManager에서 최적 키 선택
-      const { key: apiKey, index: keyIndex } = apiKeyManager.selectBestGeminiKey();
-      console.log(`[${label}] Gemini API 호출 시도 ${attempt}/${maxRetries} (키: ${keyIndex})`);
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      console.log(`[${label}] Gemini API 호출 시도 ${attempt}/${maxRetries}`);
+      
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
+
       if (!text || text.length < 10) {
         throw new Error('Gemini 응답이 너무 짧습니다.');
       }
-      console.log(`[${label}] 성공: ${text.length} chars`);
-      // 성공 기록
-      apiKeyManager.markKeySuccess('gemini', keyIndex);
+
+      console.log(`[${label}] ✅ 성공: ${text.length} chars`);
       return { text };
+
     } catch (error) {
-      lastError = error;
-      console.log(`[${label}] 시도 ${attempt} 실패:`, error.message);
-      // 에러 기록 (키 인덱스 있으면)
-      if (error.keyIndex !== undefined) {
-        apiKeyManager.markKeyError('gemini', error.keyIndex, error.message);
+      console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
       }
-      if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
   }
-  throw new Error(`Gemini API 호출 실패: ${lastError.message}`);
 }
 
 // 합성 정보 분석
 function analyzeCompositingInfo(formData, compositingScenes) {
+  const imageRef = formData.imageRef || formData.imageUpload;
+  const videoPurpose = formData.videoPurpose;
+  
+  const needsProductImage = videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education';
+  const needsBrandLogo = videoPurpose === 'service' || videoPurpose === 'brand';
+
   return {
     needsCompositing: compositingScenes.length > 0,
-    hasProductImage: !!(formData.imageRef && formData.imageRef.url),
-    hasBrandLogo: !!(formData.imageRef && formData.imageRef.url),
+    hasProductImage: needsProductImage && !!(imageRef && imageRef.url),
+    hasBrandLogo: needsBrandLogo && !!(imageRef && imageRef.url),
     scenes: compositingScenes,
-    productImageData: formData.imageRef || null,
-    brandLogoData: formData.imageRef || null,
+    productImageData: (needsProductImage && imageRef) ? imageRef : null,
+    brandLogoData: (needsBrandLogo && imageRef) ? imageRef : null,
     totalCompositingScenes: compositingScenes.length
   };
 }
 
-// 🔥 제품/서비스에 따른 프롬프트 파일 결정
+// 제품/서비스에 따른 프롬프트 파일 결정
 function getPromptFiles(videoPurpose) {
   console.log(`[getPromptFiles] videoPurpose: ${videoPurpose}`);
   
@@ -271,7 +416,7 @@ function getPromptFiles(videoPurpose) {
   };
 }
 
-// 🔥 Z+ 추가: 사용자 파일 경로 및 함수들
+// 사용자 파일 경로 및 함수들
 const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
 
 function loadUsers() {
@@ -316,7 +461,6 @@ function checkAndResetDaily(user) {
   return false;
 }
 
-// 🔥 Z+ 추가: checkUsageLimit 함수 정의
 function checkUsageLimit(username) {
   try {
     if (!username) {
@@ -332,129 +476,105 @@ function checkUsageLimit(username) {
       return { allowed: false, message: '존재하지 않는 사용자입니다.' };
     }
 
-    // 관리자는 무제한 사용
-    if (user.role === 'admin') {
-      console.log('[storyboard-init] 관리자 사용자:', username);
-      return { allowed: true };
+    checkAndResetDaily(user);
+
+    if (user.usageCount >= user.dailyLimit) {
+      console.warn('[storyboard-init] 일일 사용 한도 초과:', username);
+      return { 
+        allowed: false, 
+        message: `일일 사용 한도(${user.dailyLimit}회)를 초과했습니다. 내일 다시 시도해주세요.`,
+        usageCount: user.usageCount,
+        dailyLimit: user.dailyLimit
+      };
     }
 
-    // 일일 리셋 체크
-    const resetNeeded = checkAndResetDaily(user);
-    
-    // 사용 횟수 제한 확인
-    const currentUsage = user.usageCount || 0;
-    const usageLimit = user.usageLimit;
+    user.usageCount += 1;
+    saveUsers(users);
 
-    if (usageLimit !== null && usageLimit !== undefined) {
-      if (currentUsage >= usageLimit) {
-        console.warn('[storyboard-init] 사용 횟수 초과:', username, currentUsage, '/', usageLimit);
-        return { 
-          allowed: false, 
-          message: `일일 사용 횟수를 초과했습니다. (${currentUsage}/${usageLimit})` 
-        };
-      }
-    }
+    console.log('[storyboard-init] 사용 횟수 증가:', {
+      username,
+      usageCount: user.usageCount,
+      dailyLimit: user.dailyLimit
+    });
 
-    // 사용 횟수 증가
-    user.usageCount = currentUsage + 1;
-    
-    if (resetNeeded || currentUsage < usageLimit) {
-      saveUsers(users);
-    }
-
-    console.log('[storyboard-init] 사용 허용:', username, user.usageCount, '/', usageLimit || '무제한');
-    return { allowed: true };
-
+    return { 
+      allowed: true, 
+      usageCount: user.usageCount,
+      dailyLimit: user.dailyLimit,
+      remaining: user.dailyLimit - user.usageCount
+    };
   } catch (error) {
-    console.error('[storyboard-init] 사용 횟수 체크 오류:', error);
-    return { allowed: false, message: '서버 오류가 발생했습니다.' };
+    console.error('[storyboard-init] 사용 한도 확인 오류:', error);
+    return { allowed: true };
   }
 }
 
-// 🔥 메인 핸들러 함수 (완전 복구)
+// 🔥 메인 핸들러
 export default async function handler(req, res) {
-  // CORS 설정
+  const startTime = Date.now();
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
   res.setHeader('Access-Control-Max-Age', '86400');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // 🔥 사용 횟수 체크 추가 (여기만 추가)
-  const username = req.headers['x-username'] || req.body?.username;
-  
-  if (username) {
-    const usageCheck = checkUsageLimit(username);
-    
-    if (!usageCheck.allowed) {
-      return res.status(403).json({
-        success: false,
-        error: usageCheck.message || '사용 횟수를 초과했습니다.',
-        usageLimitExceeded: true
-      });
-    }
-  }
-
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed. Use POST.'
+    return res.status(405).json({ 
+      success: false, 
+      error: 'Method not allowed' 
     });
   }
 
-  const startTime = Date.now();
-
   try {
-    const {
-      brandName,
-      industryCategory,
-      productServiceCategory,
-      productServiceName,
-      videoPurpose,
-      videoLength,
-      coreTarget,
-      coreDifferentiation,
-      videoRequirements = '',
-      imageRef = null,
-      aspectRatioCode = 'widescreen_16_9'
-    } = req.body;
-
-    console.log(`[storyboard-init] 🚀 시작: ${brandName} - ${videoPurpose}`);
-
-    // 🔥 필수 필드 검증
-    const requiredFields = {
-      brandName: '브랜드명',
-      industryCategory: '산업 카테고리',
-      productServiceCategory: '제품/서비스 카테고리',
-      productServiceName: '제품명/서비스명',
-      videoPurpose: '영상 목적',
-      videoLength: '영상 길이',
-      coreTarget: '핵심 타겟',
-      coreDifferentiation: '핵심 차별점'
-    };
-
-    const missingFields = [];
-    for (const [field, label] of Object.entries(requiredFields)) {
-      if (!req.body[field]) {
-        missingFields.push(label);
+    const username = req.headers['x-username'];
+    
+    if (username && username !== 'undefined' && username !== 'null') {
+      const usageCheck = checkUsageLimit(username);
+      
+      if (!usageCheck.allowed) {
+        return res.status(429).json({
+          success: false,
+          error: usageCheck.message,
+          usageCount: usageCheck.usageCount,
+          dailyLimit: usageCheck.dailyLimit
+        });
       }
-    }
 
-    if (missingFields.length > 0) {
-      console.error(`[storyboard-init] 필수 필드 누락:`, missingFields);
-      return res.status(400).json({
-        success: false,
-        error: `필수 필드가 누락되었습니다: ${missingFields.join(', ')}`
+      console.log('[storyboard-init] 사용자 사용 가능:', {
+        username,
+        remaining: usageCheck.remaining
       });
     }
 
-    // 🔥 제품/서비스 분기에 따른 프롬프트 파일 선택
+    const { 
+      brandName, 
+      videoLength, 
+      videoPurpose, 
+      aspectRatio,
+      aspectRatioCode 
+    } = req.body;
+
+    if (!brandName || !videoLength || !videoPurpose) {
+      return res.status(400).json({
+        success: false,
+        error: '필수 입력값이 누락되었습니다.'
+      });
+    }
+
+    console.log('[storyboard-init] 🚀 요청 수신:', {
+      brandName,
+      videoLength,
+      videoPurpose,
+      aspectRatio: aspectRatio || aspectRatioCode
+    });
+
     const promptFiles = getPromptFiles(videoPurpose);
-    
-    // 🔥 STEP1 프롬프트 파일 로드 (public 폴더 + 관리자 수정사항)
+    console.log('[storyboard-init] 📝 선택된 프롬프트:', promptFiles);
+
     const step1FileName = PROMPT_FILE_MAPPING[promptFiles.step1];
     const step1FilePath = path.join(process.cwd(), 'public', step1FileName);
 
@@ -469,22 +589,14 @@ export default async function handler(req, res) {
     console.log(`[storyboard-init] 📝 STEP1 프롬프트 파일 로드: ${step1FileName}`);
     let step1PromptTemplate = fs.readFileSync(step1FilePath, 'utf-8');
 
-    // 🔥 STEP1 변수 치환
     const step1Variables = {
       brandName,
-      industryCategory,
-      productServiceCategory,
-      productServiceName,
-      videoPurpose,
       videoLength,
-      coreTarget,
-      coreDifferentiation,
-      videoRequirements: videoRequirements || '특별한 요구사항 없음',
-      imageRef: imageRef ? '업로드됨' : '업로드 안됨',
-      aspectRatioCode: mapAspectRatio(aspectRatioCode)
+      videoPurpose,
+      imageStatus: (req.body.imageRef && req.body.imageRef.url) ? '업로드됨' : '업로드 안됨',
+      aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio)
     };
 
-    // STEP1 프롬프트 템플릿에서 변수 치환
     for (const [key, value] of Object.entries(step1Variables)) {
       const placeholder = `{${key}}`;
       step1PromptTemplate = step1PromptTemplate.replace(new RegExp(placeholder, 'g'), value);
@@ -492,7 +604,6 @@ export default async function handler(req, res) {
 
     console.log(`[storyboard-init] ✅ STEP1 변수 치환 완료 (${Object.keys(step1Variables).length}개 변수)`);
 
-    // 🔥 STEP1: Gemini API 호출
     console.log(`[storyboard-init] 📡 STEP1 Gemini API 호출 시작`);
     const step1 = await safeCallGemini(step1PromptTemplate, {
       label: 'STEP1-storyboard-init',
@@ -503,19 +614,16 @@ export default async function handler(req, res) {
     const phase1_output = step1.text;
     console.log("[storyboard-init] ✅ STEP1 완료:", phase1_output.length, "chars");
 
-    // 🔥 씬 수 계산
+    // 🔥🔥🔥 씬 수 계산: 영상길이 나누기 2
     const sceneCountPerConcept = getSceneCount(videoLength);
-    console.log(`[storyboard-init] 📊 컨셉당 씬 수: ${sceneCountPerConcept}개`);
+    console.log(`[storyboard-init] 📊 컨셉당 씬 수: ${sceneCountPerConcept}개 (${videoLength} ÷ 2)`);
 
-    // 🔥 PRODUCT COMPOSITING SCENE 감지
     const compositingScenes = detectProductCompositingScenes(phase1_output, videoPurpose);
     console.log('[storyboard-init] 🎯 감지된 합성 씬:', compositingScenes);
 
-    // 🔥 컨셉 블록 추출
     const conceptBlocks = extractConceptBlocks(phase1_output);
     console.log(`[storyboard-init] 📋 추출된 컨셉 블록: ${conceptBlocks.length}개`);
 
-    // 🔥 STEP2 프롬프트 파일 로드 (public 폴더 + 관리자 수정사항)
     const step2FileName = PROMPT_FILE_MAPPING[promptFiles.step2];
     const step2FilePath = path.join(process.cwd(), 'public', step2FileName);
 
@@ -530,7 +638,6 @@ export default async function handler(req, res) {
     console.log(`[storyboard-init] 📝 STEP2 프롬프트 파일 로드: ${step2FileName}`);
     const step2PromptContent = fs.readFileSync(step2FilePath, 'utf-8');
 
-    // 🔥 STEP2: 상세 JSON 생성 (public 폴더 프롬프트 사용)
     const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, req.body, sceneCountPerConcept, step2PromptContent);
     console.log('[storyboard-init] 📡 STEP2 Gemini API 호출 시작');
     console.log(`[storyboard-init] STEP2 프롬프트 길이: ${step2Prompt.length} chars`);
@@ -543,13 +650,13 @@ export default async function handler(req, res) {
 
     console.log("[storyboard-init] ✅ STEP2 완료:", step2.text.length, "chars");
 
-    // 🔥 멀티 컨셉 JSON 파싱
+    // 🔥🔥🔥 새로운 파싱 함수 사용
     const mcJson = parseMultiConceptJSON(step2.text);
     console.log("[storyboard-init] 📊 JSON 파싱 결과:", mcJson);
 
     let styles = [];
     if (mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length > 0) {
-      // 컨셉 데이터를 스타일 배열로 변환
+    // 🔥🔥🔥 컨셉 데이터를 스타일 배열로 변환
       styles = mcJson.concepts.map((concept, index) => {
         const imagePrompts = [];
         
@@ -566,7 +673,7 @@ export default async function handler(req, res) {
               sceneNumber: i,
               title: scene.title || `씬 ${i}`,
               prompt: scene.image_prompt?.prompt || `${concept.concept_name} scene ${i}`,
-              negative_prompt: scene.image_prompt?.negative_prompt || "blurry, low quality",
+              negative_prompt: scene.image_prompt?.negative_prompt || "blurry, low quality, watermark, text, logo",
               motion_prompt: scene.motion_prompt?.prompt || "subtle camera movement",
               copy: scene.copy?.copy || `씬 ${i}`,
               timecode: `00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
@@ -578,7 +685,18 @@ export default async function handler(req, res) {
                 compositingContext: compositingScenes.find(cs => cs.sceneNumber === i)?.context || '[PRODUCT COMPOSITING SCENE]',
                 explicit: compositingScenes.find(cs => cs.sceneNumber === i)?.explicit || false,
                 videoPurpose: videoPurpose
-              } : null
+              } : null,
+              aspect_ratio: mapAspectRatio(aspectRatio || aspectRatioCode),
+              guidance_scale: scene.image_prompt?.guidance_scale || 7.5,
+              seed: scene.image_prompt?.seed || Math.floor(10000 + Math.random() * 90000),
+              size: scene.image_prompt?.image?.size || mapAspectRatio(aspectRatio || aspectRatioCode),
+              width: getWidthFromAspectRatio(mapAspectRatio(aspectRatio || aspectRatioCode)),
+              height: getHeightFromAspectRatio(mapAspectRatio(aspectRatio || aspectRatioCode)),
+              styling: scene.image_prompt?.styling || {
+                style: 'photo',
+                color: 'color',
+                lighting: 'natural'
+              }
             });
           }
         }
@@ -588,26 +706,33 @@ export default async function handler(req, res) {
           concept_id: index + 1,
           conceptId: index + 1,
           conceptName: concept.concept_name,
-          style: concept.style,
-          headline: `${concept.concept_name} 헤드라인`,
+          style: concept.style || 'Commercial Photography',
+          headline: concept.concept_name,
           description: `${videoPurpose} 광고를 위한 ${concept.concept_name} 접근법`,
-          copy: `${concept.concept_name} 카피`,
+          copy: concept.concept_name,
           imagePrompts: imagePrompts,
           images: [],
           metadata: {
             videoPurpose: videoPurpose,
             conceptType: concept.concept_name,
-            sceneCount: sceneCountPerConcept
+            sceneCount: sceneCountPerConcept,
+            videoLength: videoLength,
+            aspectRatio: mapAspectRatio(aspectRatio || aspectRatioCode)
           }
         };
       });
+      
+      console.log(`[storyboard-init] ✅ styles 배열 생성 완료: ${styles.length}개 컨셉`);
+      console.log(`[storyboard-init] 📊 각 컨셉당 이미지 프롬프트 수: ${styles[0]?.imagePrompts?.length || 0}개`);
+    } else {
+      console.error('[storyboard-init] ❌ JSON 파싱 실패 또는 컨셉 없음');
     }
 
     // 🔥 합성 정보 분석 (imageRef 사용)
     const compositingInfo = analyzeCompositingInfo(req.body, compositingScenes);
     console.log('[storyboard-init] 🎨 합성 정보:', compositingInfo);
 
-    // 🔥 메타데이터 생성 (복구)
+    // 🔥 메타데이터 생성
     const metadata = {
       promptFiles: promptFiles,
       promptFiles_step1: step1FileName,
@@ -615,7 +740,7 @@ export default async function handler(req, res) {
       videoPurpose,
       videoLength,
       sceneCountPerConcept,
-      aspectRatio: mapAspectRatio(req.body.aspectRatio || aspectRatioCode),
+      aspectRatio: mapAspectRatio(aspectRatio || aspectRatioCode),
       generatedAt: new Date().toISOString(),
       processingTimeMs: Date.now() - startTime,
       geminiModel: "gemini-2.5-flash",
@@ -624,13 +749,13 @@ export default async function handler(req, res) {
       brandName,
       totalConcepts: styles.length,
       compositingScenes: compositingScenes.length,
-      hasImageUpload: !!imageRef
+      hasImageUpload: !!(req.body.imageRef && req.body.imageRef.url)
     };
 
     const processingTimeMs = Date.now() - startTime;
     console.log(`[storyboard-init] ✅ 전체 처리 완료: ${processingTimeMs}ms`);
 
-    // 🔥 최종 응답 데이터 (복구)
+    // 🔥 최종 응답 데이터
     const responseData = {
       success: true,
       styles: styles,
@@ -647,6 +772,9 @@ export default async function handler(req, res) {
         conceptsParsed: mcJson?.concepts?.length || 0,
         compositingScenes: compositingScenes.length,
         totalScenes: styles.length * sceneCountPerConcept,
+        sceneCountCalculation: `${videoLength} ÷ 2 = ${sceneCountPerConcept}`,
+        expectedImagesPerConcept: sceneCountPerConcept,
+        totalExpectedImages: styles.length * sceneCountPerConcept,
         fallbackUsed: !mcJson || !mcJson.concepts || mcJson.concepts.length !== 6
       }
     };
@@ -654,8 +782,10 @@ export default async function handler(req, res) {
     console.log(`[storyboard-init] 🎉 성공 완료:`, {
       styles: styles.length,
       totalScenes: styles.length * sceneCountPerConcept,
+      scenePerConcept: sceneCountPerConcept,
       compositingScenes: compositingScenes.length,
-      processingTime: `${processingTimeMs}ms`
+      processingTime: `${processingTimeMs}ms`,
+      imagePrompts: styles.reduce((sum, s) => sum + (s.imagePrompts?.length || 0), 0)
     });
 
     return res.status(200).json(responseData);
@@ -672,6 +802,7 @@ export default async function handler(req, res) {
       debugInfo: {
         videoPurpose: req.body?.videoPurpose,
         brandName: req.body?.brandName,
+        videoLength: req.body?.videoLength,
         errorType: error.constructor.name,
         errorStack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }
