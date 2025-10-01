@@ -275,6 +275,7 @@ async function safeCallGemini(prompt, options = {}) {
   const { label = 'gemini-call', maxRetries = 3 } = options;
   
   const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_1;
+  console.log(apiKey);
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
   }
