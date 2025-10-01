@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { loadFieldConfig, saveFieldConfig, loadAdminSettings, saveAdminSettings } from '../utils/fieldConfig';
+import RealtimeConfigSync from './RealtimeConfigSync';
 
 const Step1 = ({ formData, setFormData, user, onNext }) => {
   const [fieldConfig, setFieldConfig] = useState({});
@@ -17,6 +18,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
 
   const isAdmin = user?.role === 'admin';
 
+  // 🔥 초기 설정 로드
   useEffect(() => {
     const config = loadFieldConfig();
     const settings = loadAdminSettings();
@@ -24,25 +26,103 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     setAdminSettings(settings);
   }, []);
 
+  // 🔥 RealtimeConfigSync 콜백 함수들 (WebSocket 기반 실시간 동기화)
+  const handleConfigUpdate = (newFieldConfig) => {
+    console.log('[Step1] 📨 필드 설정 실시간 업데이트:', Object.keys(newFieldConfig));
+    setFieldConfig(newFieldConfig);
+    localStorage.setItem('fieldConfig', JSON.stringify(newFieldConfig));
+  };
+
+  const handleAdminUpdate = (newAdminSettings) => {
+    console.log('[Step1] 📨 Admin 설정 실시간 업데이트:', Object.keys(newAdminSettings));
+    setAdminSettings(newAdminSettings);
+    localStorage.setItem('adminSettings', JSON.stringify(newAdminSettings));
+  };
+
+  // 🔥 BroadcastChannel 기반 탭 간 동기화 (Fallback)
   useEffect(() => {
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       const channel = new BroadcastChannel('field-config-updates');
       
-      const handleConfigUpdate = (event) => {
+      const handleBroadcastUpdate = (event) => {
         if (event.data.type === 'FIELD_CONFIG_UPDATED') {
+          console.log('[Step1] 📡 BroadcastChannel 필드 설정 업데이트');
           setFieldConfig(event.data.config);
         } else if (event.data.type === 'ADMIN_SETTINGS_UPDATED') {
+          console.log('[Step1] 📡 BroadcastChannel Admin 설정 업데이트');
           setAdminSettings(event.data.settings);
         }
       };
 
-      channel.addEventListener('message', handleConfigUpdate);
+      channel.addEventListener('message', handleBroadcastUpdate);
       return () => {
-        channel.removeEventListener('message', handleConfigUpdate);
+        channel.removeEventListener('message', handleBroadcastUpdate);
         channel.close();
       };
     }
   }, []);
+
+  // 🔥 서버 기반 Admin 설정 저장 함수 (WebSocket 브로드캐스트 포함)
+  const saveAdminSettingsToServer = async (newSettings) => {
+    try {
+      const response = await fetch('/api/admin-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Admin'
+        },
+        body: JSON.stringify({
+          type: 'admin-settings',
+          updates: newSettings,
+          isAdmin: true
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        console.log('[Step1] ✅ Admin 설정 서버 저장 완료 - WebSocket 브로드캐스트됨');
+      } else {
+        console.error('[Step1] ❌ Admin 설정 저장 실패:', data.error);
+        // Fallback: 로컬 저장
+        saveAdminSettings(newSettings);
+      }
+    } catch (error) {
+      console.error('[Step1] ❌ Admin 설정 저장 오류:', error);
+      // Fallback: 로컬 저장
+      saveAdminSettings(newSettings);
+    }
+  };
+
+  // 🔥 서버 기반 필드 설정 저장 함수 (WebSocket 브로드캐스트 포함)
+  const saveFieldConfigToServer = async (newConfig) => {
+    try {
+      const response = await fetch('/api/admin-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Admin'
+        },
+        body: JSON.stringify({
+          type: 'field-config',
+          updates: newConfig,
+          isAdmin: true
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        console.log('[Step1] ✅ 필드 설정 서버 저장 완료 - WebSocket 브로드캐스트됨');
+      } else {
+        console.error('[Step1] ❌ 필드 설정 저장 실패:', data.error);
+        // Fallback: 로컬 저장
+        saveFieldConfig(newConfig);
+      }
+    } catch (error) {
+      console.error('[Step1] ❌ 필드 설정 저장 오류:', error);
+      // Fallback: 로컬 저장
+      saveFieldConfig(newConfig);
+    }
+  };
 
   const handleInputChange = (key, value) => {
     setFormData(prev => ({ ...prev, [key]: value }));
@@ -60,7 +140,13 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    saveFieldConfig(newConfig);
+    
+    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
+    if (isAdmin) {
+      saveFieldConfigToServer(newConfig);
+    } else {
+      saveFieldConfig(newConfig);
+    }
   };
 
   const handleRestoreField = (fieldKey) => {
@@ -72,10 +158,16 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    saveFieldConfig(newConfig);
+    
+    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
+    if (isAdmin) {
+      saveFieldConfigToServer(newConfig);
+    } else {
+      saveFieldConfig(newConfig);
+    }
   };
 
- // ✅ 라벨 편집 함수 수정 - 모든 필드에 대해 작동하도록
+  // ✅ 라벨 편집 함수 수정 - 모든 필드에 대해 작동하도록
   const handleLabelEdit = (fieldKey, newLabel) => {
     // 1. adminSettings에 저장
     const newSettings = {
@@ -86,7 +178,13 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       }
     };
     setAdminSettings(newSettings);
-    saveAdminSettings(newSettings);
+    
+    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
+    if (isAdmin) {
+      saveAdminSettingsToServer(newSettings);
+    } else {
+      saveAdminSettings(newSettings);
+    }
 
     // 2. fieldConfig에도 업데이트 (즉시 반영을 위해)
     const newConfig = {
@@ -97,7 +195,13 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    saveFieldConfig(newConfig);
+    
+    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
+    if (isAdmin) {
+      saveFieldConfigToServer(newConfig);
+    } else {
+      saveFieldConfig(newConfig);
+    }
 
     setEditingLabel(null);
     setTempLabel('');
@@ -112,7 +216,14 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    saveFieldConfig(newConfig);
+    
+    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
+    if (isAdmin) {
+      saveFieldConfigToServer(newConfig);
+    } else {
+      saveFieldConfig(newConfig);
+    }
+    
     setEditingPlaceholder(null);
     setTempPlaceholder('');
   };
@@ -137,7 +248,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
   };
 
-  const handleImageLabelEdit = (newLabel) => {
+  const handleImageLabelEdit = async (newLabel) => {
     const newSettings = {
       ...adminSettings,
       imageUpload: {
@@ -146,12 +257,43 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       }
     };
     setAdminSettings(newSettings);
-    saveAdminSettings(newSettings);
+    
+    // 🔥 이미지 업로드 라벨 전용 API 호출
+    if (isAdmin) {
+      try {
+        const response = await fetch('/api/admin-config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Admin'
+          },
+          body: JSON.stringify({
+            type: 'image-upload-labels',
+            updates: { label: newLabel },
+            isAdmin: true
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          console.log('[Step1] ✅ 이미지 라벨 서버 저장 완료 - WebSocket 브로드캐스트됨');
+        } else {
+          console.error('[Step1] ❌ 이미지 라벨 저장 실패:', data.error);
+          saveAdminSettings(newSettings);
+        }
+      } catch (error) {
+        console.error('[Step1] ❌ 이미지 라벨 저장 오류:', error);
+        saveAdminSettings(newSettings);
+      }
+    } else {
+      saveAdminSettings(newSettings);
+    }
+    
     setEditingImageLabel(false);
     setTempImageLabel('');
   };
 
-  const handleImageDescEdit = (newDesc) => {
+  const handleImageDescEdit = async (newDesc) => {
     const newSettings = {
       ...adminSettings,
       imageUpload: {
@@ -160,7 +302,38 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       }
     };
     setAdminSettings(newSettings);
-    saveAdminSettings(newSettings);
+    
+    // 🔥 이미지 업로드 설명 전용 API 호출
+    if (isAdmin) {
+      try {
+        const response = await fetch('/api/admin-config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Admin'
+          },
+          body: JSON.stringify({
+            type: 'image-upload-labels',
+            updates: { descriptions: { default: newDesc } },
+            isAdmin: true
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          console.log('[Step1] ✅ 이미지 설명 서버 저장 완료 - WebSocket 브로드캐스트됨');
+        } else {
+          console.error('[Step1] ❌ 이미지 설명 저장 실패:', data.error);
+          saveAdminSettings(newSettings);
+        }
+      } catch (error) {
+        console.error('[Step1] ❌ 이미지 설명 저장 오류:', error);
+        saveAdminSettings(newSettings);
+      }
+    } else {
+      saveAdminSettings(newSettings);
+    }
+    
     setEditingImageDesc(false);
     setTempImageDesc('');
   };
@@ -311,7 +484,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     </div>
   );
 
-const renderTextAreaField = (field) => (
+  const renderTextAreaField = (field) => (
     <div key={field.key} className="group mb-8">
       <div className="flex items-center justify-between mb-4">
         {editingLabel === field.key ? (
@@ -706,109 +879,118 @@ const renderTextAreaField = (field) => (
   const hiddenFields = Object.values(fieldConfig).filter(field => !field.visible);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black relative overflow-hidden">
-      {/* Enhanced background decorative elements */}
-      <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-gradient-to-br from-blue-600/15 via-purple-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
-      <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-gradient-to-tl from-cyan-600/15 via-blue-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
-      <div className="absolute top-1/2 left-0 w-[400px] h-[400px] bg-gradient-to-r from-emerald-600/10 to-transparent rounded-full blur-3xl"></div>
+    <>
+      {/* 🔥 실시간 동기화 컴포넌트 (WebSocket 기반) */}
+      <RealtimeConfigSync 
+        onConfigUpdate={handleConfigUpdate}
+        onAdminUpdate={handleAdminUpdate}
+      />
       
-      <div className="relative z-10 max-w-4xl mx-auto p-8">
-        <div className="bg-gray-900/30 backdrop-blur-2xl rounded-[2rem] shadow-2xl border border-gray-700/30 p-12 relative overflow-hidden">
-          {/* Inner glow effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-cyan-600/5 rounded-[2rem]"></div>
-          
-          <div className="relative z-10">
-            <div className="flex items-start justify-between mb-12">
-              <div className="max-w-2xl">
-                <h2 className="text-5xl font-bold text-white mb-6 tracking-tight bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-                  기본 정보 입력
-                </h2>
-                <p className="text-gray-300 text-xl leading-relaxed font-medium">
-                  광고 영상 제작을 위한 브랜드 정보를 입력해주세요
-                </p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black relative overflow-hidden">
+        {/* Enhanced background decorative elements */}
+        <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-gradient-to-br from-blue-600/15 via-purple-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-gradient-to-tl from-cyan-600/15 via-blue-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-1/2 left-0 w-[400px] h-[400px] bg-gradient-to-r from-emerald-600/10 to-transparent rounded-full blur-3xl"></div>
+        
+        <div className="relative z-10 max-w-4xl mx-auto p-8">
+          <div className="bg-gray-900/30 backdrop-blur-2xl rounded-[2rem] shadow-2xl border border-gray-700/30 p-12 relative overflow-hidden">
+            {/* Inner glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-cyan-600/5 rounded-[2rem]"></div>
+            
+            <div className="relative z-10">
+              <div className="flex items-start justify-between mb-12">
+                <div className="max-w-2xl">
+                  <h2 className="text-5xl font-bold text-white mb-6 tracking-tight bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
+                    기본 정보 입력
+                  </h2>
+                  <p className="text-gray-300 text-xl leading-relaxed font-medium">
+                    광고 영상 제작을 위한 브랜드 정보를 입력해주세요
+                  </p>
+                </div>
+
+                {isAdmin && hiddenFields.length > 0 && (
+                  <div className="text-sm bg-gray-800/40 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/40 shadow-xl min-w-[300px]">
+                    <span className="text-gray-300 block mb-3 font-semibold">숨겨진 항목:</span>
+                    <div className="flex flex-wrap gap-2">
+                      {hiddenFields.map((field) => (
+                        <button
+                          key={field.key}
+                          onClick={() => handleRestoreField(field.key)}
+                          className="text-blue-300 hover:text-blue-200 underline underline-offset-2 text-sm px-3 py-2 bg-blue-600/15 hover:bg-blue-600/25 rounded-xl transition-all duration-200 border border-blue-500/30"
+                          title={`${field.label} 되돌리기`}
+                        >
+                          {field.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {isAdmin && hiddenFields.length > 0 && (
-                <div className="text-sm bg-gray-800/40 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/40 shadow-xl min-w-[300px]">
-                  <span className="text-gray-300 block mb-3 font-semibold">숨겨진 항목:</span>
-                  <div className="flex flex-wrap gap-2">
-                    {hiddenFields.map((field, index) => (
-                      <button
-                        key={field.key}
-                        onClick={() => handleRestoreField(field.key)}
-                        className="text-blue-300 hover:text-blue-200 underline underline-offset-2 text-sm px-3 py-2 bg-blue-600/15 hover:bg-blue-600/25 rounded-xl transition-all duration-200 border border-blue-500/30"
-                        title={`${field.label} 되돌리기`}
-                      >
-                        {field.label}
-                      </button>
-                    ))}
+              <div className="space-y-10">
+                {visibleFields.filter(field => field.type !== 'image').map(field => {
+                  switch (field.type) {
+                    case 'text':
+                      return renderTextField(field);
+                    case 'textarea':
+                      return renderTextAreaField(field);
+                    case 'select':
+                      return renderSelectField(field);
+                    default:
+                      return null;
+                  }
+                })}
+                
+                {visibleFields.filter(field => field.type === 'image').map(field => {
+                  return renderImageField(field);
+                })}
+              </div>
+
+              <div className="flex justify-end mt-16">
+                <button
+                  onClick={handleSubmit}
+                  className="group relative bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 hover:from-blue-500 hover:via-blue-400 hover:to-purple-500 text-white px-12 py-5 rounded-2xl text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25 shadow-xl"
+                >
+                  <span className="relative z-10 flex items-center gap-4">
+                    다음 단계
+                    <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                </button>
+              </div>
+
+              {isAdmin && (
+                <div className="mt-12 p-8 bg-blue-900/15 backdrop-blur-xl border border-blue-800/25 rounded-3xl shadow-xl">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-7 w-7 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-5">
+                      <h3 className="text-lg font-semibold text-blue-300 mb-3">관리자 모드 (WebSocket 실시간 반영)</h3>
+                      <div className="text-base text-blue-400 space-y-2 leading-relaxed">
+                        <p>• 각 필드의 "편집" 버튼으로 라벨을 수정하거나 "숨기기"로 필드를 제거할 수 있습니다.</p>
+                        <p>• "힌트편집" 버튼으로 placeholder 텍스트를 수정할 수 있습니다.</p>
+                        <p>• 이미지 업로드 필드는 "라벨 편집", "설명 편집"이 가능하며, 변경사항이 WebSocket을 통해 모든 PC/브라우저에 실시간 반영됩니다.</p>
+                        <p>• 🔥 <strong>실시간 동기화:</strong> 다른 PC나 브라우저에서도 즉시 변경사항이 적용됩니다.</p>
+                        {Object.keys(adminSettings).length > 0 && (
+                          <p className="mt-4 text-sm text-blue-500 font-mono bg-blue-900/20 px-3 py-2 rounded-lg">
+                            현재 적용된 Admin 설정: {JSON.stringify(Object.keys(adminSettings))}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-
-            <div className="space-y-10">
-              {visibleFields.filter(field => field.type !== 'image').map(field => {
-                switch (field.type) {
-                  case 'text':
-                    return renderTextField(field);
-                  case 'textarea':
-                    return renderTextAreaField(field);
-                  case 'select':
-                    return renderSelectField(field);
-                  default:
-                    return null;
-                }
-              })}
-              
-              {visibleFields.filter(field => field.type === 'image').map(field => {
-                return renderImageField(field);
-              })}
-            </div>
-
-            <div className="flex justify-end mt-16">
-              <button
-                onClick={handleSubmit}
-                className="group relative bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 hover:from-blue-500 hover:via-blue-400 hover:to-purple-500 text-white px-12 py-5 rounded-2xl text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25 shadow-xl"
-              >
-                <span className="relative z-10 flex items-center gap-4">
-                  다음 단계
-                  <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              </button>
-            </div>
-
-            {isAdmin && (
-              <div className="mt-12 p-8 bg-blue-900/15 backdrop-blur-xl border border-blue-800/25 rounded-3xl shadow-xl">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-7 w-7 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-5">
-                    <h3 className="text-lg font-semibold text-blue-300 mb-3">관리자 모드 (실시간 반영)</h3>
-                    <div className="text-base text-blue-400 space-y-2 leading-relaxed">
-                      <p>• 각 필드의 "편집" 버튼으로 라벨을 수정하거나 "숨기기"로 필드를 제거할 수 있습니다.</p>
-                      <p>• "힌트편집" 버튼으로 placeholder 텍스트를 수정할 수 있습니다.</p>
-                      <p>• 이미지 업로드 필드는 "라벨 편집", "설명 편집"이 가능하며, 변경사항이 다른 사용자에게도 실시간 반영됩니다.</p>
-                      {Object.keys(adminSettings).length > 0 && (
-                        <p className="mt-4 text-sm text-blue-500 font-mono bg-blue-900/20 px-3 py-2 rounded-lg">
-                          현재 적용된 Admin 설정: {JSON.stringify(Object.keys(adminSettings))}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
