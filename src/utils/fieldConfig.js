@@ -156,36 +156,35 @@ const ADMIN_SETTINGS_KEY = 'ai-ad-video-admin-settings';
 /**
  * 필드 설정 로드
  */
-export const loadFieldConfig = () => {
+// localStorage 대신 서버 API 사용
+export const loadFieldConfig = async () => {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // 기본 설정과 병합 (새 필드가 추가된 경우 대비)
-      return { ...DEFAULT_FIELD_CONFIG, ...parsed };
-    }
+    const response = await fetch('/api/admin-field-config/field-config');
+    const data = await response.json();
+    return data.config || DEFAULT_FIELD_CONFIG;
   } catch (error) {
-    console.error('필드 설정 로드 오류:', error);
+    console.error('설정 로드 실패:', error);
+    return DEFAULT_FIELD_CONFIG;
   }
-  return DEFAULT_FIELD_CONFIG;
 };
+
 
 /**
  * 필드 설정 저장
  */
-export const saveFieldConfig = (config) => {
+export const saveFieldConfig = async (config) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    
-    // 🔥 Admin 설정 변경사항을 서버에도 알림 (실시간 반영을 위함)
-    if (typeof window !== 'undefined' && window.BroadcastChannel) {
-      const channel = new BroadcastChannel('admin-settings');
-      channel.postMessage({ type: 'field-config-updated', config });
-    }
-    
-    return true;
+    const response = await fetch('/api/admin-field-config/field-config', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-username': localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).username : 'guest'
+      },
+      body: JSON.stringify(config)
+    });
+    return response.ok;
   } catch (error) {
-    console.error('필드 설정 저장 오류:', error);
+    console.error('설정 저장 실패:', error);
     return false;
   }
 };
