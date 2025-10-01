@@ -6,7 +6,8 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
-import adminFieldConfig from '../api/admin-field-config.js';
+import http from 'http';
+import { WebSocketServer } from 'ws';
 
 // 🔥 현재 파일 경로 설정
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +23,7 @@ console.log('🔑 환경변수 로드:', {
   FREEPIK_API_KEY: process.env.FREEPIK_API_KEY ? '✅' : '❌'
 });
 
+// API 모듈 import
 import usersApi from '../api/users.js';
 import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
@@ -36,10 +38,82 @@ import loadBgmList from '../api/load-bgm-list.js';
 import bgmStream from '../api/bgm-stream.js';
 import nanobanaCompose from '../api/nanobanana-compose.js';
 import adminConfig from '../api/admin-config.js';
+import adminFieldConfig from '../api/admin-field-config.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 🔥 HTTP 서버와 WebSocket 서버 생성
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+// 🔥 연결된 모든 WebSocket 클라이언트 추적
+const clients = new Set();
+
+// 🔥 WebSocket 연결 처리
+wss.on('connection', (ws, req) => {
+  console.log('🔗 새 WebSocket 클라이언트 연결됨');
+  clients.add(ws);
+  
+  // 클라이언트 메시지 처리
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      console.log('📨 WebSocket 메시지 수신:', data.type);
+      
+      // Admin의 설정 변경 메시지인 경우 모든 클라이언트에 브로드캐스트
+      if (data.type === 'ADMIN_CONFIG_UPDATE') {
+        broadcastToAllClients({
+          type: 'CONFIG_SYNC_UPDATE',
+          config: data.config,
+          adminSettings: data.adminSettings,
+          timestamp: Date.now()
+        });
+      }
+    } catch (error) {
+      console.error('❌ WebSocket 메시지 처리 오류:', error);
+    }
+  });
+  
+  // 연결 종료 처리
+  ws.on('close', () => {
+    console.log('📴 WebSocket 클라이언트 연결 종료');
+    clients.delete(ws);
+  });
+  
+  // 에러 처리
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket 오류:', error);
+    clients.delete(ws);
+  });
+});
+
+// 🔥 모든 클라이언트에 메시지 브로드캐스트 함수
+function broadcastToAllClients(message) {
+  const messageStr = JSON.stringify(message);
+  let sentCount = 0;
+  
+  clients.forEach(client => {
+    if (client.readyState === client.OPEN) {
+      try {
+        client.send(messageStr);
+        sentCount++;
+      } catch (error) {
+        console.error('❌ 클라이언트 전송 오류:', error);
+        clients.delete(client);
+      }
+    } else {
+      clients.delete(client);
+    }
+  });
+  
+  console.log(`📡 설정 변경을 ${sentCount}개 클라이언트에 브로드캐스트`);
+}
+
+// 🔥 브로드캐스트 함수를 전역으로 내보내기
+export { broadcastToAllClients };
+
+// Express 미들웨어 설정
 app.use((req, res, next) => {
   req.setTimeout(1800000);
   res.setTimeout(1800000);
@@ -64,11 +138,12 @@ app.use(bodyParser.urlencoded({
   parameterLimit: 50000
 }));
 
+// API 라우터 등록
 app.use('/api/admin-config', adminConfig);
 app.use('/api/users', usersApi);
-
 app.use('/api/admin-field-config', adminFieldConfig);
 
+// 헬스체크 엔드포인트
 app.get('/health', (req, res) => {
   res.status(200).json({
     ok: true,
@@ -76,6 +151,10 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     memory: process.memoryUsage(),
     env: process.env.NODE_ENV,
+    websocket: {
+      connected: clients.size,
+      status: 'active'
+    },
     apiKeys: {
       gemini: !!process.env.GEMINI_API_KEY,
       freepik: !!process.env.FREEPIK_API_KEY
@@ -83,6 +162,7 @@ app.get('/health', (req, res) => {
   });
 });
 
+// 로그인 API
 app.post('/api/auth/login', (req, res) => {
   try {
     const { username, password } = req.body;
@@ -128,6 +208,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
+// 프롬프트 관련 설정
 const PROMPT_FILES = {
   step1_product: 'public/Prompt_step1_product.txt',
   step1_service: 'public/Prompt_step1_service.txt', 
@@ -135,6 +216,7 @@ const PROMPT_FILES = {
   step2_service: 'public/Prompt_step2_service.txt'
 };
 
+// 프롬프트 조회 API
 app.get('/api/prompts/get', async (req, res) => {
   try {
     const publicPath = path.join(process.cwd(), 'public');
@@ -164,6 +246,7 @@ app.get('/api/prompts/get', async (req, res) => {
   }
 });
 
+// 프롬프트 업데이트 API
 app.post('/api/prompts/update', async (req, res) => {
   try {
     const { filename, content } = req.body;
@@ -242,6 +325,7 @@ app.post('/api/prompts/update', async (req, res) => {
   }
 });
 
+// 프롬프트 버전 조회 API
 app.get('/api/prompts/versions', async (req, res) => {
   try {
     const publicPath = path.join(process.cwd(), 'public');
@@ -272,6 +356,7 @@ app.get('/api/prompts/versions', async (req, res) => {
   }
 });
 
+// 프롬프트 복원 API
 app.post('/api/prompts/restore', async (req, res) => {
   try {
     const { versionId } = req.body;
@@ -340,6 +425,7 @@ app.post('/api/prompts/restore', async (req, res) => {
   }
 });
 
+// Gemini 응답 저장 API
 app.post('/api/prompts/save-response', async (req, res) => {
   try {
     const { promptKey, step, formData, response, timestamp } = req.body;
@@ -388,6 +474,7 @@ app.post('/api/prompts/save-response', async (req, res) => {
   }
 });
 
+// Gemini 응답 조회 API
 app.get('/api/prompts/responses/:promptKey', async (req, res) => {
   try {
     const { promptKey } = req.params;
@@ -440,6 +527,7 @@ app.get('/api/prompts/responses/:promptKey', async (req, res) => {
   }
 });
 
+// Gemini 응답 상세 조회 API
 app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
   try {
     const { fileName } = req.params;
@@ -470,6 +558,7 @@ app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
   }
 });
 
+// 기타 API 라우터들
 app.use('/api/storyboard-init', storyboardInit);
 app.use('/api/storyboard-render-image', storyboardRenderImage);
 app.use('/api/image-to-video', imageToVideo);
@@ -483,6 +572,7 @@ app.use('/api/load-bgm-list', loadBgmList);
 app.use('/api/bgm-stream', bgmStream);
 app.use('/api/nanobanana-compose', nanobanaCompose);
 
+// 정적 파일 서빙
 app.use('/tmp', express.static('tmp', {
   setHeaders: (res, path) => {
     if (path.endsWith('.mp4')) {
@@ -496,6 +586,7 @@ app.use('/tmp', express.static('tmp', {
   }
 }));
 
+// 404 핸들러
 app.use('*', (req, res) => {
   console.log(`❌ 404 요청: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
@@ -526,6 +617,7 @@ app.use('*', (req, res) => {
   });
 });
 
+// 전역 에러 핸들러
 app.use((error, req, res, next) => {
   console.error('[Global Error Handler]', error);
   if (!res.headersSent) {
@@ -539,10 +631,12 @@ app.use((error, req, res, next) => {
   }
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
+// 🔥 HTTP 서버 시작 (WebSocket 포함)
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 AI 광고 영상 제작 API 서버 시작됨`);
   console.log(`📍 주소: http://0.0.0.0:${PORT}`);
   console.log(`🌍 환경: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 WebSocket 서버: ws://0.0.0.0:${PORT}`);
   console.log(`🔑 API 키 상태:`);
   console.log(`   - Freepik: ${process.env.FREEPIK_API_KEY ? '✅' : '❌'}`);
   console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
@@ -555,6 +649,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`⏱️ 서버 타임아웃: ${server.timeout}ms`);
 });
 
+// 서버 에러 처리
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`❌ 포트 ${PORT} 사용 중 (EADDRINUSE). 기존 프로세스 종료 필요.`);
@@ -570,14 +665,29 @@ server.on('error', (err) => {
   }
 });
 
+// 연결 타임아웃 설정
 server.on('connection', (socket) => {
   socket.setTimeout(300000);
   socket.setKeepAlive(true, 1000);
 });
 
+// 우아한 종료 처리
 ['SIGINT','SIGTERM'].forEach(sig=>{
   process.once(sig, ()=>{
     console.log(`[${sig}] 수신 → 서버 종료 중...`);
+    
+    // WebSocket 클라이언트들에게 종료 알림
+    broadcastToAllClients({
+      type: 'SERVER_SHUTDOWN',
+      message: '서버가 종료됩니다.',
+      timestamp: Date.now()
+    });
+    
+    // WebSocket 서버 종료
+    wss.close(() => {
+      console.log('📡 WebSocket 서버 종료 완료');
+    });
+    
     server.close(()=>{
       console.log('✅ 서버 정상 종료');
       process.exit(0);
@@ -586,6 +696,7 @@ server.on('connection', (socket) => {
   });
 });
 
+// 메모리 모니터링
 setInterval(() => {
   const memory = process.memoryUsage();
   const mbUsed = Math.round(memory.heapUsed / 1024 / 1024);
