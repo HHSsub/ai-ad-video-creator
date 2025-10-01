@@ -6,6 +6,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
+import adminFieldConfig from '../api/admin-field-config.js';
 
 // 🔥 현재 파일 경로 설정
 const __filename = fileURLToPath(import.meta.url);
@@ -65,6 +66,8 @@ app.use(bodyParser.urlencoded({
 
 app.use('/api/admin-config', adminConfig);
 app.use('/api/users', usersApi);
+
+app.use('/api/admin-field-config', adminFieldConfig);
 
 app.get('/health', (req, res) => {
   res.status(200).json({
