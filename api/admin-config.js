@@ -9,6 +9,21 @@ const FIELD_CONFIG_FILE_PATH = path.join(process.cwd(), 'config', 'runtime-field
 let runtimeAdminSettings = {};
 let runtimeFieldConfig = {};
 
+// 🔥 WebSocket 브로드캐스트 함수 참조
+let broadcastToAllClients = null;
+
+// 브로드캐스트 함수 동적 로딩
+async function initBroadcast() {
+  try {
+    // 서버가 완전히 로드된 후 브로드캐스트 함수 참조
+    const { broadcastToAllClients: broadcast } = await import('../server/index.js');
+    broadcastToAllClients = broadcast;
+    console.log('[admin-config] WebSocket 브로드캐스트 함수 로드 완료');
+  } catch (error) {
+    console.warn('[admin-config] WebSocket 브로드캐스트 함수 로드 실패:', error.message);
+  }
+}
+
 // 초기화
 initializeConfig();
 
@@ -33,8 +48,26 @@ function initializeConfig() {
     }
 
     console.log('[admin-config] 설정 초기화 완료');
+    
+    // 브로드캐스트 함수 초기화 (약간의 지연 후)
+    setTimeout(initBroadcast, 1000);
   } catch (error) {
     console.error('[admin-config] 초기화 오류:', error);
+  }
+}
+
+// 🔥 모든 클라이언트에 설정 변경 브로드캐스트
+function broadcastConfigUpdate() {
+  if (broadcastToAllClients) {
+    broadcastToAllClients({
+      type: 'CONFIG_SYNC_UPDATE',
+      adminSettings: runtimeAdminSettings,
+      fieldConfig: runtimeFieldConfig,
+      timestamp: Date.now()
+    });
+    console.log('[admin-config] 설정 변경을 모든 클라이언트에 브로드캐스트 완료');
+  } else {
+    console.warn('[admin-config] 브로드캐스트 함수가 준비되지 않음');
   }
 }
 
@@ -81,7 +114,10 @@ export default async function handler(req, res) {
         // 파일에 저장
         fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(runtimeAdminSettings, null, 2));
         
-        console.log('[admin-config] Admin 설정 업데이트:', updates);
+        // 🔥 모든 클라이언트에 브로드캐스트
+        broadcastConfigUpdate();
+        
+        console.log('[admin-config] Admin 설정 업데이트 완료:', Object.keys(updates));
 
         res.status(200).json({
           success: true,
@@ -97,7 +133,10 @@ export default async function handler(req, res) {
         // 파일에 저장
         fs.writeFileSync(FIELD_CONFIG_FILE_PATH, JSON.stringify(runtimeFieldConfig, null, 2));
         
-        console.log('[admin-config] 필드 설정 업데이트:', Object.keys(updates));
+        // 🔥 모든 클라이언트에 브로드캐스트
+        broadcastConfigUpdate();
+        
+        console.log('[admin-config] 필드 설정 업데이트 완료:', Object.keys(updates));
 
         res.status(200).json({
           success: true,
@@ -128,7 +167,10 @@ export default async function handler(req, res) {
         // 파일에 저장
         fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(runtimeAdminSettings, null, 2));
         
-        console.log('[admin-config] 이미지 업로드 라벨 업데이트:', { label, descriptions });
+        // 🔥 모든 클라이언트에 브로드캐스트
+        broadcastConfigUpdate();
+        
+        console.log('[admin-config] 이미지 업로드 라벨 업데이트 완료:', { label, descriptions });
 
         res.status(200).json({
           success: true,
@@ -163,6 +205,11 @@ export default async function handler(req, res) {
       if (fs.existsSync(FIELD_CONFIG_FILE_PATH)) {
         fs.unlinkSync(FIELD_CONFIG_FILE_PATH);
       }
+
+      // 🔥 모든 클라이언트에 브로드캐스트
+      broadcastConfigUpdate();
+
+      console.log('[admin-config] 모든 설정 초기화 완료');
 
       res.status(200).json({
         success: true,
@@ -204,9 +251,6 @@ export function getImageUploadConfig(videoPurpose = 'default') {
   const descriptions = imageUploadConfig.descriptions || {
     product: '제품일 때엔 제품 이미지를, 서비스 홍보일 때엔 브랜드 로고 이미지를 올려주세요',
     service: '서비스 홍보용 브랜드 로고 이미지를 올려주세요',
-    brand: '브랜드 인지도 향상을 위한 로고 이미지를 올려주세요',
-    conversion: '구매 유도용 제품 이미지를 올려주세요',
-    education: '사용법 안내용 제품 이미지를 올려주세요',
     default: '제품일 때엔 제품 이미지를, 서비스 홍보일 때엔 브랜드 로고 이미지를 올려주세요'
   };
   
