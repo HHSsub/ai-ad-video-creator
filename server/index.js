@@ -20,6 +20,17 @@ import bgmStream from '../api/bgm-stream.js';
 import nanobanaCompose from '../api/nanobanana-compose.js';
 import adminConfig from '../api/admin-config.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// 프로젝트 루트의 .env 로드
+config({ path: join(__dirname, '..', '.env') });
+
+console.log('🔑 환경변수 로드:', {
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY?.substring(0, 15) + '...',
+  FREEPIK_API_KEY: process.env.FREEPIK_API_KEY ? '✅' : '❌'
+});
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
