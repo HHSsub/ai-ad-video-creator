@@ -64,24 +64,25 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
 
   const saveFieldConfigToServer = async (newConfig) => {
     try {
-      const response = await fetch('/api/admin-config', {
+      const user = localStorage.getItem('user');
+      const username = user ? JSON.parse(user).username : 'guest';
+      
+      const response = await fetch('/api/admin-field-config/field-config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Admin'
+          'x-username': username
         },
-        body: JSON.stringify({
-          type: 'field-config',
-          updates: newConfig,
-          isAdmin: true
-        })
+        body: JSON.stringify(newConfig)
       });
-
+  
       const data = await response.json();
       if (!data.success) {
+        console.error('서버 저장 실패:', data.error);
         saveFieldConfig(newConfig);
       }
     } catch (error) {
+      console.error('서버 저장 오류:', error);
       saveFieldConfig(newConfig);
     }
   };
