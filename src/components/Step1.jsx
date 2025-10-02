@@ -18,7 +18,6 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
 
   const isAdmin = user?.role === 'admin';
 
-  // 🔥 초기 설정 로드
   useEffect(() => {
     const config = loadFieldConfig();
     const settings = loadAdminSettings();
@@ -26,43 +25,16 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     setAdminSettings(settings);
   }, []);
 
-  // 🔥 RealtimeConfigSync 콜백 함수들 (WebSocket 기반 실시간 동기화)
   const handleConfigUpdate = (newFieldConfig) => {
-    console.log('[Step1] 📨 필드 설정 실시간 업데이트:', Object.keys(newFieldConfig));
     setFieldConfig(newFieldConfig);
     localStorage.setItem('fieldConfig', JSON.stringify(newFieldConfig));
   };
 
   const handleAdminUpdate = (newAdminSettings) => {
-    console.log('[Step1] 📨 Admin 설정 실시간 업데이트:', Object.keys(newAdminSettings));
     setAdminSettings(newAdminSettings);
     localStorage.setItem('adminSettings', JSON.stringify(newAdminSettings));
   };
 
-  // 🔥 BroadcastChannel 기반 탭 간 동기화 (Fallback)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.BroadcastChannel) {
-      const channel = new BroadcastChannel('field-config-updates');
-      
-      const handleBroadcastUpdate = (event) => {
-        if (event.data.type === 'FIELD_CONFIG_UPDATED') {
-          console.log('[Step1] 📡 BroadcastChannel 필드 설정 업데이트');
-          setFieldConfig(event.data.config);
-        } else if (event.data.type === 'ADMIN_SETTINGS_UPDATED') {
-          console.log('[Step1] 📡 BroadcastChannel Admin 설정 업데이트');
-          setAdminSettings(event.data.settings);
-        }
-      };
-
-      channel.addEventListener('message', handleBroadcastUpdate);
-      return () => {
-        channel.removeEventListener('message', handleBroadcastUpdate);
-        channel.close();
-      };
-    }
-  }, []);
-
-  // 🔥 서버 기반 Admin 설정 저장 함수 (WebSocket 브로드캐스트 포함)
   const saveAdminSettingsToServer = async (newSettings) => {
     try {
       const response = await fetch('/api/admin-config', {
@@ -79,21 +51,14 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       });
 
       const data = await response.json();
-      if (data.success) {
-        console.log('[Step1] ✅ Admin 설정 서버 저장 완료 - WebSocket 브로드캐스트됨');
-      } else {
-        console.error('[Step1] ❌ Admin 설정 저장 실패:', data.error);
-        // Fallback: 로컬 저장
+      if (!data.success) {
         saveAdminSettings(newSettings);
       }
     } catch (error) {
-      console.error('[Step1] ❌ Admin 설정 저장 오류:', error);
-      // Fallback: 로컬 저장
       saveAdminSettings(newSettings);
     }
   };
 
-  // 🔥 서버 기반 필드 설정 저장 함수 (WebSocket 브로드캐스트 포함)
   const saveFieldConfigToServer = async (newConfig) => {
     try {
       const response = await fetch('/api/admin-config', {
@@ -110,16 +75,10 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       });
 
       const data = await response.json();
-      if (data.success) {
-        console.log('[Step1] ✅ 필드 설정 서버 저장 완료 - WebSocket 브로드캐스트됨');
-      } else {
-        console.error('[Step1] ❌ 필드 설정 저장 실패:', data.error);
-        // Fallback: 로컬 저장
+      if (!data.success) {
         saveFieldConfig(newConfig);
       }
     } catch (error) {
-      console.error('[Step1] ❌ 필드 설정 저장 오류:', error);
-      // Fallback: 로컬 저장
       saveFieldConfig(newConfig);
     }
   };
@@ -141,7 +100,6 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setFieldConfig(newConfig);
     
-    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
@@ -159,7 +117,6 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setFieldConfig(newConfig);
     
-    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
@@ -167,9 +124,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     }
   };
 
-  // ✅ 라벨 편집 함수 수정 - 모든 필드에 대해 작동하도록
   const handleLabelEdit = (fieldKey, newLabel) => {
-    // 1. adminSettings에 저장
     const newSettings = {
       ...adminSettings,
       [fieldKey]: {
@@ -179,14 +134,12 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setAdminSettings(newSettings);
     
-    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
     if (isAdmin) {
       saveAdminSettingsToServer(newSettings);
     } else {
       saveAdminSettings(newSettings);
     }
 
-    // 2. fieldConfig에도 업데이트 (즉시 반영을 위해)
     const newConfig = {
       ...fieldConfig,
       [fieldKey]: {
@@ -196,7 +149,6 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setFieldConfig(newConfig);
     
-    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
@@ -217,7 +169,6 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setFieldConfig(newConfig);
     
-    // 🔥 서버로 저장 (WebSocket 브로드캐스트)
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
@@ -258,7 +209,6 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setAdminSettings(newSettings);
     
-    // 🔥 이미지 업로드 라벨 전용 API 호출
     if (isAdmin) {
       try {
         const response = await fetch('/api/admin-config', {
@@ -275,14 +225,10 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
         });
 
         const data = await response.json();
-        if (data.success) {
-          console.log('[Step1] ✅ 이미지 라벨 서버 저장 완료 - WebSocket 브로드캐스트됨');
-        } else {
-          console.error('[Step1] ❌ 이미지 라벨 저장 실패:', data.error);
+        if (!data.success) {
           saveAdminSettings(newSettings);
         }
       } catch (error) {
-        console.error('[Step1] ❌ 이미지 라벨 저장 오류:', error);
         saveAdminSettings(newSettings);
       }
     } else {
@@ -303,7 +249,6 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     };
     setAdminSettings(newSettings);
     
-    // 🔥 이미지 업로드 설명 전용 API 호출
     if (isAdmin) {
       try {
         const response = await fetch('/api/admin-config', {
@@ -320,14 +265,10 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
         });
 
         const data = await response.json();
-        if (data.success) {
-          console.log('[Step1] ✅ 이미지 설명 서버 저장 완료 - WebSocket 브로드캐스트됨');
-        } else {
-          console.error('[Step1] ❌ 이미지 설명 저장 실패:', data.error);
+        if (!data.success) {
           saveAdminSettings(newSettings);
         }
       } catch (error) {
-        console.error('[Step1] ❌ 이미지 설명 저장 오류:', error);
         saveAdminSettings(newSettings);
       }
     } else {
@@ -354,10 +295,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
 
   const handleSubmit = () => {
     if (validateForm()) {
-      console.log('Form validation passed, calling onNext');
       onNext();
-    } else {
-      console.log('Form validation failed:', errors);
     }
   };
 
@@ -719,7 +657,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
                   setEditingImageLabel(false);
                   setTempImageLabel('');
                 }}
-                className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
+className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
               >
                 취소
               </button>
@@ -880,21 +818,18 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
 
   return (
     <>
-      {/* 🔥 실시간 동기화 컴포넌트 (WebSocket 기반) */}
       <RealtimeConfigSync 
         onConfigUpdate={handleConfigUpdate}
         onAdminUpdate={handleAdminUpdate}
       />
       
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black relative overflow-hidden">
-        {/* Enhanced background decorative elements */}
         <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-gradient-to-br from-blue-600/15 via-purple-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-gradient-to-tl from-cyan-600/15 via-blue-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute top-1/2 left-0 w-[400px] h-[400px] bg-gradient-to-r from-emerald-600/10 to-transparent rounded-full blur-3xl"></div>
         
         <div className="relative z-10 max-w-4xl mx-auto p-8">
           <div className="bg-gray-900/30 backdrop-blur-2xl rounded-[2rem] shadow-2xl border border-gray-700/30 p-12 relative overflow-hidden">
-            {/* Inner glow effect */}
             <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-cyan-600/5 rounded-[2rem]"></div>
             
             <div className="relative z-10">
@@ -970,17 +905,12 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
                       </svg>
                     </div>
                     <div className="ml-5">
-                      <h3 className="text-lg font-semibold text-blue-300 mb-3">관리자 모드 (WebSocket 실시간 반영)</h3>
+                      <h3 className="text-lg font-semibold text-blue-300 mb-3">관리자 모드</h3>
                       <div className="text-base text-blue-400 space-y-2 leading-relaxed">
                         <p>• 각 필드의 "편집" 버튼으로 라벨을 수정하거나 "숨기기"로 필드를 제거할 수 있습니다.</p>
-                        <p>• "힌트편집" 버튼으로 placeholder 텍스트를 수정할 수 있습니다.</p>
-                        <p>• 이미지 업로드 필드는 "라벨 편집", "설명 편집"이 가능하며, 변경사항이 WebSocket을 통해 모든 PC/브라우저에 실시간 반영됩니다.</p>
-                        <p>• 🔥 <strong>실시간 동기화:</strong> 다른 PC나 브라우저에서도 즉시 변경사항이 적용됩니다.</p>
-                        {Object.keys(adminSettings).length > 0 && (
-                          <p className="mt-4 text-sm text-blue-500 font-mono bg-blue-900/20 px-3 py-2 rounded-lg">
-                            현재 적용된 Admin 설정: {JSON.stringify(Object.keys(adminSettings))}
-                          </p>
-                        )}
+                        <p>• "힌트편집" 버튼으로 입력 안내 텍스트를 수정할 수 있습니다.</p>
+                        <p>• 이미지 업로드 필드는 "라벨 편집", "설명 편집"이 가능합니다.</p>
+                        <p>• 변경사항은 모든 사용자에게 자동으로 반영됩니다.</p>
                       </div>
                     </div>
                   </div>
