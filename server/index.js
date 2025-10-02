@@ -6,7 +6,6 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
-import { WebSocketServer } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,27 +19,6 @@ console.log('🔑 환경변수 로드:', {
   FREEPIK_API_KEY: process.env.FREEPIK_API_KEY ? '✅' : '❌'
 });
 
-// WebSocket 클라이언트 관리
-const wsClients = new Set();
-
-// broadcastConfigUpdate 함수를 먼저 정의
-export function broadcastConfigUpdate(config) {
-  const message = JSON.stringify({
-    type: 'config-update',
-    config,
-    timestamp: new Date().toISOString()
-  });
-  
-  wsClients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(message);
-    }
-  });
-  
-  console.log(`📡 설정 변경 브로드캐스트: ${wsClients.size}명에게 전송`);
-}
-
-import adminFieldConfig from '../api/admin-field-config.js';
 import usersApi from '../api/users.js';
 import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
@@ -55,6 +33,7 @@ import loadBgmList from '../api/load-bgm-list.js';
 import bgmStream from '../api/bgm-stream.js';
 import nanobanaCompose from '../api/nanobanana-compose.js';
 import adminConfig from '../api/admin-config.js';
+import adminFieldConfig from '../api/admin-field-config.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -211,7 +190,7 @@ app.post('/api/prompts/update', async (req, res) => {
     const filePath = path.join(publicPath, actualFileName);
     
     if (fs.existsSync(filePath)) {
-      const existingContent = fs.readFileSync(filePath, 'utf-8');
+      const existingContent = fs.readFileSync(filePath, 'utf--8');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupPath = path.join(versionsPath, `${filename}_${timestamp}.txt`);
       fs.writeFileSync(backupPath, existingContent);
@@ -552,28 +531,6 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   
   console.log(`⏱️ 서버 타임아웃: ${server.timeout}ms`);
 });
-
-// WebSocket 서버
-const wss = new WebSocketServer({ 
-  server,
-  path: '/ws'
-});
-
-wss.on('connection', (ws) => {
-  wsClients.add(ws);
-  console.log(`✅ WebSocket 클라이언트 연결 (총 ${wsClients.size}명)`);
-  
-  ws.on('close', () => {
-    wsClients.delete(ws);
-    console.log(`📴 WebSocket 연결 종료 (남은 인원: ${wsClients.size}명)`);
-  });
-
-  ws.on('error', () => {
-    wsClients.delete(ws);
-  });
-});
-
-console.log(`🔌 WebSocket 서버 시작: ws://0.0.0.0:${PORT}/ws`);
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
