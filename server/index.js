@@ -7,7 +7,6 @@ import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
 import { WebSocketServer } from 'ws';
-import adminFieldConfig from '../api/admin-field-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +20,27 @@ console.log('🔑 환경변수 로드:', {
   FREEPIK_API_KEY: process.env.FREEPIK_API_KEY ? '✅' : '❌'
 });
 
+// WebSocket 클라이언트 관리
+const wsClients = new Set();
+
+// broadcastConfigUpdate 함수를 먼저 정의
+export function broadcastConfigUpdate(config) {
+  const message = JSON.stringify({
+    type: 'config-update',
+    config,
+    timestamp: new Date().toISOString()
+  });
+  
+  wsClients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(message);
+    }
+  });
+  
+  console.log(`📡 설정 변경 브로드캐스트: ${wsClients.size}명에게 전송`);
+}
+
+import adminFieldConfig from '../api/admin-field-config.js';
 import usersApi from '../api/users.js';
 import storyboardInit from '../api/storyboard-init.js';
 import storyboardRenderImage from '../api/storyboard-render-image.js';
@@ -500,27 +520,7 @@ app.use('*', (req, res) => {
     error: 'Not Found',
     path: req.originalUrl,
     method: req.method,
-    timestamp: new Date().toISOString(),
-    availableEndpoints: [
-      'GET /health',
-      'GET /api/debug',
-      'POST /api/auth/login',
-      'GET /api/prompts/get',
-      'POST /api/prompts/update',
-      'GET /api/prompts/versions',
-      'POST /api/prompts/restore',
-      'POST /api/storyboard-init',
-      'POST /api/storyboard-render-image',
-      'POST /api/image-to-video',
-      'POST /api/generate-video',
-      'POST /api/video-status',
-      'POST /api/compile-videos',
-      'POST /api/apply-bgm',
-      'GET /api/load-mood-list',
-      'GET /api/load-bgm-list',
-      'GET /api/bgm-stream',
-      'POST /api/nanobanana-compose'
-    ]
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -559,15 +559,13 @@ const wss = new WebSocketServer({
   path: '/ws'
 });
 
-const wsClients = new Set();
-
 wss.on('connection', (ws) => {
   wsClients.add(ws);
-  console.log('✅ WebSocket 클라이언트 연결');
+  console.log(`✅ WebSocket 클라이언트 연결 (총 ${wsClients.size}명)`);
   
   ws.on('close', () => {
     wsClients.delete(ws);
-    console.log('📴 WebSocket 연결 종료');
+    console.log(`📴 WebSocket 연결 종료 (남은 인원: ${wsClients.size}명)`);
   });
 
   ws.on('error', () => {
@@ -575,32 +573,11 @@ wss.on('connection', (ws) => {
   });
 });
 
-export function broadcastConfigUpdate(config) {
-  const message = JSON.stringify({
-    type: 'config-update',
-    config,
-    timestamp: new Date().toISOString()
-  });
-  
-  wsClients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(message);
-    }
-  });
-  
-  console.log(`📡 설정 변경 브로드캐스트: ${wsClients.size}명에게 전송`);
-}
-
-console.log('🔌 WebSocket 서버 시작: ws://0.0.0.0:' + PORT + '/ws');
+console.log(`🔌 WebSocket 서버 시작: ws://0.0.0.0:${PORT}/ws`);
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`❌ 포트 ${PORT} 사용 중 (EADDRINUSE). 기존 프로세스 종료 필요.`);
-    console.log('\n🛠 해결 방법 예시:');
-    console.log(`  lsof -i :${PORT}`);
-    console.log(`  sudo fuser -k ${PORT}/tcp`);
-    console.log('  pkill -f server/index.js');
-    console.log(`  다시 실행: PORT=${PORT} npm run start:api`);
+    console.error(`❌ 포트 ${PORT} 사용 중`);
     process.exit(1);
   } else {
     console.error('서버 리스닝 오류:', err);
