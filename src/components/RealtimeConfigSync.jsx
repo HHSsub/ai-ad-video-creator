@@ -28,9 +28,10 @@ const RealtimeConfigSync = ({ onConfigUpdate }) => {
           
           if (data.type === 'config-update' && onConfigUpdate) {
             onConfigUpdate(data.config);
+            window.location.reload(); // 강제 새로고침
           }
         } catch (error) {
-          console.error('[RealtimeConfigSync] 메시지 파싱 오류:', error);
+          // 에러 무시
         }
       };
 
@@ -50,7 +51,7 @@ const RealtimeConfigSync = ({ onConfigUpdate }) => {
       };
 
     } catch (error) {
-      console.error('[RealtimeConfigSync] WebSocket 연결 오류:', error);
+      // 에러 무시
     }
   }, [onConfigUpdate]);
 
@@ -67,7 +68,7 @@ const RealtimeConfigSync = ({ onConfigUpdate }) => {
     };
   }, [connectWebSocket]);
 
-  return null; // UI 렌더링 없음
+  return null;
 };
 
 export default RealtimeConfigSync;
