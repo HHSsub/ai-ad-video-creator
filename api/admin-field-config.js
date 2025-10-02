@@ -1,7 +1,6 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { broadcastConfigUpdate } from '../server/index.js';
 
 const router = express.Router();
 const CONFIG_FILE = path.join(process.cwd(), 'config', 'field-settings.json');
@@ -34,8 +33,6 @@ router.post('/field-config', (req, res) => {
     }
 
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(req.body, null, 2));
-    
-    broadcastConfigUpdate(req.body);
     
     res.json({ success: true });
   } catch (error) {
