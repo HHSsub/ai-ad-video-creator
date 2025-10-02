@@ -19,10 +19,13 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
-    const config = loadFieldConfig();
-    const settings = loadAdminSettings();
-    setFieldConfig(config);
-    setAdminSettings(settings);
+    const loadConfig = async () => {
+      const config = await loadFieldConfig();
+      const settings = loadAdminSettings();
+      setFieldConfig(config);
+      setAdminSettings(settings);
+    };
+    loadConfig();
   }, []);
 
   const handleConfigUpdate = (newFieldConfig) => {
