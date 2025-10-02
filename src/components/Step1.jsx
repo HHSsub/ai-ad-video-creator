@@ -40,24 +40,25 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
 
   const saveAdminSettingsToServer = async (newSettings) => {
     try {
-      const response = await fetch('/api/admin-config', {
+      const user = localStorage.getItem('user');
+      const username = user ? JSON.parse(user).username : 'guest';
+      
+      const response = await fetch('/api/admin-field-config/field-config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Admin'
+          'x-username': username
         },
-        body: JSON.stringify({
-          type: 'admin-settings',
-          updates: newSettings,
-          isAdmin: true
-        })
+        body: JSON.stringify(newSettings)
       });
-
+  
       const data = await response.json();
       if (!data.success) {
+        console.error('서버 저장 실패:', data.error);
         saveAdminSettings(newSettings);
       }
     } catch (error) {
+      console.error('서버 저장 오류:', error);
       saveAdminSettings(newSettings);
     }
   };
@@ -214,27 +215,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     setAdminSettings(newSettings);
     
     if (isAdmin) {
-      try {
-        const response = await fetch('/api/admin-config', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Admin'
-          },
-          body: JSON.stringify({
-            type: 'image-upload-labels',
-            updates: { label: newLabel },
-            isAdmin: true
-          })
-        });
-
-        const data = await response.json();
-        if (!data.success) {
-          saveAdminSettings(newSettings);
-        }
-      } catch (error) {
-        saveAdminSettings(newSettings);
-      }
+      await saveAdminSettingsToServer(newSettings);
     } else {
       saveAdminSettings(newSettings);
     }
@@ -254,27 +235,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     setAdminSettings(newSettings);
     
     if (isAdmin) {
-      try {
-        const response = await fetch('/api/admin-config', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Admin'
-          },
-          body: JSON.stringify({
-            type: 'image-upload-labels',
-            updates: { descriptions: { default: newDesc } },
-            isAdmin: true
-          })
-        });
-
-        const data = await response.json();
-        if (!data.success) {
-          saveAdminSettings(newSettings);
-        }
-      } catch (error) {
-        saveAdminSettings(newSettings);
-      }
+      await saveAdminSettingsToServer(newSettings);
     } else {
       saveAdminSettings(newSettings);
     }
@@ -282,7 +243,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
     setEditingImageDesc(false);
     setTempImageDesc('');
   };
-
+    
   const validateForm = () => {
     const newErrors = {};
     const visibleFields = Object.values(fieldConfig).filter(field => field.visible);
