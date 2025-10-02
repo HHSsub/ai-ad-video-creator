@@ -12,6 +12,7 @@ const RealtimeConfigSync = ({ onConfigUpdate }) => {
       return;
     }
 
+    // 올바른 포트: 3000
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.hostname}:3000/ws`;
 
@@ -28,10 +29,10 @@ const RealtimeConfigSync = ({ onConfigUpdate }) => {
           
           if (data.type === 'config-update' && onConfigUpdate) {
             onConfigUpdate(data.config);
-            window.location.reload(); // 강제 새로고침
+            window.location.reload();
           }
         } catch (error) {
-          // 에러 무시
+          // 무시
         }
       };
 
@@ -47,11 +48,11 @@ const RealtimeConfigSync = ({ onConfigUpdate }) => {
       };
 
       wsRef.current.onerror = () => {
-        // 에러 무시
+        // 무시
       };
 
     } catch (error) {
-      // 에러 무시
+      // 무시
     }
   }, [onConfigUpdate]);
 
