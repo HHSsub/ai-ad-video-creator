@@ -190,7 +190,7 @@ app.post('/api/prompts/update', async (req, res) => {
     const filePath = path.join(publicPath, actualFileName);
     
     if (fs.existsSync(filePath)) {
-      const existingContent = fs.readFileSync(filePath, 'utf--8');
+      const existingContent = fs.readFileSync(filePath, 'utf-8');  
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupPath = path.join(versionsPath, `${filename}_${timestamp}.txt`);
       fs.writeFileSync(backupPath, existingContent);
