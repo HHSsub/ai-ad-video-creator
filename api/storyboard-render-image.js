@@ -102,11 +102,10 @@ async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
 
     console.log(`[generateImageWithSeedreamV4] 태스크 생성 응답:`, createResult);
 
-    if (!createResult || !createResult.data || !createResult.data.id) {
-      throw new Error('Seedream v4 태스크 ID를 받지 못했습니다: ' + JSON.stringify(createResult));
+    if (!createResult || !createResult.data || !createResult.data.task_id) {
+      throw new Error('...');
     }
-
-    const taskId = createResult.data.id;
+    const taskId = createResult.data.task_id;
     console.log(`[generateImageWithSeedreamV4] 태스크 생성 성공 (컨셉: ${conceptId}): ${taskId}`);
 
     // 🔥 태스크 상태 폴링
