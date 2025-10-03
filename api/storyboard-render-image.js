@@ -1,100 +1,83 @@
-// api/storyboard-render-image.js - Freepik Seedream v4 공식 API 적용
+// api/storyboard-render-image.js - 전체 코드 (생략 없음)
 
-import { safeCallFreepik, getApiKeyStatus } from '../src/utils/apiHelpers.js';
+import { safeCallFreepik, getApiKeyStatus } from '../src/utils/apiKeyManager.js';
 
-const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
-const POLLING_TIMEOUT = 120000; // 2 minutes
-const POLLING_INTERVAL = 3000;
-
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// 🔥 Seedream v4 태스크 상태 폴링 (공식 API)
-async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
-  const startTime = Date.now();
+async function pollSeedreamV4TaskStatus(taskId, conceptId, maxAttempts = 60, pollInterval = 5000) {
+  console.log(`[pollSeedreamV4TaskStatus] 폴링 시작: taskId=${taskId}, conceptId=${conceptId}`);
   
-  while (Date.now() - startTime < POLLING_TIMEOUT) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      console.log(`[pollSeedreamV4TaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중... (컨셉: ${conceptId})`);
- 
-      // 🔥 공식 Seedream v4 상태 확인 엔드포인트
-      const url = `${FREEPIK_API_BASE}/ai/text-to-image/seedream-v4/${encodeURIComponent(taskId)}`;
+      const statusEndpoint = `https://api.freepik.com/v1/ai/image-generation/seedream/v4/${taskId}`;
       
-      const result = await safeCallFreepik(url, {
+      const statusResult = await safeCallFreepik(statusEndpoint, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json'
+          'Content-Type': 'application/json'
         }
-      }, conceptId, `seedream-v4-status-${taskId.substring(0, 8)}`);
+      }, conceptId, `seedream-v4-status-concept-${conceptId}`);
 
-      console.log(`[pollSeedreamV4TaskStatus] 응답:`, result);
+      console.log(`[pollSeedreamV4TaskStatus] 시도 ${attempt}/${maxAttempts}, 상태:`, statusResult?.data?.status);
 
-      if (result && result.data) {
-        const taskData = result.data;
-        const status = (taskData.status || '').toUpperCase();
-
-        console.log(`[pollSeedreamV4TaskStatus] 태스크 상태: ${status}`);
-
-        if (status === 'COMPLETED') {
-          // 🔥 Seedream v4의 generated 배열에서 이미지 URL 추출
-          if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated.length > 0) {
-            const imageUrl = taskData.generated[0];
-            console.log(`[pollSeedreamV4TaskStatus] ✅ 완료 - 이미지 URL: ${imageUrl.substring(0, 80)}...`);
-            return { imageUrl, raw: taskData };
-          } else {
-            console.warn(`[pollSeedreamV4TaskStatus] COMPLETED 상태이지만 generated 배열이 비어있음`);
-            return { imageUrl: null, raw: taskData };
-          }
-        } else if (status === 'FAILED') {
-          throw new Error(`태스크 실패: ${taskData.error || 'Unknown error'}`);
-        } else if (['IN_PROGRESS', 'PENDING', 'PROCESSING'].includes(status)) {
-          console.log(`[pollSeedreamV4TaskStatus] 진행 중... (${status})`);
-          await sleep(POLLING_INTERVAL);
-          continue;
-        } else {
-          console.warn(`[pollSeedreamV4TaskStatus] 알 수 없는 상태: ${status}`);
-          await sleep(POLLING_INTERVAL);
-          continue;
-        }
+      if (!statusResult || !statusResult.data) {
+        throw new Error('상태 확인 응답이 비정상입니다');
       }
 
-      await sleep(POLLING_INTERVAL);
+      const status = statusResult.data.status;
+
+      if (status === 'completed') {
+        const imageUrl = statusResult.data.output?.url;
+        if (!imageUrl) {
+          throw new Error('완료되었으나 이미지 URL이 없습니다');
+        }
+        console.log(`[pollSeedreamV4TaskStatus] ✅ 완료: ${imageUrl}`);
+        return {
+          success: true,
+          imageUrl: imageUrl,
+          raw: statusResult.data
+        };
+      }
+
+      if (status === 'failed' || status === 'error') {
+        const errorMsg = statusResult.data.error?.message || 'Seedream v4 태스크 실패';
+        throw new Error(errorMsg);
+      }
+
+      if (attempt < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
 
     } catch (error) {
-      console.error(`[pollSeedreamV4TaskStatus] 폴링 오류:`, error.message);
-      await sleep(POLLING_INTERVAL);
+      console.error(`[pollSeedreamV4TaskStatus] 시도 ${attempt} 오류:`, error.message);
+      if (attempt >= maxAttempts) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
   }
 
-  throw new Error(`태스크 ${taskId} 타임아웃 (${POLLING_TIMEOUT / 1000}초 초과)`);
+  throw new Error(`Seedream v4 태스크 타임아웃 (${maxAttempts}회 시도)`);
 }
 
-// 🔥 Freepik Seedream v4 공식 API 호출
 async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
-  console.log('[generateImageWithSeedreamV4] Seedream v4 공식 API 사용:', {
-    prompt: imagePrompt.prompt,
-    aspectRatio: imagePrompt.aspect_ratio,
-    seed: imagePrompt.seed,
-    conceptId: conceptId
-  });
+  if (!imagePrompt || !imagePrompt.prompt) {
+    throw new Error('imagePrompt.prompt가 필요합니다');
+  }
 
-  // 🔥 공식 Seedream v4 생성 엔드포인트
-  const endpoint = `${FREEPIK_API_BASE}/ai/text-to-image/seedream-v4`;
- 
-  // 🔥 Seedream v4 공식 파라미터 구조
+  const endpoint = 'https://api.freepik.com/v1/ai/image-generation/seedream/v4';
+
   const requestBody = {
     prompt: imagePrompt.prompt,
-    aspect_ratio: imagePrompt.aspect_ratio || "widescreen_16_9",
+    negative_prompt: imagePrompt.negative_prompt || "blurry, low quality, watermark, logo, text",
+    aspect_ratio: imagePrompt.aspect_ratio || 'widescreen_16_9',
     guidance_scale: imagePrompt.guidance_scale || 2.5,
     seed: imagePrompt.seed || Math.floor(Math.random() * 1000000),
-    webhook_url: null // 웹훅 사용 안함 (폴링 방식)
+    webhook: null
   };
 
-  // 🔥 레퍼런스 이미지가 있는 경우 추가
   if (imagePrompt.reference_images && Array.isArray(imagePrompt.reference_images) && imagePrompt.reference_images.length > 0) {
     requestBody.reference_images = imagePrompt.reference_images;
   }
 
-  // undefined/null 값 정리
   Object.keys(requestBody).forEach(key => {
     const v = requestBody[key];
     if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) {
@@ -112,7 +95,6 @@ async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
   });
 
   try {
-    // 🔥 Seedream v4 태스크 생성
     const result = await safeCallFreepik(endpoint, {
       method: 'POST',
       headers: {
@@ -130,7 +112,6 @@ async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
     const taskId = result.data.task_id;
     console.log(`[generateImageWithSeedreamV4] 태스크 생성 완료: ${taskId} (컨셉: ${conceptId})`);
 
-    // 폴링으로 완료될 때까지 대기
     const pollResult = await pollSeedreamV4TaskStatus(taskId, conceptId);
 
     const imageUrl = pollResult.imageUrl || null;
@@ -150,7 +131,6 @@ async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
   }
 }
 
-// 폴백 이미지 생성 (디자인/디버깅 용)
 function generateFallbackImage(sceneNumber, conceptId) {
   const themes = [
     { bg: '2563EB', text: 'FFFFFF', label: 'Professional+Business' },
@@ -164,11 +144,10 @@ function generateFallbackImage(sceneNumber, conceptId) {
   const themeIndex = ((sceneNumber || 1) - 1) % themes.length;
   const theme = themes[themeIndex];
 
-  return `https://via.placeholder.com/1920x1080/${theme.bg}/${theme.text}?text=${theme.label}+Scene+${sceneNumber || 1}`;
+  return `https://via.placeholder.com/1920x1080/${theme.bg}/${theme.text}?text=Concept+${conceptId}+Scene+${sceneNumber}`;
 }
 
 export default async function handler(req, res) {
-  // CORS 기본 처리
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -180,60 +159,85 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    let { imagePrompt, sceneNumber, conceptId, prompt } = req.body || {};
+    let { imagePrompt, sceneNumber, conceptId, prompt, aspectRatio } = req.body || {};
 
-    console.log('[storyboard-render-image] 요청 수신:', {
+    console.log('[storyboard-render-image] 🔍 요청 수신:', {
       sceneNumber,
       conceptId,
       hasImagePrompt: !!imagePrompt,
       legacyPrompt: !!prompt,
-      promptPreview: (imagePrompt?.prompt || prompt || '').substring(0, 200)
+      imagePromptType: typeof imagePrompt,
+      imagePromptKeys: imagePrompt ? Object.keys(imagePrompt) : []
     });
 
-    // 🔥 API 키 상태 확인
     const keyStatus = getApiKeyStatus();
     console.log(`[storyboard-render-image] Freepik API 키 상태: ${keyStatus.freepik.availableKeys}/${keyStatus.freepik.totalKeys}개 사용가능`);
 
-    // 🔥 하위 호환 - 구형 형식을 Seedream v4 형식으로 변환
     if (!imagePrompt && prompt) {
+      console.log('[storyboard-render-image] ⚠️ 레거시 prompt 형식 감지, imagePrompt로 변환');
       imagePrompt = {
         prompt,
-        aspect_ratio: 'widescreen_16_9',
+        negative_prompt: "blurry, low quality, watermark, text, logo",
+        aspect_ratio: aspectRatio || 'widescreen_16_9',
         guidance_scale: 2.5,
         seed: Math.floor(Math.random() * 1000000)
       };
-      console.log('[storyboard-render-image] 구형 요청을 Seedream v4 imagePrompt로 변환');
     }
 
-    // 🔥 imagePrompt 구조를 Seedream v4 형식으로 정규화
     if (imagePrompt) {
-      // 기존 구조에서 Seedream v4 파라미터로 매핑
+      const promptText = imagePrompt.prompt || 
+                         imagePrompt.image_prompt?.prompt || 
+                         imagePrompt.text || 
+                         '';
+
+      if (!promptText || promptText.trim().length < 5) {
+        console.error('[storyboard-render-image] ❌ 유효하지 않은 prompt:', imagePrompt);
+        return res.status(400).json({
+          success: false,
+          error: 'Valid prompt required (minimum 5 characters)',
+          received: imagePrompt
+        });
+      }
+
       const normalizedPrompt = {
-        prompt: imagePrompt.prompt || imagePrompt.image_prompt?.prompt,
+        prompt: promptText,
+        negative_prompt: imagePrompt.negative_prompt || 
+                        imagePrompt.image_prompt?.negative_prompt || 
+                        "blurry, low quality, watermark, text, logo",
         aspect_ratio: imagePrompt.aspect_ratio || 
                      imagePrompt.image?.size || 
                      imagePrompt.size || 
+                     aspectRatio ||
                      'widescreen_16_9',
         guidance_scale: imagePrompt.guidance_scale || 
                        imagePrompt.image_prompt?.guidance_scale || 
                        2.5,
         seed: imagePrompt.seed || 
               imagePrompt.image_prompt?.seed || 
-              Math.floor(Math.random() * 1000000)
+              Math.floor(Math.random() * 1000000),
+        styling: imagePrompt.styling || {
+          style: 'photo',
+          color: 'color',
+          lighting: 'natural'
+        }
       };
-      
-      imagePrompt = normalizedPrompt;
-    }
 
-    if (!imagePrompt || !imagePrompt.prompt || typeof imagePrompt.prompt !== 'string' || imagePrompt.prompt.trim().length < 5) {
-      console.error('[storyboard-render-image] 유효하지 않은 imagePrompt:', imagePrompt);
+      imagePrompt = normalizedPrompt;
+      
+      console.log('[storyboard-render-image] ✅ imagePrompt 정규화 완료:', {
+        promptPreview: imagePrompt.prompt.substring(0, 100) + '...',
+        aspect_ratio: imagePrompt.aspect_ratio,
+        guidance_scale: imagePrompt.guidance_scale,
+        seed: imagePrompt.seed
+      });
+    } else {
+      console.error('[storyboard-render-image] ❌ imagePrompt와 prompt 모두 없음');
       return res.status(400).json({
-        error: 'Valid imagePrompt required',
-        received: imagePrompt
+        success: false,
+        error: 'imagePrompt or prompt is required'
       });
     }
 
-    // API 키가 없으면 폴백 이미지 반환
     if (keyStatus.freepik.totalKeys === 0) {
       console.error('[storyboard-render-image] Freepik API 키가 없음');
       const fallbackUrl = generateFallbackImage(sceneNumber, conceptId);
@@ -241,16 +245,19 @@ export default async function handler(req, res) {
         success: true,
         url: fallbackUrl,
         fallback: true,
-        message: 'API 키 없음',
+        message: 'API 키 없음 - 폴백 이미지 사용',
         processingTime: Date.now() - startTime,
-        metadata: { error: 'no_api_key' }
+        metadata: { 
+          error: 'no_api_key',
+          sceneNumber,
+          conceptId
+        }
       });
     }
 
-    console.log(`[storyboard-render-image] 컨셉 ${conceptId}에 대한 Seedream v4 키 풀 활용 시작`);
+    console.log(`[storyboard-render-image] 🚀 컨셉 ${conceptId}, 씬 ${sceneNumber} Seedream v4 키 풀 활용 시작`);
 
     try {
-      // 🔥 Seedream v4로 이미지 생성
       const result = await generateImageWithSeedreamV4(imagePrompt, conceptId || 0);
 
       const processingTime = Date.now() - startTime;
@@ -264,7 +271,6 @@ export default async function handler(req, res) {
         keyPoolUsed: true
       });
 
-      // 🔥 최종 API 키 상태 로깅
       const finalKeyStatus = getApiKeyStatus();
 
       return res.status(200).json({
@@ -293,11 +299,10 @@ export default async function handler(req, res) {
       });
 
     } catch (freepikError) {
-      console.error('[storyboard-render-image] Freepik 호출 실패:', freepikError && freepikError.message ? freepikError.message : String(freepikError));
+      console.error('[storyboard-render-image] ❌ Freepik 호출 실패:', freepikError.message);
 
       const fallbackUrl = generateFallbackImage(sceneNumber, conceptId);
 
-      // 🔥 에러 시에도 키 풀 상태 포함
       const errorKeyStatus = getApiKeyStatus();
 
       return res.status(200).json({
@@ -305,13 +310,13 @@ export default async function handler(req, res) {
         url: fallbackUrl,
         fallback: true,
         processingTime: Date.now() - startTime,
-        error: freepikError && freepikError.message ? freepikError.message : String(freepikError),
+        error: freepikError.message,
         metadata: {
           sceneNumber,
           conceptId,
           promptUsed: imagePrompt.prompt,
           apiProvider: 'Fallback',
-          originalError: freepikError && freepikError.message ? freepikError.message : String(freepikError),
+          originalError: freepikError.message,
           keyPoolStatus: {
             totalKeys: errorKeyStatus.freepik.totalKeys,
             availableKeys: errorKeyStatus.freepik.availableKeys,
@@ -322,7 +327,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('[storyboard-render-image] 전체 시스템 오류:', error);
+    console.error('[storyboard-render-image] ❌ 전체 시스템 오류:', error);
 
     const fallbackUrl = generateFallbackImage(
       req.body?.sceneNumber || 1,
