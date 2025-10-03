@@ -188,14 +188,19 @@ function parseMultiConceptJSON(text) {
     console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
     
     // Step2 응답 구조:
-    // **1. 컨셉: 욕망의 시각화**
+    // ### 컨셉: 욕망의 시각화
+    // **Pre-assigned Style: Dreamy Ethereal Photography**
     // ### S#1 (0:00-0:02)
+    // **Concept Headline: 24시간 자신감, 수분 파동이 만든 완벽한 하루!**
     // ```json (Image Prompt - 첫 번째)
     // ```json (Motion Prompt - 두 번째)
     // ```json (Copy - 세 번째)
     
-    // 컨셉 헤더 추출: **1. 컨셉:, **2. 컨셉: 등
-    const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
+    // 🔥 개선된 컨셉 헤더 추출 - 다양한 형식 지원
+    // 패턴 1: ### 컨셉: XXX
+    // 패턴 2: ### 1. 컨셉: XXX
+    // 패턴 3: **1. 컨셉: XXX**
+    const conceptPattern = /###\s*(?:\d+\.\s*)?컨셉:\s*(.+)|^\*\*\s*\d+\.\s*컨셉:\s*(.+)\*\*/gm;
     const conceptMatches = [...text.matchAll(conceptPattern)];
     
     if (conceptMatches.length === 0) {
@@ -211,41 +216,57 @@ function parseMultiConceptJSON(text) {
     const concepts = [];
     
     for (let i = 0; i < conceptMatches.length; i++) {
-      const conceptNum = parseInt(conceptMatches[i][1]);
-      const conceptName = conceptMatches[i][2].trim();
+      // 패턴에 따라 캡처 그룹이 다름
+      const conceptName = (conceptMatches[i][1] || conceptMatches[i][2] || '').trim();
       const startIdx = conceptMatches[i].index;
       const endIdx = i < conceptMatches.length - 1 ? conceptMatches[i + 1].index : text.length;
       const conceptText = text.substring(startIdx, endIdx);
       
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
+      console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1}: ${conceptName}`);
       
-      // 씬 헤더 추출: ### S#1, ### S#2, ..., ### S#5
-      const scenePattern = /###\s*S#(\d+)\s*\(/g;
+      // 🔥 개선된 씬 헤더 추출 - 다양한 형식 지원
+      // 패턴 1: ### S#1 (0:00-0:02)
+      // 패턴 2: ### 씬 1
+      // 패턴 3: S#1 (0:00-0:02)
+      const scenePattern = /###\s*(?:S#|씬\s*)(\d+)|^S#(\d+)\s*\(/gm;
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
       
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
+      console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 발견된 씬: ${sceneMatches.length}개`);
       
       const conceptData = {
         concept_name: conceptName
       };
       
+      // 🔥 스타일 정보 추출 (선택사항)
+      const styleMatch = conceptText.match(/\*\*Pre-assigned Style:\s*(.+?)\*\*/);
+      if (styleMatch) {
+        conceptData.style = styleMatch[1].trim();
+        console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1} 스타일: ${conceptData.style}`);
+      }
+      
       for (let j = 0; j < sceneMatches.length; j++) {
-        const sceneNum = parseInt(sceneMatches[j][1]);
+        // 패턴에 따라 캡처 그룹이 다름
+        const sceneNum = parseInt(sceneMatches[j][1] || sceneMatches[j][2]);
         const sceneStartIdx = sceneMatches[j].index;
         const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
         const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
         
-        // JSON 블록 추출: ```json ... ```
+        // 🔥 JSON 블록 추출: ```json ... ``` (개선된 정규식)
         const jsonBlocks = [...sceneText.matchAll(/```json\s*([\s\S]*?)```/g)];
         
         if (jsonBlocks.length >= 3) {
           try {
             // 첫 번째 JSON: Image Prompt
-            const imagePrompt = JSON.parse(jsonBlocks[0][1].trim());
+            const imagePromptText = jsonBlocks[0][1].trim();
+            const imagePrompt = JSON.parse(imagePromptText);
+            
             // 두 번째 JSON: Motion Prompt
-            const motionPrompt = JSON.parse(jsonBlocks[1][1].trim());
+            const motionPromptText = jsonBlocks[1][1].trim();
+            const motionPrompt = JSON.parse(motionPromptText);
+            
             // 세 번째 JSON: Copy (카피라이팅 문구)
-            const copyPrompt = JSON.parse(jsonBlocks[2][1].trim());
+            const copyPromptText = jsonBlocks[2][1].trim();
+            const copyPrompt = JSON.parse(copyPromptText);
             
             conceptData[`scene_${sceneNum}`] = {
               sceneNumber: sceneNum,
@@ -255,18 +276,38 @@ function parseMultiConceptJSON(text) {
               copy: copyPrompt
             };
             
-            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 씬 ${sceneNum} 파싱 완료`);
+            console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 씬 ${sceneNum} 파싱 완료`);
             
           } catch (e) {
-            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 씬 ${sceneNum} JSON 파싱 실패:`, e.message);
+            console.warn(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 씬 ${sceneNum} JSON 파싱 실패:`, e.message);
+            console.warn(`[parseMultiConceptJSON] 문제 JSON:`, jsonBlocks[0][1].substring(0, 100));
+          }
+        } else if (jsonBlocks.length >= 1) {
+          // 🔥 폴백: JSON 블록이 3개 미만일 경우 첫 번째만이라도 사용
+          try {
+            const imagePromptText = jsonBlocks[0][1].trim();
+            const imagePrompt = JSON.parse(imagePromptText);
+            
+            conceptData[`scene_${sceneNum}`] = {
+              sceneNumber: sceneNum,
+              title: `씬 ${sceneNum}`,
+              image_prompt: imagePrompt,
+              motion_prompt: { prompt: "subtle camera movement" },
+              copy: { copy: `씬 ${sceneNum}` }
+            };
+            
+            console.log(`[parseMultiConceptJSON] ⚠️ 컨셉 ${i + 1} - 씬 ${sceneNum} 부분 파싱 (${jsonBlocks.length}개 JSON)`);
+            
+          } catch (e) {
+            console.warn(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 씬 ${sceneNum} 폴백 파싱 실패:`, e.message);
           }
         } else {
-          console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 씬 ${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견 (3개 필요)`);
+          console.warn(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 씬 ${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견 (최소 1개 필요)`);
         }
       }
       
       const sceneCount = Object.keys(conceptData).filter(k => k.startsWith('scene_')).length;
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} 최종 씬 수: ${sceneCount}개`);
+      console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1} 최종 씬 수: ${sceneCount}개`);
       
       concepts.push(conceptData);
     }
