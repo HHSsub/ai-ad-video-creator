@@ -588,20 +588,31 @@ export default async function handler(req, res) {
     console.log(`[storyboard-init] 📝 STEP1 프롬프트 파일 로드: ${step1FileName}`);
     let step1PromptTemplate = fs.readFileSync(step1FilePath, 'utf-8');
 
+    // 🔥🔥🔥 Step1 변수 치환 (apiPayload 구조 정확히 반영)
     const step1Variables = {
-      brandName,
-      videoLength,
-      videoPurpose,
-      imageStatus: (req.body.imageRef && req.body.imageRef.url) ? '업로드됨' : '업로드 안됨',
+      brandName: brandName || '',
+      industryCategory: industryCategory || '',
+      productServiceCategory: productServiceCategory || '',
+      productServiceName: productServiceName || '',
+      videoPurpose: videoPurpose || 'product',
+      videoLength: videoLength || '10초',
+      coreTarget: coreTarget || '',
+      coreDifferentiation: coreDifferentiation || '',
+      videoRequirements: '없음',
+      brandLogo: (req.body.imageUpload && req.body.imageUpload.url && (videoPurpose === 'service' || videoPurpose === 'brand')) ? '업로드됨' : '없음',
+      productImage: (req.body.imageUpload && req.body.imageUpload.url && (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education')) ? '업로드됨' : '없음',
       aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio)
     };
-
+    
+    console.log('[storyboard-init] 🔄 Step1 변수 치환:', step1Variables);
+    
     for (const [key, value] of Object.entries(step1Variables)) {
       const placeholder = `{${key}}`;
-      step1PromptTemplate = step1PromptTemplate.replace(new RegExp(placeholder, 'g'), value);
+      const regex = new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g');
+      step1PromptTemplate = step1PromptTemplate.replace(regex, value);
     }
-
-    console.log(`[storyboard-init] ✅ STEP1 변수 치환 완료 (${Object.keys(step1Variables).length}개 변수)`);
+    
+    console.log(`[storyboard-init] ✅ STEP1 변수 치환 완료`);
 
     console.log(`[storyboard-init] 📡 STEP1 Gemini API 호출 시작`);
     const step1 = await safeCallGemini(step1PromptTemplate, {
