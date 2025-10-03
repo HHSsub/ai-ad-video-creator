@@ -147,7 +147,7 @@ function extractConceptBlocks(content) {
   let currentBlock = null;
   
   lines.forEach((line, index) => {
-    if (line.includes('컨셉') && (line.includes('#') || line.includes('번'))) {
+    if (line.includes('컨셉') && (line.includes(':') || line.includes(. '))) {
       if (currentBlock) {
         blocks.push(currentBlock);
       }
