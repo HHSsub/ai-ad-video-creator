@@ -49,7 +49,7 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
           throw new Error(`Seedream v4 태스크 실패: ${status}`);
         }
 
-        if (status === 'PENDING' || status === 'PROCESSING') {
+        if (status === 'PENDING' || status === 'PROCESSING' || status === 'CREATED') {
           console.log(`[pollSeedreamV4TaskStatus] 대기 중... (${status})`);
           await sleep(POLLING_INTERVAL);
           continue;
@@ -103,8 +103,9 @@ async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
     console.log(`[generateImageWithSeedreamV4] 태스크 생성 응답:`, createResult);
 
     if (!createResult || !createResult.data || !createResult.data.task_id) {
-      throw new Error('...');
+      throw new Error('Seedream v4 태스크 ID를 받지 못했습니다: ' + JSON.stringify(createResult));
     }
+
     const taskId = createResult.data.task_id;
     console.log(`[generateImageWithSeedreamV4] 태스크 생성 성공 (컨셉: ${conceptId}): ${taskId}`);
 
