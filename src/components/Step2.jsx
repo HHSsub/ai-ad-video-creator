@@ -164,58 +164,61 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   };
 
   const composeSingleImageSafely = async (imageObj, style, compositingInfo, retryCount = 0, maxRetries = 2) => {
-    if (!imageObj.isCompositingScene || !imageObj.compositingInfo) {
-      return { ...imageObj, compositingSuccess: false };
-    }
-
-    try {
-      const overlayImageData = getOverlayImageData(imageObj.compositingInfo);
-      if (!overlayImageData) {
-        log(`❌ Scene ${imageObj.sceneNumber}: 합성용 이미지 없음`);
+      if (!imageObj.isCompositingScene || !imageObj.compositingInfo) {
         return { ...imageObj, compositingSuccess: false };
       }
-
-      log(`🎨 Scene ${imageObj.sceneNumber} 이미지 합성 중... ${retryCount > 0 ? `(재시도 ${retryCount}/${maxRetries})` : ''}`);
-
-      const composeResponse = await fetch(`${API_BASE}/api/nanobanana-compose`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseImageUrl: imageObj.url,
-          overlayImageData: overlayImageData,
-          compositingInfo: {
-            videoPurpose: imageObj.compositingInfo.videoPurpose || 'product',
-            sceneDescription: imageObj.title || `Scene ${imageObj.sceneNumber}`,
-            compositingContext: imageObj.compositingContext || 'natural placement'
-          }
-        }),
-      });
-
-      if (!composeResponse.ok) {
-        throw new Error(`HTTP ${composeResponse.status}`);
-      }
-
-      const composeResult = await composeResponse.json();
-
-      if (composeResult.success && composeResult.imageUrl) {
-        imageObj.url = composeResult.imageUrl;
-        imageObj.compositingSuccess = true;
+  
+      try {
+        const overlayImageData = getOverlayImageData(imageObj.compositingInfo);
+        if (!overlayImageData) {
+          log(`❌ Scene ${imageObj.sceneNumber}: 합성용 이미지 없음`);
+          return { ...imageObj, compositingSuccess: false };
+        }
+  
+        log(`🎨 Scene ${imageObj.sceneNumber} 이미지 합성 중... ${retryCount > 0 ? `(재시도 ${retryCount}/${maxRetries})` : ''}`);
+  
+        const composeResponse = await fetch(`${API_BASE}/api/nanobanana-compose`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            baseImageUrl: imageObj.url,
+            overlayImageData: overlayImageData,
+            compositingInfo: imageObj.compositingInfo,  // 🔥 핵심 수정: 전체 객체 전달
+            sceneNumber: imageObj.sceneNumber,
+            conceptId: style?.conceptId || style?.id || 1,  // 🔥 conceptId 추가
+            title: imageObj.title,
+            prompt: imageObj.prompt || imageObj.image_prompt?.prompt,
+          }),
+        });
+  
+        if (!composeResponse.ok) {
+          const errorData = await composeResponse.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `HTTP ${composeResponse.status}`);
+        }
+  
+        const composeResult = await composeResponse.json();
+  
+        if (composeResult.success && composeResult.composedImageUrl) {
+          imageObj.url = composeResult.composedImageUrl;
+          imageObj.compositingSuccess = true;
+          log(`✅ Scene ${imageObj.sceneNumber} 합성 완료`);
+          return imageObj;
+        } else {
+          throw new Error('합성 결과 없음');
+        }
+      } catch (error) {
+        log(`❌ Scene ${imageObj.sceneNumber} 합성 실패: ${error.message}`);
+  
+        if (retryCount < maxRetries) {
+          log(`🔄 Scene ${imageObj.sceneNumber} 재시도 중... (${retryCount + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return composeSingleImageSafely(imageObj, style, compositingInfo, retryCount + 1, maxRetries);
+        }
+  
+        imageObj.compositingSuccess = false;
         return imageObj;
-      } else {
-        throw new Error(composeResult.error || '합성 실패');
       }
-
-    } catch (error) {
-      log(`❌ Scene ${imageObj.sceneNumber} 합성 오류: ${error.message}`);
-      
-      if (retryCount < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        return await composeSingleImageSafely(imageObj, style, compositingInfo, retryCount + 1, maxRetries);
-      }
-
-      return { ...imageObj, compositingSuccess: false };
-    }
-  };
+    };
 
   const handleGenerateStoryboard = async () => {
     setIsLoading(true);
