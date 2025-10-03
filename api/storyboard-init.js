@@ -184,88 +184,110 @@ function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, 
 
 // 🔥🔥🔥 완전히 재작성된 JSON 파싱 함수 (마크다운 대응)
 // parseMultiConceptJSON 함수를 다음으로 완전 교체:
-
 function parseMultiConceptJSON(text) {
   try {
     console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
-    console.log('[parseMultiConceptJSON] 텍스트 미리보기:', text.substring(0, 500));
     
-    // 🔥 1단계: ```json ... ``` 코드 블록 추출
-    const jsonBlockMatches = text.matchAll(/```json\s*([\s\S]*?)\s*```/g);
-    const jsonBlocks = Array.from(jsonBlockMatches);
+    // Step2 응답은 마크다운 형식
+    // ### 컨셉명 (영상 길이: XX초, 총 YY씬) 으로 시작
+    const conceptPattern = /###\s*(.+?)\s*\(영상 길이:/g;
+    const conceptMatches = [...text.matchAll(conceptPattern)];
     
-    if (jsonBlocks.length > 0) {
-      console.log(`[parseMultiConceptJSON] JSON 코드 블록 ${jsonBlocks.length}개 발견`);
-      
-      // 가장 큰 JSON 블록 선택
-      let largestBlock = jsonBlocks[0][1];
-      for (const block of jsonBlocks) {
-        if (block[1].length > largestBlock.length) {
-          largestBlock = block[1];
-        }
-      }
-      
-      console.log('[parseMultiConceptJSON] 가장 큰 JSON 블록 길이:', largestBlock.length);
-      console.log('[parseMultiConceptJSON] JSON 블록 미리보기:', largestBlock.substring(0, 300));
-      
-      try {
-        const parsed = JSON.parse(largestBlock);
-        if (parsed && parsed.concepts && Array.isArray(parsed.concepts)) {
-          console.log('[parseMultiConceptJSON] ✅ JSON 코드 블록 파싱 성공, 컨셉 수:', parsed.concepts.length);
-          
-          // 각 컨셉의 씬 수 검증
-          parsed.concepts.forEach((concept, idx) => {
-            const sceneKeys = Object.keys(concept).filter(k => k.startsWith('scene_'));
-            console.log(`[parseMultiConceptJSON] 컨셉 ${idx + 1} 씬 수:`, sceneKeys.length);
-          });
-          
-          return parsed;
-        } else {
-          console.warn('[parseMultiConceptJSON] JSON 파싱 성공했으나 concepts 배열 없음');
-        }
-      } catch (e) {
-        console.error('[parseMultiConceptJSON] JSON 파싱 오류:', e.message);
-        console.error('[parseMultiConceptJSON] 파싱 실패한 JSON 일부:', largestBlock.substring(0, 500));
-      }
+    if (conceptMatches.length === 0) {
+      console.error('[parseMultiConceptJSON] 컨셉 헤더를 찾을 수 없음');
+      return null;
     }
     
-    // 🔥 2단계: 직접 {...} JSON 객체 추출
-    try {
-      // 가장 바깥쪽 { } 찾기
-      const firstBrace = text.indexOf('{');
-      const lastBrace = text.lastIndexOf('}');
+    console.log(`[parseMultiConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
+    
+    const concepts = [];
+    
+    for (let i = 0; i < conceptMatches.length; i++) {
+      const conceptName = conceptMatches[i][1].trim();
+      const startIdx = conceptMatches[i].index;
+      const endIdx = i < conceptMatches.length - 1 ? conceptMatches[i + 1].index : text.length;
+      const conceptText = text.substring(startIdx, endIdx);
       
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        const jsonCandidate = text.substring(firstBrace, lastBrace + 1);
-        console.log('[parseMultiConceptJSON] 직접 JSON 추출 시도, 길이:', jsonCandidate.length);
+      console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1}: ${conceptName}`);
+      
+      // 씬별 JSON 추출
+      // 패턴: ### S#1, ### S#2, ..., ### 마지막 씬, ### 마지막씬, ### S#5 등
+      const scenePattern = /###\s*(S#(\d+)|마지막\s*씬|마지막씬)/gi;
+      const sceneMatches = [...conceptText.matchAll(scenePattern)];
+      
+      const conceptData = {
+        concept_name: conceptName,
+        scenes: {}
+      };
+      
+      for (let j = 0; j < sceneMatches.length; j++) {
+        const sceneMatch = sceneMatches[j][0];
+        let sceneNum;
         
-        const parsed = JSON.parse(jsonCandidate);
-        if (parsed && parsed.concepts && Array.isArray(parsed.concepts)) {
-          console.log('[parseMultiConceptJSON] ✅ 직접 JSON 파싱 성공, 컨셉 수:', parsed.concepts.length);
-          return parsed;
+        // 씬 번호 추출
+        if (sceneMatch.includes('마지막')) {
+          // 마지막 씬인 경우, 전체 씬 개수로 추정
+          sceneNum = sceneMatches.length;
+        } else {
+          const numMatch = sceneMatch.match(/\d+/);
+          sceneNum = numMatch ? parseInt(numMatch[0]) : j + 1;
+        }
+        
+        const sceneStartIdx = sceneMatches[j].index;
+        const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
+        const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
+        
+        // JSON 블록 추출: ```json ... ```
+        const jsonBlocks = [...sceneText.matchAll(/```json\s*([\s\S]*?)```/g)];
+        
+        if (jsonBlocks.length >= 3) {
+          try {
+            const imagePrompt = JSON.parse(jsonBlocks[0][1].trim());
+            const motionPrompt = JSON.parse(jsonBlocks[1][1].trim());
+            const copyPrompt = JSON.parse(jsonBlocks[2][1].trim());
+            
+            conceptData.scenes[`scene_${sceneNum}`] = {
+              sceneNumber: sceneNum,
+              title: `씬 ${sceneNum}`,
+              image_prompt: imagePrompt,
+              motion_prompt: motionPrompt,
+              copy: copyPrompt
+            };
+            
+            console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 씬 ${sceneNum} 파싱 완료`);
+            
+          } catch (e) {
+            console.warn(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 씬 ${sceneNum} JSON 파싱 실패:`, e.message);
+          }
+        } else {
+          console.warn(`[parseMultiConceptJSON] 컨셉 ${i + 1} - 씬 ${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견 (3개 필요)`);
         }
       }
-    } catch (e) {
-      console.warn('[parseMultiConceptJSON] 직접 JSON 추출 실패:', e.message);
+      
+      const sceneCount = Object.keys(conceptData.scenes).length;
+      console.log(`[parseMultiConceptJSON] 컨셉 ${i + 1} 최종 씬 수: ${sceneCount}개`);
+      
+      concepts.push(conceptData);
     }
     
-    // 🔥 3단계: 폴백 - 빈 구조 반환 (디버깅용)
-    console.error('[parseMultiConceptJSON] ❌ 모든 파싱 방법 실패');
-    console.error('[parseMultiConceptJSON] Gemini 응답 전체 저장 (디버깅용)');
+    console.log('[parseMultiConceptJSON] ✅ 파싱 완료, 총 컨셉:', concepts.length);
     
-    // 디버깅: 전체 응답을 파일로 저장
-    if (typeof process !== 'undefined' && process.cwd) {
-      const fs = require('fs');
-      const path = require('path');
-      const debugPath = path.join(process.cwd(), 'debug_gemini_response.txt');
-      fs.writeFileSync(debugPath, text, 'utf-8');
-      console.log('[parseMultiConceptJSON] 전체 응답 저장됨:', debugPath);
-    }
+    // 디버깅: 각 컨셉의 씬 수 확인
+    concepts.forEach((concept, idx) => {
+      const sceneKeys = Object.keys(concept.scenes).filter(k => k.startsWith('scene_'));
+      console.log(`[parseMultiConceptJSON] 컨셉 ${idx + 1} (${concept.concept_name}): ${sceneKeys.length}개 씬`);
+    });
     
-    return null;
+    return { concepts };
     
   } catch (error) {
-    console.error('[parseMultiConceptJSON] ❌ 전체 파싱 오류:', error);
+    console.error('[parseMultiConceptJSON] ❌ 파싱 오류:', error);
+    
+    // 디버깅: 전체 응답 저장
+    const debugPath = path.join(process.cwd(), 'debug_gemini_response.txt');
+    fs.writeFileSync(debugPath, text, 'utf-8');
+    console.log('[parseMultiConceptJSON] 전체 응답 저장:', debugPath);
+    
     return null;
   }
 }
