@@ -1,10 +1,8 @@
-// api/storyboard-init.js
-import 'dotenv/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// api/storyboard-init.js - 이미지 생성 문제 완벽 수정
+
 import fs from 'fs';
 import path from 'path';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+import { safeCallGemini } from '../src/utils/apiHelpers.js';
 
 const PROMPT_FILE_MAPPING = {
   'step1_product': 'Prompt_step1_product.txt',
@@ -14,293 +12,90 @@ const PROMPT_FILE_MAPPING = {
 };
 
 function getSceneCount(videoLength) {
-  const lengthNumber = parseInt(videoLength);
-  console.log(`[getSceneCount] 입력: ${videoLength} → ${lengthNumber}초`);
-  const sceneCount = Math.floor(lengthNumber / 2);
-  console.log(`[getSceneCount] 결과: ${lengthNumber}초 ÷ 2 = ${sceneCount}씬`);
-  return sceneCount;
+  const lengthStr = String(videoLength).replace(/[^0-9]/g, '');
+  const length = parseInt(lengthStr, 10);
+  
+  if (length <= 5) return 3;
+  if (length <= 10) return 5;
+  if (length <= 20) return 10;
+  return 15;
 }
 
-function mapAspectRatio(aspectRatio) {
-  console.log(`[mapAspectRatio] 입력: ${aspectRatio}`);
+function mapAspectRatio(input) {
+  if (!input) return 'widescreen_16_9';
+  const normalized = String(input).toLowerCase().trim();
   
-  if (!aspectRatio || typeof aspectRatio !== 'string') {
-    console.log('[mapAspectRatio] → 기본값: widescreen_16_9');
+  if (normalized.includes('16:9') || normalized.includes('16_9') || normalized === '가로') {
     return 'widescreen_16_9';
   }
-
-  const cleanRatio = aspectRatio.toLowerCase().trim();
-  
-  if (cleanRatio.includes('16:9') || cleanRatio.includes('가로') || cleanRatio.includes('widescreen')) {
-    console.log('[mapAspectRatio] → widescreen_16_9');
-    return 'widescreen_16_9';
+  if (normalized.includes('9:16') || normalized.includes('9_16') || normalized === '세로') {
+    return 'portrait_9_16';
   }
-  
-  if (cleanRatio.includes('1:1') || cleanRatio.includes('정사각형') || cleanRatio.includes('square')) {
-    console.log('[mapAspectRatio] → square_1_1');
+  if (normalized.includes('1:1') || normalized.includes('1_1') || normalized === '정사각형') {
     return 'square_1_1';
   }
   
-  if (cleanRatio.includes('9:16') || cleanRatio.includes('세로') || cleanRatio.includes('portrait')) {
-    console.log('[mapAspectRatio] → portrait_9_16');
-    return 'portrait_9_16';
-  }
-  
-  console.log('[mapAspectRatio] → 기본값 (인식 실패): widescreen_16_9');
   return 'widescreen_16_9';
 }
 
-function getWidthFromAspectRatio(ratio) {
-  const widthMap = {
+function getWidthFromAspectRatio(aspectRatio) {
+  const map = {
     'widescreen_16_9': 1920,
-    'square_1_1': 1024,
-    'portrait_9_16': 1080
+    'portrait_9_16': 1080,
+    'square_1_1': 1080
   };
-  return widthMap[ratio] || 1920;
+  return map[aspectRatio] || 1920;
 }
 
-function getHeightFromAspectRatio(ratio) {
-  const heightMap = {
+function getHeightFromAspectRatio(aspectRatio) {
+  const map = {
     'widescreen_16_9': 1080,
-    'square_1_1': 1024,
-    'portrait_9_16': 1920
+    'portrait_9_16': 1920,
+    'square_1_1': 1080
   };
-  return heightMap[ratio] || 1080;
+  return map[aspectRatio] || 1080;
 }
 
-function detectProductCompositingScenes(text, videoPurpose) {
-  try {
-    console.log(`[detectProductCompositingScenes] 합성 씬 감지 시작 (videoPurpose: ${videoPurpose})`);
-    
-    const compositingScenes = [];
-    const lines = text.split('\n');
-    
-    let currentSceneNumber = null;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      const sceneMatch = line.match(/S#(\d+)/);
-      if (sceneMatch) {
-        currentSceneNumber = parseInt(sceneMatch[1]);
-      }
-      
-      if (line.includes('[PRODUCT COMPOSITING SCENE]') || line.includes('PRODUCT COMPOSITING SCENE')) {
-        const sceneNum = currentSceneNumber || parseInt(line.match(/S#(\d+)/)?.[1] || 0);
-        
-        if (sceneNum > 0) {
-          console.log(`[detectProductCompositingScenes] 🎯 명시적 합성 씬 발견: S#${sceneNum} (라인 ${i + 1})`);
-          compositingScenes.push({
-            sceneNumber: sceneNum,
-            lineNumber: i + 1,
-            content: line.trim(),
-            type: 'product_compositing',
-            explicit: true,
-            context: `제품 합성 씬 ${sceneNum}`,
-            videoPurpose: videoPurpose
-          });
-        }
-      }
-
-      if ((videoPurpose === 'product' || videoPurpose === 'conversion') && 
-          currentSceneNumber && 
-          (line.includes('제품') || line.includes('product') || line.includes('상품'))) {
-        const hasExplicitCompositing = compositingScenes.some(cs => cs.sceneNumber === currentSceneNumber && cs.explicit);
-        if (!hasExplicitCompositing) {
-          console.log(`[detectProductCompositingScenes] 💡 제품 노출 씬 감지 (씬 ${currentSceneNumber}): ${line.substring(0, 80)}...`);
-        }
-      }
-    }
-
-    console.log(`[detectProductCompositingScenes] ✅ 명시적 합성 씬: ${compositingScenes.length}개`);
-    return compositingScenes;
-
-  } catch (error) {
-    console.error('[detectProductCompositingScenes] 오류:', error);
-    return [];
-  }
-}
-
-function extractConceptBlocks(content) {
-  const blocks = [];
-  const lines = content.split('\n');
-  let currentBlock = null;
+function detectProductCompositingScenes(step1Output, videoPurpose) {
+  const scenes = [];
   
-  lines.forEach((line, index) => {
-    if (line.includes('컨셉') && (line.includes(':') || line.includes('. '))) {
-      if (currentBlock) {
-        blocks.push(currentBlock);
-      }
-      currentBlock = {
-        startLine: index + 1,
-        title: line.trim(),
-        content: [line]
-      };
-    } else if (currentBlock) {
-      currentBlock.content.push(line);
-    }
-  });
-  
-  if (currentBlock) {
-    blocks.push(currentBlock);
-  }
-  
-  return blocks;
-}
-
-function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, step2Template) {
-  let finalPrompt = step2Template;
-  
-  finalPrompt = finalPrompt.replace(/{phase1_output}/g, phase1Output);
-  finalPrompt = finalPrompt.replace(/{sceneCount}/g, sceneCount);
-  finalPrompt = finalPrompt.replace(/{brandName}/g, requestBody.brandName || '');
-  finalPrompt = finalPrompt.replace(/{videoPurpose}/g, requestBody.videoPurpose || '');
-  finalPrompt = finalPrompt.replace(/{videoLength}/g, requestBody.videoLength || '10');
-  
-  return finalPrompt;
-}
-
-function parseMultiConceptJSON(text) {
-  try {
-    console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
+  if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') {
+    const regex = /S#(\d+)[^:]*:[^[]*\[PRODUCT COMPOSITING SCENE\]/gi;
+    const matches = [...step1Output.matchAll(regex)];
     
-    const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
-    const conceptMatches = [...text.matchAll(conceptPattern)];
-    
-    if (conceptMatches.length === 0) {
-      console.error('[parseMultiConceptJSON] 컨셉 헤더를 찾을 수 없음');
-      const debugPath = path.join(process.cwd(), 'debug_step2_response.txt');
-      fs.writeFileSync(debugPath, text, 'utf-8');
-      console.log('[parseMultiConceptJSON] Step2 응답 저장:', debugPath);
-      return null;
-    }
-    
-    console.log(`[parseMultiConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
-    
-    const concepts = [];
-    
-    for (let i = 0; i < conceptMatches.length; i++) {
-      const conceptNum = parseInt(conceptMatches[i][1]);
-      const conceptName = conceptMatches[i][2].trim();
-      const startIdx = conceptMatches[i].index;
-      const endIdx = i < conceptMatches.length - 1 ? conceptMatches[i + 1].index : text.length;
-      const conceptText = text.substring(startIdx, endIdx);
-      
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
-      
-      const scenePattern = /###\s*S#(\d+)\s*\(/g;
-      const sceneMatches = [...conceptText.matchAll(scenePattern)];
-      
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
-      
-      const conceptData = {
-        concept_name: conceptName
-      };
-      
-      for (let j = 0; j < sceneMatches.length; j++) {
-        const sceneNum = parseInt(sceneMatches[j][1]);
-        const sceneStartIdx = sceneMatches[j].index;
-        const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
-        const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
-        
-        const jsonBlocks = [...sceneText.matchAll(/```json\s*([\s\S]*?)```/g)];
-        
-        if (jsonBlocks.length >= 3) {
-          try {
-            const imagePrompt = JSON.parse(jsonBlocks[0][1].trim());
-            const motionPrompt = JSON.parse(jsonBlocks[1][1].trim());
-            const copyPrompt = JSON.parse(jsonBlocks[2][1].trim());
-            
-            conceptData[`scene_${sceneNum}`] = {
-              sceneNumber: sceneNum,
-              title: `씬 ${sceneNum}`,
-              image_prompt: imagePrompt,
-              motion_prompt: motionPrompt,
-              copy: copyPrompt
-            };
-            
-            console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 씬 ${sceneNum} 파싱 완료`);
-            
-          } catch (e) {
-            console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 씬 ${sceneNum} JSON 파싱 실패:`, e.message);
-          }
-        } else {
-          console.warn(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 씬 ${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견 (3개 필요)`);
-        }
-      }
-      
-      const sceneCount = Object.keys(conceptData).filter(k => k.startsWith('scene_')).length;
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} 최종 씬 수: ${sceneCount}개`);
-      
-      concepts.push(conceptData);
-    }
-    
-    console.log('[parseMultiConceptJSON] ✅ 파싱 완료, 총 컨셉:', concepts.length);
-    
-    concepts.forEach((concept, idx) => {
-      const sceneKeys = Object.keys(concept).filter(k => k.startsWith('scene_'));
-      console.log(`[parseMultiConceptJSON] 컨셉 ${idx + 1} (${concept.concept_name}): ${sceneKeys.length}개 씬`);
+    matches.forEach(match => {
+      const sceneNum = parseInt(match[1], 10);
+      scenes.push({
+        sceneNumber: sceneNum,
+        context: '[PRODUCT COMPOSITING SCENE]',
+        explicit: true
+      });
     });
     
-    return { concepts };
-    
-  } catch (error) {
-    console.error('[parseMultiConceptJSON] ❌ 파싱 오류:', error);
-    const debugPath = path.join(process.cwd(), 'debug_step2_response.txt');
-    fs.writeFileSync(debugPath, text, 'utf-8');
-    console.log('[parseMultiConceptJSON] Step2 응답 저장:', debugPath);
-    return null;
-  }
-}
-
-async function safeCallGemini(prompt, options = {}) {
-  const { label = 'gemini-call', maxRetries = 3 } = options;
-  
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_1;
-  console.log(apiKey);
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`[${label}] Gemini API 호출 시도 ${attempt}/${maxRetries}`);
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      if (!text || text.length < 10) {
-        throw new Error('Gemini 응답이 너무 짧습니다.');
-      }
-
-      console.log(`[${label}] ✅ 성공: ${text.length} chars`);
-      return { text };
-
-    } catch (error) {
-      console.error(`[${label}] 시도 ${attempt} 실패:`, error.message);
-      
-      if (attempt === maxRetries) {
-        throw error;
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    if (scenes.length === 0) {
+      scenes.push({
+        sceneNumber: 2,
+        context: '[PRODUCT COMPOSITING SCENE] - Default S#2',
+        explicit: false
+      });
     }
   }
+  
+  return scenes;
 }
 
-function analyzeCompositingInfo(formData, compositingScenes) {
-  const imageUpload = formData.imageUpload;
-  const videoPurpose = formData.videoPurpose;
+function analyzeCompositingInfo(requestBody, compositingScenes) {
+  const { videoPurpose, imageUpload, productServiceName, brandName } = requestBody;
   
-  const needsProductImage = videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education';
-  const needsBrandLogo = videoPurpose === 'service' || videoPurpose === 'brand';
-
+  const needsProductImage = (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education');
+  const needsBrandLogo = (videoPurpose === 'service' || videoPurpose === 'brand');
+  
   return {
-    needsCompositing: compositingScenes.length > 0,
+    videoPurpose: videoPurpose || 'product',
+    sceneDescription: productServiceName || brandName || '제품/서비스',
+    compositingContext: needsProductImage ? 'product_placement' : 'brand_logo',
+    needsProductImage: needsProductImage,
+    needsBrandLogo: needsBrandLogo,
     hasProductImage: needsProductImage && !!(imageUpload && imageUpload.url),
     hasBrandLogo: needsBrandLogo && !!(imageUpload && imageUpload.url),
     scenes: compositingScenes,
@@ -415,39 +210,155 @@ function incrementUsageCount(username) {
   try {
     const users = loadUsers();
     const user = users[username];
-    
+
     if (user) {
       user.usageCount = (user.usageCount || 0) + 1;
       users[username] = user;
       saveUsers(users);
       console.log(`[storyboard-init] 사용 횟수 증가: ${username} (${user.usageCount}/${user.dailyLimit})`);
-      return true;
     }
-    
-    return false;
   } catch (error) {
     console.error('[storyboard-init] 사용 횟수 증가 오류:', error);
-    return false;
+  }
+}
+
+function extractConceptBlocks(text) {
+  const lines = text.split('\n');
+  const blocks = [];
+  let currentBlock = null;
+  
+  lines.forEach((line, index) => {
+    if (line.match(/^\d+\.\s*컨셉:/)) {
+      if (currentBlock) {
+        blocks.push(currentBlock);
+      }
+      currentBlock = {
+        startLine: index + 1,
+        title: line.trim(),
+        content: [line]
+      };
+    } else if (currentBlock) {
+      currentBlock.content.push(line);
+    }
+  });
+  
+  if (currentBlock) {
+    blocks.push(currentBlock);
+  }
+  
+  return blocks;
+}
+
+function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, step2Template) {
+  let finalPrompt = step2Template;
+  
+  finalPrompt = finalPrompt.replace(/{phase1_output}/g, phase1Output);
+  finalPrompt = finalPrompt.replace(/{sceneCount}/g, sceneCount);
+  finalPrompt = finalPrompt.replace(/{brandName}/g, requestBody.brandName || '');
+  finalPrompt = finalPrompt.replace(/{videoPurpose}/g, requestBody.videoPurpose || '');
+  finalPrompt = finalPrompt.replace(/{videoLength}/g, requestBody.videoLength || '10');
+  
+  return finalPrompt;
+}
+
+function parseMultiConceptJSON(text) {
+  try {
+    console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
+    
+    const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
+    const conceptMatches = [...text.matchAll(conceptPattern)];
+    
+    if (conceptMatches.length === 0) {
+      console.error('[parseMultiConceptJSON] 컨셉 헤더를 찾을 수 없음');
+      const debugPath = path.join(process.cwd(), 'debug_step2_response.txt');
+      fs.writeFileSync(debugPath, text, 'utf-8');
+      console.log('[parseMultiConceptJSON] Step2 응답 저장:', debugPath);
+      return null;
+    }
+    
+    console.log(`[parseMultiConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
+    
+    const concepts = [];
+    
+    for (let i = 0; i < conceptMatches.length; i++) {
+      const conceptNum = parseInt(conceptMatches[i][1]);
+      const conceptName = conceptMatches[i][2].trim();
+      const startIdx = conceptMatches[i].index;
+      const endIdx = i < conceptMatches.length - 1 ? conceptMatches[i + 1].index : text.length;
+      const conceptText = text.substring(startIdx, endIdx);
+      
+      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
+      
+      const scenePattern = /###\s*S#(\d+)\s*\(/g;
+      const sceneMatches = [...conceptText.matchAll(scenePattern)];
+      
+      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
+      
+      const conceptData = {
+        concept_name: conceptName
+      };
+      
+      for (let j = 0; j < sceneMatches.length; j++) {
+        const sceneNum = parseInt(sceneMatches[j][1]);
+        const sceneStartIdx = sceneMatches[j].index;
+        const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
+        const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
+        
+        const jsonBlocks = [...sceneText.matchAll(/```json\s*([\s\S]*?)```/g)];
+        
+        if (jsonBlocks.length >= 3) {
+          try {
+            const imagePromptJSON = JSON.parse(jsonBlocks[0][1].trim());
+            const motionPromptJSON = JSON.parse(jsonBlocks[1][1].trim());
+            const copyJSON = JSON.parse(jsonBlocks[2][1].trim());
+            
+            conceptData[`scene_${sceneNum}`] = {
+              title: `Scene ${sceneNum}`,
+              image_prompt: imagePromptJSON,
+              motion_prompt: motionPromptJSON,
+              copy: copyJSON
+            };
+          } catch (e) {
+            console.error(`[parseMultiConceptJSON] JSON 파싱 실패 (컨셉 ${conceptNum}, 씬 ${sceneNum}):`, e.message);
+          }
+        } else {
+          console.warn(`[parseMultiConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함`);
+        }
+      }
+      
+      concepts.push(conceptData);
+    }
+    
+    return { concepts };
+    
+  } catch (error) {
+    console.error('[parseMultiConceptJSON] 전체 파싱 오류:', error);
+    return null;
   }
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  const startTime = Date.now();
+  
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  const startTime = Date.now();
+  if (req.method !== 'POST') {
+    return res.status(405).json({ 
+      success: false, 
+      error: 'Method not allowed' 
+    });
+  }
 
   try {
-    const username = req.headers['x-username'];
-    
-    if (!username) {
-      console.warn('[storyboard-init] username 헤더가 없습니다');
-      return res.status(401).json({
-        success: false,
-        error: '사용자 인증이 필요합니다.'
-      });
-    }
+    const username = req.headers['x-username'] || 'anonymous';
+    console.log(`[storyboard-init] 📥 요청 수신 (사용자: ${username})`);
 
     const usageCheck = checkUsageLimit(username);
     
@@ -589,7 +500,7 @@ export default async function handler(req, res) {
           if (scene) {
             const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === i);
             
-            imagePrompts.push({
+            const imagePromptData = {
               sceneNumber: i,
               title: scene.title || `씬 ${i}`,
               prompt: scene.image_prompt?.prompt || `${concept.concept_name} scene ${i}`,
@@ -616,8 +527,16 @@ export default async function handler(req, res) {
                 style: 'photo',
                 color: 'color',
                 lighting: 'natural'
+              },
+              image_prompt: {
+                prompt: scene.image_prompt?.prompt || `${concept.concept_name} scene ${i}`,
+                negative_prompt: scene.image_prompt?.negative_prompt || "blurry, low quality, watermark, text, logo",
+                guidance_scale: scene.image_prompt?.guidance_scale || 7.5,
+                seed: scene.image_prompt?.seed || Math.floor(10000 + Math.random() * 90000)
               }
-            });
+            };
+            
+            imagePrompts.push(imagePromptData);
           }
         }
 
@@ -626,12 +545,18 @@ export default async function handler(req, res) {
           concept_id: index + 1,
           conceptId: index + 1,
           conceptName: concept.concept_name,
+          concept_title: concept.concept_name,
+          concept_description: `${videoPurpose} 광고를 위한 ${concept.concept_name} 접근법`,
           style: concept.style || 'Commercial Photography',
           headline: concept.concept_name,
           description: `${videoPurpose} 광고를 위한 ${concept.concept_name} 접근법`,
           copy: concept.concept_name,
           imagePrompts: imagePrompts,
-          images: [],
+          images: imagePrompts.map(ip => ({
+            ...ip,
+            url: null,
+            status: 'pending'
+          })),
           metadata: {
             videoPurpose: videoPurpose,
             conceptType: concept.concept_name,
@@ -644,6 +569,7 @@ export default async function handler(req, res) {
       
       console.log(`[storyboard-init] ✅ styles 배열 생성 완료: ${styles.length}개 컨셉`);
       console.log(`[storyboard-init] 📊 각 컨셉당 이미지 프롬프트 수: ${styles[0]?.imagePrompts?.length || 0}개`);
+      console.log(`[storyboard-init] 📊 각 컨셉당 images 배열 길이: ${styles[0]?.images?.length || 0}개`);
     } else {
       console.error('[storyboard-init] ❌ JSON 파싱 실패 또는 컨셉 없음');
     }
@@ -677,6 +603,7 @@ export default async function handler(req, res) {
       success: true,
       styles,
       metadata,
+      compositingInfo,
       phase1_output,
       step2_output: step2.text,
       processingTime: Date.now() - startTime,
