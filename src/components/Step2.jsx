@@ -388,8 +388,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                   'x-username': user.username
                 },
                 body: JSON.stringify({
-                  image_prompt: img.image_prompt,
+                  imagePrompt: img.image_prompt || img,  // 🔥 수정
                   sceneNumber: img.sceneNumber,
+                  conceptId: styleIdx + 1,  // 🔥 추가
                   aspectRatio: formData.aspectRatioCode || 'widescreen_16_9',
                   title: img.title
                 }),
