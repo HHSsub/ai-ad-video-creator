@@ -195,7 +195,7 @@ function parseMultiConceptJSON(text) {
     // ```json (Copy - 세 번째)
     
     // 컨셉 헤더 추출: **1. 컨셉:, **2. 컨셉: 등
-    const conceptPattern = /\*\*(\d+)\.\s*컨셉:\s*(.+?)\*\*/g;
+    const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
     const conceptMatches = [...text.matchAll(conceptPattern)];
     
     if (conceptMatches.length === 0) {
@@ -220,7 +220,7 @@ function parseMultiConceptJSON(text) {
       console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
       
       // 씬 헤더 추출: ### S#1, ### S#2, ..., ### S#5
-      const scenePattern = /###\s*S#(\d+)/g;
+      const scenePattern = /###\s*S#(\d+)\s*\(/g;
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
       
       console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
