@@ -1,85 +1,304 @@
-// src/components/Step2.jsx - 완전 수정본
+// src/components/Step2.jsx - 완전한 전체 코드 (생략 없음)
 import { useState } from 'react';
 import PropTypes from 'prop-types';
-import SpinnerOverlay from './ui/SpinnerOverlay';
-import { progressManager } from '../utils/progressManager';
-import { getUnifiedImageData } from '../utils/imageHelpers';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
+const SpinnerOverlay = ({ title, percent, lines }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[9999]">
+    <div className="bg-gray-800 rounded-lg p-6 text-center border border-gray-700 max-w-md w-full">
+      <div className="relative mb-4">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-white font-bold">{Math.round(percent)}%</span>
+        </div>
+      </div>
+      <p className="text-gray-300 mb-2">{title}</p>
+      {lines && lines.length > 0 && (
+        <div className="max-h-32 overflow-y-auto text-xs text-left bg-gray-900 p-2 rounded mt-2">
+          {lines.slice(-10).map((line, idx) => (
+            <div key={idx} className="text-green-400 font-mono">{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+SpinnerOverlay.propTypes = {
+  title: PropTypes.string,
+  percent: PropTypes.number,
+  lines: PropTypes.array,
+};
+
+class ProgressManager {
+  constructor() {
+    this.phases = {
+      STEP1: { weight: 0.15, progress: 0, completed: false },
+      STEP2: { weight: 0.15, progress: 0, completed: false },
+      RENDER: { weight: 0.45, progress: 0, completed: false },
+      COMPOSE: { weight: 0.25, progress: 0, completed: false }
+    };
+  }
+
+  startPhase(phaseName) {
+    if (this.phases[phaseName]) {
+      this.phases[phaseName].progress = 0;
+      this.phases[phaseName].completed = false;
+    }
+  }
+
+  updatePhase(phaseName, progress) {
+    if (this.phases[phaseName]) {
+      this.phases[phaseName].progress = Math.min(1, Math.max(0, progress));
+    }
+    return this.getTotalProgress();
+  }
+
+  completePhase(phaseName) {
+    if (this.phases[phaseName]) {
+      this.phases[phaseName].progress = 1;
+      this.phases[phaseName].completed = true;
+    }
+    return this.getTotalProgress();
+  }
+
+  getTotalProgress() {
+    let total = 0;
+    for (const phase of Object.values(this.phases)) {
+      total += phase.weight * phase.progress;
+    }
+    return Math.round(total * 100);
+  }
+
+  reset() {
+    for (const phase of Object.values(this.phases)) {
+      phase.progress = 0;
+      phase.completed = false;
+    }
+  }
+
+  getPhaseProgress(phaseName) {
+    return this.phases[phaseName]?.progress || 0;
+  }
+}
+
+function getPromptFiles(videoPurpose) {
+  console.log('[getPromptFiles] videoPurpose:', videoPurpose);
+  
+  if (videoPurpose === 'product' || videoPurpose === 'conversion') {
+    console.log('[getPromptFiles] → 제품/전환용 프롬프트');
+    return {
+      step1: 'step1_product',
+      step2: 'step2_product'
+    };
+  } else if (videoPurpose === 'service') {
+    console.log('[getPromptFiles] → 서비스용 프롬프트');
+    return {
+      step1: 'step1_service',
+      step2: 'step2_service'
+    };
+  }
+  
+  console.log('[getPromptFiles] → 기본값 (제품용)');
+  return {
+    step1: 'step1_product',
+    step2: 'step2_product'
+  };
+}
+
+const getUnifiedImageData = (formData) => {
+  let unifiedImageData = null;
+  if (formData.imageUpload?.url) {
+    unifiedImageData = formData.imageUpload.url;
+    return {
+      hasImage: true,
+      imageData: unifiedImageData,
+      source: 'imageUpload'
+    };
+  }
+  return {
+    hasImage: false,
+    imageData: null,
+    source: null
+  };
+};
+
 const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading, user }) => {
-  const [logs, setLogs] = useState([]);
   const [percent, setPercent] = useState(0);
-  const [error, setError] = useState(null);
-  const [isBusy, setIsBusy] = useState(false);
-  const [styles, setStyles] = useState(null);
+  const [logs, setLogs] = useState([]);
   const [imagesDone, setImagesDone] = useState(0);
   const [imagesFail, setImagesFail] = useState(0);
+  const [error, setError] = useState('');
   const [debugInfo, setDebugInfo] = useState(null);
+  const [styles, setStyles] = useState([]);
 
-  const log = (message) => {
+  const isBusy = isLoading;
+  const progressManager = new ProgressManager();
+
+  const log = (message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
-    const logMsg = `[${timestamp}] ${message}`;
-    setLogs(prev => [...prev, logMsg]);
-    console.log(logMsg);
+    const logEntry = `[${timestamp}] ${message}`;
+    console.log(logEntry);
+    setLogs(prev => [...prev, logEntry]);
   };
 
   const updateProgress = (phase, progress) => {
-    const totalProgress = progressManager.getTotalProgress();
-    setPercent(Math.min(100, Math.round(totalProgress * 100)));
+    const newPercent = progressManager.updatePhase(phase, progress);
+    setPercent(newPercent);
+  };
+
+  const getOverlayImageData = (compositingInfo) => {
+    let overlayData = null;
+    if (compositingInfo.productImageData) {
+      overlayData = compositingInfo.productImageData;
+    } else if (compositingInfo.brandLogoData) {
+      overlayData = compositingInfo.brandLogoData;
+    }
+    if (overlayData && !overlayData.startsWith('data:image/')) {
+      if (/^[A-Za-z0-9+/=]+$/.test(overlayData)) {
+        overlayData = `data:image/jpeg;base64,${overlayData}`;
+      }
+    }
+    return overlayData || null;
+  };
+
+  const composeSingleImageSafely = async (imageObj, style, compositingInfo, retryCount = 0, maxRetries = 2) => {
+    if (!imageObj.isCompositingScene || !imageObj.compositingInfo) {
+      return { ...imageObj, compositingSuccess: false };
+    }
+
+    try {
+      const overlayImageData = getOverlayImageData(imageObj.compositingInfo);
+      if (!overlayImageData) {
+        log(`❌ Scene ${imageObj.sceneNumber}: 합성용 이미지 없음`);
+        return { ...imageObj, compositingSuccess: false };
+      }
+
+      log(`🎨 Scene ${imageObj.sceneNumber} 이미지 합성 중... ${retryCount > 0 ? `(재시도 ${retryCount}/${maxRetries})` : ''}`);
+
+      const composeResponse = await fetch(`${API_BASE}/api/nanobanana-compose`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseImageUrl: imageObj.url,
+          overlayImageData: overlayImageData,
+          compositingInfo: {
+            videoPurpose: imageObj.compositingInfo.videoPurpose || 'product',
+            sceneDescription: imageObj.title || `Scene ${imageObj.sceneNumber}`,
+            compositingContext: imageObj.compositingContext || 'natural placement'
+          }
+        }),
+      });
+
+      if (!composeResponse.ok) {
+        throw new Error(`HTTP ${composeResponse.status}`);
+      }
+
+      const composeResult = await composeResponse.json();
+
+      if (composeResult.success && composeResult.imageUrl) {
+        imageObj.url = composeResult.imageUrl;
+        imageObj.compositingSuccess = true;
+        return imageObj;
+      } else {
+        throw new Error(composeResult.error || '합성 실패');
+      }
+
+    } catch (error) {
+      log(`❌ Scene ${imageObj.sceneNumber} 합성 오류: ${error.message}`);
+      
+      if (retryCount < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        return await composeSingleImageSafely(imageObj, style, compositingInfo, retryCount + 1, maxRetries);
+      }
+
+      return { ...imageObj, compositingSuccess: false };
+    }
   };
 
   const handleGenerateStoryboard = async () => {
+    setIsLoading(true);
+    setError('');
+    setPercent(0);
+    setLogs([]);
+    setImagesDone(0);
+    setImagesFail(0);
+    setDebugInfo(null);
+    setStyles([]);
+  
+    const startTime = Date.now();
+  
     try {
-      setError(null);
-      setIsBusy(true);
-      setIsLoading?.(true);
-      setLogs([]);
-      setPercent(0);
-      setImagesDone(0);
-      setImagesFail(0);
-
-      progressManager.reset();
-      progressManager.startPhase('STEP1');
-      
       log('🚀 스토리보드 생성을 시작합니다...');
-      updateProgress('STEP1', 0.1);
-
+      log('⏱️ 대기시간은 약 10분 내외입니다'); 
+      log('☕ 잠시만 기다려주세요...');
+  
+      const videoPurpose = formData.videoPurpose || 'product';
+      const promptFiles = getPromptFiles(videoPurpose);
+  
+      progressManager.startPhase('STEP1');
+      log('아이디어를 구상하고 있습니다...');
+      updateProgress('STEP1', 0.05);
+  
       const step1ProgressInterval = setInterval(() => {
-        const currentProgress = progressManager.getPhaseProgress('STEP1');
-        if (currentProgress < 0.9) {
-          updateProgress('STEP1', Math.min(0.9, currentProgress + 0.1));
+        const currentProgress = progressManager.phases.STEP1.progress;
+        if (currentProgress < 0.85 && !progressManager.phases.STEP1.completed) {
+          updateProgress('STEP1', currentProgress + 0.02);
         }
       }, 2000);
-
-      const timeoutDuration = 180000;
+  
+      const apiPayload = {
+        brandName: formData.brandName || '',
+        industryCategory: formData.industryCategory || '',
+        productServiceCategory: formData.productServiceCategory || '',
+        productServiceName: formData.productServiceName || '',
+        videoPurpose: videoPurpose,
+        videoLength: formData.videoLength || '10초',
+        coreTarget: formData.coreTarget || '',
+        coreDifferentiation: formData.coreDifferentiation || '',
+        aspectRatioCode: formData.aspectRatioCode || 'widescreen_16_9',
+        imageUpload: formData.imageUpload ? {
+          name: formData.imageUpload.name,
+          size: formData.imageUpload.size,
+          url: formData.imageUpload.url
+        } : null,
+        promptType: promptFiles.step1
+      };
+  
+      const controller = new AbortController();
       const timeoutId = setTimeout(() => {
+        controller.abort();
+        log('⚠️ 요청 타임아웃 (30분 초과)');
+      }, 1800000);
+
+      let step1Response;
+      try {
+        step1Response = await fetch(`${API_BASE}/api/storyboard-init`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-username': user.username
+          },
+          body: JSON.stringify(apiPayload),
+          signal: controller.signal,
+          keepalive: true
+        });
+      } catch (fetchError) {
         clearInterval(step1ProgressInterval);
-        throw new Error('서버 응답 시간이 초과되었습니다. 다시 시도해주세요.');
-      }, timeoutDuration);
-
-      log('📡 서버에 스토리보드 생성 요청 중...');
-      
-      const step1Response = await fetch(`${API_BASE}/api/storyboard-init`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-username': user?.username || 'anonymous'
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!step1Response) {
         clearTimeout(timeoutId);
-        clearInterval(step1ProgressInterval);
+        
+        if (fetchError.name === 'AbortError') {
+          throw new Error('요청 시간이 너무 오래 걸렸습니다. 다시 시도해주세요.');
+        }
         throw new Error('서버에 연결할 수 없습니다. 네트워크를 확인해주세요.');
       }
-
+  
       clearTimeout(timeoutId);
       clearInterval(step1ProgressInterval);
-
+  
       log(`📡 서버 응답 상태: ${step1Response.status} ${step1Response.statusText}`);
-
+  
       if (!step1Response.ok) {
         let errorMessage = '스토리보드 생성에 실패했습니다';
         try {
@@ -93,7 +312,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         }
         throw new Error(errorMessage);
       }
-
+  
       let initData;
       try {
         const contentLength = step1Response.headers.get('content-length');
@@ -112,24 +331,23 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         log(`❌ 파싱 오류: ${parseError.message}`);
         throw new Error('서버 응답을 처리할 수 없습니다');
       }
-
+  
       if (!initData.success) {
         throw new Error(initData.error || '스토리보드 생성 실패');
       }
-
+  
       if (!initData.styles || !Array.isArray(initData.styles)) {
         throw new Error('스토리보드 데이터 형식이 올바르지 않습니다');
       }
-
+  
       const { styles, metadata, compositingInfo } = initData;
-
+  
       console.log('📊 [DEBUG] initData 구조:', {
         stylesCount: styles.length,
         firstStyle: {
           concept_id: styles[0]?.concept_id,
           imagesLength: styles[0]?.images?.length,
-          imagePromptsLength: styles[0]?.imagePrompts?.length,
-          firstImage: styles[0]?.images?.[0]
+          imagePromptsLength: styles[0]?.imagePrompts?.length
         }
       });
 
@@ -169,7 +387,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         finalStyles[0].images.length : 0;
       const totalImages = finalStyles.length * perStyle;
 
-      log(`📊 [DEBUG] 이미지 생성 정보: ${finalStyles.length}개 컨셉 × ${perStyle}개 씬 = ${totalImages}개 이미지`);
+      log(`📊 총 ${totalImages}개 이미지 생성 예정`);
 
       if (totalImages > 0) {
         progressManager.startPhase('RENDER');
@@ -180,20 +398,17 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
         for (let styleIdx = 0; styleIdx < finalStyles.length; styleIdx++) {
           const style = finalStyles[styleIdx];
-          
           const images = style.images || [];
 
-          log(`🎨 [컨셉 ${styleIdx + 1}/${finalStyles.length}: ${style.concept_title}] ${images.length}개 씬 처리 시작`);
+          log(`🎨 [컨셉 ${styleIdx + 1}/${finalStyles.length}] ${images.length}개 씬 처리 시작`);
 
           if (images.length === 0) {
             log(`⚠️ [컨셉 ${styleIdx + 1}] images 배열이 비어있습니다!`);
-            console.error('❌ [DEBUG] style 구조:', style);
             continue;
           }
 
           for (let imgIdx = 0; imgIdx < images.length; imgIdx++) {
             const img = images[imgIdx];
-            
             try {
               log(`🎨 [컨셉 ${styleIdx + 1}] 씬 ${img.sceneNumber} 이미지 생성 중...`);
 
@@ -210,17 +425,11 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
                 }
               };
 
-              console.log(`📤 [DEBUG] 이미지 렌더링 요청:`, {
-                sceneNumber: img.sceneNumber,
-                conceptId: styleIdx + 1,
-                promptPreview: imagePromptPayload.prompt.substring(0, 50) + '...'
-              });
-
               const renderResponse = await fetch(`${API_BASE}/api/storyboard-render-image`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'x-username': user?.username || 'anonymous'
+                  'x-username': user.username
                 },
                 body: JSON.stringify({
                   imagePrompt: imagePromptPayload,
@@ -233,81 +442,164 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
               if (renderResponse.ok) {
                 const result = await renderResponse.json();
-                console.log(`📥 [DEBUG] 이미지 렌더링 응답:`, result);
-                
                 if (result.success && result.url) {
                   img.url = result.url;
-                  img.status = 'completed';
                   successImages++;
                   setImagesDone(successImages);
-                  log(`✅ [컨셉 ${styleIdx + 1}] 씬 ${img.sceneNumber} 이미지 생성 성공`);
+                  log(`✅ 씬 ${img.sceneNumber} 이미지 생성 성공`);
                 } else {
-                  img.status = 'failed';
                   failedImages++;
                   setImagesFail(failedImages);
-                  log(`❌ [컨셉 ${styleIdx + 1}] 씬 ${img.sceneNumber} 이미지 생성 실패: ${result.error || '알 수 없는 오류'}`);
+                  log(`❌ 씬 ${img.sceneNumber} 이미지 생성 실패`);
                 }
               } else {
-                const errorText = await renderResponse.text();
-                console.error(`❌ [DEBUG] HTTP 오류:`, errorText);
-                img.status = 'failed';
                 failedImages++;
                 setImagesFail(failedImages);
-                log(`❌ [컨셉 ${styleIdx + 1}] 씬 ${img.sceneNumber} HTTP ${renderResponse.status} 오류`);
+                log(`❌ 씬 ${img.sceneNumber} HTTP ${renderResponse.status} 오류`);
               }
-
-            } catch (imgError) {
-              console.error(`❌ [DEBUG] 이미지 생성 예외:`, imgError);
-              img.status = 'error';
+            } catch (e) {
               failedImages++;
               setImagesFail(failedImages);
-              log(`❌ [컨셉 ${styleIdx + 1}] 씬 ${img.sceneNumber} 예외 발생: ${imgError.message}`);
+              log(`❌ 씬 ${img.sceneNumber} 이미지 생성 오류`);
             }
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            const progress = (successImages + failedImages) / totalImages;
+            updateProgress('RENDER', Math.min(0.95, progress));
+
+            if (imgIdx < images.length - 1 || styleIdx < finalStyles.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
           }
         }
 
         progressManager.completePhase('RENDER');
         updateProgress('RENDER', 1.0);
-        log(`✅ 이미지 생성 완료: ${successImages}개 성공, ${failedImages}개 실패`);
+        log(`✅ 이미지 생성 완료: 성공 ${successImages}개, 실패 ${failedImages}개`);
+
+        const allCompositingImages = [];
+        for (const style of finalStyles) {
+          const images = style.images || [];
+          for (const img of images) {
+            if (img.isCompositingScene && img.compositingInfo) {
+              allCompositingImages.push(img);
+            }
+          }
+        }
+
+        if (allCompositingImages.length > 0 && imageInfo.hasImage) {
+          progressManager.startPhase('COMPOSE');
+          log(`🎨 이미지 합성 중... (총 ${allCompositingImages.length}개)`);
+
+          let compositingSuccess = 0;
+          let compositingFailed = 0;
+
+          for (let i = 0; i < allCompositingImages.length; i++) {
+            const imageObj = allCompositingImages[i];
+
+            if (imageObj.compositingInfo && (formData.videoPurpose === 'product' || formData.videoPurpose === 'conversion')) {
+              imageObj.compositingInfo.brandLogoData = imageInfo.imageData;
+            }
+
+            try {
+              const style = finalStyles.find(s => s.images?.includes(imageObj));
+              const composedImage = await composeSingleImageSafely(imageObj, style, finalCompositingInfo);
+
+              if (composedImage.compositingSuccess) {
+                compositingSuccess++;
+                log(`✅ Scene ${composedImage.sceneNumber} 합성 성공`);
+              } else {
+                compositingFailed++;
+                log(`❌ Scene ${composedImage.sceneNumber} 합성 실패`);
+              }
+
+              const progress = (i + 1) / allCompositingImages.length;
+              updateProgress('COMPOSE', progress);
+
+              if (i < allCompositingImages.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              }
+            } catch (error) {
+              compositingFailed++;
+              log(`❌ Scene ${imageObj.sceneNumber} 합성 오류`);
+            }
+          }
+          log(`📊 이미지 합성 완료: 성공 ${compositingSuccess}개, 실패 ${compositingFailed}개`);
+          progressManager.completePhase('COMPOSE');
+          updateProgress('COMPOSE', 1.0);
+        } else {
+          progressManager.completePhase('COMPOSE');
+          updateProgress('COMPOSE', 1.0);
+        }
+
+        setPercent(100);
+        log(`✅ 모든 작업이 완료되었습니다!`);
+
+        const finalStoryboard = {
+          success: true,
+          styles: finalStyles,
+          compositingInfo: finalCompositingInfo,
+          metadata: {
+            ...metadata,
+            videoPurpose: formData.videoPurpose,
+            promptFiles: promptFiles,
+            perStyleCount: perStyle,
+            totalImages: totalImages,
+            successImages: successImages,
+            failedImages: failedImages,
+            processingTimeMs: Date.now() - startTime,
+            createdAt: new Date().toISOString(),
+          }
+        };
+
+        setStoryboard?.(finalStoryboard);
+        setStyles(finalStyles);
+
+        log('🚀 다음 단계로 자동 이동합니다...');
+        
+        setTimeout(() => {
+          setIsLoading?.(false);
+          if (onNext) {
+            console.log('🎯 Step2 → Step3 자동 이동 실행');
+            onNext();
+          }
+        }, 2000);
+
       } else {
-        log('⚠️ 생성할 이미지가 없습니다');
+        setPercent(100);
+
+        const finalStoryboard = {
+          success: true,
+          styles: finalStyles,
+          compositingInfo: finalCompositingInfo,
+          metadata: {
+            ...metadata,
+            videoPurpose: formData.videoPurpose,
+            promptFiles: promptFiles,
+            perStyleCount: perStyle,
+            totalImages: totalImages,
+            processingTimeMs: Date.now() - startTime,
+            createdAt: new Date().toISOString(),
+          }
+        };
+        setStoryboard?.(finalStoryboard);
+        setStyles(finalStyles);
+
+        log('🚀 다음 단계로 자동 이동합니다...');
+        
+        setTimeout(() => {
+          setIsLoading?.(false);
+          if (onNext) {
+            console.log('🎯 Step2 → Step3 자동 이동 실행');
+            onNext();
+          }
+        }, 2000);
       }
 
-      const finalStoryboard = {
-        styles: finalStyles,
-        compositingInfo: finalCompositingInfo,
-        metadata: {
-          ...metadata,
-          totalImages,
-          successImages: successImages || 0,
-          failedImages: failedImages || 0,
-          imageGenerationCompleted: true
-        }
-      };
-
-      setStoryboard?.(finalStoryboard);
-      setStyles(finalStyles);
-
-      log('🚀 다음 단계로 자동 이동합니다...');
-      
-      setTimeout(() => {
-        setIsLoading?.(false);
-        if (onNext) {
-          console.log('🎯 Step2 → Step3 자동 이동 실행');
-          onNext();
-        }
-      }, 2000);
-
     } catch (e) {
-      console.error('❌ [DEBUG] 전체 오류:', e);
       setError(e.message);
       setIsLoading?.(false);
       setPercent(0);
       log(`❌ 오류 발생: ${e.message}`);
-    } finally {
-      setIsBusy(false);
     }
   };
 
