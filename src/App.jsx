@@ -64,7 +64,12 @@ function App() {
                       src="/upnexx_logo.png" 
                       alt="UPNEXX Logo" 
                       className="h-10 w-auto"
-                      style={{ filter: 'brightness(1.3)' }}
+                      style={{ 
+                        height: "140px", // 원하는 크기(px)로 조절. 영상분석기와 동일한 로고 사이즈
+                        width: "auto",
+                        background: "none",
+                        display: "block"
+                      }}
                       onError={(e) => {
                         e.target.style.display = 'none';
                       }}
