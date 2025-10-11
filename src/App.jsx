@@ -62,7 +62,7 @@ function App() {
                   src="/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
-                    height: "140px",
+                    height: "120px",
                     width: "auto",
                     background: "none",
                     display: "block"
@@ -123,7 +123,7 @@ function App() {
                   src="/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
-                    height: "140px",
+                    height: "120px",
                     width: "auto",
                     background: "none",
                     display: "block"
@@ -193,7 +193,7 @@ function App() {
                 src="/upnexx_logo.png"
                 alt="UPNEXX 로고"
                 style={{
-                  height: "140px",
+                  height: "120px",
                   width: "auto",
                   background: "none",
                   display: "block"
