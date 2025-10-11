@@ -62,7 +62,7 @@ function App() {
                   src="/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
-                    height: "220px",
+                    height: "140px",
                     width: "auto",
                     background: "none",
                     display: "block"
@@ -123,7 +123,7 @@ function App() {
                   src="/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
-                    height: "220px",
+                    height: "140px",
                     width: "auto",
                     background: "none",
                     display: "block"
@@ -189,20 +189,16 @@ function App() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/5 p-2 rounded-lg border border-white/10">
-                  <img 
-                    src="/upnexx_logo.png" 
-                    alt="UPNEXX Logo" 
-                    className="h-10 w-auto"
-                    style={{ filter: 'brightness(1.3)' }}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                </div>
-              </div>
-              
+              <img 
+                src="/upnexx_logo.png"
+                alt="UPNEXX 로고"
+                style={{
+                  height: "140px",
+                  width: "auto",
+                  background: "none",
+                  display: "block"
+                }}
+              />
               <div className="hidden md:flex items-center gap-1">
                 {[
                   { num: 1, title: '정보 입력', desc: 'Information' },
