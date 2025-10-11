@@ -58,24 +58,17 @@ function App() {
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/5 p-2 rounded-lg border border-white/10">
-                    <img 
-                      src="/upnexx_logo.png" 
-                      alt="UPNEXX Logo" 
-                      className="h-10 w-auto"
-                      style={{ 
-                        height: "140px", // 원하는 크기(px)로 조절. 영상분석기와 동일한 로고 사이즈
-                        width: "auto",
-                        background: "none",
-                        display: "block"
-                      }}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                </div>
+                {/* 로고: 박스, 테두리, 패딩 없이 단독 이미지로 교체 */}
+                <img 
+                  src="/upnexx_logo.png"
+                  alt="UPNEXX 로고"
+                  style={{
+                    height: "140px",
+                    width: "auto",
+                    background: "none",
+                    display: "block"
+                  }}
+                />
                 <div className="flex space-x-1">
                   <button
                     onClick={() => setCurrentView('main')}
@@ -127,19 +120,17 @@ function App() {
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/5 p-2 rounded-lg border border-white/10">
-                    <img 
-                      src="/upnexx_logo.png" 
-                      alt="UPNEXX Logo" 
-                      className="h-10 w-auto"
-                      style={{ filter: 'brightness(1.3)' }}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                </div>
+                {/* 로고: 박스, 테두리, 패딩 없이 단독 이미지로 교체 */}
+                <img 
+                  src="/upnexx_logo.png"
+                  alt="UPNEXX 로고"
+                  style={{
+                    height: "140px",
+                    width: "auto",
+                    background: "none",
+                    display: "block"
+                  }}
+                />
                 <div className="flex space-x-1">
                   <button
                     onClick={() => setCurrentView('main')}
