@@ -58,12 +58,11 @@ function App() {
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
-                {/* 로고: 박스, 테두리, 패딩 없이 단독 이미지로 교체 */}
                 <img 
                   src="/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
-                    height: "140px",
+                    height: "220px",
                     width: "auto",
                     background: "none",
                     display: "block"
@@ -112,7 +111,7 @@ function App() {
       </div>
     );
   }
-
+  
   if (currentView === 'admin') {
     return (
       <div className="min-h-screen bg-[#0A0A0B]">
@@ -120,12 +119,11 @@ function App() {
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
-                {/* 로고: 박스, 테두리, 패딩 없이 단독 이미지로 교체 */}
                 <img 
                   src="/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
-                    height: "140px",
+                    height: "220px",
                     width: "auto",
                     background: "none",
                     display: "block"
