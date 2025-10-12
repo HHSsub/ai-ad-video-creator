@@ -22,7 +22,7 @@ const Step3 = ({
   const selected = styles.find(s => s.concept_id === selectedConceptId) || null;
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 5000;
-  const MAX_TOTAL_TIME = 300000;
+  const MAX_TOTAL_TIME = 600000;  // 10분 (600000ms)
 
   const log = (m) => {
     const timestampedMsg = `[${new Date().toLocaleTimeString()}] ${m}`;
@@ -240,7 +240,25 @@ const Step3 = ({
       const elapsedTime = Date.now() - startTime;
       
       if (elapsedTime > maxPollTime) {
-        log(`⏰ 최대 처리 시간 초과 - 현재 상태로 완료`);
+        // 🔥 [수정] 타임아웃 시 아직 완료되지 않은 씬들을 정적 이미지로 명시적 처리
+        log(`⏰ 최대 처리 시간 초과 (${Math.round(maxPollTime/1000)}초) - 미완료 씬을 정적 이미지로 처리`);
+        
+        // 미완료 씬들을 정적 이미지로 강제 설정
+        const unfinished = tasks.filter(t => {
+          const img = selected?.images?.find(im => im.sceneNumber === t.sceneNumber);
+          return !(img && img.videoUrl);
+        });
+        
+        unfinished.forEach(task => {
+          const img = selected?.images?.find(im => im.sceneNumber === task.sceneNumber);
+          if (img && !img.videoUrl) {
+            img.videoUrl = img.url;
+            img.isStaticVideo = true;
+            img.failureReason = 'Video generation timeout - exceeded maximum wait time';
+            log(`⏰ Scene ${img.sceneNumber}: 타임아웃 - 정적 이미지로 대체`);
+          }
+        });
+        
         setPolling(false);
         setIsLoading(false);
         setPercent(100);
