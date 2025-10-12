@@ -467,6 +467,229 @@ app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
   }
 });
 
+// 🔥 프롬프트 테스트 API
+app.post('/api/prompts/test', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { promptKey, step, formData, promptContent } = req.body;
+    
+    console.log('[prompts/test] 테스트 요청:', { promptKey, step });
+    
+    if (!promptKey || !step || !promptContent || !formData) {
+      return res.status(400).json({
+        success: false,
+        message: '필수 데이터가 누락되었습니다.',
+        error: 'promptKey, step, formData, promptContent가 필요합니다.'
+      });
+    }
+
+    // safeCallGemini import
+    const { safeCallGemini } = await import('../src/utils/apiHelpers.js');
+    
+    // Step1 프롬프트 변수 치환
+    let step1PromptTemplate = promptContent;
+    
+    const step1Variables = {
+      brandName: formData.brandName || '',
+      industryCategory: formData.industryCategory || '',
+      productServiceCategory: formData.productServiceCategory || '',
+      productServiceName: formData.productServiceName || '',
+      videoPurpose: formData.videoPurpose || 'product',
+      videoLength: formData.videoLength || '10초',
+      coreTarget: formData.coreTarget || '',
+      coreDifferentiation: formData.coreDifferentiation || '',
+      videoRequirements: '없음',
+      brandLogo: '없음',
+      productImage: '없음',
+      aspectRatioCode: formData.aspectRatioCode || 'widescreen_16_9'
+    };
+
+    for (const [key, value] of Object.entries(step1Variables)) {
+      const placeholder = new RegExp(`\\{${key}\\}`, 'g');
+      step1PromptTemplate = step1PromptTemplate.replace(placeholder, value);
+    }
+
+    console.log('[prompts/test] Step1 Gemini 호출 시작...');
+    
+    let step1Response;
+    try {
+      const step1Result = await safeCallGemini(step1PromptTemplate, {
+        label: 'PROMPT-TEST-STEP1',
+        maxRetries: 2,
+        isImageComposition: false
+      });
+      step1Response = step1Result.text;
+      console.log('[prompts/test] ✅ Step1 완료:', step1Response.length, 'chars');
+    } catch (step1Error) {
+      console.error('[prompts/test] ❌ Step1 실패:', step1Error);
+      
+      // 사용자 친화적 에러 메시지
+      let friendlyError = 'Step1 프롬프트 테스트 중 오류가 발생했습니다.';
+      if (step1Error.message.includes('quota') || step1Error.message.includes('rate limit')) {
+        friendlyError = '🚫 API 한도 초과: Gemini API 사용량이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+      } else if (step1Error.message.includes('timeout')) {
+        friendlyError = '⏰ 타임아웃: 응답 시간이 너무 오래 걸렸습니다. 프롬프트 길이를 줄이거나 다시 시도해주세요.';
+      } else if (step1Error.message.includes('API key')) {
+        friendlyError = '🔑 API 키 오류: Gemini API 키가 올바르지 않거나 설정되지 않았습니다.';
+      }
+      
+      return res.status(500).json({
+        success: false,
+        step: 'step1',
+        error: friendlyError,
+        technicalError: step1Error.message,
+        processingTime: Date.now() - startTime
+      });
+    }
+
+    // Step2가 필요한 경우
+    let step2Response = null;
+    if (step === 'step2' || promptKey.includes('step2')) {
+      console.log('[prompts/test] Step2 프롬프트 로드 시작...');
+      
+      // Step2 프롬프트 파일 로드
+      const step2PromptKey = promptKey.includes('product') ? 'step2_product' : 'step2_service';
+      const step2FileName = PROMPT_FILES[step2PromptKey];
+      
+      if (!step2FileName) {
+        return res.status(400).json({
+          success: false,
+          message: 'Step2 프롬프트 파일을 찾을 수 없습니다.',
+          error: `Invalid promptKey: ${step2PromptKey}`
+        });
+      }
+      
+      const publicPath = path.join(process.cwd(), 'public');
+      const step2FilePath = path.join(publicPath, path.basename(step2FileName));
+      
+      if (!fs.existsSync(step2FilePath)) {
+        return res.status(404).json({
+          success: false,
+          message: 'Step2 프롬프트 파일이 존재하지 않습니다.',
+          error: `File not found: ${step2FilePath}`
+        });
+      }
+      
+      let step2PromptTemplate = fs.readFileSync(step2FilePath, 'utf-8');
+      
+      // Step2 변수 치환
+      const step2Variables = {
+        phase1_output: step1Response,
+        sceneCount: 5,
+        brandName: formData.brandName || '',
+        videoPurpose: formData.videoPurpose || '',
+        videoLength: formData.videoLength || '10'
+      };
+      
+      for (const [key, value] of Object.entries(step2Variables)) {
+        const placeholder = new RegExp(`\\{${key}\\}`, 'g');
+        step2PromptTemplate = step2PromptTemplate.replace(placeholder, String(value));
+      }
+      
+      console.log('[prompts/test] Step2 Gemini 호출 시작...');
+      
+      try {
+        const step2Result = await safeCallGemini(step2PromptTemplate, {
+          label: 'PROMPT-TEST-STEP2',
+          maxRetries: 2,
+          isImageComposition: false
+        });
+        step2Response = step2Result.text;
+        console.log('[prompts/test] ✅ Step2 완료:', step2Response.length, 'chars');
+        
+        // JSON 파싱 테스트
+        try {
+          const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
+          const conceptMatches = [...step2Response.matchAll(conceptPattern)];
+          
+          if (conceptMatches.length === 0) {
+            console.warn('[prompts/test] ⚠️ 컨셉 헤더를 찾을 수 없음 - JSON 파싱 실패 가능성');
+          } else {
+            console.log('[prompts/test] ✅ JSON 파싱 가능:', conceptMatches.length, '개 컨셉 발견');
+          }
+        } catch (parseError) {
+          console.warn('[prompts/test] ⚠️ JSON 파싱 경고:', parseError.message);
+        }
+        
+      } catch (step2Error) {
+        console.error('[prompts/test] ❌ Step2 실패:', step2Error);
+        
+        let friendlyError = 'Step2 프롬프트 테스트 중 오류가 발생했습니다.';
+        if (step2Error.message.includes('quota') || step2Error.message.includes('rate limit')) {
+          friendlyError = '🚫 API 한도 초과: Gemini API 사용량이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+        } else if (step2Error.message.includes('timeout')) {
+          friendlyError = '⏰ 타임아웃: 응답 시간이 너무 오래 걸렸습니다. 프롬프트 길이를 줄이거나 다시 시도해주세요.';
+        } else if (step2Error.message.includes('API key')) {
+          friendlyError = '🔑 API 키 오류: Gemini API 키가 올바르지 않거나 설정되지 않았습니다.';
+        }
+        
+        return res.status(500).json({
+          success: false,
+          step: 'step2',
+          step1Response: step1Response,
+          error: friendlyError,
+          technicalError: step2Error.message,
+          processingTime: Date.now() - startTime
+        });
+      }
+    }
+
+    // 응답 저장
+    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
+    if (!fs.existsSync(responsesPath)) {
+      fs.mkdirSync(responsesPath, { recursive: true });
+    }
+
+    const timestamp = Date.now();
+    const fileName = `${promptKey}_test_${timestamp}.json`;
+    const filePath = path.join(responsesPath, fileName);
+    
+    const responseData = {
+      promptKey,
+      step: 'test',
+      formData: formData,
+      response: step2Response || step1Response,
+      rawStep1Response: step1Response,
+      rawStep2Response: step2Response,
+      timestamp: new Date().toISOString(),
+      savedAt: new Date().toISOString(),
+      isTest: true
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
+
+    console.log('[prompts/test] ✅ 테스트 완료 및 저장:', fileName);
+
+    res.json({
+      success: true,
+      message: '프롬프트 테스트가 완료되었습니다.',
+      step1Response: step1Response ? {
+        length: step1Response.length,
+        preview: step1Response.substring(0, 500) + '...',
+        success: true
+      } : null,
+      step2Response: step2Response ? {
+        length: step2Response.length,
+        preview: step2Response.substring(0, 500) + '...',
+        success: true,
+        jsonParseStatus: step2Response.includes('###') ? '✅ 컨셉 헤더 발견 - 파싱 가능' : '⚠️ 컨셉 헤더 없음 - 파싱 실패 가능성'
+      } : null,
+      fileName: fileName,
+      processingTime: Date.now() - startTime
+    });
+
+  } catch (error) {
+    console.error('[prompts/test] ❌ 전체 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '프롬프트 테스트 중 오류가 발생했습니다.',
+      error: error.message,
+      processingTime: Date.now() - startTime
+    });
+  }
+});
+
 app.use('/api/storyboard-init', storyboardInit);
 app.use('/api/storyboard-render-image', storyboardRenderImage);
 app.use('/api/image-to-video', imageToVideo);
