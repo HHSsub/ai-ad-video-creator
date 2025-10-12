@@ -37,6 +37,117 @@ import adminFieldConfig from '../api/admin-field-config.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+// 🔥 세션 저장소 (메모리)
+const activeSessions = new Map();
+
+// 세션 시작
+app.post('/api/session/start', (req, res) => {
+  try {
+    const { sessionId, formData, timestamp } = req.body;
+    const username = req.headers['x-username'] || 'anonymous';
+    
+    activeSessions.set(username, {
+      sessionId,
+      formData,
+      timestamp,
+      progress: 0,
+      completed: false,
+      storyboard: null
+    });
+    
+    console.log(`[session] 세션 시작: ${username} (${sessionId})`);
+    
+    res.json({
+      success: true,
+      sessionId
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 세션 확인
+app.get('/api/session/check', (req, res) => {
+  try {
+    const username = req.headers['x-username'] || 'anonymous';
+    const session = activeSessions.get(username);
+    
+    if (session && !session.completed) {
+      res.json({
+        hasOngoingSession: true,
+        session
+      });
+    } else {
+      res.json({
+        hasOngoingSession: false
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 세션 상태 조회
+app.get('/api/session/status/:sessionId', (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const username = req.headers['x-username'] || 'anonymous';
+    const session = activeSessions.get(username);
+    
+    if (session && session.sessionId === sessionId) {
+      res.json({
+        success: true,
+        ...session
+      });
+    } else {
+      res.json({
+        success: false,
+        message: '세션을 찾을 수 없습니다.'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 세션 업데이트 (storyboard-init에서 호출)
+app.post('/api/session/update', (req, res) => {
+  try {
+    const { sessionId, progress, message, storyboard, completed } = req.body;
+    const username = req.headers['x-username'] || 'anonymous';
+    const session = activeSessions.get(username);
+    
+    if (session && session.sessionId === sessionId) {
+      session.progress = progress || session.progress;
+      session.message = message;
+      session.completed = completed || false;
+      
+      if (storyboard) {
+        session.storyboard = storyboard;
+      }
+      
+      activeSessions.set(username, session);
+      
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, message: '세션을 찾을 수 없습니다.' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 세션 클리어
+app.post('/api/session/clear', (req, res) => {
+  try {
+    const username = req.headers['x-username'] || 'anonymous';
+    activeSessions.delete(username);
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 app.use((req, res, next) => {
   req.setTimeout(1800000);
