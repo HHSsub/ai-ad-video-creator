@@ -262,7 +262,8 @@ function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, 
 }
 
 // 🔥 [추가] Gemini 응답 저장 헬퍼 함수
-function saveGeminiResponse(promptKey, step, formData, response, step1Response = null) {
+// 🔥 [수정] Gemini 응답 저장 헬퍼 함수 - 시그니처 변경
+function saveGeminiResponse(promptKey, step, formData, step1Response, step2Response = null) {
   try {
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
     
@@ -275,13 +276,14 @@ function saveGeminiResponse(promptKey, step, formData, response, step1Response =
     const fileName = `${promptKey}_${step}_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
     
+    // 🔥 [수정] step1, step2 응답 모두 정확히 저장
     const responseData = {
       promptKey,
       step,
       formData: formData || {},
-      response: response,
-      rawStep1Response: step1Response || null,
-      rawStep2Response: (step === 'step2') ? response : null,
+      response: step2Response || step1Response,  // 최종 응답
+      rawStep1Response: step1Response,
+      rawStep2Response: step2Response,
       timestamp: new Date().toISOString(),
       savedAt: new Date().toISOString()
     };
@@ -537,15 +539,26 @@ export default async function handler(req, res) {
     console.log(step2.text);
     console.log('==========================================\n');
 
-    // 🔥 [추가] Step2 응답 저장 (Step1 응답도 함께 저장)
+    // 🔥 [수정] Step2 완료 후 양쪽 promptKey 모두에 전체 세트 저장
+    // step1 히스토리에 저장
+    saveGeminiResponse(
+      promptFiles.step1,
+      'complete',
+      req.body,
+      phase1_output,
+      step2.text
+    );
+    
+    // step2 히스토리에 저장
     saveGeminiResponse(
       promptFiles.step2,
-      'step2',
+      'complete',
       req.body,
-      step2.text,
-      phase1_output
+      phase1_output,
+      step2.text
     );
-    console.log('[storyboard-init] 💾 Step2 응답 저장 완료');
+    
+    console.log('[storyboard-init] 💾 Step1, Step2 응답 양쪽 히스토리에 저장 완료');
 
     const mcJson = parseMultiConceptJSON(step2.text);
     console.log("[storyboard-init] 📊 JSON 파싱 결과:", mcJson);
