@@ -204,36 +204,73 @@ const AdminPanel = () => {
   };
 
   const testPrompt = async (promptKey, step) => {
-    setTestMode(true);
-    try {
-      const response = await fetch('/api/prompts/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          promptKey,
-          step,
-          formData: testFormData,
-          promptContent: prompts[promptKey]
-        })
-      });
-
-      const data = await response.json();
+      setTestMode(true);
+      setMessage({ type: '', text: '' }); // 기존 메시지 초기화
       
-      if (data.success) {
-        loadGeminiResponses(promptKey);
-        showMessage('success', '프롬프트 테스트가 완료되었습니다.');
-      } else {
-        showMessage('error', data.message || '테스트 실패');
+      try {
+        // 🔥 진행 상황 표시
+        showMessage('info', '⏳ 프롬프트 테스트 진행 중...');
+        
+        const response = await fetch('/api/prompts/test', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            promptKey,
+            step,
+            formData: testFormData,
+            promptContent: prompts[promptKey]
+          })
+        });
+  
+        const data = await response.json();
+        
+        if (data.success) {
+          // 🔥 성공 결과를 상세하게 표시
+          let successMsg = '✅ 프롬프트 테스트 완료!\n\n';
+          
+          if (data.step1Response) {
+            successMsg += `📝 Step1 응답: ${data.step1Response.length}자\n`;
+          }
+          
+          if (data.step2Response) {
+            successMsg += `📝 Step2 응답: ${data.step2Response.length}자\n`;
+            successMsg += `${data.step2Response.jsonParseStatus}\n`;
+          }
+          
+          successMsg += `\n⏱️ 처리 시간: ${Math.round(data.processingTime / 1000)}초`;
+          successMsg += `\n💾 응답이 히스토리에 저장되었습니다.`;
+          
+          showMessage('success', successMsg);
+          
+          // Gemini 응답 목록 새로고침
+          if (selectedVersion) {
+            const promptKeyToRefresh = selectedVersion.promptKey || getPromptKeyFromVersion(selectedVersion);
+            loadGeminiResponses(promptKeyToRefresh);
+          }
+        } else {
+          // 🔥 에러를 사용자 친화적으로 표시
+          let errorMsg = '❌ 프롬프트 테스트 실패\n\n';
+          errorMsg += data.error || '알 수 없는 오류가 발생했습니다.';
+          
+          if (data.technicalError) {
+            errorMsg += `\n\n🔧 기술 상세: ${data.technicalError}`;
+          }
+          
+          if (data.processingTime) {
+            errorMsg += `\n⏱️ 시도 시간: ${Math.round(data.processingTime / 1000)}초`;
+          }
+          
+          showMessage('error', errorMsg);
+        }
+        
+      } catch (error) {
+        showMessage('error', `❌ 프롬프트 테스트 실패\n\n네트워크 오류: ${error.message}`);
+      } finally {
+        setTestMode(false);
       }
-      
-    } catch (error) {
-      showMessage('error', '프롬프트 테스트에 실패했습니다.');
-    } finally {
-      setTestMode(false);
-    }
-  };
+    };
 
   const viewResponseDetail = async (fileName) => {
     try {
@@ -257,7 +294,11 @@ const AdminPanel = () => {
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage({ type: '', text: '' }), 5000);
+    
+    // info 타입은 자동으로 사라지지 않음 (진행 중 상태)
+    if (type !== 'info') {
+      setTimeout(() => setMessage({ type: '', text: '' }), 10000); // 10초로 연장
+    }
   };
 
   const handlePromptChange = (filename, value) => {
@@ -295,8 +336,12 @@ const AdminPanel = () => {
         </div>
 
         {message.text && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            message.type === 'success' ? 'bg-green-900/30 text-green-300 border border-green-800' : 'bg-red-900/30 text-red-300 border border-red-800'
+          <div className={`mb-6 p-4 rounded-lg whitespace-pre-wrap ${
+            message.type === 'success' 
+              ? 'bg-green-900/30 text-green-300 border border-green-800' 
+              : message.type === 'info'
+                ? 'bg-blue-900/30 text-blue-300 border border-blue-800'
+                : 'bg-red-900/30 text-red-300 border border-red-800'
           }`}>
             {message.text}
           </div>
@@ -411,9 +456,17 @@ const AdminPanel = () => {
                     <button
                       onClick={() => testPrompt(activeTab, activeTab.includes('step1') ? 'step1' : 'step2')}
                       disabled={testMode}
-                      className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-500 disabled:opacity-50 text-sm"
+                      className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
                     >
-                      {testMode ? '테스트 중...' : '프롬프트 테스트'}
+                      {testMode ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                          </svg>
+                          테스트 중...
+                        </>
+                      ) : '프롬프트 테스트'}
                     </button>
                     <button
                       onClick={() => savePrompt(activeTab)}
