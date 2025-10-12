@@ -136,12 +136,100 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   const isBusy = isLoading;
   const progressManager = new ProgressManager();
 
+    // 🔥 여기에 추가 시작
+  useEffect(() => {
+    const checkOngoingSession = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/session/check`, {
+          headers: {
+            'x-username': user?.username || 'anonymous'
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (data.hasOngoingSession && data.session) {
+          const shouldResume = window.confirm(
+            `⚠️ 진행 중이던 스토리보드 생성 작업이 있습니다.\n` +
+            `브랜드: ${data.session.formData?.brandName || '(없음)'}\n` +
+            `진행률: ${data.session.progress || 0}%\n\n` +
+            `이어서 진행하시겠습니까?`
+          );
+          
+          if (shouldResume) {
+            log('🔄 이전 세션을 복구합니다...');
+            
+            if (data.session.storyboard) {
+              setStoryboard(data.session.storyboard);
+              setStyles(data.session.storyboard.styles || []);
+              setPercent(100);
+              log('✅ 스토리보드가 복구되었습니다.');
+            } else {
+              pollSessionProgress(data.session.sessionId);
+            }
+          } else {
+            await fetch(`${API_BASE}/api/session/clear`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-username': user?.username || 'anonymous'
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('세션 확인 실패:', error);
+      }
+    };
+    
+    if (user?.username) {
+      checkOngoingSession();
+    }
+  }, [user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const log = (message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = `[${timestamp}] ${message}`;
     console.log(logEntry);
     setLogs(prev => [...prev, logEntry]);
   };
+
+  const pollSessionProgress = async (sessionId) => {
+  setIsLoading(true);
+  
+  const pollInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/session/status/${sessionId}`);
+      const data = await response.json();
+      
+      if (data.progress) {
+        setPercent(data.progress);
+        log(`📊 진행률: ${data.progress}% - ${data.message || ''}`);
+      }
+      
+      if (data.completed && data.storyboard) {
+        clearInterval(pollInterval);
+        setStoryboard(data.storyboard);
+        setStyles(data.storyboard.styles || []);
+        setPercent(100);
+        setIsLoading(false);
+        log('✅ 스토리보드 생성 완료!');
+      } else if (data.error) {
+        clearInterval(pollInterval);
+        setError(data.error);
+        setIsLoading(false);
+        log(`❌ 오류: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('세션 상태 확인 실패:', error);
+    }
+  }, 5000);
+  
+  setTimeout(() => {
+    clearInterval(pollInterval);
+    setIsLoading(false);
+  }, 1800000);
+};
 
   const updateProgress = (phase, progress) => {
     const newPercent = progressManager.updatePhase(phase, progress);
@@ -236,7 +324,27 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       log('🚀 스토리보드 생성을 시작합니다...');
       log('⏱️ 대기시간은 약 10분 내외입니다'); 
       log('☕ 잠시만 기다려주세요...');
-  
+
+      const sessionId = `session_${Date.now()}_${user?.username || 'anonymous'}`;
+      
+      try {
+        await fetch(`${API_BASE}/api/session/start`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-username': user?.username || 'anonymous'
+          },
+          body: JSON.stringify({
+            sessionId,
+            formData: formData,
+            timestamp: new Date().toISOString()
+          })
+        });
+        log('💾 세션이 저장되었습니다. 새로고침해도 안전합니다.');
+      } catch (sessionError) {
+        console.error('세션 저장 실패:', sessionError);
+      }
+      
       const videoPurpose = formData.videoPurpose || 'product';
       const promptFiles = getPromptFiles(videoPurpose);
   
@@ -554,6 +662,25 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           }
         };
 
+        try {
+          await fetch(`${API_BASE}/api/session/update`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-username': user?.username || 'anonymous'
+            },
+            body: JSON.stringify({
+              sessionId: sessionId,
+              progress: 100,
+              message: '스토리보드 생성 완료',
+              completed: true,
+              storyboard: finalStoryboard
+            })
+          });
+        } catch (sessionError) {
+          console.error('세션 업데이트 실패:', sessionError);
+        }
+        
         setStoryboard?.(finalStoryboard);
         setStyles(finalStyles);
 
