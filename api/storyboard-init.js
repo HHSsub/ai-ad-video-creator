@@ -1,4 +1,4 @@
-// api/storyboard-init.js - 이미지 생성 문제 완벽 수정
+// api/storyboard-init.js - Gemini 응답 저장 로직 추가
 
 import fs from 'fs';
 import path from 'path';
@@ -261,6 +261,48 @@ function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, 
   return finalPrompt;
 }
 
+// 🔥 [추가] Gemini 응답 저장 헬퍼 함수
+function saveGeminiResponse(promptKey, step, formData, response, step1Response = null) {
+  try {
+    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
+    
+    if (!fs.existsSync(responsesPath)) {
+      fs.mkdirSync(responsesPath, { recursive: true });
+      console.log('[saveGeminiResponse] gemini_responses 폴더 생성');
+    }
+
+    const timestamp = Date.now();
+    const fileName = `${promptKey}_${step}_${timestamp}.json`;
+    const filePath = path.join(responsesPath, fileName);
+    
+    const responseData = {
+      promptKey,
+      step,
+      formData: formData || {},
+      response: response,
+      rawStep1Response: step1Response || null,
+      rawStep2Response: (step === 'step2') ? response : null,
+      timestamp: new Date().toISOString(),
+      savedAt: new Date().toISOString()
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
+
+    console.log(`[saveGeminiResponse] ✅ Gemini 응답 저장 완료: ${fileName}`);
+    return {
+      success: true,
+      fileName
+    };
+
+  } catch (error) {
+    console.error('[saveGeminiResponse] ❌ Gemini 응답 저장 실패:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 function parseMultiConceptJSON(text) {
   try {
     console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
@@ -446,6 +488,16 @@ export default async function handler(req, res) {
     console.log(phase1_output);
     console.log('==========================================\n');
 
+    // 🔥 [추가] Step1 응답 저장
+    saveGeminiResponse(
+      promptFiles.step1,
+      'step1',
+      req.body,
+      phase1_output,
+      null
+    );
+    console.log('[storyboard-init] 💾 Step1 응답 저장 완료');
+
     const sceneCountPerConcept = getSceneCount(videoLength);
     console.log(`[storyboard-init] 📊 컨셉당 씬 수: ${sceneCountPerConcept}개 (${videoLength} ÷ 2)`);
 
@@ -484,6 +536,16 @@ export default async function handler(req, res) {
     console.log('\n========== STEP2 FULL RESPONSE ==========');
     console.log(step2.text);
     console.log('==========================================\n');
+
+    // 🔥 [추가] Step2 응답 저장 (Step1 응답도 함께 저장)
+    saveGeminiResponse(
+      promptFiles.step2,
+      'step2',
+      req.body,
+      step2.text,
+      phase1_output
+    );
+    console.log('[storyboard-init] 💾 Step2 응답 저장 완료');
 
     const mcJson = parseMultiConceptJSON(step2.text);
     console.log("[storyboard-init] 📊 JSON 파싱 결과:", mcJson);
