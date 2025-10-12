@@ -404,6 +404,9 @@ export default async function handler(req, res) {
     const username = req.headers['x-username'] || 'anonymous';
     console.log(`[storyboard-init] 📥 요청 수신 (사용자: ${username})`);
 
+    const sessionId = req.body.sessionId || null;
+    console.log(`[storyboard-init] 📝 세션 ID: ${sessionId}`);
+
     const usageCheck = checkUsageLimit(username);
     
     if (!usageCheck.allowed) {
@@ -476,6 +479,22 @@ export default async function handler(req, res) {
 
     console.log(`[storyboard-init] ✅ STEP1 변수 치환 완료`);
 
+    if (sessionId) {
+      try {
+        await fetch(`http://localhost:3000/api/session/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-username': username },
+          body: JSON.stringify({
+            sessionId,
+            progress: 10,
+            message: 'Step1 아이디어 구상 중...'
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.error('[세션 업데이트 실패]', e);
+      }
+    }
+
     console.log(`[storyboard-init] 📡 STEP1 Gemini API 호출 시작`);
     const step1 = await safeCallGemini(step1PromptTemplate, {
       label: 'STEP1-storyboard-init',
@@ -486,6 +505,22 @@ export default async function handler(req, res) {
     const phase1_output = step1.text;
     console.log("[storyboard-init] ✅ STEP1 완료:", phase1_output.length, "chars");
 
+    if (sessionId) {
+      try {
+        await fetch(`http://localhost:3000/api/session/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-username': username },
+          body: JSON.stringify({
+            sessionId,
+            progress: 30,
+            message: 'Step1 완료, Step2 컨셉 개발 중...'
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.error('[세션 업데이트 실패]', e);
+      }
+    }
+    
     console.log('\n========== STEP1 FULL RESPONSE ==========');
     console.log(phase1_output);
     console.log('==========================================\n');
@@ -524,6 +559,24 @@ export default async function handler(req, res) {
     const step2PromptContent = fs.readFileSync(step2FilePath, 'utf-8');
 
     const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, req.body, sceneCountPerConcept, step2PromptContent);
+
+    // 🔥 세션 업데이트: Step2 시작
+    if (sessionId) {
+      try {
+        await fetch(`http://localhost:3000/api/session/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-username': username },
+          body: JSON.stringify({
+            sessionId,
+            progress: 50,
+            message: 'Step2 상세 컨셉 생성 중...'
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.error('[세션 업데이트 실패]', e);
+      }
+    }
+    
     console.log('[storyboard-init] 📡 STEP2 Gemini API 호출 시작');
     console.log(`[storyboard-init] STEP2 프롬프트 길이: ${step2Prompt.length} chars`);
 
@@ -535,6 +588,23 @@ export default async function handler(req, res) {
 
     console.log("[storyboard-init] ✅ STEP2 완료:", step2.text.length, "chars");
 
+    // 🔥 세션 업데이트: Step2 완료
+    if (sessionId) {
+      try {
+        await fetch(`http://localhost:3000/api/session/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-username': username },
+          body: JSON.stringify({
+            sessionId,
+            progress: 70,
+            message: 'Step2 완료, 이미지 생성 준비 중...'
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.error('[세션 업데이트 실패]', e);
+      }
+    }
+    
     console.log('\n========== STEP2 FULL RESPONSE ==========');
     console.log(step2.text);
     console.log('==========================================\n');
@@ -673,6 +743,30 @@ export default async function handler(req, res) {
     };
 
     incrementUsageCount(username);
+
+    // 🔥 세션 업데이트: 완료
+    if (sessionId) {
+      try {
+        await fetch(`http://localhost:3000/api/session/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-username': username },
+          body: JSON.stringify({
+            sessionId,
+            progress: 100,
+            message: '스토리보드 생성 완료',
+            completed: true,
+            storyboard: {
+              success: true,
+              styles,
+              metadata,
+              compositingInfo
+            }
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.error('[세션 업데이트 실패]', e);
+      }
+    }
 
     return res.status(200).json({
       success: true,
