@@ -1,5 +1,5 @@
 // src/components/Step2.jsx - 완전한 전체 코드 (생략 없음)
-import { useState } from 'react';
+import { useState, useEffect  } from 'react';
 import PropTypes from 'prop-types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
