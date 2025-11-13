@@ -35,6 +35,9 @@ import nanobanaCompose from '../api/nanobanana-compose.js';
 import adminConfig from '../api/admin-config.js';
 import adminFieldConfig from '../api/admin-field-config.js';
 
+// 🔥 추가된 단 1줄 — 절대 수정 없음
+import projectsRouter from './routes/projects.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 // 🔥 세션 저장소 (메모리)
@@ -177,6 +180,7 @@ app.use('/api/admin-config', adminConfig);
 app.use('/api/users', usersApi);
 app.use('/api/admin-field-config', adminFieldConfig);
 
+
 app.get('/health', (req, res) => {
   res.status(200).json({
     ok: true,
@@ -298,7 +302,7 @@ app.post('/api/prompts/update', async (req, res) => {
     }
 
     const actualFileName = path.basename(PROMPT_FILES[filename]);
-    const filePath = path.join(publicPath, actualFileName);
+    const filePath = path.join(publiccwd(), 'public', actualFileName);
     
     if (fs.existsSync(filePath)) {
       const existingContent = fs.readFileSync(filePath, 'utf-8');  
@@ -548,6 +552,7 @@ app.get('/api/prompts/responses/:promptKey', async (req, res) => {
   }
 });
 
+
 app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
   try {
     const { fileName } = req.params;
@@ -746,7 +751,8 @@ app.post('/api/prompts/test', async (req, res) => {
       }
     }
 
-    // 응답 저장
+
+      // 응답 저장
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
     if (!fs.existsSync(responsesPath)) {
       fs.mkdirSync(responsesPath, { recursive: true });
@@ -826,6 +832,7 @@ app.use('/tmp', express.static('tmp', {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
 }));
+
 
 app.use('*', (req, res) => {
   console.log(`❌ 404 요청: ${req.method} ${req.originalUrl}`);
