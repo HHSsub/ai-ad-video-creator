@@ -7,15 +7,21 @@ import Step1 from './components/Step1';
 import Step2 from './components/Step2';
 import Step3 from './components/Step3';
 import Step4 from './components/Step4';
+import ProjectDashboard from './components/ProjectDashboard';
+import ModeSelector from './components/ModeSelector';
+import Step1Manual from './components/Step1Manual';
+import Step1Auto from './components/Step1Auto';
 
 function App() {
   const [user, setUser] = useState(null);
-  const [currentView, setCurrentView] = useState('main');
+  const [currentView, setCurrentView] = useState('projects'); // 🔥 초기 진입: 프로젝트 대시보드
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({});
   const [storyboard, setStoryboard] = useState(null);
   const [selectedConceptId, setSelectedConceptId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentProject, setCurrentProject] = useState(null); // 🔥 현재 선택된 프로젝트
+  const [currentMode, setCurrentMode] = useState(null);       // 🔥 'auto' | 'manual'
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -31,21 +37,51 @@ function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    setCurrentView('projects');
+    setStep(1);
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('user');
-    setCurrentView('main');
+    setCurrentView('projects');
     setStep(1);
     setFormData({});
     setStoryboard(null);
     setSelectedConceptId(null);
     setIsLoading(false);
+    setCurrentProject(null);
+    setCurrentMode(null);
   };
 
   const next = () => setStep(s => Math.min(4, s + 1));
   const prev = () => setStep(s => Math.max(1, s - 1));
+
+  // 🔥 프로젝트 선택 핸들러
+  const handleSelectProject = (project) => {
+    setCurrentProject(project);
+    setCurrentMode(null);
+    setCurrentView('mode-select');
+  };
+
+  // 🔥 모드 선택 핸들러
+  const handleSelectMode = (mode) => {
+    setCurrentMode(mode);
+    setStep(1);
+
+    if (mode === 'auto') {
+      setCurrentView('step1-auto');
+    } else if (mode === 'manual') {
+      setCurrentView('step1-manual');
+    }
+  };
+
+  // 🔥 프로젝트 대시보드로 돌아가기
+  const handleBackToProjects = () => {
+    setCurrentProject(null);
+    setCurrentMode(null);
+    setCurrentView('projects');
+  };
 
   if (!user) {
     return <Login onLogin={handleLogin} />;
@@ -70,7 +106,7 @@ function App() {
                 />
                 <div className="flex space-x-1">
                   <button
-                    onClick={() => setCurrentView('main')}
+                    onClick={handleBackToProjects}
                     className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
                   >
                     메인
@@ -131,7 +167,7 @@ function App() {
                 />
                 <div className="flex space-x-1">
                   <button
-                    onClick={() => setCurrentView('main')}
+                    onClick={handleBackToProjects}
                     className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
                   >
                     메인
@@ -301,20 +337,55 @@ function App() {
             </div>
           )}
 
-          {step === 1 && (
-            <Step1
+          {/* 🔥 프로젝트 대시보드 */}
+          {currentView === 'projects' && (
+            <ProjectDashboard 
+              user={user} 
+              onSelectProject={handleSelectProject}
+            />
+          )}
+
+          {/* 🔥 모드 선택 화면 */}
+          {currentView === 'mode-select' && currentProject && (
+            <ModeSelector 
+              project={currentProject}
+              onSelectMode={handleSelectMode}
+              onBack={handleBackToProjects}
+            />
+          )}
+
+          {/* 🔥 Step1 - Auto 모드 */}
+          {currentView === 'step1-auto' && (
+            <Step1Auto
               formData={formData}
               setFormData={setFormData}
               user={user}
               onNext={() => {
-                console.log('Step1 완료, formData:', formData);
+                console.log('Step1Auto 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
-                next();
+                setStep(2);
+                setCurrentView('step2');
               }}
             />
           )}
-          
-          {step === 2 && (
+
+          {/* 🔥 Step1 - Manual 모드 */}
+          {currentView === 'step1-manual' && (
+            <Step1Manual
+              formData={formData}
+              setFormData={setFormData}
+              user={user}
+              onNext={() => {
+                console.log('Step1Manual 완료, formData:', formData);
+                console.log('🔥 선택된 영상 길이:', formData.videoLength);
+                setStep(2);
+                setCurrentView('step2');
+              }}
+            />
+          )}
+
+          {/* 🔥 Step2 */}
+          {currentView === 'step2' && (
             <Step2
               formData={formData}
               setFormData={setFormData}
@@ -323,23 +394,35 @@ function App() {
               isLoading={isLoading}
               setIsLoading={setIsLoading}
               user={user}
-              onPrev={prev}
+              onPrev={() => {
+                if (currentMode === 'auto') {
+                  setCurrentView('step1-auto');
+                } else {
+                  setCurrentView('step1-manual');
+                }
+                setStep(1);
+              }}
               onNext={() => {
                 console.log('Step2 완료, storyboard styles:', storyboard?.styles?.length);
                 console.log('🔥 전달된 영상 길이:', formData.videoLength);
-                next();
+                setStep(3);
+                setCurrentView('step3');
               }}
             />
           )}
-          
-          {step === 3 && (
+
+          {/* 🔥 Step3 */}
+          {currentView === 'step3' && (
             <Step3
               storyboard={storyboard}
               selectedConceptId={selectedConceptId}
               setSelectedConceptId={setSelectedConceptId}
               isLoading={isLoading}
               setIsLoading={setIsLoading}
-              onPrev={prev}
+              onPrev={() => {
+                setStep(2);
+                setCurrentView('step2');
+              }}
               user={user}
               onNext={() => {
                 if (!selectedConceptId) {
@@ -348,17 +431,22 @@ function App() {
                 }
                 console.log('Step3 완료, selectedConceptId:', selectedConceptId);
                 console.log('🔥 전달될 영상 길이:', formData.videoLength);
-                next();
+                setStep(4);
+                setCurrentView('step4');
               }}
             />
           )}
-          
-          {step === 4 && (
+
+          {/* 🔥 Step4 */}
+          {currentView === 'step4' && (
             <Step4
               storyboard={storyboard}
               selectedConceptId={selectedConceptId}
               formData={formData}
-              onPrev={prev}
+              onPrev={() => {
+                setStep(3);
+                setCurrentView('step3');
+              }}
               user={user}
               onReset={() => {
                 setStep(1);
@@ -366,9 +454,33 @@ function App() {
                 setStoryboard(null);
                 setSelectedConceptId(null);
                 setIsLoading(false);
+                setCurrentProject(null);
+                setCurrentMode(null);
+                setCurrentView('projects');
                 console.log('🔄 전체 초기화 완료');
               }}
             />
+          )}
+
+          {/* 🔁 레거시 보호용: 혹시 currentView가 위에 다 없을 때 기본 Step1로 진입 */}
+          {currentView !== 'projects' &&
+            currentView !== 'mode-select' &&
+            currentView !== 'step1-auto' &&
+            currentView !== 'step1-manual' &&
+            currentView !== 'step2' &&
+            currentView !== 'step3' &&
+            currentView !== 'step4' && (
+              <Step1
+                formData={formData}
+                setFormData={setFormData}
+                user={user}
+                onNext={() => {
+                  console.log('Step1 완료(레거시 경로), formData:', formData);
+                  console.log('🔥 선택된 영상 길이:', formData.videoLength);
+                  setStep(2);
+                  setCurrentView('step2');
+                }}
+              />
           )}
         </div>
       </main>
