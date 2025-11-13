@@ -1,0 +1,201 @@
+.step1-manual {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.manual-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.manual-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+
+.manual-header p {
+  font-size: 16px;
+  color: #666;
+}
+
+.manual-form {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.form-section {
+  margin-bottom: 40px;
+}
+
+.section-label {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+}
+
+.error-text {
+  font-size: 14px;
+  color: #dc3545;
+  font-weight: 400;
+  margin-left: 12px;
+}
+
+.option-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.option-btn {
+  padding: 14px 28px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.option-btn:hover {
+  border-color: #007bff;
+  background: #f8fbff;
+}
+
+.option-btn.selected {
+  border-color: #007bff;
+  background: #007bff;
+  color: white;
+  font-weight: 600;
+}
+
+.natural-language-box {
+  position: relative;
+}
+
+.natural-language-box textarea {
+  width: 100%;
+  padding: 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.natural-language-box textarea:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.natural-language-box textarea::placeholder {
+  color: #999;
+  line-height: 1.6;
+}
+
+.char-count {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-size: 12px;
+  color: #999;
+  background: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.summary-box {
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.summary-box h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+}
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.summary-item:last-child {
+  border-bottom: none;
+}
+
+.summary-label {
+  font-weight: 500;
+  color: #666;
+}
+
+.summary-value {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.btn-submit {
+  width: 100%;
+  padding: 18px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-submit:hover {
+  background: #1e7e34;
+}
+
+@media (max-width: 768px) {
+  .step1-manual {
+    padding: 24px 16px;
+  }
+
+  .manual-form {
+    padding: 24px;
+  }
+
+  .manual-header h1 {
+    font-size: 24px;
+  }
+
+  .section-label {
+    font-size: 16px;
+  }
+
+  .option-btn {
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+
+  .natural-language-box textarea {
+    font-size: 14px;
+  }
+}

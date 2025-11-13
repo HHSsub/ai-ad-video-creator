@@ -1,0 +1,172 @@
+.mode-selector {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 60px 20px;
+}
+
+.mode-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.mode-header h1 {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+
+.project-desc {
+  font-size: 16px;
+  color: #666;
+}
+
+.mode-title {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 40px;
+}
+
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 32px;
+  margin-bottom: 40px;
+}
+
+.mode-card {
+  background: white;
+  border: 3px solid #e0e0e0;
+  border-radius: 16px;
+  padding: 40px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.mode-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.auto-mode:hover {
+  border-color: #007bff;
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.manual-mode:hover {
+  border-color: #28a745;
+  background: linear-gradient(135deg, #f8fff8 0%, #ffffff 100%);
+}
+
+.mode-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.mode-card h3 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+
+.mode-desc {
+  font-size: 16px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 24px;
+  min-height: 48px;
+}
+
+.mode-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 32px 0;
+  text-align: left;
+}
+
+.mode-features li {
+  font-size: 14px;
+  color: #333;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.mode-features li:last-child {
+  border-bottom: none;
+}
+
+.btn-select {
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auto-mode .btn-select {
+  background: #007bff;
+  color: white;
+}
+
+.auto-mode .btn-select:hover {
+  background: #0056b3;
+}
+
+.manual-mode .btn-select {
+  background: #28a745;
+  color: white;
+}
+
+.manual-mode .btn-select:hover {
+  background: #1e7e34;
+}
+
+.mode-info {
+  background: #fff9e6;
+  border: 1px solid #ffe066;
+  border-radius: 8px;
+  padding: 16px 20px;
+  text-align: center;
+}
+
+.mode-info p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.mode-info strong {
+  color: #f0ad4e;
+}
+
+@media (max-width: 768px) {
+  .mode-selector {
+    padding: 40px 16px;
+  }
+
+  .mode-header h1 {
+    font-size: 28px;
+  }
+
+  .mode-title {
+    font-size: 22px;
+  }
+
+  .mode-cards {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .mode-card {
+    padding: 32px 24px;
+  }
+}
