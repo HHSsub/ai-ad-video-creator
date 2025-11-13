@@ -3,8 +3,6 @@ import { useState, useEffect } from 'react';
 import Login from './components/auth/Login';
 import AdminPanel from './components/admin/AdminPanel';
 import UserManagement from './components/admin/UserManagement';
-import Step1 from './components/Step1Auto';
-import Step1 from './components/Step1Manual';
 import Step2 from './components/Step2';
 import Step3 from './components/Step3';
 import Step4 from './components/Step4';
