@@ -94,7 +94,7 @@ function App() {
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
                 <img 
-                  src="/upnexx_logo.png"
+                  src="/nexxii/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
                     height: "120px",
@@ -155,7 +155,7 @@ function App() {
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-8">
                 <img 
-                  src="/upnexx_logo.png"
+                  src="/nexxii/upnexx_logo.png"
                   alt="UPNEXX 로고"
                   style={{
                     height: "120px",
@@ -225,7 +225,7 @@ function App() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
               <img 
-                src="/upnexx_logo.png"
+                src="/nexxii/upnexx_logo.png"
                 alt="UPNEXX 로고"
                 style={{
                   height: "120px",

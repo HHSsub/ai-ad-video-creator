@@ -13,7 +13,7 @@ const Login = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/nexxii/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ const Login = ({ onLogin }) => {
             <div className="flex justify-center mb-6">
               <div className="bg-white/5 p-4 rounded-xl border border-white/10">
                 <img
-                  src="/upnexx_logo.png"
+                  src="/nexxii/upnexx_logo.png"
                   alt="Upnexx Logo"
                   className="h-20 w-auto"
                   style={{ filter: 'brightness(1.3) drop-shadow(0 0 10px rgba(255,255,255,0.5))' }}

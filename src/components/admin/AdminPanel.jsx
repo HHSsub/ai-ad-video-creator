@@ -78,7 +78,7 @@ const AdminPanel = () => {
   const loadPrompts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/prompts/get');
+      const response = await fetch('/nexxii/api/prompts/get');
       const data = await response.json();
       
       if (data.success) {
@@ -95,7 +95,7 @@ const AdminPanel = () => {
 
   const loadVersions = async () => {
     try {
-      const response = await fetch('/api/prompts/versions');
+      const response = await fetch('/nexxii/api/prompts/versions');
       const data = await response.json();
       
       if (data.success) {
@@ -139,7 +139,7 @@ const AdminPanel = () => {
   const savePrompt = async (filename) => {
     setSaving(true);
     try {
-      const response = await fetch('/api/prompts/update', {
+      const response = await fetch('/nexxii/api/prompts/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +176,7 @@ const AdminPanel = () => {
     try {
       const promptKey = getPromptKeyFromVersion(version);
       
-      const response = await fetch('/api/prompts/restore', {
+      const response = await fetch('/nexxii/api/prompts/restore', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -211,7 +211,7 @@ const AdminPanel = () => {
         // 🔥 진행 상황 표시
         showMessage('info', '⏳ 프롬프트 테스트 진행 중...');
         
-        const response = await fetch('/api/prompts/test', {
+        const response = await fetch('/nexxii/api/prompts/test', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

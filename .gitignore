@@ -35,3 +35,13 @@ public/gemini_responses/
 *.njsproj
 *.sln
 *.sw?
+*.bak
+
+# 설정파일
+config/
+public/versions/
+ffmpeg-*
+nohup.out
+
+# db 
+*.db

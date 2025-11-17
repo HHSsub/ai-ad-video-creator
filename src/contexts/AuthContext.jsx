@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
   // 로그인
   const login = async (username, password) => {
     try {
-      const response = await apiCall('/api/auth/login', {
+      const response = await apiCall('/nexxii/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username, password }),
       });

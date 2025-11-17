@@ -18,7 +18,7 @@ const UserManagement = ({ currentUser }) => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/users', {
+      const response = await fetch('/nexxii/api/users', {
         headers: {
           'x-username': currentUser.username
         }
@@ -68,7 +68,7 @@ const UserManagement = ({ currentUser }) => {
     }
 
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch('/nexxii/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

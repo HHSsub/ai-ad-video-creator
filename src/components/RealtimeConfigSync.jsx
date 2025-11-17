@@ -7,7 +7,7 @@ const RealtimeConfigSync = ({ onConfigUpdate }) => {
   useEffect(() => {
     const checkConfig = async () => {
       try {
-        const response = await fetch('/api/admin-field-config/field-config', {
+        const response = await fetch('/nexxii/api/admin-field-config/field-config', {
           headers: {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'

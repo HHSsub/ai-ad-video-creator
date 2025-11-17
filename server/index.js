@@ -37,6 +37,7 @@ import adminFieldConfig from '../api/admin-field-config.js';
 
 // 🔥 추가된 단 1줄 — 절대 수정 없음
 import projectsRouter from './routes/projects.js';
+import authRouter from './routes/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,11 +45,11 @@ const PORT = process.env.PORT || 3000;
 const activeSessions = new Map();
 
 // 세션 시작
-app.post('/api/session/start', (req, res) => {
+app.post('/api/session/start', (req, res) => { // 수정됨: /api/ 추가
   try {
     const { sessionId, formData, timestamp } = req.body;
     const username = req.headers['x-username'] || 'anonymous';
-    
+
     activeSessions.set(username, {
       sessionId,
       formData,
@@ -57,9 +58,9 @@ app.post('/api/session/start', (req, res) => {
       completed: false,
       storyboard: null
     });
-    
+
     console.log(`[session] 세션 시작: ${username} (${sessionId})`);
-    
+
     res.json({
       success: true,
       sessionId
@@ -74,7 +75,7 @@ app.get('/api/session/check', (req, res) => {
   try {
     const username = req.headers['x-username'] || 'anonymous';
     const session = activeSessions.get(username);
-    
+
     if (session && !session.completed) {
       res.json({
         hasOngoingSession: true,
@@ -96,7 +97,7 @@ app.get('/api/session/status/:sessionId', (req, res) => {
     const { sessionId } = req.params;
     const username = req.headers['x-username'] || 'anonymous';
     const session = activeSessions.get(username);
-    
+
     if (session && session.sessionId === sessionId) {
       res.json({
         success: true,
@@ -114,23 +115,23 @@ app.get('/api/session/status/:sessionId', (req, res) => {
 });
 
 // 세션 업데이트 (storyboard-init에서 호출)
-app.post('/api/session/update', (req, res) => {
+app.post('/api/session/update', (req, res) => { // 수정됨: /api/ 추가
   try {
     const { sessionId, progress, message, storyboard, completed } = req.body;
     const username = req.headers['x-username'] || 'anonymous';
     const session = activeSessions.get(username);
-    
+
     if (session && session.sessionId === sessionId) {
       session.progress = progress || session.progress;
       session.message = message;
       session.completed = completed || false;
-      
+
       if (storyboard) {
         session.storyboard = storyboard;
       }
-      
+
       activeSessions.set(username, session);
-      
+
       res.json({ success: true });
     } else {
       res.json({ success: false, message: '세션을 찾을 수 없습니다.' });
@@ -141,11 +142,11 @@ app.post('/api/session/update', (req, res) => {
 });
 
 // 세션 클리어
-app.post('/api/session/clear', (req, res) => {
+app.post('/api/session/clear', (req, res) => { // 수정됨: /api/ 추가
   try {
     const username = req.headers['x-username'] || 'anonymous';
     activeSessions.delete(username);
-    
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -165,20 +166,21 @@ app.use(cors({
   maxAge: 86400
 }));
 
-app.use(bodyParser.json({ 
+app.use(bodyParser.json({
   limit: '100mb',
   extended: true,
   parameterLimit: 50000
 }));
-app.use(bodyParser.urlencoded({ 
-  extended: true, 
+app.use(bodyParser.urlencoded({
+  extended: true,
   limit: '100mb',
   parameterLimit: 50000
 }));
 
 app.use('/api/admin-config', adminConfig);
-app.use('/api/users', usersApi);
-app.use('/api/admin-field-config', adminFieldConfig);
+app.use('/api/users', usersApi); // 수정됨: /api/ 추가
+app.use('/api/admin-field-config', adminFieldConfig); // 수정됨: /api/ 추가
+app.use('/api/auth', authRouter);
 
 
 app.get('/health', (req, res) => {
@@ -195,59 +197,18 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.post('/api/auth/login', (req, res) => {
-  try {
-    const { username, password } = req.body;
-
-    const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
-    
-    if (!fs.existsSync(USERS_FILE)) {
-      console.error('[auth/login] config/users.json 파일이 없습니다.');
-      return res.status(500).json({
-        success: false,
-        message: '서버 설정 오류입니다. 관리자에게 문의하세요.'
-      });
-    }
-
-    const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    const user = users[username];
-
-    if (user && user.password === password) {
-      console.log(`✅ 로그인 성공: ${username} (${user.role})`);
-      res.json({
-        success: true,
-        user: {
-          username: user.id,
-          role: user.role,
-          name: user.name,
-          usageLimit: user.usageLimit,
-          usageCount: user.usageCount
-        }
-      });
-    } else {
-      console.log(`❌ 로그인 실패: ${username}`);
-      res.status(401).json({
-        success: false,
-        message: '아이디 또는 비밀번호가 올바르지 않습니다.'
-      });
-    }
-  } catch (error) {
-    console.error('로그인 API 오류:', error);
-    res.status(500).json({
-      success: false,
-      message: '서버 오류가 발생했습니다.'
-    });
-  }
-});
+/*
+[이 위치에 있던 하드코딩된 app.post('/api/auth/login', ...) 로직이 삭제되었습니다.]
+*/
 
 const PROMPT_FILES = {
   step1_product: 'public/Prompt_step1_product.txt',
-  step1_service: 'public/Prompt_step1_service.txt', 
+  step1_service: 'public/Prompt_step1_service.txt',
   step2_product: 'public/Prompt_step2_product.txt',
   step2_service: 'public/Prompt_step2_service.txt'
 };
 
-app.get('/api/prompts/get', async (req, res) => {
+app.get('/api/prompts/get', async (req, res) => { // 수정됨: /api/ 추가
   try {
     const publicPath = path.join(process.cwd(), 'public');
     const prompts = {};
@@ -279,7 +240,7 @@ app.get('/api/prompts/get', async (req, res) => {
 app.post('/api/prompts/update', async (req, res) => {
   try {
     const { filename, content } = req.body;
-    
+
     if (!filename || content === undefined) {
       return res.status(400).json({
         success: false,
@@ -296,26 +257,26 @@ app.post('/api/prompts/update', async (req, res) => {
 
     const publicPath = path.join(process.cwd(), 'public');
     const versionsPath = path.join(publicPath, 'versions');
-    
+
     if (!fs.existsSync(versionsPath)) {
       fs.mkdirSync(versionsPath, { recursive: true });
     }
 
     const actualFileName = path.basename(PROMPT_FILES[filename]);
-    const filePath = path.join(publiccwd(), 'public', actualFileName);
-    
+    const filePath = path.join(process.cwd(), 'public', actualFileName);
+
     if (fs.existsSync(filePath)) {
-      const existingContent = fs.readFileSync(filePath, 'utf-8');  
+      const existingContent = fs.readFileSync(filePath, 'utf-8');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupPath = path.join(versionsPath, `${filename}_${timestamp}.txt`);
       fs.writeFileSync(backupPath, existingContent);
     }
-    
+
     fs.writeFileSync(filePath, content);
 
     const metadataPath = path.join(versionsPath, 'versions.json');
     let versions = [];
-    
+
     if (fs.existsSync(metadataPath)) {
       try {
         versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
@@ -333,7 +294,7 @@ app.post('/api/prompts/update', async (req, res) => {
     };
 
     versions.unshift(versionEntry);
-    
+
     const limitedVersions = versions.slice(0, 100);
     fs.writeFileSync(metadataPath, JSON.stringify(limitedVersions, null, 2));
 
@@ -354,12 +315,12 @@ app.post('/api/prompts/update', async (req, res) => {
   }
 });
 
-app.get('/api/prompts/versions', async (req, res) => {
+app.get('/api/prompts/versions', async (req, res) => { // 수정됨: /api/ 추가
   try {
     const publicPath = path.join(process.cwd(), 'public');
     const versionsPath = path.join(publicPath, 'versions');
     const metadataPath = path.join(versionsPath, 'versions.json');
-    
+
     if (!fs.existsSync(metadataPath)) {
       return res.json({
         success: true,
@@ -368,7 +329,7 @@ app.get('/api/prompts/versions', async (req, res) => {
     }
 
     const versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-    
+
     res.json({
       success: true,
       versions: versions.slice(0, 50)
@@ -387,7 +348,7 @@ app.get('/api/prompts/versions', async (req, res) => {
 app.post('/api/prompts/restore', async (req, res) => {
   try {
     const { versionId } = req.body;
-    
+
     if (!versionId) {
       return res.status(400).json({
         success: false,
@@ -398,7 +359,7 @@ app.post('/api/prompts/restore', async (req, res) => {
     const publicPath = path.join(process.cwd(), 'public');
     const versionsPath = path.join(publicPath, 'versions');
     const metadataPath = path.join(versionsPath, 'versions.json');
-    
+
     if (!fs.existsSync(metadataPath)) {
       return res.status(404).json({
         success: false,
@@ -408,7 +369,7 @@ app.post('/api/prompts/restore', async (req, res) => {
 
     const versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
     const version = versions.find(v => v.id === versionId);
-    
+
     if (!version) {
       return res.status(404).json({
         success: false,
@@ -417,7 +378,7 @@ app.post('/api/prompts/restore', async (req, res) => {
     }
 
     const versionFilePath = path.join(versionsPath, version.versionFile);
-    
+
     if (!fs.existsSync(versionFilePath)) {
       return res.status(404).json({
         success: false,
@@ -432,7 +393,7 @@ app.post('/api/prompts/restore', async (req, res) => {
       const backupPath = path.join(versionsPath, `restore_backup_${timestamp}.txt`);
       fs.writeFileSync(backupPath, currentContent);
     }
-    
+
     const versionContent = fs.readFileSync(versionFilePath, 'utf-8');
     fs.writeFileSync(currentFilePath, versionContent);
 
@@ -455,7 +416,7 @@ app.post('/api/prompts/restore', async (req, res) => {
 app.post('/api/prompts/save-response', async (req, res) => {
   try {
     const { promptKey, step, formData, response, timestamp } = req.body;
-    
+
     if (!promptKey || !step || !response) {
       return res.status(400).json({
         success: false,
@@ -464,14 +425,14 @@ app.post('/api/prompts/save-response', async (req, res) => {
     }
 
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
-    
+
     if (!fs.existsSync(responsesPath)) {
       fs.mkdirSync(responsesPath, { recursive: true });
     }
 
     const fileName = `${promptKey}_${step}_${timestamp || Date.now()}.json`;
     const filePath = path.join(responsesPath, fileName);
-    
+
     const responseData = {
       promptKey,
       step,
@@ -500,11 +461,11 @@ app.post('/api/prompts/save-response', async (req, res) => {
   }
 });
 
-app.get('/api/prompts/responses/:promptKey', async (req, res) => {
+app.get('/api/prompts/responses/:promptKey', async (req, res) => { // 수정됨: /api/ 추가
   try {
     const { promptKey } = req.params;
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
-    
+
     if (!fs.existsSync(responsesPath)) {
       return res.json({
         success: true,
@@ -521,12 +482,12 @@ app.get('/api/prompts/responses/:promptKey', async (req, res) => {
       });
 
     const responses = [];
-    
+
     for (const file of files.slice(0, 20)) {
       try {
         const filePath = path.join(responsesPath, file);
         const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        
+
         responses.push({
           fileName: file,
           ...content,
@@ -553,12 +514,12 @@ app.get('/api/prompts/responses/:promptKey', async (req, res) => {
 });
 
 
-app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
+app.get('/api/prompts/response-detail/:fileName', async (req, res) => { // 수정됨: /api/ 추가
   try {
     const { fileName } = req.params;
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
     const filePath = path.join(responsesPath, fileName);
-    
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({
         success: false,
@@ -567,7 +528,7 @@ app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
     }
 
     const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    
+
     res.json({
       success: true,
       data: content
@@ -586,12 +547,12 @@ app.get('/api/prompts/response-detail/:fileName', async (req, res) => {
 // 🔥 프롬프트 테스트 API
 app.post('/api/prompts/test', async (req, res) => {
   const startTime = Date.now();
-  
+
   try {
     const { promptKey, step, formData, promptContent } = req.body;
-    
+
     console.log('[prompts/test] 테스트 요청:', { promptKey, step });
-    
+
     if (!promptKey || !step || !promptContent || !formData) {
       return res.status(400).json({
         success: false,
@@ -602,10 +563,10 @@ app.post('/api/prompts/test', async (req, res) => {
 
     // safeCallGemini import
     const { safeCallGemini } = await import('../src/utils/apiHelpers.js');
-    
+
     // Step1 프롬프트 변수 치환
     let step1PromptTemplate = promptContent;
-    
+
     const step1Variables = {
       brandName: formData.brandName || '',
       industryCategory: formData.industryCategory || '',
@@ -627,7 +588,7 @@ app.post('/api/prompts/test', async (req, res) => {
     }
 
     console.log('[prompts/test] Step1 Gemini 호출 시작...');
-    
+
     let step1Response;
     try {
       const step1Result = await safeCallGemini(step1PromptTemplate, {
@@ -639,7 +600,7 @@ app.post('/api/prompts/test', async (req, res) => {
       console.log('[prompts/test] ✅ Step1 완료:', step1Response.length, 'chars');
     } catch (step1Error) {
       console.error('[prompts/test] ❌ Step1 실패:', step1Error);
-      
+
       // 사용자 친화적 에러 메시지
       let friendlyError = 'Step1 프롬프트 테스트 중 오류가 발생했습니다.';
       if (step1Error.message.includes('quota') || step1Error.message.includes('rate limit')) {
@@ -649,7 +610,7 @@ app.post('/api/prompts/test', async (req, res) => {
       } else if (step1Error.message.includes('API key')) {
         friendlyError = '🔑 API 키 오류: Gemini API 키가 올바르지 않거나 설정되지 않았습니다.';
       }
-      
+
       return res.status(500).json({
         success: false,
         step: 'step1',
@@ -663,11 +624,11 @@ app.post('/api/prompts/test', async (req, res) => {
     let step2Response = null;
     if (step === 'step2' || promptKey.includes('step2')) {
       console.log('[prompts/test] Step2 프롬프트 로드 시작...');
-      
+
       // Step2 프롬프트 파일 로드
       const step2PromptKey = promptKey.includes('product') ? 'step2_product' : 'step2_service';
       const step2FileName = PROMPT_FILES[step2PromptKey];
-      
+
       if (!step2FileName) {
         return res.status(400).json({
           success: false,
@@ -675,10 +636,10 @@ app.post('/api/prompts/test', async (req, res) => {
           error: `Invalid promptKey: ${step2PromptKey}`
         });
       }
-      
+
       const publicPath = path.join(process.cwd(), 'public');
       const step2FilePath = path.join(publicPath, path.basename(step2FileName));
-      
+
       if (!fs.existsSync(step2FilePath)) {
         return res.status(404).json({
           success: false,
@@ -686,9 +647,9 @@ app.post('/api/prompts/test', async (req, res) => {
           error: `File not found: ${step2FilePath}`
         });
       }
-      
+
       let step2PromptTemplate = fs.readFileSync(step2FilePath, 'utf-8');
-      
+
       // Step2 변수 치환
       const step2Variables = {
         phase1_output: step1Response,
@@ -697,14 +658,14 @@ app.post('/api/prompts/test', async (req, res) => {
         videoPurpose: formData.videoPurpose || '',
         videoLength: formData.videoLength || '10'
       };
-      
+
       for (const [key, value] of Object.entries(step2Variables)) {
         const placeholder = new RegExp(`\\{${key}\\}`, 'g');
         step2PromptTemplate = step2PromptTemplate.replace(placeholder, String(value));
       }
-      
+
       console.log('[prompts/test] Step2 Gemini 호출 시작...');
-      
+
       try {
         const step2Result = await safeCallGemini(step2PromptTemplate, {
           label: 'PROMPT-TEST-STEP2',
@@ -713,12 +674,12 @@ app.post('/api/prompts/test', async (req, res) => {
         });
         step2Response = step2Result.text;
         console.log('[prompts/test] ✅ Step2 완료:', step2Response.length, 'chars');
-        
+
         // JSON 파싱 테스트
         try {
           const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
           const conceptMatches = [...step2Response.matchAll(conceptPattern)];
-          
+
           if (conceptMatches.length === 0) {
             console.warn('[prompts/test] ⚠️ 컨셉 헤더를 찾을 수 없음 - JSON 파싱 실패 가능성');
           } else {
@@ -727,10 +688,10 @@ app.post('/api/prompts/test', async (req, res) => {
         } catch (parseError) {
           console.warn('[prompts/test] ⚠️ JSON 파싱 경고:', parseError.message);
         }
-        
+
       } catch (step2Error) {
         console.error('[prompts/test] ❌ Step2 실패:', step2Error);
-        
+
         let friendlyError = 'Step2 프롬프트 테스트 중 오류가 발생했습니다.';
         if (step2Error.message.includes('quota') || step2Error.message.includes('rate limit')) {
           friendlyError = '🚫 API 한도 초과: Gemini API 사용량이 초과되었습니다. 잠시 후 다시 시도해주세요.';
@@ -739,7 +700,7 @@ app.post('/api/prompts/test', async (req, res) => {
         } else if (step2Error.message.includes('API key')) {
           friendlyError = '🔑 API 키 오류: Gemini API 키가 올바르지 않거나 설정되지 않았습니다.';
         }
-        
+
         return res.status(500).json({
           success: false,
           step: 'step2',
@@ -761,7 +722,7 @@ app.post('/api/prompts/test', async (req, res) => {
     const timestamp = Date.now();
     const fileName = `${promptKey}_test_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
-    
+
     const responseData = {
       promptKey,
       step: 'test',
@@ -790,7 +751,7 @@ app.post('/api/prompts/test', async (req, res) => {
         length: step2Response.length,
         preview: step2Response.substring(0, 500) + '...',
         success: true,
-        jsonParseStatus: step2Response.includes('###') ? '✅ 컨셉 헤더 발견 - 파싱 가능' : '⚠️ 컨셉 헤더 없음 - 파싱 실패 가능성'
+        jsonParseStatus: step2Response.includes('###') ? '✅ 컨셉 헤더 발견 - 파싱 가능' : '⚠️ 컨셉 헤더 없음 - 파싱  실패 가능성'
       } : null,
       fileName: fileName,
       processingTime: Date.now() - startTime
@@ -807,18 +768,19 @@ app.post('/api/prompts/test', async (req, res) => {
   }
 });
 
-app.use('/api/storyboard-init', storyboardInit);
-app.use('/api/storyboard-render-image', storyboardRenderImage);
-app.use('/api/image-to-video', imageToVideo);
-app.use('/api/generate-video', generateVideo);
+app.use('/api/projects', projectsRouter);
+app.use('/api/storyboard-init', storyboardInit); // 수정됨: /api/ 추가
+app.use('/api/storyboard-render-image', storyboardRenderImage); // 수정됨: /api/ 추가
+app.use('/api/image-to-video', imageToVideo); // 수정됨: /api/ 추가
+app.use('/api/generate-video', generateVideo); // 수정됨: /api/ 추가
 app.use('/api/video-status', videoStatus);
-app.use('/api/compile-videos', compileVideos);
-app.use('/api/debug', debug);
-app.use('/api/apply-bgm', applyBgm);
-app.use('/api/load-mood-list', loadMoodList);
-app.use('/api/load-bgm-list', loadBgmList);
-app.use('/api/bgm-stream', bgmStream);
-app.use('/api/nanobanana-compose', nanobanaCompose);
+app.use('/api/compile-videos', compileVideos); // 수정됨: /api/ 추가
+app.use('/api/debug', debug); // 수정됨: /api/ 추가
+app.use('/api/apply-bgm', applyBgm); // 수정됨: /api/ 추가
+app.use('/api/load-mood-list', loadMoodList); // 수정됨: /api/ 추가
+app.use('/api/load-bgm-list', loadBgmList); // 수정됨: /api/ 추가
+app.use('/api/bgm-stream', bgmStream); // 수정됨: /api/ 추가
+app.use('/api/nanobanana-compose', nanobanaCompose); // 수정됨: /api/ 추가
 
 app.use('/tmp', express.static('tmp', {
   setHeaders: (res, path) => {
@@ -862,14 +824,14 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`📍 주소: http://0.0.0.0:${PORT}`);
   console.log(`🌍 환경: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔑 API 키 상태:`);
-  console.log(`   - Freepik: ${process.env.FREEPIK_API_KEY ? '✅' : '❌'}`);
-  console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
+  console.log(`   - Freepik: ${process.env.FREEPIK_API_KEY ? '✅' : '❌'}`);
+  console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
-  
+
   server.timeout = 300000;
   server.keepAliveTimeout = 300000;
   server.headersTimeout = 305000;
-  
+
   console.log(`⏱️ 서버 타임아웃: ${server.timeout}ms`);
 });
 

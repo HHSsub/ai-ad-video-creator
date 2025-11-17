@@ -142,7 +142,7 @@ const ADMIN_SETTINGS_KEY = 'ai-ad-video-admin-settings';
 
 export const loadFieldConfig = async () => {
   try {
-    const response = await fetch('/api/admin-field-config/field-config');
+    const response = await fetch('/nexxii/api/admin-field-config/field-config');
     const data = await response.json();
     
     if (data.success && data.config && Object.keys(data.config).length > 0) {
@@ -172,7 +172,7 @@ export const saveFieldConfig = async (config) => {
     const user = localStorage.getItem('user');
     const username = user ? JSON.parse(user).username : 'guest';
     
-    const response = await fetch('/api/admin-field-config/field-config', {
+    const response = await fetch('/nexxii/api/admin-field-config/field-config', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',

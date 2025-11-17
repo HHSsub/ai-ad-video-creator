@@ -43,7 +43,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       const user = localStorage.getItem('user');
       const username = user ? JSON.parse(user).username : 'guest';
       
-      const response = await fetch('/api/admin-field-config/field-config', {
+      const response = await fetch('/nexxii/api/admin-field-config/field-config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ const Step1 = ({ formData, setFormData, user, onNext }) => {
       const user = localStorage.getItem('user');
       const username = user ? JSON.parse(user).username : 'guest';
       
-      const response = await fetch('/api/admin-field-config/field-config', {
+      const response = await fetch('/nexxii/api/admin-field-config/field-config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
