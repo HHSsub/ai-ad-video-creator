@@ -1,5 +1,3 @@
-// api/storyboard-init.js
-
 export const config = {
   maxDuration: 9000,
 };
@@ -113,20 +111,17 @@ function getPromptFiles(videoPurpose) {
   console.log(`[getPromptFiles] videoPurpose: ${videoPurpose}`);
   
   if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') {
-    console.log('[getPromptFiles] → 제품용 프롬프트');
     return {
       step1: 'step1_product',
       step2: 'step2_product'
     };
   } else if (videoPurpose === 'service' || videoPurpose === 'brand') {
-    console.log('[getPromptFiles] → 서비스용 프롬프트');
     return {
       step1: 'step1_service',
       step2: 'step2_service'
     };
   }
   
-  console.log('[getPromptFiles] → 기본값 (제품용)');
   return {
     step1: 'step1_product',
     step2: 'step2_product'
@@ -138,16 +133,11 @@ const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
 function loadUsers() {
   try {
     if (!fs.existsSync(USERS_FILE)) {
-      console.error('[storyboard-init] 사용자 파일이 없습니다:', USERS_FILE);
       return {};
     }
-    
     const data = fs.readFileSync(USERS_FILE, 'utf8');
-    const users = JSON.parse(data);
-    console.log('[storyboard-init] 사용자 데이터 로드 완료');
-    return users;
+    return JSON.parse(data);
   } catch (error) {
-    console.error('[storyboard-init] 사용자 데이터 로드 오류:', error);
     return {};
   }
 }
@@ -156,10 +146,8 @@ function saveUsers(users) {
   try {
     const data = JSON.stringify(users, null, 2);
     fs.writeFileSync(USERS_FILE, data, 'utf8');
-    console.log('[storyboard-init] 사용자 데이터 저장 완료');
     return true;
   } catch (error) {
-    console.error('[storyboard-init] 사용자 데이터 저장 오류:', error);
     return false;
   }
 }
@@ -170,7 +158,6 @@ function checkAndResetDaily(user) {
   if (user.lastResetDate !== today) {
     user.usageCount = 0;
     user.lastResetDate = today;
-    console.log('[storyboard-init] 일일 리셋:', user.id);
     return true;
   }
   
@@ -179,34 +166,18 @@ function checkAndResetDaily(user) {
 
 function checkUsageLimit(username) {
   try {
-    if (!username) {
-      console.warn('[storyboard-init] username이 없습니다');
-      return { allowed: false, message: '사용자 정보가 없습니다.' };
-    }
-
     const users = loadUsers();
     const user = users[username];
-
     if (!user) {
-      console.warn('[storyboard-init] 사용자를 찾을 수 없습니다:', username);
       return { allowed: false, message: '존재하지 않는 사용자입니다.' };
     }
-
     checkAndResetDaily(user);
-
     if (user.usageCount >= user.dailyLimit) {
-      console.warn('[storyboard-init] 일일 사용 한도 초과:', username);
-      return { 
-        allowed: false, 
-        message: `일일 사용 한도(${user.dailyLimit}회)를 초과했습니다.`
-      };
+      return { allowed: false, message: `일일 사용 한도(${user.dailyLimit}회)를 초과했습니다.` };
     }
-
     return { allowed: true, user };
-
   } catch (error) {
-    console.error('[storyboard-init] 사용 한도 체크 오류:', error);
-    return { allowed: false, message: '사용 한도 확인 중 오류가 발생했습니다.' };
+    return { allowed: false, message: '사용 한도 확인 중 오류 발생' };
   }
 }
 
@@ -214,16 +185,12 @@ function incrementUsageCount(username) {
   try {
     const users = loadUsers();
     const user = users[username];
-
     if (user) {
       user.usageCount = (user.usageCount || 0) + 1;
       users[username] = user;
       saveUsers(users);
-      console.log(`[storyboard-init] 사용 횟수 증가: ${username} (${user.usageCount}/${user.dailyLimit})`);
     }
-  } catch (error) {
-    console.error('[storyboard-init] 사용 횟수 증가 오류:', error);
-  }
+  } catch (error) {}
 }
 
 function extractConceptBlocks(text) {
@@ -233,9 +200,7 @@ function extractConceptBlocks(text) {
   
   lines.forEach((line, index) => {
     if (line.match(/^\d+\.\s*컨셉:/)) {
-      if (currentBlock) {
-        blocks.push(currentBlock);
-      }
+      if (currentBlock) blocks.push(currentBlock);
       currentBlock = {
         startLine: index + 1,
         title: line.trim(),
@@ -246,82 +211,55 @@ function extractConceptBlocks(text) {
     }
   });
   
-  if (currentBlock) {
-    blocks.push(currentBlock);
-  }
+  if (currentBlock) blocks.push(currentBlock);
   
   return blocks;
 }
 
 function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, step2Template) {
   let finalPrompt = step2Template;
-  
   finalPrompt = finalPrompt.replace(/{phase1_output}/g, phase1Output);
   finalPrompt = finalPrompt.replace(/{sceneCount}/g, sceneCount);
   finalPrompt = finalPrompt.replace(/{brandName}/g, requestBody.brandName || '');
   finalPrompt = finalPrompt.replace(/{videoPurpose}/g, requestBody.videoPurpose || '');
   finalPrompt = finalPrompt.replace(/{videoLength}/g, requestBody.videoLength || '10');
-  
   return finalPrompt;
 }
 
 function saveGeminiResponse(promptKey, step, formData, step1Response, step2Response = null) {
   try {
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
-    
     if (!fs.existsSync(responsesPath)) {
       fs.mkdirSync(responsesPath, { recursive: true });
-      console.log('[saveGeminiResponse] gemini_responses 폴더 생성');
     }
-
     const timestamp = Date.now();
     const fileName = `${promptKey}_${step}_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
-    
     const responseData = {
       promptKey,
       step,
-      formData: formData || {},
+      formData,
       response: step2Response || step1Response,
       rawStep1Response: step1Response,
       rawStep2Response: step2Response,
       timestamp: new Date().toISOString(),
       savedAt: new Date().toISOString()
     };
-
     fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
-
-    console.log(`[saveGeminiResponse] ✅ Gemini 응답 저장 완료: ${fileName}`);
-    return {
-      success: true,
-      fileName
-    };
-
+    return { success: true, fileName };
   } catch (error) {
-    console.error('[saveGeminiResponse] ❌ Gemini 응답 저장 실패:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 }
 
 function parseMultiConceptJSON(text) {
   try {
-    console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
-    
     const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
     const conceptMatches = [...text.matchAll(conceptPattern)];
     
     if (conceptMatches.length === 0) {
-      console.error('[parseMultiConceptJSON] 컨셉 헤더를 찾을 수 없음');
-      const debugPath = path.join(process.cwd(), 'debug_step2_response.txt');
-      fs.writeFileSync(debugPath, text, 'utf-8');
-      console.log('[parseMultiConceptJSON] Step2 응답 저장:', debugPath);
       return null;
     }
-    
-    console.log(`[parseMultiConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
     
     const concepts = [];
     
@@ -332,12 +270,8 @@ function parseMultiConceptJSON(text) {
       const endIdx = i < conceptMatches.length - 1 ? conceptMatches[i + 1].index : text.length;
       const conceptText = text.substring(startIdx, endIdx);
       
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
-      
       const scenePattern = /###\s*S#(\d+)\s*\(/g;
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
-      
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
       
       const conceptData = {
         concept_name: conceptName
@@ -363,11 +297,7 @@ function parseMultiConceptJSON(text) {
               motion_prompt: motionPromptJSON,
               copy: copyJSON
             };
-          } catch (e) {
-            console.error(`[parseMultiConceptJSON] JSON 파싱 실패 (컨셉 ${conceptNum}, 씬 ${sceneNum}):`, e.message);
-          }
-        } else {
-          console.warn(`[parseMultiConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함`);
+          } catch (e) {}
         }
       }
       
@@ -375,9 +305,7 @@ function parseMultiConceptJSON(text) {
     }
     
     return { concepts };
-    
   } catch (error) {
-    console.error('[parseMultiConceptJSON] 전체 파싱 오류:', error);
     return null;
   }
 }
@@ -385,6 +313,7 @@ function parseMultiConceptJSON(text) {
 export default async function handler(req, res) {
   const startTime = Date.now();
   
+  // CORS 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
@@ -401,28 +330,43 @@ export default async function handler(req, res) {
     });
   }
 
+  // 🔥 여기서부터는 가능한 한 빨리 응답을 돌려주고,
+  //    실제 무거운 작업은 백그라운드로 넘긴다.
+  const username = req.headers['x-username'] || 'anonymous';
+  console.log(`[storyboard-init] 📥 요청 수신 (사용자: ${username})`);
+
+  const sessionId = req.body.sessionId || `session_${Date.now()}_${username}`;
+  console.log(`[storyboard-init] 📝 세션 ID: ${sessionId}`);
+
+  // 🔥 즉시 202 응답 반환
+  res.status(202).json({
+    success: true,
+    sessionId: sessionId,
+    message: '스토리보드 생성이 시작되었습니다'
+  });
+
+  // 🔥 백그라운드에서 나머지 처리 계속
+  processStoryboardAsync(req.body, username, sessionId, startTime).catch(err => {
+    console.error('[storyboard-init] 백그라운드 처리 실패:', err);
+  });
+}
+
+// 🔥 백그라운드에서 실제 스토리보드 생성 전체를 수행하는 함수
+async function processStoryboardAsync(body, username, sessionId, startTime) {
   try {
-    const username = req.headers['x-username'] || 'anonymous';
-    console.log(`[storyboard-init] 📥 요청 수신 (사용자: ${username})`);
+    console.log(`[processStoryboardAsync] 시작 (사용자: ${username}, 세션: ${sessionId})`);
 
-    const sessionId = req.body.sessionId || null;
-    console.log(`[storyboard-init] 📝 세션 ID: ${sessionId}`);
-
-    // 🔥 즉시 202 응답 반환
-    res.status(202).json({
-      success: true,
-      sessionId: sessionId,
-      message: '스토리보드 생성이 시작되었습니다'
-    });
-
+    // 1) 일일 사용량 체크
     const usageCheck = checkUsageLimit(username);
-    
     if (!usageCheck.allowed) {
       console.warn('[storyboard-init] 사용 한도 초과:', username);
-      return res.status(429).json({
-        success: false,
+      await updateSession(sessionId, {
+        progress: 0,
+        message: usageCheck.message,
+        completed: true,
         error: usageCheck.message
       });
+      return;
     }
 
     const {
@@ -437,9 +381,9 @@ export default async function handler(req, res) {
       aspectRatio,
       aspectRatioCode,
       imageUpload
-    } = req.body;
+    } = body;
 
-    console.log('[storyboard-init] 🚀 요청 수신:', {
+    console.log('[storyboard-init] 🚀 요청 수신(백그라운드):', {
       brandName,
       videoLength,
       videoPurpose,
@@ -454,10 +398,12 @@ export default async function handler(req, res) {
 
     if (!fs.existsSync(step1FilePath)) {
       console.error(`[storyboard-init] STEP1 프롬프트 파일 없음:`, step1FilePath);
-      return res.status(404).json({
-        success: false,
+      await updateSession(sessionId, {
+        progress: 0,
+        completed: true,
         error: `STEP1 프롬프트 파일을 찾을 수 없습니다: ${step1FileName}`
       });
+      return;
     }
 
     console.log(`[storyboard-init] 📝 STEP1 프롬프트 파일 로드: ${step1FileName}`);
@@ -506,6 +452,7 @@ export default async function handler(req, res) {
     console.log(`[storyboard-init] 📡 STEP1 Gemini API 호출 시작`);
     console.log('[storyboard-init] ⏰ 타임스탬프:', new Date().toISOString());
     console.log('[storyboard-init] 📝 프롬프트 길이:', step1PromptTemplate.length, 'chars');
+
     const step1 = await safeCallGemini(step1PromptTemplate, {
       label: 'STEP1-storyboard-init',
       maxRetries: 3,
@@ -515,7 +462,7 @@ export default async function handler(req, res) {
     const phase1_output = step1.text;
     console.log("[storyboard-init] ✅ STEP1 완료:", phase1_output.length, "chars");
     console.log('[storyboard-init] ⏰ STEP1 소요 시간:', (Date.now() - startTime) / 1000, '초');
-    
+
     if (sessionId) {
       try {
         await fetch(`http://localhost:3000/api/session/update`, {
@@ -531,7 +478,7 @@ export default async function handler(req, res) {
         console.error('[세션 업데이트 실패]', e);
       }
     }
-    
+
     console.log('\n========== STEP1 FULL RESPONSE ==========');
     console.log(phase1_output);
     console.log('==========================================\n');
@@ -539,7 +486,7 @@ export default async function handler(req, res) {
     saveGeminiResponse(
       promptFiles.step1,
       'step1',
-      req.body,
+      body,
       phase1_output,
       null
     );
@@ -559,16 +506,18 @@ export default async function handler(req, res) {
 
     if (!fs.existsSync(step2FilePath)) {
       console.error(`[storyboard-init] STEP2 프롬프트 파일 없음:`, step2FilePath);
-      return res.status(404).json({
-        success: false,
+      await updateSession(sessionId, {
+        progress: 40,
+        completed: true,
         error: `STEP2 프롬프트 파일을 찾을 수 없습니다: ${step2FileName}`
       });
+      return;
     }
 
     console.log(`[storyboard-init] 📝 STEP2 프롬프트 파일 로드: ${step2FileName}`);
     const step2PromptContent = fs.readFileSync(step2FilePath, 'utf-8');
 
-    const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, req.body, sceneCountPerConcept, step2PromptContent);
+    const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, body, sceneCountPerConcept, step2PromptContent);
 
     if (sessionId) {
       try {
@@ -585,7 +534,7 @@ export default async function handler(req, res) {
         console.error('[세션 업데이트 실패]', e);
       }
     }
-    
+
     console.log('[storyboard-init] 📡 STEP2 Gemini API 호출 시작');
     console.log('[storyboard-init] ⏰ 타임스탬프:', new Date().toISOString());
     console.log(`[storyboard-init] STEP2 프롬프트 길이: ${step2Prompt.length} chars`);
@@ -614,7 +563,7 @@ export default async function handler(req, res) {
         console.error('[세션 업데이트 실패]', e);
       }
     }
-    
+
     console.log('\n========== STEP2 FULL RESPONSE ==========');
     console.log(step2.text);
     console.log('==========================================\n');
@@ -622,7 +571,7 @@ export default async function handler(req, res) {
     saveGeminiResponse(
       promptFiles.step1,
       'complete',
-      req.body,
+      body,
       phase1_output,
       step2.text
     );
@@ -630,7 +579,7 @@ export default async function handler(req, res) {
     saveGeminiResponse(
       promptFiles.step2,
       'complete',
-      req.body,
+      body,
       phase1_output,
       step2.text
     );
@@ -644,14 +593,14 @@ export default async function handler(req, res) {
     if (mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length > 0) {
       styles = mcJson.concepts.map((concept, index) => {
         const imagePrompts = [];
-        
+
         for (let i = 1; i <= sceneCountPerConcept; i++) {
           const sceneKey = `scene_${i}`;
           const scene = concept[sceneKey];
-          
+
           if (scene) {
             const isCompositingScene = compositingScenes.some(cs => cs.sceneNumber === i);
-            
+
             const imagePromptData = {
               sceneNumber: i,
               title: scene.title || `씬 ${i}`,
@@ -687,7 +636,7 @@ export default async function handler(req, res) {
                 seed: scene.image_prompt?.seed || Math.floor(10000 + Math.random() * 90000)
               }
             };
-            
+
             imagePrompts.push(imagePromptData);
           }
         }
@@ -718,7 +667,7 @@ export default async function handler(req, res) {
           }
         };
       });
-      
+
       console.log(`[storyboard-init] ✅ styles 배열 생성 완료: ${styles.length}개 컨셉`);
       console.log(`[storyboard-init] 📊 각 컨셉당 이미지 프롬프트 수: ${styles[0]?.imagePrompts?.length || 0}개`);
       console.log(`[storyboard-init] 📊 각 컨셉당 images 배열 길이: ${styles[0]?.images?.length || 0}개`);
@@ -726,31 +675,7 @@ export default async function handler(req, res) {
       console.error('[storyboard-init] ❌ JSON 파싱 실패 또는 컨셉 없음');
     }
 
-    const compositingInfo = analyzeCompositingInfo(req.body, compositingScenes);
-    console.log('[storyboard-init] 🎨 합성 정보:', compositingInfo);
-
-    const metadata = {
-      promptFiles: promptFiles,
-      promptFiles_step1: step1FileName,
-      promptFiles_step2: step2FileName,
-      videoPurpose,
-      videoLength,
-      sceneCountPerConcept,
-      aspectRatio: mapAspectRatio(aspectRatio || aspectRatioCode),
-      generatedAt: new Date().toISOString(),
-      processingTimeMs: Date.now() - startTime,
-      geminiModel: "gemini-2.5-flash",
-      step1Length: phase1_output.length,
-      step2Length: step2.text.length,
-      brandName,
-      totalConcepts: styles.length,
-      compositingScenes: compositingScenes.length,
-      hasImageUpload: !!(imageUpload && imageUpload.url),
-      compositingInfo: compositingInfo
-    };
-
-    incrementUsageCount(username);
-
+    // 이미지 생성 및 합성 전 세션 진행도 업데이트
     if (sessionId) {
       try {
         await fetch(`http://localhost:3000/api/session/update`, {
@@ -758,15 +683,8 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json', 'x-username': username },
           body: JSON.stringify({
             sessionId,
-            progress: 100,
-            message: '스토리보드 생성 완료',
-            completed: true,
-            storyboard: {
-              success: true,
-              styles,
-              metadata,
-              compositingInfo
-            }
+            progress: 80,
+            message: '이미지 생성 준비 중...'
           })
         }).catch(() => {});
       } catch (e) {
@@ -774,33 +692,215 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({
-      success: true,
-      styles,
-      metadata,
-      compositingInfo,
-      phase1_output,
-      step2_output: step2.text,
-      processingTime: Date.now() - startTime,
-      timestamp: new Date().toISOString()
-    });
+    console.log('[storyboard-init] 🎨 이미지 생성 루프 시작');
+
+    // 이미지 생성 완료 상태 저장
+    const generatedImages = [];
+
+    // 전역 compositing 설정
+    const globalCompositingNeeded =
+      videoPurpose === 'product' ||
+      videoPurpose === 'conversion' ||
+      videoPurpose === 'education';
+
+    const globalLogoNeeded =
+      videoPurpose === 'service' ||
+      videoPurpose === 'brand';
+
+    // 메인 이미지 생성 루프
+    for (let si = 0; si < styles.length; si++) {
+      const style = styles[si];
+
+      console.log(`[storyboard-init] 🎞 컨셉 ${si + 1}/${styles.length} 이미지 생성 시작`);
+
+      for (let ip = 0; ip < style.imagePrompts.length; ip++) {
+        const imgPrompt = style.imagePrompts[ip];
+        console.log(`[storyboard-init] 🖼  생성 중 → Concept ${si + 1} / Image ${ip + 1}`);
+
+        try {
+          const imageResponse = await safeCallGemini(imgPrompt.prompt, {
+            label: `IMAGE_C${si + 1}_S${ip + 1}`,
+            maxRetries: 3,
+            isImageComposition: false
+          });
+
+          const imageUrl = imageResponse?.imageUrl || null;
+          generatedImages.push({
+            conceptId: style.id,
+            sceneNumber: imgPrompt.sceneNumber,
+            url: imageUrl
+          });
+
+          style.images[ip].url = imageUrl;
+          style.images[ip].status = imageUrl ? 'generated' : 'failed';
+
+          console.log(`[storyboard-init]   → 이미지 생성 완료: ${imageUrl}`);
+
+        } catch (imageError) {
+          console.error(`[storyboard-init] ❌ 이미지 생성 실패 (C${si + 1}-S${ip + 1})`, imageError);
+          style.images[ip].url = null;
+          style.images[ip].status = 'failed';
+        }
+
+        // 세션 상태 업데이트 (프론트에서 실시간 반영)
+        if (sessionId) {
+          try {
+            await fetch(`http://localhost:3000/api/session/update`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-username': username },
+              body: JSON.stringify({
+                sessionId,
+                progress: 80 + Math.floor((ip / style.imagePrompts.length) * 15),
+                message: `이미지 생성 중... (${ip + 1}/${style.imagePrompts.length})`,
+                styles: styles
+              })
+            }).catch(() => {});
+          } catch (e) {
+            console.error('[세션 업데이트 실패]', e);
+          }
+        }
+      }
+    }
+
+    console.log('[storyboard-init] 🖨 모든 이미지 생성 루프 완료');
+
+    // 합성 이미지(상품 이미지 or 브랜드 로고) 추가 생성
+    if (globalCompositingNeeded || globalLogoNeeded) {
+      console.log('[storyboard-init] 🧩 합성 이미지 생성 시작');
+
+      for (let si = 0; si < styles.length; si++) {
+        const style = styles[si];
+
+        for (let ip = 0; ip < style.imagePrompts.length; ip++) {
+          const imgPrompt = style.imagePrompts[ip];
+
+          if (!imgPrompt.isCompositing) continue;
+
+          console.log(
+            `[storyboard-init] 🔧 합성 처리 → Concept ${si + 1}, Scene ${imgPrompt.sceneNumber}`
+          );
+
+          try {
+            const compositeRequest = {
+              prompt: imgPrompt.prompt,
+              productImageUrl: globalCompositingNeeded ? body.imageUpload?.url || null : null,
+              brandLogoUrl: globalLogoNeeded ? body.imageUpload?.url || null : null,
+              aspectRatio: imgPrompt.aspect_ratio || 'widescreen_16_9'
+            };
+
+            const compositeResp = await safeCallGemini(compositeRequest.prompt, {
+              label: `COMPOSITING_C${si + 1}_S${imgPrompt.sceneNumber}`,
+              maxRetries: 2,
+              isImageComposition: true
+            });
+
+            const compositeUrl = compositeResp?.imageUrl || null;
+
+            style.images[ip].url = compositeUrl;
+            style.images[ip].status = compositeUrl ? 'generated' : 'failed';
+
+            console.log(`[storyboard-init]     → 합성 결과: ${compositeUrl}`);
+
+          } catch (e) {
+            console.error(
+              `[storyboard-init] ❌ 합성 실패 (C${si + 1}-S${imgPrompt.sceneNumber})`,
+              e
+            );
+          }
+
+          // 합성 진행 상태 업데이트
+          if (sessionId) {
+            try {
+              await fetch(`http://localhost:3000/api/session/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-username': username },
+                body: JSON.stringify({
+                  sessionId,
+                  progress: 95,
+                  message: `합성 이미지 처리 중...`,
+                  styles: styles
+                })
+              }).catch(() => {});
+            } catch (e) {
+              console.error('[세션 업데이트 실패]', e);
+            }
+          }
+        }
+      }
+
+      console.log('[storyboard-init] 🧩 합성 이미지 전체 완료');
+    }
+
+    console.log('[storyboard-init] 🎉 모든 이미지 생성 및 합성 완료');
+
+    // 최종 세션 업데이트
+    if (sessionId) {
+      try {
+        console.log('[storyboard-init] 📝 최종 세션 업데이트 시작');
+
+        await fetch(`http://localhost:3000/api/session/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-username': username },
+          body: JSON.stringify({
+            sessionId,
+            progress: 100,
+            message: '📌 스토리보드 생성이 완료되었습니다.',
+            completed: true,
+            storyboard: {
+              step1_output: typeof phase1_output === 'string'
+                ? phase1_output
+                : JSON.stringify(phase1_output, null, 2),
+
+              step2_output: typeof step2?.text === 'string'
+                ? step2.text
+                : JSON.stringify(step2?.text, null, 2),
+
+              styles: styles
+            }
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.error('[storyboard-init] ❌ 최종 세션 업데이트 실패', e);
+      }
+    }
+
+    // 사용량 증가
+    try {
+      incrementUsageCount(username);
+    } catch (e) {
+      console.error('[storyboard-init] 사용량 증가 실패:', e);
+    }
+
+    console.log(`[storyboard-init] 🎉 전체 생성 완료 — 총 소요: ${(Date.now() - startTime) / 1000}s`);
 
   } catch (error) {
-    console.error('[storyboard-init] ❌ 오류 발생:', error);
-    console.error('[storyboard-init] 스택 트레이스:', error.stack);
+    console.error('[processStoryboardAsync] ❌ 오류 발생:', error);
 
-    return res.status(500).json({
-      success: false,
-      error: '스토리보드 생성 중 오류가 발생했습니다. 관리자에게 문의하세요.',
-      processingTime: Date.now() - startTime,
-      timestamp: new Date().toISOString(),
-      debugInfo: {
-        videoPurpose: req.body?.videoPurpose,
-        brandName: req.body?.brandName,
-        videoLength: req.body?.videoLength,
-        errorType: error.name
-      },
-      errorCode: 'UNKNOWN_ERROR'
+    // 오류 발생 시 session 업데이트
+    try {
+      await updateSession(sessionId, {
+        progress: 0,
+        completed: true,
+        error: error.message || '알 수 없는 오류'
+      });
+    } catch (e) {
+      console.error('[updateSession] 오류 저장 실패:', e);
+    }
+  }
+}
+
+// 🔧 세션 업데이트 헬퍼 함수
+async function updateSession(sessionId, data) {
+  try {
+    console.log(`[updateSession] 세션 업데이트:`, sessionId, data);
+
+    await fetch(`http://localhost:3000/api/session/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, ...data })
     });
+
+  } catch (e) {
+    console.error('[updateSession] ❌ 업데이트 실패:', e);
   }
 }
