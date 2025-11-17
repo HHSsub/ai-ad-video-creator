@@ -114,6 +114,10 @@ export async function safeCallGemini(prompt, options = {}) {
   }
   
   const allModels = [selectedModel, ...fallbackModels.filter(m => m !== selectedModel)];
+  console.log(`[${label}] 🚀 Gemini API 호출 시작`);
+  console.log(`[${label}] 📝 프롬프트 타입: ${Array.isArray(prompt) ? '배열' : '문자열'}`);
+  console.log(`[${label}] 📝 프롬프트 길이: ${Array.isArray(prompt) ? JSON.stringify(prompt).length : prompt.length} chars`);
+  console.log(`[${label}] ⏰ 시작 시간:`, new Date().toISOString());
 
   // 🔥 키 풀 상태 로깅
   console.log(`[${label}] 🔑 API 키 풀 상태:`);
@@ -143,7 +147,8 @@ export async function safeCallGemini(prompt, options = {}) {
         // Gemini API 클라이언트 생성 및 호출 (타임아웃 적용)
         const genAI = new GoogleGenerativeAI(apiKey);
         const geminiModel = genAI.getGenerativeModel({ model: currentModel });
-        
+
+        console.log(`[${label}] 📡 API 호출 시작 (모델: ${currentModel}, 키: ${keyIndex})`);
         // 🔥 타임아웃과 함께 API 호출
         const apiCall = Array.isArray(prompt) 
           ? geminiModel.generateContent({ contents: prompt })
@@ -161,6 +166,8 @@ export async function safeCallGemini(prompt, options = {}) {
         
         // 성공 로깅 (모델명 포함)
         console.log(`[${label}] ✅ 성공 (모델: ${currentModel}, 키: ${keyIndex}, 시간: ${processingTime}ms, 응답: ${responseText?.length || 0}자)`);
+        console.log(`[${label}] ⏰ API 응답 시간: ${(processingTime/1000).toFixed(2)}초`);
+        console.log(`[${label}] 📊 응답 크기: ${(responseText?.length || 0)} chars`);
         
         // 키 사용 성공 기록
         if (selectedKeyIndex !== null) {
@@ -207,10 +214,17 @@ export async function safeCallGemini(prompt, options = {}) {
         }
         
         console.error(`[${label}] 시도 ${totalAttempts} 실패 (모델: ${currentModel}, 키: ${selectedKeyIndex}, ${processingTime}ms):`, error.message);
+        console.error(`[${label}] ❌ 에러 상세:`, {
+          message: error.message,
+          status: error.status,
+          code: error.code,
+          type: error.constructor.name
+        });
+
         
         if (isRetryableError(error) && modelAttempt < maxRetries - 1) {
           const delay = exponentialBackoffDelay(modelAttempt);
-          console.log(`[${label}] ${delay}ms 후 재시도... (모델: ${currentModel})`);
+          console.log(`[${label}] ⏳ ${delay}ms (${(delay/1000).toFixed(1)}초) 후 재시도... (모델: ${currentModel}, 남은 시도: ${maxRetries - modelAttempt - 1}회)`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -221,6 +235,12 @@ export async function safeCallGemini(prompt, options = {}) {
   
   const totalTime = Date.now() - startTime;
   console.error(`[${label}] ❌ 모든 모델 시도 실패 (총 시간: ${totalTime}ms, 시도: ${totalAttempts}회)`);
+  console.error(`[${label}] 💥 최종 에러:`, {
+    message: lastError?.message,
+    totalTime: `${(totalTime/1000).toFixed(2)}초`,
+    attempts: totalAttempts,
+    models: allModels.join(', ')
+  });
   throw lastError || new Error(`${label} 모든 재시도 실패`);
 }
 
