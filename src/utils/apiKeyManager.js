@@ -226,30 +226,45 @@ class ApiKeyManager {
   }
 
   markKeyError(service, keyIndex, errorMessage = '') {
-    const usageMap = service === 'gemini' ? this.geminiUsage : this.freepikUsage;
-    if (usageMap.has(keyIndex)) {
-      const usage = usageMap.get(keyIndex);
-      usage.errorCount++;
-      const errorLower = errorMessage.toLowerCase();
-      const isRateLimit = errorLower.includes('429') || 
-                         errorLower.includes('too many requests') ||
-                         errorLower.includes('rate limit') ||
-                         errorLower.includes('quota') ||
-                         errorLower.includes('exceeded your current quota') ||
-                         errorLower.includes('overload');
-      if (isRateLimit || (usage.errorCount > usage.successCount + 2 && usage.errorCount >= 3)) {
-        if (!usage.isBlocked) {
-          usage.isBlocked = true;
-          usage.blockStarted = Date.now(); // 최초 블록 시점 기록. 이후 절대 갱신 안함.
-          console.warn(`[markKeyError] 🚫 ${service} 키 ${keyIndex} 일시적 블록 (Rate Limit/연속실패): ${errorMessage.substring(0, 100)}`);
+      const usageMap = service === 'gemini' ? this.geminiUsage : this.freepikUsage;
+      if (usageMap.has(keyIndex)) {
+        const usage = usageMap.get(keyIndex);
+        usage.errorCount++;
+        const errorLower = errorMessage.toLowerCase();
+        
+        // 🔥 503은 일시적 과부하이므로 블록 기준 완화
+        const is503 = errorLower.includes('503') || errorLower.includes('overload');
+        const isRateLimit = errorLower.includes('429') || 
+                           errorLower.includes('too many requests') ||
+                           errorLower.includes('rate limit') ||
+                           errorLower.includes('quota') ||
+                           errorLower.includes('exceeded your current quota');
+        
+        // 🔥 블록 기준 완화:
+        // - 429/quota: 5번 연속 실패 시 블록
+        // - 503: 10번 연속 실패 시 블록
+        // - 기타: errorCount > successCount + 5 이고 errorCount >= 8
+        const blockThreshold = is503 ? 10 : (isRateLimit ? 5 : 8);
+        const shouldBlock = isRateLimit 
+          ? (usage.errorCount >= 5)
+          : (is503 
+            ? (usage.errorCount >= 10)
+            : (usage.errorCount > usage.successCount + 5 && usage.errorCount >= 8));
+        
+        if (shouldBlock) {
+          if (!usage.isBlocked) {
+            usage.isBlocked = true;
+            usage.blockStarted = Date.now();
+            console.warn(`[markKeyError] 🚫 ${service} 키 ${keyIndex} 일시적 블록 (${is503 ? '503 과부하' : isRateLimit ? 'Rate Limit' : '연속실패'}: ${usage.errorCount}회): ${errorMessage.substring(0, 100)}`);
+          } else {
+            console.warn(`[markKeyError] 🚫 ${service} 키 ${keyIndex} 이미 블록 중 (blockStarted=${new Date(usage.blockStarted).toISOString()})`);
+          }
         } else {
-          // 이미 블록된 경우엔 blockStarted 갱신하지 않음
-          console.warn(`[markKeyError] 🚫 ${service} 키 ${keyIndex} 이미 블록 중 (blockStarted=${new Date(usage.blockStarted).toISOString()})`);
+          const remaining = blockThreshold - usage.errorCount;
+          console.log(`[markKeyError] ${service} 키 ${keyIndex} 실패 (총 ${usage.errorCount}회) - 블록까지 ${remaining}회 남음`);
         }
       }
-      console.log(`[markKeyError] ${service} 키 ${keyIndex} 실패 (총 ${usage.errorCount}회) ${usage.isBlocked ? '- 블록됨' : ''}`);
     }
-  }
 
   getUsageStats() {
     const geminiStats = {};
