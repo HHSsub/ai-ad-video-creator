@@ -497,6 +497,8 @@ export default async function handler(req, res) {
     }
 
     console.log(`[storyboard-init] 📡 STEP1 Gemini API 호출 시작`);
+    console.log('[storyboard-init] ⏰ 타임스탬프:', new Date().toISOString());
+    console.log('[storyboard-init] 📝 프롬프트 길이:', step1PromptTemplate.length, 'chars');
     const step1 = await safeCallGemini(step1PromptTemplate, {
       label: 'STEP1-storyboard-init',
       maxRetries: 3,
@@ -505,7 +507,8 @@ export default async function handler(req, res) {
 
     const phase1_output = step1.text;
     console.log("[storyboard-init] ✅ STEP1 완료:", phase1_output.length, "chars");
-
+    console.log('[storyboard-init] ⏰ STEP1 소요 시간:', (Date.now() - startTime) / 1000, '초');
+    
     if (sessionId) {
       try {
         await fetch(`http://localhost:3000/api/session/update`, {
@@ -577,6 +580,7 @@ export default async function handler(req, res) {
     }
     
     console.log('[storyboard-init] 📡 STEP2 Gemini API 호출 시작');
+    console.log('[storyboard-init] ⏰ 타임스탬프:', new Date().toISOString());
     console.log(`[storyboard-init] STEP2 프롬프트 길이: ${step2Prompt.length} chars`);
 
     const step2 = await safeCallGemini(step2Prompt, {
@@ -586,6 +590,7 @@ export default async function handler(req, res) {
     });
 
     console.log("[storyboard-init] ✅ STEP2 완료:", step2.text.length, "chars");
+    console.log('[storyboard-init] ⏰ STEP2 소요 시간:', (Date.now() - startTime) / 1000, '초');
 
     if (sessionId) {
       try {
