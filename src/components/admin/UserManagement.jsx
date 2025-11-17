@@ -121,12 +121,7 @@ const UserManagement = ({ currentUser }) => {
   
       alert('사용자 정보가 수정되었습니다.');
       setModalOpen(false);
-      
-      // 🔥 강제 새로고침 추가 (캐시 무시)
       await loadUsers();
-      
-      // 🔥 또는 페이지 전체 새로고침
-      // window.location.reload();
       
     } catch (err) {
       alert(err.message);
@@ -263,7 +258,7 @@ const UserManagement = ({ currentUser }) => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                    {user.usageLimit !== null ? `${user.usageLimit}회` : '무제한'}
+                    {user.totalUsageCount || 0}회
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`font-semibold ${
@@ -274,6 +269,9 @@ const UserManagement = ({ currentUser }) => {
                     }`}>
                       {remaining}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                    {user.lastResetDate || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                     <button
