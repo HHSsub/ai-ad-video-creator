@@ -1,7 +1,7 @@
-// api/session/start.js
 const sessions = new Map();
 
-export default async function handler(req, res) {
+const handler = async (req, res) => {
+  // CORS 헤더
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
@@ -19,6 +19,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('[session/start] req.body:', req.body);
+    
     const { sessionId, formData, timestamp } = req.body;
     const username = req.headers['x-username'] || 'anonymous';
 
@@ -41,7 +43,7 @@ export default async function handler(req, res) {
       updatedAt: new Date().toISOString()
     });
 
-    console.log(`[session/start] 세션 생성: ${sessionId} (사용자: ${username})`);
+    console.log(`[session/start] ✅ 세션 생성: ${sessionId} (사용자: ${username})`);
 
     return res.status(200).json({
       success: true,
@@ -50,12 +52,13 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('[session/start] 오류:', error);
+    console.error('[session/start] ❌ 오류:', error);
     return res.status(500).json({
       success: false,
-      error: '세션 생성 중 오류가 발생했습니다'
+      error: error.message || '세션 생성 중 오류가 발생했습니다'
     });
   }
-}
+};
 
+export default handler;
 export { sessions };
