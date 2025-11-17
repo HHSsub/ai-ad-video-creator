@@ -1,12 +1,12 @@
-// api/storyboard-init.js - Gemini 응답 저장 로직 추가
-
-import fs from 'fs';
-import path from 'path';
-import { safeCallGemini } from '../src/utils/apiHelpers.js';
+// api/storyboard-init.js
 
 export const config = {
   maxDuration: 300,
 };
+
+import fs from 'fs';
+import path from 'path';
+import { safeCallGemini } from '../src/utils/apiHelpers.js';
 
 const PROMPT_FILE_MAPPING = {
   'step1_product': 'Prompt_step1_product.txt',
@@ -265,8 +265,6 @@ function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, 
   return finalPrompt;
 }
 
-// 🔥 [추가] Gemini 응답 저장 헬퍼 함수
-// 🔥 [수정] Gemini 응답 저장 헬퍼 함수 - 시그니처 변경
 function saveGeminiResponse(promptKey, step, formData, step1Response, step2Response = null) {
   try {
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
@@ -280,12 +278,11 @@ function saveGeminiResponse(promptKey, step, formData, step1Response, step2Respo
     const fileName = `${promptKey}_${step}_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
     
-    // 🔥 [수정] step1, step2 응답 모두 정확히 저장
     const responseData = {
       promptKey,
       step,
       formData: formData || {},
-      response: step2Response || step1Response,  // 최종 응답
+      response: step2Response || step1Response,
       rawStep1Response: step1Response,
       rawStep2Response: step2Response,
       timestamp: new Date().toISOString(),
@@ -529,7 +526,6 @@ export default async function handler(req, res) {
     console.log(phase1_output);
     console.log('==========================================\n');
 
-    // 🔥 [추가] Step1 응답 저장
     saveGeminiResponse(
       promptFiles.step1,
       'step1',
@@ -564,7 +560,6 @@ export default async function handler(req, res) {
 
     const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, req.body, sceneCountPerConcept, step2PromptContent);
 
-    // 🔥 세션 업데이트: Step2 시작
     if (sessionId) {
       try {
         await fetch(`http://localhost:3000/api/session/update`, {
@@ -592,7 +587,6 @@ export default async function handler(req, res) {
 
     console.log("[storyboard-init] ✅ STEP2 완료:", step2.text.length, "chars");
 
-    // 🔥 세션 업데이트: Step2 완료
     if (sessionId) {
       try {
         await fetch(`http://localhost:3000/api/session/update`, {
@@ -613,8 +607,6 @@ export default async function handler(req, res) {
     console.log(step2.text);
     console.log('==========================================\n');
 
-    // 🔥 [수정] Step2 완료 후 양쪽 promptKey 모두에 전체 세트 저장
-    // step1 히스토리에 저장
     saveGeminiResponse(
       promptFiles.step1,
       'complete',
@@ -623,7 +615,6 @@ export default async function handler(req, res) {
       step2.text
     );
     
-    // step2 히스토리에 저장
     saveGeminiResponse(
       promptFiles.step2,
       'complete',
@@ -748,7 +739,6 @@ export default async function handler(req, res) {
 
     incrementUsageCount(username);
 
-    // 🔥 세션 업데이트: 완료
     if (sessionId) {
       try {
         await fetch(`http://localhost:3000/api/session/update`, {
