@@ -408,6 +408,13 @@ export default async function handler(req, res) {
     const sessionId = req.body.sessionId || null;
     console.log(`[storyboard-init] 📝 세션 ID: ${sessionId}`);
 
+    // 🔥 즉시 202 응답 반환
+    res.status(202).json({
+      success: true,
+      sessionId: sessionId,
+      message: '스토리보드 생성이 시작되었습니다'
+    });
+
     const usageCheck = checkUsageLimit(username);
     
     if (!usageCheck.allowed) {
