@@ -4,6 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 
+export const config = {
+  maxDuration: 300,
+};
+
 const PROMPT_FILE_MAPPING = {
   'step1_product': 'Prompt_step1_product.txt',
   'step1_service': 'Prompt_step1_service.txt',
