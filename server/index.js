@@ -44,6 +44,11 @@ const PORT = process.env.PORT || 3000;
 // 🔥 세션 저장소 (메모리)
 const activeSessions = new Map();
 
+// 🔥 미들웨어 설정 (반드시 최상단)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(cors());
+
 // 세션 시작
 app.post('/api/session/start', (req, res) => { // 수정됨: /api/ 추가
   try {
