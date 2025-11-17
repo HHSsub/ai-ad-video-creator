@@ -63,11 +63,36 @@ function App() {
     setCurrentView('mode-select');
   };
 
-  // 🔥 모드 선택 핸들러
-  const handleSelectMode = (mode) => {
+  // 🔥 모드 선택 핸들러 (프로젝트 모드 저장 추가)
+  const handleSelectMode = async (mode) => {
     setCurrentMode(mode);
+    
+    // 🔥 프로젝트에 모드 저장
+    if (currentProject && currentProject.id) {
+      try {
+        const response = await fetch(`/nexxii/api/projects/${currentProject.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': user.username || user.id
+          },
+          body: JSON.stringify({ mode })
+        });
+  
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[App] ✅ 프로젝트 모드 저장 성공:', data.project);
+          setCurrentProject(data.project);
+        } else {
+          console.error('[App] ❌ 프로젝트 모드 저장 실패:', response.status);
+        }
+      } catch (error) {
+        console.error('[App] ❌ 프로젝트 모드 저장 오류:', error);
+      }
+    }
+    
     setStep(1);
-
+  
     if (mode === 'auto') {
       setCurrentView('step1-auto');
     } else if (mode === 'manual') {
