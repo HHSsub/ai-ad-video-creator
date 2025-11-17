@@ -1,7 +1,7 @@
 // api/storyboard-init.js
 
 export const config = {
-  maxDuration: 300,
+  maxDuration: 9000,
 };
 
 import fs from 'fs';
