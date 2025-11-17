@@ -99,7 +99,7 @@ const UserManagement = ({ currentUser }) => {
 
   const handleEditUser = async () => {
     try {
-      const response = await fetch(`/api/users?username=${selectedUser.username}`, {
+      const response = await fetch(`/nexxii/api/users?username=${selectedUser.username}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ const UserManagement = ({ currentUser }) => {
     }
 
     try {
-      const response = await fetch(`/api/users?username=${username}`, {
+      const response = await fetch(`/nexxii/api/users?username=${username}`, {
         method: 'DELETE',
         headers: {
           'x-username': currentUser.username
