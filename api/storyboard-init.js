@@ -452,6 +452,8 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
         console.log(`[pollVideoStatus] 📊 상태: ${status} (${Math.floor(attempt * 5 / 60)}분 ${(attempt * 5) % 60}초 경과)`);
         
         const videoProgress = ((currentVideoIndex - 1) / totalVideos) * 100;
+        const session = sessionStore.getSession(sessionId);  // 🔥 추가
+        if (session) {  // 🔥 추가
         await updateSession(sessionId, {
           progress: {
             phase: 'VIDEO',
@@ -459,6 +461,7 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
             currentStep: `비디오 ${currentVideoIndex}/${totalVideos} 생성 중... (${Math.floor(attempt * 5 / 60)}분 경과, 상태: ${status})`
           }
         });
+       }
       }
 
       if (status === 'COMPLETED') {
