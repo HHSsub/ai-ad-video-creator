@@ -16,7 +16,6 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
     try {
       console.log(`[pollSeedreamV4TaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중... (컨셉: ${conceptId})`);
  
-      // 🔥 공식 Seedream v4 상태 확인 엔드포인트
       const url = `${FREEPIK_API_BASE}/ai/text-to-image/seedream-v4/${encodeURIComponent(taskId)}`;
       
       const result = await safeCallFreepik(url, {
@@ -34,7 +33,7 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
 
         console.log(`[pollSeedreamV4TaskStatus] 태스크 상태: ${status}`);
 
-        // ✅ 완료 상태
+        // ✅ 완료
         if (status === 'COMPLETED') {
           if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated.length > 0) {
             const imageUrl = taskData.generated[0];
@@ -45,12 +44,12 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
           }
         }
 
-        // ❌ 실패 상태
+        // ❌ 실패
         if (status === 'FAILED' || status === 'ERROR') {
           throw new Error(`Seedream v4 태스크 실패: ${status}`);
         }
 
-        // ✅ 진행 중 상태 (정상) - 계속 대기
+        // ✅ 진행 중 - 정상 대기
         if (status === 'IN_PROGRESS' || status === 'PENDING' || status === 'PROCESSING' || status === 'CREATED') {
           console.log(`[pollSeedreamV4TaskStatus] 대기 중... (${status})`);
           await sleep(POLLING_INTERVAL);
@@ -64,25 +63,23 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
       }
 
     } catch (error) {
-      // 타임아웃 체크
       if (Date.now() - startTime >= POLLING_TIMEOUT) {
         throw new Error(`Seedream v4 태스크 타임아웃 (${POLLING_TIMEOUT}ms 초과)`);
       }
       
       console.error(`[pollSeedreamV4TaskStatus] 폴링 에러 (컨셉: ${conceptId}):`, error);
       
-      // FAILED/ERROR는 즉시 throw
       if (error.message.includes('FAILED') || error.message.includes('ERROR')) {
         throw error;
       }
       
-      // 기타 에러는 재시도
       await sleep(POLLING_INTERVAL);
     }
   }
 
   throw new Error(`Seedream v4 태스크 타임아웃 (${POLLING_TIMEOUT}ms)`);
 }
+
 
 // 🔥 Seedream v4 이미지 생성 함수 (키 풀 활용)
 async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
