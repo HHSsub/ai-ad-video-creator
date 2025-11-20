@@ -3,7 +3,7 @@
  * GET /api/session/status/:sessionId
  */
 
-import sessionStore from '../../../utils/sessionStore.js';
+import sessionStore from '../../../src/utils/sessionStore.js';  // ✅ 맞음!
 
 export default async function handler(req, res) {
   // CORS 헤더 설정
