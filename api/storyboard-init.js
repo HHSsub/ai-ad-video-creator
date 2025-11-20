@@ -732,10 +732,12 @@ async function processStoryboardAsync(body, username, sessionId) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            segments,
-            videoLength: videoLength,
-            formData: body,
-            jsonMode: true
+            sessionId,           // 🔥 NEW: 진행률 추적용
+            concept,             // 🔥 NEW: 컨셉 이름
+            segments: conceptVideos[concept],
+            videoLength: formData.videoLength,
+            formData,
+            jsonMode: true,
           })
         });
 
