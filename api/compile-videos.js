@@ -1,10 +1,10 @@
-// api/compile-videos.js - 진행률 추적 추가 버전
+// api/compile-videos.js - 진행률 추적 추가 (올바른 import)
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
-import { getSession, updateSession } from '../src/utils/sessionStore.js';
+import sessionStore from '../src/utils/sessionStore.js';  // ✅ default import
 
 const MAX_DOWNLOAD_RETRIES = 3;
 const DOWNLOAD_TIMEOUT = 30000;
@@ -253,7 +253,7 @@ export default async function handler(req, res) {
     // 🔥 진행률 업데이트: COMPOSE 시작 (세션이 있는 경우에만)
     if (sessionId) {
       try {
-        await updateSession(sessionId, {
+        sessionStore.updateProgress(sessionId, {
           phase: 'COMPOSE',
           currentStep: `${concept} 컨셉 합성 시작`,
           percentage: 80,
@@ -294,7 +294,7 @@ export default async function handler(req, res) {
     // 🔥 진행률 업데이트: 다운로드 시작
     if (sessionId) {
       try {
-        await updateSession(sessionId, {
+        sessionStore.updateProgress(sessionId, {
           phase: 'COMPOSE',
           currentStep: `${concept} - 비디오 다운로드 중 (0/${segmentsToUse.length})`,
           percentage: 82,
@@ -362,7 +362,7 @@ export default async function handler(req, res) {
         if (sessionId && (i + 1) % 2 === 0) {
           const clipProgress = Math.round(82 + ((i + 1) / segmentsToUse.length) * 8);
           try {
-            await updateSession(sessionId, {
+            sessionStore.updateProgress(sessionId, {
               phase: 'COMPOSE',
               currentStep: `${concept} - 클립 처리 중 (${i + 1}/${segmentsToUse.length})`,
               percentage: clipProgress,
@@ -390,7 +390,7 @@ export default async function handler(req, res) {
     // 🔥 진행률 업데이트: 합치기 시작
     if (sessionId) {
       try {
-        await updateSession(sessionId, {
+        sessionStore.updateProgress(sessionId, {
           phase: 'COMPOSE',
           currentStep: `${concept} - FFmpeg 합성 중...`,
           percentage: 90,
@@ -477,7 +477,7 @@ export default async function handler(req, res) {
       // 🔥 진행률 업데이트: 완료 (이 함수는 한 컨셉만 처리하므로 100%는 storyboard-init에서)
       if (sessionId) {
         try {
-          await updateSession(sessionId, {
+          sessionStore.updateProgress(sessionId, {
             phase: 'COMPOSE',
             currentStep: `${concept} 컨셉 합성 완료`,
             percentage: 95, // 한 컨셉 완료 (전체는 storyboard-init에서 100%로)
@@ -568,10 +568,7 @@ export default async function handler(req, res) {
     // 🔥 에러 발생 시 세션 업데이트
     if (req.body?.sessionId) {
       try {
-        await updateSession(req.body.sessionId, {
-          status: 'error',
-          error: `compile-videos 실패: ${error.message}`,
-        });
+        sessionStore.updateStatus(req.body.sessionId, 'error', null, `compile-videos 실패: ${error.message}`);
       } catch (err) {
         console.warn('[compile-videos] 에러 상태 업데이트 실패:', err.message);
       }
