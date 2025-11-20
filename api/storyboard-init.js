@@ -456,7 +456,8 @@ function extractJSONBlocks(text) {
   return jsonBlocks;
 }
 
-module.exports = {
+// 🔥🔥🔥 ES Module export로 변경
+export {
   parseUnifiedConceptJSON,
   extractJSONBlocks
 };
