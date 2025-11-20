@@ -1,6 +1,9 @@
-// api/session/clear.js
+/**
+ * API: 세션 삭제 (사용자 세션 초기화)
+ * POST /api/session/clear
+ */
 
-import { sessions } from './start.js';
+import sessionStore from '../../src/utils/sessionStore.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,20 +24,21 @@ export default async function handler(req, res) {
   try {
     const username = req.headers['x-username'] || 'anonymous';
 
-    const userSessions = Array.from(sessions.entries()).filter(
-      ([_, session]) => session.username === username
-    );
+    const allSessions = sessionStore.getAllSessions();
+    const userSessions = allSessions.filter(s => s.username === username);
 
-    userSessions.forEach(([sessionId, _]) => {
-      sessions.delete(sessionId);
+    let deletedCount = 0;
+    userSessions.forEach(session => {
+      sessionStore.deleteSession(session.id);
+      deletedCount++;
     });
 
-    console.log(`[session/clear] 사용자 세션 삭제: ${username} (${userSessions.length}개)`);
+    console.log(`[session/clear] 사용자 세션 삭제: ${username} (${deletedCount}개)`);
 
     return res.status(200).json({
       success: true,
       message: '세션이 삭제되었습니다',
-      deletedCount: userSessions.length
+      deletedCount: deletedCount
     });
 
   } catch (error) {
