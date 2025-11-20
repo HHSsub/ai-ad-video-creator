@@ -34,8 +34,8 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
 
         console.log(`[pollSeedreamV4TaskStatus] 태스크 상태: ${status}`);
 
+        // ✅ 완료 상태
         if (status === 'COMPLETED') {
-          // 🔥 Seedream v4의 generated 배열에서 이미지 URL 추출
           if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated.length > 0) {
             const imageUrl = taskData.generated[0];
             console.log(`[pollSeedreamV4TaskStatus] ✅ 완료 - 이미지 URL: ${imageUrl.substring(0, 80)}...`);
@@ -45,32 +45,38 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
           }
         }
 
+        // ❌ 실패 상태
         if (status === 'FAILED' || status === 'ERROR') {
           throw new Error(`Seedream v4 태스크 실패: ${status}`);
         }
 
-        if (status === 'PENDING' || status === 'PROCESSING' || status === 'CREATED') {
+        // ✅ 진행 중 상태 (정상) - 계속 대기
+        if (status === 'IN_PROGRESS' || status === 'PENDING' || status === 'PROCESSING' || status === 'CREATED') {
           console.log(`[pollSeedreamV4TaskStatus] 대기 중... (${status})`);
           await sleep(POLLING_INTERVAL);
           continue;
         }
 
+        // ❌ 알 수 없는 상태
         throw new Error(`알 수 없는 태스크 상태: ${status}`);
       } else {
         throw new Error('응답에 data 필드가 없습니다');
       }
 
     } catch (error) {
+      // 타임아웃 체크
       if (Date.now() - startTime >= POLLING_TIMEOUT) {
         throw new Error(`Seedream v4 태스크 타임아웃 (${POLLING_TIMEOUT}ms 초과)`);
       }
       
       console.error(`[pollSeedreamV4TaskStatus] 폴링 에러 (컨셉: ${conceptId}):`, error);
       
+      // FAILED/ERROR는 즉시 throw
       if (error.message.includes('FAILED') || error.message.includes('ERROR')) {
         throw error;
       }
       
+      // 기타 에러는 재시도
       await sleep(POLLING_INTERVAL);
     }
   }
