@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './Step1Manual.css';
 
 const Step1Manual = ({ formData, setFormData, user, onNext }) => {
   const [errors, setErrors] = useState({});
+
+  // ✅ Manual mode 설정
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      mode: 'manual'
+    }));
+  }, [setFormData]);
 
   // 필수 옵션값 (fieldConfig.js와 정확히 일치)
   const VIDEO_LENGTHS = ['10초', '20초', '30초'];
@@ -12,7 +20,10 @@ const Step1Manual = ({ formData, setFormData, user, onNext }) => {
     { value: 'square_1_1', label: '1:1 (정사각형)' },
     { value: 'portrait_9_16', label: '9:16 (세로형)' }
   ];
-  const VIDEO_PURPOSES = ['제품', '서비스'];
+  const VIDEO_PURPOSES = [
+    { value: 'product', label: '제품' },
+    { value: 'service', label: '서비스' }
+  ];
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -34,16 +45,16 @@ const Step1Manual = ({ formData, setFormData, user, onNext }) => {
     if (!formData.videoLength) {
       newErrors.videoLength = '영상 길이를 선택하세요';
     }
-    if (!formData.aspectRatio) {
-      newErrors.aspectRatio = '영상 비율을 선택하세요';
+    if (!formData.aspectRatioCode) {
+      newErrors.aspectRatioCode = '영상 비율을 선택하세요';
     }
     if (!formData.videoPurpose) {
       newErrors.videoPurpose = '영상 목적을 선택하세요';
     }
 
     // 자연어 입력 검증
-    if (!formData.naturalLanguageInput || formData.naturalLanguageInput.trim().length < 10) {
-      newErrors.naturalLanguageInput = '최소 10자 이상 입력하세요';
+    if (!formData.userdescription || formData.userdescription.trim().length < 10) {
+      newErrors.userdescription = '최소 10자 이상 입력하세요';
     }
 
     setErrors(newErrors);
@@ -91,15 +102,15 @@ const Step1Manual = ({ formData, setFormData, user, onNext }) => {
         <div className="form-section">
           <label className="section-label">
             2. 영상 비율 *
-            {errors.aspectRatio && <span className="error-text">{errors.aspectRatio}</span>}
+            {errors.aspectRatioCode && <span className="error-text">{errors.aspectRatioCode}</span>}
           </label>
           <div className="option-group">
             {ASPECT_RATIOS.map(ratio => (
               <button
                 key={ratio.value}
                 type="button"
-                className={`option-btn ${formData.aspectRatio === ratio.value ? 'selected' : ''}`}
-                onClick={() => handleChange('aspectRatio', ratio.value)}
+                className={`option-btn ${formData.aspectRatioCode === ratio.value ? 'selected' : ''}`}
+                onClick={() => handleChange('aspectRatioCode', ratio.value)}
               >
                 {ratio.label}
               </button>
@@ -116,12 +127,12 @@ const Step1Manual = ({ formData, setFormData, user, onNext }) => {
           <div className="option-group">
             {VIDEO_PURPOSES.map(purpose => (
               <button
-                key={purpose}
+                key={purpose.value}
                 type="button"
-                className={`option-btn ${formData.videoPurpose === purpose ? 'selected' : ''}`}
-                onClick={() => handleChange('videoPurpose', purpose)}
+                className={`option-btn ${formData.videoPurpose === purpose.value ? 'selected' : ''}`}
+                onClick={() => handleChange('videoPurpose', purpose.value)}
               >
-                {purpose}
+                {purpose.label}
               </button>
             ))}
           </div>
@@ -131,24 +142,24 @@ const Step1Manual = ({ formData, setFormData, user, onNext }) => {
         <div className="form-section">
           <label className="section-label">
             4. 원하는 영상 설명 *
-            {errors.naturalLanguageInput && <span className="error-text">{errors.naturalLanguageInput}</span>}
+            {errors.userdescription && <span className="error-text">{errors.userdescription}</span>}
           </label>
           <div className="natural-language-box">
             <textarea
-              value={formData.naturalLanguageInput || ''}
-              onChange={(e) => handleChange('naturalLanguageInput', e.target.value)}
+              value={formData.userdescription || ''}
+              onChange={(e) => handleChange('userdescription', e.target.value)}
               placeholder="예시:
-• 60대 할머니가 나와서 깽판을 치는 재밌는 광고영상을 제작해줘
-• 신제품 출시를 알리는 세련된 티저 영상
-• 젊은 세대를 타겟으로 한 역동적인 브랜드 영상
-• 감성적인 스토리텔링이 담긴 기업 홍보 영상
+- 70대 할머니가 나와서 깽판을 치는 재밌는 광고영상을 제작해줘
+- 신제품 출시를 알리는 세련된 티저 영상
+- 젊은 세대를 타겟으로 한 역동적인 브랜드 영상
+- 감성적인 스토리텔링이 담긴 기업 홍보 영상
 
 자유롭게 작성하세요. AI가 이해하고 최적의 영상을 생성합니다."
               rows={10}
               maxLength={2000}
             />
             <div className="char-count">
-              {(formData.naturalLanguageInput || '').length} / 2000
+              {(formData.userdescription || '').length} / 2000
             </div>
           </div>
         </div>
@@ -164,12 +175,14 @@ const Step1Manual = ({ formData, setFormData, user, onNext }) => {
             <div className="summary-item">
               <span className="summary-label">영상 비율:</span>
               <span className="summary-value">
-                {ASPECT_RATIOS.find(r => r.value === formData.aspectRatio)?.label || '-'}
+                {ASPECT_RATIOS.find(r => r.value === formData.aspectRatioCode)?.label || '-'}
               </span>
             </div>
             <div className="summary-item">
               <span className="summary-label">영상 목적:</span>
-              <span className="summary-value">{formData.videoPurpose || '-'}</span>
+              <span className="summary-value">
+                {VIDEO_PURPOSES.find(p => p.value === formData.videoPurpose)?.label || '-'}
+              </span>
             </div>
           </div>
         </div>
