@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './Step1Manual.css';
 
-const Step1Manual = ({ formData, setFormData, user, onNext }) => {
+const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   const [errors, setErrors] = useState({});
 
   // ✅ Manual mode 설정
@@ -186,14 +186,24 @@ const Step1Manual = ({ formData, setFormData, user, onNext }) => {
             </div>
           </div>
         </div>
-
-        {/* 제출 버튼 */}
-        <button 
-          className="btn-submit"
-          onClick={handleSubmit}
-        >
-          다음 단계로 →
-        </button>
+        {/* 버튼 영역 */}
+        <div className="flex items-center justify-between pt-6 border-t border-gray-700 mt-8">
+          {/* ✅ 이전 버튼 추가 */}
+          <button
+            onClick={onPrev}
+            className="px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            ← 이전 단계
+          </button>
+          
+          {/* 기존 다음 버튼 */}
+          <button 
+            className="btn-submit px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg transition-all duration-200 font-medium"
+            onClick={handleSubmit}
+          >
+            다음 단계로 →
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -203,6 +213,7 @@ Step1Manual.propTypes = {
   formData: PropTypes.object.isRequired,
   setFormData: PropTypes.func.isRequired,
   user: PropTypes.object.isRequired,
+    onPrev: PropTypes.func,  
   onNext: PropTypes.func.isRequired
 };
 
