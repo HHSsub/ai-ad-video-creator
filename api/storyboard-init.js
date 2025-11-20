@@ -276,33 +276,40 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
     
     const expectedConceptCount = mode === 'manual' ? 1 : 3;
     
+    // 1. 컨셉 블록 추출 - mode에 따라 다른 패턴 사용
     let conceptMatches = [];
     
     if (mode === 'manual') {
+      // manual 모드: Section 2 패턴 찾기 (대소문자 무시, 공백 유연하게)
       const manualConceptPattern = /Section\s*2[\s.:]*[^\n]*(?:Cinematic|Storyboard)[^\n]*/i;
       const match = text.match(manualConceptPattern);
       
       if (match) {
         console.log('[parseUnifiedConceptJSON] Manual 모드 - Section 2 발견:', match[0]);
+        // Section 2를 찾았으면 matchAll 형식과 호환되는 매치 객체 생성
         conceptMatches = [{
           0: match[0],
-          1: '1',
-          2: 'Manual Video Concept',
+          1: '1', // 컨셉 번호 1로 설정
+          2: 'Manual Video Concept', // 기본 컨셉 이름
           index: match.index,
           input: text
         }];
       }
     } else {
+      // auto 모드: 기존 패턴 사용
       const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
       conceptMatches = [...text.matchAll(conceptPattern)];
     }
     
     if (conceptMatches.length === 0) {
       console.error('[parseUnifiedConceptJSON] 컨셉 헤더를 찾을 수 없음');
+      const debugPath = path.join(process.cwd(), 'debug_unified_response.txt');
+      fs.writeFileSync(debugPath, text, 'utf-8');
+      console.log('[parseUnifiedConceptJSON] 응답 저장:', debugPath);
       return null;
     }
     
-    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
+    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견 (기대: ${expectedConceptCount}개)`);
     
     const concepts = [];
     const conceptsToProcess = conceptMatches.slice(0, expectedConceptCount);
@@ -328,6 +335,7 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
       const styleMatch = conceptText.match(/Style:\s*(.+)/);
       const style = styleMatch ? styleMatch[1].trim() : '';
       
+      // 2. 씬 블록 추출
       const scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
       
@@ -346,10 +354,16 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
         const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
         const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
         
+        console.log(`[parseUnifiedConceptJSON]   처리 중: S#${sceneNum} (${timecode})`);
+        
+        // Visual Description 추출
         const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=JSON|###|$)/s);
         const visualDescription = visualDescMatch ? visualDescMatch[1].trim() : '';
         
+        // 🔥🔥🔥 개선된 JSON 블록 추출 (백틱 있는/없는 형식 모두 지원)
         const jsonBlocks = extractJSONBlocks(sceneText);
+        
+        console.log(`[parseUnifiedConceptJSON]   S#${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견`);
         
         if (jsonBlocks.length >= 3) {
           try {
@@ -366,41 +380,73 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
               copy: copyJSON
             };
             
+            console.log(`[parseUnifiedConceptJSON]   → S#${sceneNum} 파싱 성공`);
           } catch (e) {
             console.error(`[parseUnifiedConceptJSON] JSON 파싱 실패 (컨셉 ${conceptNum}, 씬 ${sceneNum}):`, e.message);
+            console.error('[parseUnifiedConceptJSON] JSON 블록 내용:');
+            jsonBlocks.forEach((block, idx) => {
+              console.error(`  블록 ${idx + 1}:`, block.substring(0, 200));
+            });
           }
+        } else {
+          console.warn(`[parseUnifiedConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함 (${jsonBlocks.length}개 발견)`);
+          
+          // 🔥 디버깅: 실제 텍스트 일부 출력
+          console.log(`[parseUnifiedConceptJSON] 씬 텍스트 샘플 (처음 500자):`);
+          console.log(sceneText.substring(0, 500));
         }
       }
+      
+      const sceneKeys = Object.keys(conceptData).filter(k => k.startsWith('scene_'));
+      console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum} 최종 씬 수: ${sceneKeys.length}개`);
       
       concepts.push(conceptData);
     }
     
     console.log(`[parseUnifiedConceptJSON] ✅ 파싱 완료: ${concepts.length}개 컨셉`);
+    concepts.forEach((c, idx) => {
+      const sceneCount = Object.keys(c).filter(k => k.startsWith('scene_')).length;
+      console.log(`  컨셉 ${idx + 1} (${c.concept_name}): ${sceneCount}개 씬`);
+    });
     
     return { concepts };
     
   } catch (error) {
     console.error('[parseUnifiedConceptJSON] 전체 파싱 오류:', error);
+    console.error('[parseUnifiedConceptJSON] 스택:', error.stack);
     return null;
   }
 }
 
+/**
+ * 🔥 JSON 블록 추출 함수 (백틱 있는/없는 형식 모두 지원)
+ * @param {string} text - 파싱할 텍스트
+ * @returns {string[]} - 추출된 JSON 문자열 배열
+ */
 function extractJSONBlocks(text) {
   const jsonBlocks = [];
   
+  // 패턴 1: 백틱으로 감싸진 JSON (```json ... ``` 또는 ```python ... ```)
   const backtickPattern = /```(?:json|python)?\s*\n([\s\S]*?)\n```/g;
   let backtickMatches = [...text.matchAll(backtickPattern)];
   
+  // 패턴 2: "JSON" 단어 다음에 오는 순수 JSON (백틱 없음)
+  // "JSON\n{...}" 형식
   const plainJSONPattern = /(?:^|\n)JSON\s*\n(\{[\s\S]*?\n\})\s*(?=\n(?:JSON|###|```|$))/gm;
   let plainMatches = [...text.matchAll(plainJSONPattern)];
   
+  // 패턴 3: "JSON" 단어 다음에 "```copy" 형식 (특수 케이스)
   const copyPattern = /(?:^|\n)JSON\s*\n```copy\s*\n([\s\S]*?)\n```/gm;
   let copyMatches = [...text.matchAll(copyPattern)];
   
+  console.log(`[extractJSONBlocks] 백틱 매치: ${backtickMatches.length}, 순수 JSON 매치: ${plainMatches.length}, Copy 매치: ${copyMatches.length}`);
+  
+  // 모든 매치를 위치 순서대로 정렬
   const allMatches = [];
   
   backtickMatches.forEach(match => {
     const content = match[1].trim();
+    // 백틱 안에 {로 시작하는 JSON인지 확인
     if (content.startsWith('{')) {
       allMatches.push({
         index: match.index,
@@ -418,6 +464,7 @@ function extractJSONBlocks(text) {
     });
   });
   
+  // Copy 패턴 처리 (copy 키를 가진 JSON으로 변환)
   copyMatches.forEach(match => {
     const copyText = match[1].trim();
     const copyJSON = JSON.stringify({ copy: copyText });
@@ -428,15 +475,19 @@ function extractJSONBlocks(text) {
     });
   });
   
+  // 위치 순서대로 정렬
   allMatches.sort((a, b) => a.index - b.index);
   
+  // JSON 문자열만 추출
   allMatches.forEach(match => {
+    console.log(`[extractJSONBlocks]   매치 타입: ${match.type}, 위치: ${match.index}, 내용 시작: ${match.content.substring(0, 50)}...`);
     jsonBlocks.push(match.content);
   });
   
   return jsonBlocks;
 }
 
+// 🔥🔥🔥 ES Module export로 변경
 export {
   parseUnifiedConceptJSON,
   extractJSONBlocks
