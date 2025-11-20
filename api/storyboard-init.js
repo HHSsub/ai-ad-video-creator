@@ -266,9 +266,30 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
     
     const expectedConceptCount = mode === 'manual' ? 1 : 3;
     
-    // 1. 컨셉 블록 추출
-    const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
-    const conceptMatches = [...text.matchAll(conceptPattern)];
+    // 1. 컨셉 블록 추출 - mode에 따라 다른 패턴 사용
+    let conceptMatches = [];
+    
+    if (mode === 'manual') {
+      // manual 모드: Section 2 패턴 찾기 (대소문자 무시, 공백 유연하게)
+      const manualConceptPattern = /Section\s*2[\s.:]*[^\n]*(?:Cinematic|Storyboard)[^\n]*/i;
+      const match = text.match(manualConceptPattern);
+      
+      if (match) {
+        console.log('[parseUnifiedConceptJSON] Manual 모드 - Section 2 발견:', match[0]);
+        // Section 2를 찾았으면 matchAll 형식과 호환되는 매치 객체 생성
+        conceptMatches = [{
+          0: match[0],
+          1: '1', // 컨셉 번호 1로 설정
+          2: 'Manual Video Concept', // 기본 컨셉 이름
+          index: match.index,
+          input: text
+        }];
+      }
+    } else {
+      // auto 모드: 기존 패턴 사용
+      const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
+      conceptMatches = [...text.matchAll(conceptPattern)];
+    }
     
     if (conceptMatches.length === 0) {
       console.error('[parseUnifiedConceptJSON] 컨셉 헤더를 찾을 수 없음');
