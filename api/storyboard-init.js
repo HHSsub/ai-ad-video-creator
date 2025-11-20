@@ -399,9 +399,11 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username) {
 
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const result = await response.json();
-  if (!result.success || !result.url) throw new Error('이미지 생성 실패');
-  return result.url;
+  console.log(`[generateImage] 응답:`, JSON.stringify(result));
+  if (!result.success || !result.imageUrl) throw new Error('이미지 생성 실패');
+  return result.imageUrl;  // 🔥 result.url → result.imageUrl
 }
+
 
 async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
   const response = await fetch(`${API_BASE}/api/image-to-video`, {
@@ -610,6 +612,7 @@ async function processStoryboardAsync(body, username, sessionId) {
             aspect_ratio: mapAspectRatio(scene.image_prompt?.aspect_ratio || body.aspectRatioCode || 'widescreen_16_9')
           };
           const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username);
+          console.log(`[storyboard-init] 🖼️ 씬 ${sceneNum} 이미지 생성 완료: ${imageUrl}`);
           images.push({
             sceneNumber: sceneNum,
             imageUrl: imageUrl,
