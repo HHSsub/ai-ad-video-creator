@@ -13,14 +13,28 @@ import Step1Auto from './components/Step1Auto';
 
 function App() {
   const [user, setUser] = useState(null);
-  const [currentView, setCurrentView] = useState('projects'); // 🔥 초기 진입: 프로젝트 대시보드
+  const [currentView, setCurrentView] = useState('projects');
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({
+    mode: 'auto',
+    userdescription: '',
+    videoLength: '',
+    aspectRatioCode: '',
+    videoPurpose: '',
+    brandName: '',
+    industryCategory: '',
+    productServiceCategory: '',
+    productServiceName: '',
+    coreTarget: '',
+    coreDifferentiation: '',
+    videoRequirements: '',
+    imageUpload: null
+  });
   const [storyboard, setStoryboard] = useState(null);
   const [selectedConceptId, setSelectedConceptId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentProject, setCurrentProject] = useState(null); // 🔥 현재 선택된 프로젝트
-  const [currentMode, setCurrentMode] = useState(null);       // 🔥 'auto' | 'manual'
+  const [currentProject, setCurrentProject] = useState(null);
+  const [currentMode, setCurrentMode] = useState(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -45,7 +59,21 @@ function App() {
     localStorage.removeItem('user');
     setCurrentView('projects');
     setStep(1);
-    setFormData({});
+    setFormData({
+      mode: 'auto',
+      userdescription: '',
+      videoLength: '',
+      aspectRatioCode: '',
+      videoPurpose: '',
+      brandName: '',
+      industryCategory: '',
+      productServiceCategory: '',
+      productServiceName: '',
+      coreTarget: '',
+      coreDifferentiation: '',
+      videoRequirements: '',
+      imageUpload: null
+    });
     setStoryboard(null);
     setSelectedConceptId(null);
     setIsLoading(false);
@@ -56,18 +84,37 @@ function App() {
   const next = () => setStep(s => Math.min(4, s + 1));
   const prev = () => setStep(s => Math.max(1, s - 1));
 
-  // 🔥 프로젝트 선택 핸들러
   const handleSelectProject = (project) => {
     setCurrentProject(project);
     setCurrentMode(null);
+    setFormData({
+      mode: 'auto',
+      userdescription: '',
+      videoLength: '',
+      aspectRatioCode: '',
+      videoPurpose: '',
+      brandName: '',
+      industryCategory: '',
+      productServiceCategory: '',
+      productServiceName: '',
+      coreTarget: '',
+      coreDifferentiation: '',
+      videoRequirements: '',
+      imageUpload: null
+    });
+    setStoryboard(null);
+    setSelectedConceptId(null);
     setCurrentView('mode-select');
   };
 
-  // 🔥 모드 선택 핸들러 (프로젝트 모드 저장 추가)
   const handleSelectMode = async (mode) => {
     setCurrentMode(mode);
     
-    // 🔥 프로젝트에 모드 저장
+    setFormData(prev => ({
+      ...prev,
+      mode: mode
+    }));
+    
     if (currentProject && currentProject.id) {
       try {
         const response = await fetch(`/nexxii/api/projects/${currentProject.id}`, {
@@ -100,11 +147,48 @@ function App() {
     }
   };
 
-  // 🔥 프로젝트 대시보드로 돌아가기
   const handleBackToProjects = () => {
     setCurrentProject(null);
     setCurrentMode(null);
+    setFormData({
+      mode: 'auto',
+      userdescription: '',
+      videoLength: '',
+      aspectRatioCode: '',
+      videoPurpose: '',
+      brandName: '',
+      industryCategory: '',
+      productServiceCategory: '',
+      productServiceName: '',
+      coreTarget: '',
+      coreDifferentiation: '',
+      videoRequirements: '',
+      imageUpload: null
+    });
+    setStoryboard(null);
+    setSelectedConceptId(null);
     setCurrentView('projects');
+  };
+
+  const handleBackToModeSelect = () => {
+    setCurrentMode(null);
+    setFormData({
+      mode: 'auto',
+      userdescription: '',
+      videoLength: '',
+      aspectRatioCode: '',
+      videoPurpose: '',
+      brandName: '',
+      industryCategory: '',
+      productServiceCategory: '',
+      productServiceName: '',
+      coreTarget: '',
+      coreDifferentiation: '',
+      videoRequirements: '',
+      imageUpload: null
+    });
+    setCurrentView('mode-select');
+    setStep(1);
   };
 
   if (!user) {
@@ -237,6 +321,7 @@ function App() {
     step,
     formDataKeys: Object.keys(formData),
     videoLength: formData.videoLength,
+    mode: formData.mode,
     hasStoryboard: !!storyboard,
     selectedConceptId,
     isLoading,
@@ -361,7 +446,6 @@ function App() {
             </div>
           )}
 
-          {/* 🔥 프로젝트 대시보드 */}
           {currentView === 'projects' && (
             <ProjectDashboard 
               user={user} 
@@ -369,7 +453,6 @@ function App() {
             />
           )}
 
-          {/* 🔥 모드 선택 화면 */}
           {currentView === 'mode-select' && currentProject && (
             <ModeSelector 
               project={currentProject}
@@ -378,12 +461,12 @@ function App() {
             />
           )}
 
-          {/* 🔥 Step1 - Auto 모드 */}
           {currentView === 'step1-auto' && (
             <Step1Auto
               formData={formData}
               setFormData={setFormData}
               user={user}
+              onPrev={handleBackToModeSelect}
               onNext={() => {
                 console.log('Step1Auto 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
@@ -393,22 +476,22 @@ function App() {
             />
           )}
 
-          {/* 🔥 Step1 - Manual 모드 */}
           {currentView === 'step1-manual' && (
             <Step1Manual
               formData={formData}
               setFormData={setFormData}
               user={user}
+              onPrev={handleBackToModeSelect}
               onNext={() => {
                 console.log('Step1Manual 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
+                console.log('🔥 사용자 설명:', formData.userdescription);
                 setStep(2);
                 setCurrentView('step2');
               }}
             />
           )}
 
-          {/* 🔥 Step2 */}
           {currentView === 'step2' && (
             <Step2
               formData={formData}
@@ -435,7 +518,6 @@ function App() {
             />
           )}
 
-          {/* 🔥 Step3 */}
           {currentView === 'step3' && (
             <Step3
               storyboard={storyboard}
@@ -461,7 +543,6 @@ function App() {
             />
           )}
 
-          {/* 🔥 Step4 */}
           {currentView === 'step4' && (
             <Step4
               storyboard={storyboard}
@@ -474,7 +555,21 @@ function App() {
               user={user}
               onReset={() => {
                 setStep(1);
-                setFormData({});
+                setFormData({
+                  mode: 'auto',
+                  userdescription: '',
+                  videoLength: '',
+                  aspectRatioCode: '',
+                  videoPurpose: '',
+                  brandName: '',
+                  industryCategory: '',
+                  productServiceCategory: '',
+                  productServiceName: '',
+                  coreTarget: '',
+                  coreDifferentiation: '',
+                  videoRequirements: '',
+                  imageUpload: null
+                });
                 setStoryboard(null);
                 setSelectedConceptId(null);
                 setIsLoading(false);
@@ -484,27 +579,6 @@ function App() {
                 console.log('🔄 전체 초기화 완료');
               }}
             />
-          )}
-
-          {/* 🔁 레거시 보호용: 혹시 currentView가 위에 다 없을 때 기본 Step1로 진입 */}
-          {currentView !== 'projects' &&
-            currentView !== 'mode-select' &&
-            currentView !== 'step1-auto' &&
-            currentView !== 'step1-manual' &&
-            currentView !== 'step2' &&
-            currentView !== 'step3' &&
-            currentView !== 'step4' && (
-              <Step1
-                formData={formData}
-                setFormData={setFormData}
-                user={user}
-                onNext={() => {
-                  console.log('Step1 완료(레거시 경로), formData:', formData);
-                  console.log('🔥 선택된 영상 길이:', formData.videoLength);
-                  setStep(2);
-                  setCurrentView('step2');
-                }}
-              />
           )}
         </div>
       </main>
