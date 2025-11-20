@@ -264,6 +264,10 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
   try {
     console.log('[parseUnifiedConceptJSON] 파싱 시작, mode:', mode);
     
+    // 🔥 Manual Mode는 컨셉 1개만
+    const expectedConceptCount = mode === 'manual' ? 1 : 3;
+    
+    // 1. 컨셉 블록 추출 (### 1. 컨셉: 또는 ### [숫자]. 컨셉:)
     const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
     const conceptMatches = [...text.matchAll(conceptPattern)];
     
@@ -275,25 +279,47 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
       return null;
     }
     
-    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
+    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견 (기대: ${expectedConceptCount}개)`);
+    
+    // 🔥 컨셉 개수 검증
+    if (conceptMatches.length !== expectedConceptCount) {
+      console.warn(`[parseUnifiedConceptJSON] ⚠️ 컨셉 개수 불일치: 발견 ${conceptMatches.length}개, 기대 ${expectedConceptCount}개`);
+    }
     
     const concepts = [];
     
-    for (let i = 0; i < conceptMatches.length; i++) {
-      const conceptNum = parseInt(conceptMatches[i][1]);
-      const conceptName = conceptMatches[i][2].trim();
-      const startIdx = conceptMatches[i].index;
-      const endIdx = i < conceptMatches.length - 1 ? conceptMatches[i + 1].index : text.length;
+    // 🔥 올바른 개수만큼만 처리
+    const conceptsToProcess = conceptMatches.slice(0, expectedConceptCount);
+    
+    for (let i = 0; i < conceptsToProcess.length; i++) {
+      const conceptMatch = conceptsToProcess[i];
+      const conceptNum = parseInt(conceptMatch[1]);
+      const conceptName = conceptMatch[2].trim();
+      const startIdx = conceptMatch.index;
+      
+      // 🔥 다음 컨셉의 시작 위치 또는 텍스트 끝
+      let endIdx = text.length;
+      if (i < conceptsToProcess.length - 1) {
+        endIdx = conceptsToProcess[i + 1].index;
+      }
+      
       const conceptText = text.substring(startIdx, endIdx);
       
       console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
+      console.log(`[parseUnifiedConceptJSON] 컨셉 텍스트 길이: ${conceptText.length} chars`);
       
+      // Big Idea 추출
       const bigIdeaMatch = conceptText.match(/Big Idea:\s*(.+)/);
       const bigIdea = bigIdeaMatch ? bigIdeaMatch[1].trim() : '';
       
+      // Style 추출
       const styleMatch = conceptText.match(/Style:\s*(.+)/);
       const style = styleMatch ? styleMatch[1].trim() : '';
       
+      console.log(`[parseUnifiedConceptJSON] Big Idea: ${bigIdea}`);
+      console.log(`[parseUnifiedConceptJSON] Style: ${style}`);
+      
+      // 2. 씬 블록 추출 (### S#숫자 (timecode))
       const scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
       
@@ -312,10 +338,16 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
         const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
         const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
         
-        const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=```json)/s);
+        console.log(`[parseUnifiedConceptJSON]   처리 중: S#${sceneNum} (${timecode})`);
+        
+        // Visual Description 추출
+        const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=```json|###|$)/s);
         const visualDescription = visualDescMatch ? visualDescMatch[1].trim() : '';
         
+        // 3개의 JSON 블록 추출
         const jsonBlocks = [...sceneText.matchAll(/```json\s*([\s\S]*?)```/g)];
+        
+        console.log(`[parseUnifiedConceptJSON]   S#${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견`);
         
         if (jsonBlocks.length >= 3) {
           try {
@@ -335,19 +367,34 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
             console.log(`[parseUnifiedConceptJSON]   → S#${sceneNum} 파싱 성공`);
           } catch (e) {
             console.error(`[parseUnifiedConceptJSON] JSON 파싱 실패 (컨셉 ${conceptNum}, 씬 ${sceneNum}):`, e.message);
+            console.error('[parseUnifiedConceptJSON] JSON 블록 내용:');
+            jsonBlocks.forEach((block, idx) => {
+              console.error(`  블록 ${idx + 1}:`, block[1].trim().substring(0, 100));
+            });
           }
         } else {
           console.warn(`[parseUnifiedConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함 (${jsonBlocks.length}개 발견)`);
         }
       }
       
+      // 🔥 컨셉 데이터 검증
+      const sceneKeys = Object.keys(conceptData).filter(k => k.startsWith('scene_'));
+      console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum} 최종 씬 수: ${sceneKeys.length}개`);
+      
       concepts.push(conceptData);
     }
+    
+    console.log(`[parseUnifiedConceptJSON] ✅ 파싱 완료: ${concepts.length}개 컨셉`);
+    concepts.forEach((c, idx) => {
+      const sceneCount = Object.keys(c).filter(k => k.startsWith('scene_')).length;
+      console.log(`  컨셉 ${idx + 1} (${c.concept_name}): ${sceneCount}개 씬`);
+    });
     
     return { concepts };
     
   } catch (error) {
     console.error('[parseUnifiedConceptJSON] 전체 파싱 오류:', error);
+    console.error('[parseUnifiedConceptJSON] 스택:', error.stack);
     return null;
   }
 }
