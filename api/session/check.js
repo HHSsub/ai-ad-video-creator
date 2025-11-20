@@ -1,6 +1,9 @@
-// api/session/check.js
+/**
+ * API: 세션 확인 (진행 중인 세션 존재 여부)
+ * GET /api/session/check
+ */
 
-import { sessions } from './start.js';
+import sessionStore from '../../src/utils/sessionStore.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,8 +17,9 @@ export default async function handler(req, res) {
   try {
     const username = req.headers['x-username'] || 'anonymous';
 
-    const userSessions = Array.from(sessions.values()).filter(
-      s => s.username === username && !s.completed
+    const allSessions = sessionStore.getAllSessions();
+    const userSessions = allSessions.filter(
+      s => s.username === username && s.status !== 'completed' && s.status !== 'error'
     );
 
     if (userSessions.length > 0) {
