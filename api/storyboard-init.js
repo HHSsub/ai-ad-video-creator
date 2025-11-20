@@ -9,7 +9,13 @@ import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../src/utils/sessionStore.js';
 
-const API_BASE = process.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE = process.env.VITE_API_BASE_URL 
+  ? (process.env.VITE_API_BASE_URL.startsWith('http') 
+      ? process.env.VITE_API_BASE_URL 
+      : `https://upnexx.ai${process.env.VITE_API_BASE_URL}`)
+  : 'http://localhost:3000';
+console.log('[storyboard-init] API_BASE:', API_BASE);
+
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 
 // ============================================================
