@@ -1,9 +1,10 @@
-// api/compile-videos.js - 영상 길이 정확 반영 완전 수정
+// api/compile-videos.js - 진행률 추적 추가 버전
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
+import { getSession, updateSession } from '../src/utils/sessionStore.js';
 
 const MAX_DOWNLOAD_RETRIES = 3;
 const DOWNLOAD_TIMEOUT = 30000;
@@ -205,8 +206,10 @@ export default async function handler(req, res) {
       body = {};
     }
 
-    // 🔥 사용자가 선택한 영상 길이를 정확히 반영
+    // 🔥 sessionId 파라미터 추가
     const {
+      sessionId, // 🔥 NEW: 진행률 추적용
+      concept, // 🔥 NEW: 컨셉 이름
       segments,
       fps = 24,
       scale = '1280:720',
@@ -237,6 +240,8 @@ export default async function handler(req, res) {
     const clipDurationSeconds = 2; // 각 클립당 2초 고정
     
     console.log('[compile-videos] 🚀 정확한 길이 반영 시작:', {
+      sessionId: sessionId || 'N/A',
+      concept: concept || 'N/A',
       사용자선택길이: `${userSelectedVideoLengthSeconds}초`,
       필요클립개수: requiredClipCount,
       클립당길이: `${clipDurationSeconds}초`,
@@ -244,6 +249,20 @@ export default async function handler(req, res) {
       예상최종길이: `${requiredClipCount * clipDurationSeconds}초`,
       정확일치여부: (requiredClipCount * clipDurationSeconds) === userSelectedVideoLengthSeconds ? '✅' : '❌'
     });
+
+    // 🔥 진행률 업데이트: COMPOSE 시작 (세션이 있는 경우에만)
+    if (sessionId) {
+      try {
+        await updateSession(sessionId, {
+          phase: 'COMPOSE',
+          currentStep: `${concept} 컨셉 합성 시작`,
+          percentage: 80,
+        });
+        console.log(`[compile-videos] 진행률 업데이트: ${concept} 합성 시작 (80%)`);
+      } catch (err) {
+        console.warn('[compile-videos] 진행률 업데이트 실패 (계속 진행):', err.message);
+      }
+    }
 
     // 🔥 세그먼트를 필요한 개수만큼만 사용 (순서대로)
     const segmentsToUse = segments.slice(0, requiredClipCount);
@@ -271,6 +290,19 @@ export default async function handler(req, res) {
 
     // 1단계: 비디오 다운로드 및 전처리 (정확한 길이로)
     console.log(`[compile-videos] 1단계: ${segmentsToUse.length}개 비디오 처리 시작 (각 ${clipDurationSeconds}초로)`);
+    
+    // 🔥 진행률 업데이트: 다운로드 시작
+    if (sessionId) {
+      try {
+        await updateSession(sessionId, {
+          phase: 'COMPOSE',
+          currentStep: `${concept} - 비디오 다운로드 중 (0/${segmentsToUse.length})`,
+          percentage: 82,
+        });
+      } catch (err) {
+        console.warn('[compile-videos] 진행률 업데이트 실패:', err.message);
+      }
+    }
     
     for (let i = 0; i < segmentsToUse.length; i++) {
       const segment = segmentsToUse[i];
@@ -326,6 +358,20 @@ export default async function handler(req, res) {
 
         console.log(`[compile-videos] ✅ 세그먼트 ${i + 1} 처리 완료 (${clipDurationSeconds}초)`);
 
+        // 🔥 진행률 업데이트: 클립 처리 진행 (82% ~ 90%)
+        if (sessionId && (i + 1) % 2 === 0) {
+          const clipProgress = Math.round(82 + ((i + 1) / segmentsToUse.length) * 8);
+          try {
+            await updateSession(sessionId, {
+              phase: 'COMPOSE',
+              currentStep: `${concept} - 클립 처리 중 (${i + 1}/${segmentsToUse.length})`,
+              percentage: clipProgress,
+            });
+          } catch (err) {
+            console.warn('[compile-videos] 진행률 업데이트 실패:', err.message);
+          }
+        }
+
       } catch (error) {
         console.error(`[compile-videos] 세그먼트 ${i + 1} 처리 실패:`, error.message);
         // 개별 실패는 무시하고 계속 진행
@@ -340,6 +386,19 @@ export default async function handler(req, res) {
 
     // 2단계: 비디오 합치기 - 정확한 길이로
     console.log('[compile-videos] 2단계: 비디오 합치기 (정확한 길이 반영)');
+    
+    // 🔥 진행률 업데이트: 합치기 시작
+    if (sessionId) {
+      try {
+        await updateSession(sessionId, {
+          phase: 'COMPOSE',
+          currentStep: `${concept} - FFmpeg 합성 중...`,
+          percentage: 90,
+        });
+      } catch (err) {
+        console.warn('[compile-videos] 진행률 업데이트 실패:', err.message);
+      }
+    }
     
     const listContent = processedClips.map(clipPath => 
       `file '${path.basename(clipPath)}'`
@@ -414,6 +473,20 @@ export default async function handler(req, res) {
         lengthCorrect: isLengthCorrect,
         처리시간: processingTime + 'ms'
       });
+
+      // 🔥 진행률 업데이트: 완료 (이 함수는 한 컨셉만 처리하므로 100%는 storyboard-init에서)
+      if (sessionId) {
+        try {
+          await updateSession(sessionId, {
+            phase: 'COMPOSE',
+            currentStep: `${concept} 컨셉 합성 완료`,
+            percentage: 95, // 한 컨셉 완료 (전체는 storyboard-init에서 100%로)
+          });
+          console.log(`[compile-videos] 진행률 업데이트: ${concept} 합성 완료 (95%)`);
+        } catch (err) {
+          console.warn('[compile-videos] 진행률 업데이트 실패:', err.message);
+        }
+      }
       
       const response = {
         success: true,
@@ -432,6 +505,7 @@ export default async function handler(req, res) {
           scale,
           fps,
           videoLengthSource: videoLengthSource,
+          concept: concept || 'N/A',
           debug: {
             publicPath,
             fileExists,
@@ -490,6 +564,18 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[compile-videos] ❌ 전체 오류:', error);
+    
+    // 🔥 에러 발생 시 세션 업데이트
+    if (req.body?.sessionId) {
+      try {
+        await updateSession(req.body.sessionId, {
+          status: 'error',
+          error: `compile-videos 실패: ${error.message}`,
+        });
+      } catch (err) {
+        console.warn('[compile-videos] 에러 상태 업데이트 실패:', err.message);
+      }
+    }
     
     if (!res.headersSent) {
       res.status(500).json({
