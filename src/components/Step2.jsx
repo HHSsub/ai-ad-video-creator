@@ -414,78 +414,70 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     return { successImages: 0, failedImages: 0, processingTimeMs: 0 };
   };
 
-  const pollAndGenerateImages = async (sessionId) => {
-    setIsLoading(true);
-    progressManager.startPhase('INIT');
-    
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/session/status/${sessionId}`);
-        const data = await response.json();
+const pollAndGenerateImages = async (sessionId) => {
+  setIsLoading(true);
+  progressManager.startPhase('INIT');
+  
+  const pollInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/session/status/${sessionId}`);
+      const data = await response.json();
+      
+      // 🔥 수정: data.session.progress로 읽기
+      if (data.success && data.session && data.session.progress) {
+        const progress = data.session.progress;
         
-        if (data.progress) {
-          const adjustedProgress = Math.round(data.progress * 0.3);
-          updateProgress('INIT', data.progress / 100);
-          log(`📊 진행률: ${data.progress}% - ${data.message || ''}`);
-        }
-        
-        if (data.completed && data.storyboard) {
-          clearInterval(pollInterval);
-          progressManager.completePhase('INIT');
-          log('✅ 전체 구조 생성 완료!');
-          
-          const { styles, metadata, compositingInfo } = data.storyboard;
-          
-          setDebugInfo({
-            totalConcepts: styles.length,
-            imagesPerConcept: styles[0]?.images?.length || 0
-          });
-          
-          log('📸 이미지 생성을 시작합니다...');
-          
-          const result = await generateImagesAndCompose(styles, compositingInfo);
-          
-          const finalStoryboard = {
-            success: true,
-            styles: styles,
-            compositingInfo: compositingInfo,
-            metadata: {
-              ...metadata,
-              successImages: result.successImages,
-              failedImages: result.failedImages,
-              totalProcessingTimeMs: result.processingTimeMs
-            }
-          };
-          
-          setStoryboard(finalStoryboard);
-          setStyles(styles);
-          setIsLoading(false);
-          
-          log('🚀 다음 단계로 자동 이동합니다...');
-          
-          setTimeout(() => {
-            if (onNext) {
-              console.log('🎯 Step2 → Step3 자동 이동 실행');
-              onNext();
-            }
-          }, 2000);
-          
-        } else if (data.error) {
-          clearInterval(pollInterval);
-          setError(data.error);
-          setIsLoading(false);
-          log(`❌ 오류: ${data.error}`);
-        }
-      } catch (error) {
-        console.error('세션 상태 확인 실패:', error);
+        // 진행률 업데이트
+        setPercent(progress.percentage || 0);
+        log(`📊 ${progress.phase || ''} ${progress.percentage || 0}% - ${progress.currentStep || ''}`);
       }
-    }, 5000);
-    
-    setTimeout(() => {
-      clearInterval(pollInterval);
-      setIsLoading(false);
-    }, 1800000);
-  };
+      
+      // 🔥 수정: data.session.status로 완료 확인
+      if (data.success && data.session && data.session.status === 'completed' && data.session.result) {
+        clearInterval(pollInterval);
+        progressManager.completePhase('INIT');
+        log('✅ 전체 구조 생성 완료!');
+        
+        const result = data.session.result;
+        const { styles, metadata, compositingInfo } = result;
+        
+        setDebugInfo({
+          totalConcepts: styles.length,
+          imagesPerConcept: styles[0]?.images?.length || 0
+        });
+        
+        // 🔥 최종 스토리보드 설정
+        setStoryboard(result);
+        setStyles(styles);
+        setPercent(100);
+        setIsLoading(false);
+        
+        log('🚀 다음 단계로 자동 이동합니다...');
+        
+        setTimeout(() => {
+          if (onNext) {
+            console.log('🎯 Step2 → Step3 자동 이동 실행');
+            onNext();
+          }
+        }, 2000);
+        
+      } else if (data.success && data.session && data.session.status === 'error') {
+        clearInterval(pollInterval);
+        const errorMsg = data.session.error?.message || '알 수 없는 오류';
+        setError(errorMsg);
+        setIsLoading(false);
+        log(`❌ 오류: ${errorMsg}`);
+      }
+    } catch (error) {
+      console.error('세션 상태 확인 실패:', error);
+    }
+  }, 3000);  // 🔥 3초로 변경 (더 빠른 업데이트)
+  
+  setTimeout(() => {
+    clearInterval(pollInterval);
+    setIsLoading(false);
+  }, 1800000);
+};
 
   const handleGenerateStoryboard = async () => {
     setIsLoading(true);
