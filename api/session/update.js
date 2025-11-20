@@ -3,7 +3,7 @@
  * POST /api/session/update
  */
 
-import sessionStore from '../../utils/sessionStore.js';
+import sessionStore from '../../src/utils/sessionStore.js';
 
 export default async function handler(req, res) {
   // CORS 헤더 설정
