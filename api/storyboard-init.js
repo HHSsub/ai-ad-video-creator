@@ -9,10 +9,9 @@ import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 
 const PROMPT_FILE_MAPPING = {
-  'step1_product': 'Prompt_step1_product.txt',
-  'step1_service': 'Prompt_step1_service.txt',
-  'step2_product': 'Prompt_step2_product.txt',
-  'step2_service': 'Prompt_step2_service.txt'
+  'product': 'new_product_prompt_1120.txt',
+  'service': 'new_service_prompt_1120.txt',
+  'manual': 'new_manual_prompt_1120.txt'
 };
 
 function getSceneCount(videoLength) {
@@ -60,12 +59,12 @@ function getHeightFromAspectRatio(aspectRatio) {
   return map[aspectRatio] || 1080;
 }
 
-function detectProductCompositingScenes(step1Output, videoPurpose) {
+function detectProductCompositingScenes(fullOutput, videoPurpose) {
   const scenes = [];
   
   if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') {
     const regex = /S#(\d+)[^:]*:[^[]*\[PRODUCT COMPOSITING SCENE\]/gi;
-    const matches = [...step1Output.matchAll(regex)];
+    const matches = [...fullOutput.matchAll(regex)];
     
     matches.forEach(match => {
       const sceneNum = parseInt(match[1], 10);
@@ -109,28 +108,24 @@ function analyzeCompositingInfo(requestBody, compositingScenes) {
   };
 }
 
-function getPromptFiles(videoPurpose) {
-  console.log(`[getPromptFiles] videoPurpose: ${videoPurpose}`);
+function getPromptFile(videoPurpose, mode = 'auto') {
+  console.log(`[getPromptFile] videoPurpose: ${videoPurpose}, mode: ${mode}`);
   
-  if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') {
-    console.log('[getPromptFiles] → 제품용 프롬프트');
-    return {
-      step1: 'step1_product',
-      step2: 'step2_product'
-    };
-  } else if (videoPurpose === 'service' || videoPurpose === 'brand') {
-    console.log('[getPromptFiles] → 서비스용 프롬프트');
-    return {
-      step1: 'step1_service',
-      step2: 'step2_service'
-    };
+  if (mode === 'manual') {
+    console.log('[getPromptFile] → 매뉴얼 프롬프트');
+    return 'manual';
   }
   
-  console.log('[getPromptFiles] → 기본값 (제품용)');
-  return {
-    step1: 'step1_product',
-    step2: 'step2_product'
-  };
+  if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') {
+    console.log('[getPromptFile] → 제품용 프롬프트');
+    return 'product';
+  } else if (videoPurpose === 'service' || videoPurpose === 'brand') {
+    console.log('[getPromptFile] → 서비스용 프롬프트');
+    return 'service';
+  }
+  
+  console.log('[getPromptFile] → 기본값 (제품용)');
+  return 'product';
 }
 
 const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
@@ -226,46 +221,7 @@ function incrementUsageCount(username) {
   }
 }
 
-function extractConceptBlocks(text) {
-  const lines = text.split('\n');
-  const blocks = [];
-  let currentBlock = null;
-  
-  lines.forEach((line, index) => {
-    if (line.match(/^\d+\.\s*컨셉:/)) {
-      if (currentBlock) {
-        blocks.push(currentBlock);
-      }
-      currentBlock = {
-        startLine: index + 1,
-        title: line.trim(),
-        content: [line]
-      };
-    } else if (currentBlock) {
-      currentBlock.content.push(line);
-    }
-  });
-  
-  if (currentBlock) {
-    blocks.push(currentBlock);
-  }
-  
-  return blocks;
-}
-
-function buildFinalPrompt(phase1Output, conceptBlocks, requestBody, sceneCount, step2Template) {
-  let finalPrompt = step2Template;
-  
-  finalPrompt = finalPrompt.replace(/{phase1_output}/g, phase1Output);
-  finalPrompt = finalPrompt.replace(/{sceneCount}/g, sceneCount);
-  finalPrompt = finalPrompt.replace(/{brandName}/g, requestBody.brandName || '');
-  finalPrompt = finalPrompt.replace(/{videoPurpose}/g, requestBody.videoPurpose || '');
-  finalPrompt = finalPrompt.replace(/{videoLength}/g, requestBody.videoLength || '10');
-  
-  return finalPrompt;
-}
-
-function saveGeminiResponse(promptKey, step, formData, step1Response, step2Response = null) {
+function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   try {
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
     
@@ -282,9 +238,7 @@ function saveGeminiResponse(promptKey, step, formData, step1Response, step2Respo
       promptKey,
       step,
       formData: formData || {},
-      response: step2Response || step1Response,
-      rawStep1Response: step1Response,
-      rawStep2Response: step2Response,
+      response: fullResponse,
       timestamp: new Date().toISOString(),
       savedAt: new Date().toISOString()
     };
@@ -306,22 +260,22 @@ function saveGeminiResponse(promptKey, step, formData, step1Response, step2Respo
   }
 }
 
-function parseMultiConceptJSON(text) {
+function parseUnifiedConceptJSON(text, mode = 'auto') {
   try {
-    console.log('[parseMultiConceptJSON] 파싱 시작, 텍스트 길이:', text.length);
+    console.log('[parseUnifiedConceptJSON] 파싱 시작, mode:', mode);
     
     const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
     const conceptMatches = [...text.matchAll(conceptPattern)];
     
     if (conceptMatches.length === 0) {
-      console.error('[parseMultiConceptJSON] 컨셉 헤더를 찾을 수 없음');
-      const debugPath = path.join(process.cwd(), 'debug_step2_response.txt');
+      console.error('[parseUnifiedConceptJSON] 컨셉 헤더를 찾을 수 없음');
+      const debugPath = path.join(process.cwd(), 'debug_unified_response.txt');
       fs.writeFileSync(debugPath, text, 'utf-8');
-      console.log('[parseMultiConceptJSON] Step2 응답 저장:', debugPath);
+      console.log('[parseUnifiedConceptJSON] 응답 저장:', debugPath);
       return null;
     }
     
-    console.log(`[parseMultiConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
+    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
     
     const concepts = [];
     
@@ -332,22 +286,34 @@ function parseMultiConceptJSON(text) {
       const endIdx = i < conceptMatches.length - 1 ? conceptMatches[i + 1].index : text.length;
       const conceptText = text.substring(startIdx, endIdx);
       
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
+      console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
       
-      const scenePattern = /###\s*S#(\d+)\s*\(/g;
+      const bigIdeaMatch = conceptText.match(/Big Idea:\s*(.+)/);
+      const bigIdea = bigIdeaMatch ? bigIdeaMatch[1].trim() : '';
+      
+      const styleMatch = conceptText.match(/Style:\s*(.+)/);
+      const style = styleMatch ? styleMatch[1].trim() : '';
+      
+      const scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
       
-      console.log(`[parseMultiConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
+      console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
       
       const conceptData = {
-        concept_name: conceptName
+        concept_name: conceptName,
+        big_idea: bigIdea,
+        style: style
       };
       
       for (let j = 0; j < sceneMatches.length; j++) {
         const sceneNum = parseInt(sceneMatches[j][1]);
+        const timecode = sceneMatches[j][2].trim();
         const sceneStartIdx = sceneMatches[j].index;
         const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
         const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
+        
+        const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=```json)/s);
+        const visualDescription = visualDescMatch ? visualDescMatch[1].trim() : '';
         
         const jsonBlocks = [...sceneText.matchAll(/```json\s*([\s\S]*?)```/g)];
         
@@ -359,15 +325,19 @@ function parseMultiConceptJSON(text) {
             
             conceptData[`scene_${sceneNum}`] = {
               title: `Scene ${sceneNum}`,
+              timecode: timecode,
+              visual_description: visualDescription,
               image_prompt: imagePromptJSON,
               motion_prompt: motionPromptJSON,
               copy: copyJSON
             };
+            
+            console.log(`[parseUnifiedConceptJSON]   → S#${sceneNum} 파싱 성공`);
           } catch (e) {
-            console.error(`[parseMultiConceptJSON] JSON 파싱 실패 (컨셉 ${conceptNum}, 씬 ${sceneNum}):`, e.message);
+            console.error(`[parseUnifiedConceptJSON] JSON 파싱 실패 (컨셉 ${conceptNum}, 씬 ${sceneNum}):`, e.message);
           }
         } else {
-          console.warn(`[parseMultiConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함`);
+          console.warn(`[parseUnifiedConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함 (${jsonBlocks.length}개 발견)`);
         }
       }
       
@@ -377,7 +347,7 @@ function parseMultiConceptJSON(text) {
     return { concepts };
     
   } catch (error) {
-    console.error('[parseMultiConceptJSON] 전체 파싱 오류:', error);
+    console.error('[parseUnifiedConceptJSON] 전체 파싱 오류:', error);
     return null;
   }
 }
@@ -421,36 +391,37 @@ async function processStoryboardAsync(body, username, sessionId) {
       coreDifferentiation,
       aspectRatio,
       aspectRatioCode,
-      imageUpload
+      imageUpload,
+      mode,
+      userDescription
     } = body;
 
     console.log('[storyboard-init] 🚀 요청 수신:', {
       brandName,
       videoLength,
       videoPurpose,
+      mode: mode || 'auto',
       aspectRatio: aspectRatio || aspectRatioCode
     });
 
-    const promptFiles = getPromptFiles(videoPurpose);
-    console.log('[storyboard-init] 📝 선택된 프롬프트:', promptFiles);
+    const promptFile = getPromptFile(videoPurpose, mode);
+    const promptFileName = PROMPT_FILE_MAPPING[promptFile];
+    const promptFilePath = path.join(process.cwd(), 'public', promptFileName);
 
-    const step1FileName = PROMPT_FILE_MAPPING[promptFiles.step1];
-    const step1FilePath = path.join(process.cwd(), 'public', step1FileName);
-
-    if (!fs.existsSync(step1FilePath)) {
-      console.error(`[storyboard-init] STEP1 프롬프트 파일 없음:`, step1FilePath);
+    if (!fs.existsSync(promptFilePath)) {
+      console.error(`[storyboard-init] 프롬프트 파일 없음:`, promptFilePath);
       await updateSession(sessionId, {
-        error: `STEP1 프롬프트 파일을 찾을 수 없습니다: ${step1FileName}`,
+        error: `프롬프트 파일을 찾을 수 없습니다: ${promptFileName}`,
         progress: 0,
         completed: true
       });
       return;
     }
 
-    console.log(`[storyboard-init] 📝 STEP1 프롬프트 파일 로드: ${step1FileName}`);
-    let step1PromptTemplate = fs.readFileSync(step1FilePath, 'utf-8');
+    console.log(`[storyboard-init] 📝 프롬프트 파일 로드: ${promptFileName}`);
+    let promptTemplate = fs.readFileSync(promptFilePath, 'utf-8');
 
-    const step1Variables = {
+    const promptVariables = {
       brandName: brandName || '',
       industryCategory: industryCategory || '',
       productServiceCategory: productServiceCategory || '',
@@ -459,130 +430,65 @@ async function processStoryboardAsync(body, username, sessionId) {
       videoLength: videoLength || '10초',
       coreTarget: coreTarget || '',
       coreDifferentiation: coreDifferentiation || '',
-      videoRequirements: '없음',
+      videoRequirements: body.videoRequirements || '없음',
       brandLogo: (imageUpload && imageUpload.url && (videoPurpose === 'service' || videoPurpose === 'brand')) ? '업로드됨' : '없음',
       productImage: (imageUpload && imageUpload.url && (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education')) ? '업로드됨' : '없음',
-      aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio)
+      aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio),
+      userdescription: userDescription || ''
     };
 
-    console.log('[storyboard-init] 🔄 Step1 변수 치환:', step1Variables);
+    console.log('[storyboard-init] 🔄 변수 치환:', promptVariables);
 
-    for (const [key, value] of Object.entries(step1Variables)) {
+    for (const [key, value] of Object.entries(promptVariables)) {
       const placeholder = new RegExp(`\\{${key}\\}`, 'g');
-      step1PromptTemplate = step1PromptTemplate.replace(placeholder, value);
+      promptTemplate = promptTemplate.replace(placeholder, value);
     }
 
-    console.log(`[storyboard-init] ✅ STEP1 변수 치환 완료`);
+    console.log(`[storyboard-init] ✅ 변수 치환 완료`);
 
     await updateSession(sessionId, {
-      progress: 10,
-      message: 'Step1 아이디어 구상 중...'
+      progress: 20,
+      message: '통합 컨셉 생성 중...'
     });
 
-    console.log(`[storyboard-init] 📡 STEP1 Gemini API 호출 시작`);
+    console.log(`[storyboard-init] 📡 통합 Gemini API 호출 시작`);
     console.log('[storyboard-init] ⏰ 타임스탬프:', new Date().toISOString());
-    console.log('[storyboard-init] 📝 프롬프트 길이:', step1PromptTemplate.length, 'chars');
-    const step1 = await safeCallGemini(step1PromptTemplate, {
-      label: 'STEP1-storyboard-init',
+    console.log('[storyboard-init] 📝 프롬프트 길이:', promptTemplate.length, 'chars');
+    
+    const geminiResponse = await safeCallGemini(promptTemplate, {
+      label: 'UNIFIED-storyboard-init',
       maxRetries: 3,
       isImageComposition: false
     });
 
-    const phase1_output = step1.text;
-    console.log("[storyboard-init] ✅ STEP1 완료:", phase1_output.length, "chars");
-    console.log('[storyboard-init] ⏰ STEP1 소요 시간:', (Date.now() - startTime) / 1000, '초');
+    const fullOutput = geminiResponse.text;
+    console.log("[storyboard-init] ✅ 통합 응답 완료:", fullOutput.length, "chars");
+    console.log('[storyboard-init] ⏰ 소요 시간:', (Date.now() - startTime) / 1000, '초');
     
     await updateSession(sessionId, {
-      progress: 30,
-      message: 'Step1 완료, Step2 컨셉 개발 중...'
+      progress: 60,
+      message: '응답 파싱 중...'
     });
     
-    console.log('\n========== STEP1 FULL RESPONSE ==========');
-    console.log(phase1_output);
+    console.log('\n========== UNIFIED FULL RESPONSE ==========');
+    console.log(fullOutput);
     console.log('==========================================\n');
 
     saveGeminiResponse(
-      promptFiles.step1,
-      'step1',
+      promptFile,
+      'unified',
       body,
-      phase1_output,
-      null
+      fullOutput
     );
-    console.log('[storyboard-init] 💾 Step1 응답 저장 완료');
+    console.log('[storyboard-init] 💾 응답 저장 완료');
 
     const sceneCountPerConcept = getSceneCount(videoLength);
-    console.log(`[storyboard-init] 📊 컨셉당 씬 수: ${sceneCountPerConcept}개 (${videoLength} ÷ 2)`);
+    console.log(`[storyboard-init] 📊 컨셉당 씬 수: ${sceneCountPerConcept}개`);
 
-    const compositingScenes = detectProductCompositingScenes(phase1_output, videoPurpose);
+    const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     console.log('[storyboard-init] 🎯 감지된 합성 씬:', compositingScenes);
 
-    const conceptBlocks = extractConceptBlocks(phase1_output);
-    console.log(`[storyboard-init] 📋 추출된 컨셉 블록: ${conceptBlocks.length}개`);
-
-    const step2FileName = PROMPT_FILE_MAPPING[promptFiles.step2];
-    const step2FilePath = path.join(process.cwd(), 'public', step2FileName);
-
-    if (!fs.existsSync(step2FilePath)) {
-      console.error(`[storyboard-init] STEP2 프롬프트 파일 없음:`, step2FilePath);
-      await updateSession(sessionId, {
-        error: `STEP2 프롬프트 파일을 찾을 수 없습니다: ${step2FileName}`,
-        progress: 30,
-        completed: true
-      });
-      return;
-    }
-
-    console.log(`[storyboard-init] 📝 STEP2 프롬프트 파일 로드: ${step2FileName}`);
-    const step2PromptContent = fs.readFileSync(step2FilePath, 'utf-8');
-
-    const step2Prompt = buildFinalPrompt(phase1_output, conceptBlocks, body, sceneCountPerConcept, step2PromptContent);
-
-    await updateSession(sessionId, {
-      progress: 50,
-      message: 'Step2 상세 컨셉 생성 중...'
-    });
-    
-    console.log('[storyboard-init] 📡 STEP2 Gemini API 호출 시작');
-    console.log('[storyboard-init] ⏰ 타임스탬프:', new Date().toISOString());
-    console.log(`[storyboard-init] STEP2 프롬프트 길이: ${step2Prompt.length} chars`);
-
-    const step2 = await safeCallGemini(step2Prompt, {
-      label: 'STEP2-storyboard-init',
-      maxRetries: 3,
-      isImageComposition: false
-    });
-
-    console.log("[storyboard-init] ✅ STEP2 완료:", step2.text.length, "chars");
-    console.log('[storyboard-init] ⏰ STEP2 소요 시간:', (Date.now() - startTime) / 1000, '초');
-
-    await updateSession(sessionId, {
-      progress: 70,
-      message: 'Step2 완료, 이미지 생성 준비 중...'
-    });
-    
-    console.log('\n========== STEP2 FULL RESPONSE ==========');
-    console.log(step2.text);
-    console.log('==========================================\n');
-
-    saveGeminiResponse(
-      promptFiles.step1,
-      'complete',
-      body,
-      phase1_output,
-      step2.text
-    );
-    
-    saveGeminiResponse(
-      promptFiles.step2,
-      'complete',
-      body,
-      phase1_output,
-      step2.text
-    );
-    
-    console.log('[storyboard-init] 💾 Step1, Step2 응답 양쪽 히스토리에 저장 완료');
-
-    const mcJson = parseMultiConceptJSON(step2.text);
+    const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
     console.log("[storyboard-init] 📊 JSON 파싱 결과:", mcJson);
 
     let styles = [];
@@ -600,11 +506,12 @@ async function processStoryboardAsync(body, username, sessionId) {
             const imagePromptData = {
               sceneNumber: i,
               title: scene.title || `씬 ${i}`,
+              timecode: scene.timecode || `00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
+              visual_description: scene.visual_description || '',
               prompt: scene.image_prompt?.prompt || `${concept.concept_name} scene ${i}`,
               negative_prompt: scene.image_prompt?.negative_prompt || "blurry, low quality, watermark, text, logo",
               motion_prompt: scene.motion_prompt?.prompt || "subtle camera movement",
               copy: scene.copy?.copy || `씬 ${i}`,
-              timecode: `00:${String((i-1)*2).padStart(2,'0')}-00:${String(i*2).padStart(2,'0')}`,
               compositingContext: isCompositingScene ? 
                 `[PRODUCT COMPOSITING SCENE] ${concept.concept_name} scene ${i}` : 
                 `${concept.concept_name} scene ${i}`,
@@ -614,16 +521,16 @@ async function processStoryboardAsync(body, username, sessionId) {
                 explicit: compositingScenes.find(cs => cs.sceneNumber === i)?.explicit || false,
                 videoPurpose: videoPurpose
               } : null,
-              aspect_ratio: mapAspectRatio(aspectRatio || aspectRatioCode),
+              aspect_ratio: scene.image_prompt?.image?.size || mapAspectRatio(aspectRatio || aspectRatioCode),
               guidance_scale: scene.image_prompt?.guidance_scale || 7.5,
               seed: scene.image_prompt?.seed || Math.floor(10000 + Math.random() * 90000),
               size: scene.image_prompt?.image?.size || mapAspectRatio(aspectRatio || aspectRatioCode),
               width: getWidthFromAspectRatio(mapAspectRatio(aspectRatio || aspectRatioCode)),
               height: getHeightFromAspectRatio(mapAspectRatio(aspectRatio || aspectRatioCode)),
               styling: scene.image_prompt?.styling || {
-                style: 'photo',
-                color: 'color',
-                lighting: 'natural'
+                style: scene.image_prompt?.styling?.style || 'photo',
+                color: scene.image_prompt?.styling?.color || 'color',
+                lighting: scene.image_prompt?.styling?.lighting || 'natural'
               },
               image_prompt: {
                 prompt: scene.image_prompt?.prompt || `${concept.concept_name} scene ${i}`,
@@ -643,10 +550,11 @@ async function processStoryboardAsync(body, username, sessionId) {
           conceptId: index + 1,
           conceptName: concept.concept_name,
           concept_title: concept.concept_name,
-          concept_description: `${videoPurpose} 광고를 위한 ${concept.concept_name} 접근법`,
+          big_idea: concept.big_idea || '',
+          concept_description: concept.big_idea || `${videoPurpose} 광고를 위한 ${concept.concept_name} 접근법`,
           style: concept.style || 'Commercial Photography',
           headline: concept.concept_name,
-          description: `${videoPurpose} 광고를 위한 ${concept.concept_name} 접근법`,
+          description: concept.big_idea || `${videoPurpose} 광고를 위한 ${concept.concept_name} 접근법`,
           copy: concept.concept_name,
           imagePrompts: imagePrompts,
           images: imagePrompts.map(ip => ({
@@ -675,9 +583,9 @@ async function processStoryboardAsync(body, username, sessionId) {
     console.log('[storyboard-init] 🎨 합성 정보:', compositingInfo);
 
     const metadata = {
-      promptFiles: promptFiles,
-      promptFiles_step1: step1FileName,
-      promptFiles_step2: step2FileName,
+      promptFile: promptFile,
+      promptFileName: promptFileName,
+      mode: mode || 'auto',
       videoPurpose,
       videoLength,
       sceneCountPerConcept,
@@ -685,8 +593,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       generatedAt: new Date().toISOString(),
       processingTimeMs: Date.now() - startTime,
       geminiModel: "gemini-2.5-flash",
-      step1Length: phase1_output.length,
-      step2Length: step2.text.length,
+      fullOutputLength: fullOutput.length,
       brandName,
       totalConcepts: styles.length,
       compositingScenes: compositingScenes.length,
@@ -705,8 +612,7 @@ async function processStoryboardAsync(body, username, sessionId) {
         styles,
         metadata,
         compositingInfo,
-        phase1_output,
-        step2_output: step2.text,
+        fullOutput: fullOutput,
         processingTime: Date.now() - startTime,
         timestamp: new Date().toISOString()
       }
