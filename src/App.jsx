@@ -47,6 +47,45 @@ function App() {
     }
   }, []);
 
+  // App.jsx - useEffect 추가 (프로젝트 데이터 복구)
+
+useEffect(() => {
+  const loadProjectData = async () => {
+    if (currentProject && currentProject.id) {
+      try {
+        const response = await fetch(`/nexxii/api/projects/${currentProject.id}`, {
+          headers: {
+            'x-username': user?.username || 'anonymous'
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.project.formData) {
+            setFormData(data.project.formData);
+            console.log('[App] 프로젝트 formData 복구:', data.project.formData);
+          }
+          
+          if (data.project.mode) {
+            setCurrentMode(data.project.mode);
+            console.log('[App] 프로젝트 mode 복구:', data.project.mode);
+          }
+          
+          if (data.project.storyboard) {
+            setStoryboard(data.project.storyboard);
+            console.log('[App] 프로젝트 storyboard 복구');
+          }
+        }
+      } catch (error) {
+        console.error('[App] 프로젝트 데이터 로드 실패:', error);
+      }
+    }
+  };
+  
+  loadProjectData();
+}, [currentProject?.id]);
+
   const handleLogin = (userData) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
