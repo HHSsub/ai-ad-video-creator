@@ -1,3 +1,4 @@
+// src/components/Step3.jsx 전체코드
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -22,7 +23,7 @@ const Step3 = ({
   const selected = styles.find(s => s.concept_id === selectedConceptId) || null;
   const MAX_RETRIES = 3;
   const RETRY_DELAY = 5000;
-  const MAX_TOTAL_TIME = 600000;  // 10분 (600000ms)
+  const MAX_TOTAL_TIME = 600000;
 
   const log = (m) => {
     const timestampedMsg = `[${new Date().toLocaleTimeString()}] ${m}`;
@@ -34,7 +35,7 @@ const Step3 = ({
     const maxRetries = MAX_RETRIES;
     
     try {
-      const videoPrompt = img.prompt || img.image_prompt?.prompt;
+      const videoPrompt = img.motion_prompt || img.prompt || img.image_prompt?.prompt;
       if (!videoPrompt) {
         log(`❌ Scene ${img.sceneNumber}: 프롬프트 없음 - 정적 이미지로 대체`);
         return {
@@ -158,7 +159,7 @@ const Step3 = ({
     setTaskRetries(new Map());
     
     const startTime = Date.now();
-    log(`🚀 영상 클립 생성을 시작합니다: ${selected.style}`);
+    log(`🚀 영상 클립 생성을 시작합니다: ${selected.style || selected.conceptName}`);
 
     try {
       const sortedImages = [...selected.images].sort((a, b) => a.sceneNumber - b.sceneNumber);
@@ -240,10 +241,8 @@ const Step3 = ({
       const elapsedTime = Date.now() - startTime;
       
       if (elapsedTime > maxPollTime) {
-        // 🔥 [수정] 타임아웃 시 아직 완료되지 않은 씬들을 정적 이미지로 명시적 처리
         log(`⏰ 최대 처리 시간 초과 (${Math.round(maxPollTime/1000)}초) - 미완료 씬을 정적 이미지로 처리`);
         
-        // 미완료 씬들을 정적 이미지로 강제 설정
         const unfinished = tasks.filter(t => {
           const img = selected?.images?.find(im => im.sceneNumber === t.sceneNumber);
           return !(img && img.videoUrl);
@@ -410,21 +409,11 @@ const Step3 = ({
                     : 'border-gray-700 hover:border-gray-600'
                 } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <div className="font-semibold mb-1 text-white">{s.style}</div>
+                <div className="font-semibold mb-1 text-white">{s.style || s.conceptName}</div>
                 <div className="text-xs text-gray-400 mb-2 line-clamp-2">
-                  {s.summary || s.description}
+                  {s.big_idea || s.summary || s.description}
                 </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {(s.images || []).slice(0, 6).map(img => (
-                    <img
-                      key={img.id}
-                      src={img.thumbnail || img.url}
-                      alt={`Scene ${img.sceneNumber}`}
-                      className="w-full h-16 object-cover rounded"
-                    />
-                  ))}
-                </div>
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="text-xs text-gray-500 mt-2">
                   씬: {s.images?.length || 0}개
                 </div>
                 {selectedConceptId === s.concept_id && (
@@ -437,7 +426,7 @@ const Step3 = ({
           {selected && (
             <div className="mb-6 bg-gray-900/50 rounded-lg p-4">
               <h3 className="font-semibold mb-3 text-white">
-                {selected.style} - 씬 진행 상황 ({completedCount}/{selected.images.length})
+                {selected.style || selected.conceptName} - 씬 진행 상황 ({completedCount}/{selected.images.length})
               </h3>
               <div className="grid md:grid-cols-5 gap-3">
                 {sortedImages.map(img => {
@@ -446,7 +435,7 @@ const Step3 = ({
                   
                   return (
                     <div
-                      key={img.id}
+                      key={img.id || img.sceneNumber}
                       className={`border rounded-lg p-2 text-xs transition-all ${
                         hasVideo 
                           ? (isStatic ? 'bg-yellow-900/30 border-yellow-700' : 'bg-green-900/30 border-green-700')
@@ -458,14 +447,41 @@ const Step3 = ({
                         alt={`Scene ${img.sceneNumber}`}
                         className="w-full h-20 object-cover rounded mb-1"
                       />
-                      <div className="font-medium text-gray-300">Scene {img.sceneNumber}</div>
-                      <div className={`text-[10px] ${
+                      <div className="font-medium text-gray-300 mb-1">
+                        Scene {img.sceneNumber}
+                        {img.timecode && (
+                          <span className="text-gray-500 ml-1 text-[9px]">
+                            ({img.timecode})
+                          </span>
+                        )}
+                      </div>
+                      
+                      {img.copy && (
+                        <div className="bg-gray-800/50 rounded p-1 mb-1">
+                          <div className="text-[9px] text-gray-400 line-clamp-2">
+                            💬 {img.copy}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {img.visual_description && (
+                        <details className="mb-1">
+                          <summary className="text-[9px] text-gray-500 cursor-pointer hover:text-gray-400">
+                            설명 보기
+                          </summary>
+                          <div className="text-[8px] text-gray-500 mt-1 max-h-20 overflow-y-auto">
+                            {img.visual_description}
+                          </div>
+                        </details>
+                      )}
+                      
+                      <div className={`text-[10px] mt-1 font-medium ${
                         hasVideo 
                           ? (isStatic ? 'text-yellow-400' : 'text-green-400')
                           : 'text-gray-500'
                       }`}>
                         {hasVideo 
-                          ? (isStatic ? '🖼️ 정적' : '🎬 완료')
+                          ? (isStatic ? '🖼️ 정적 이미지' : '🎬 영상 완료')
                           : '⏳ 처리 중'
                         }
                       </div>
