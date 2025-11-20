@@ -601,7 +601,11 @@ async function processStoryboardAsync(body, username, sessionId) {
         if (!scene) continue;
 
         try {
-          const imageUrl = await generateImage(scene.image_prompt, sceneNum, conceptIdx + 1, username);
+          const imagePrompt = {
+            ...scene.image_prompt,
+            aspect_ratio: mapAspectRatio(scene.image_prompt?.aspect_ratio || body.aspectRatioCode || 'widescreen_16_9')
+          };
+          const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username);
           images.push({
             sceneNumber: sceneNum,
             imageUrl: imageUrl,
