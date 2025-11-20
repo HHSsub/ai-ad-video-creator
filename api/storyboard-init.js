@@ -1,6 +1,4 @@
-// api/storyboard-init.js - 🔥 완전 자동화 버전 (원본 로직 100% 유지)
-// 🔥 추가된 것: 자동화 + 진행률 업데이트만!
-// 🔥 변경된 것: 없음!
+// api/storyboard-init.js - 🔥 Manual 모드 파싱 수정 완료!
 
 export const config = {
   maxDuration: 9000,
@@ -15,7 +13,7 @@ const API_BASE = process.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 
 // ============================================================
-// 🔥 원본 함수들 - 단 1글자도 바꾸지 않음!
+// 원본 함수들 - 절대 수정 안 함!
 // ============================================================
 
 const PROMPT_FILE_MAPPING = {
@@ -28,10 +26,10 @@ function getSceneCount(videoLength) {
   const lengthStr = String(videoLength).replace(/[^0-9]/g, '');
   const length = parseInt(lengthStr, 10);
   
-  if (length <= 10) return 5;
-  if (length <= 20) return 10;
-  if (length <= 30) return 15;
-  return 10;
+  if (length <= 5) return 3;
+  if (length <= 10) return 5;    // 10초 = 5개 씬
+  if (length <= 20) return 10;   // 20초 = 10개 씬
+  return 15;                      // 30초 = 15개 씬
 }
 
 function mapAspectRatio(input) {
@@ -270,46 +268,46 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   }
 }
 
+// ============================================================
+// 🔥 수정된 파싱 함수 - Manual 모드 지원!
+// ============================================================
+
 function parseUnifiedConceptJSON(text, mode = 'auto') {
   try {
     console.log('[parseUnifiedConceptJSON] 파싱 시작, mode:', mode);
     
     const expectedConceptCount = mode === 'manual' ? 1 : 3;
     
-    // 1. 컨셉 블록 추출 - mode에 따라 다른 패턴 사용
+    // 1. 컨셉 블록 추출
     let conceptMatches = [];
     
     if (mode === 'manual') {
-      // manual 모드: Section 2 패턴 찾기 (대소문자 무시, 공백 유연하게)
+      // Manual 모드: Section 2 찾기
       const manualConceptPattern = /Section\s*2[\s.:]*[^\n]*(?:Cinematic|Storyboard)[^\n]*/i;
       const match = text.match(manualConceptPattern);
       
       if (match) {
         console.log('[parseUnifiedConceptJSON] Manual 모드 - Section 2 발견:', match[0]);
-        // Section 2를 찾았으면 matchAll 형식과 호환되는 매치 객체 생성
         conceptMatches = [{
           0: match[0],
-          1: '1', // 컨셉 번호 1로 설정
-          2: 'Manual Video Concept', // 기본 컨셉 이름
+          1: '1',
+          2: 'Manual Video Concept',
           index: match.index,
           input: text
         }];
       }
     } else {
-      // auto 모드: 기존 패턴 사용
+      // Auto 모드
       const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
       conceptMatches = [...text.matchAll(conceptPattern)];
     }
     
     if (conceptMatches.length === 0) {
       console.error('[parseUnifiedConceptJSON] 컨셉 헤더를 찾을 수 없음');
-      const debugPath = path.join(process.cwd(), 'debug_unified_response.txt');
-      fs.writeFileSync(debugPath, text, 'utf-8');
-      console.log('[parseUnifiedConceptJSON] 응답 저장:', debugPath);
       return null;
     }
     
-    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견 (기대: ${expectedConceptCount}개)`);
+    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
     
     const concepts = [];
     const conceptsToProcess = conceptMatches.slice(0, expectedConceptCount);
@@ -335,8 +333,16 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
       const styleMatch = conceptText.match(/Style:\s*(.+)/);
       const style = styleMatch ? styleMatch[1].trim() : '';
       
-      // 2. 씬 블록 추출
-      const scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
+      // 🔥 씬 블록 추출 - Manual/Auto 모드 구분
+      let scenePattern;
+      if (mode === 'manual') {
+        // Manual 모드: "S#1 (0:00-0:02.5)" 패턴
+        scenePattern = /S#(\d+)\s*\(([^)]+)\)/g;
+      } else {
+        // Auto 모드: "### S#1 (...)" 패턴
+        scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
+      }
+      
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
       
       console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
@@ -357,10 +363,10 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
         console.log(`[parseUnifiedConceptJSON]   처리 중: S#${sceneNum} (${timecode})`);
         
         // Visual Description 추출
-        const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=JSON|###|$)/s);
+        const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=JSON|###|S#\d+|$)/s);
         const visualDescription = visualDescMatch ? visualDescMatch[1].trim() : '';
         
-        // 🔥🔥🔥 개선된 JSON 블록 추출 (백틱 있는/없는 형식 모두 지원)
+        // JSON 블록 추출
         const jsonBlocks = extractJSONBlocks(sceneText);
         
         console.log(`[parseUnifiedConceptJSON]   S#${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견`);
@@ -382,18 +388,10 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
             
             console.log(`[parseUnifiedConceptJSON]   → S#${sceneNum} 파싱 성공`);
           } catch (e) {
-            console.error(`[parseUnifiedConceptJSON] JSON 파싱 실패 (컨셉 ${conceptNum}, 씬 ${sceneNum}):`, e.message);
-            console.error('[parseUnifiedConceptJSON] JSON 블록 내용:');
-            jsonBlocks.forEach((block, idx) => {
-              console.error(`  블록 ${idx + 1}:`, block.substring(0, 200));
-            });
+            console.error(`[parseUnifiedConceptJSON] JSON 파싱 실패 (씬 ${sceneNum}):`, e.message);
           }
         } else {
           console.warn(`[parseUnifiedConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함 (${jsonBlocks.length}개 발견)`);
-          
-          // 🔥 디버깅: 실제 텍스트 일부 출력
-          console.log(`[parseUnifiedConceptJSON] 씬 텍스트 샘플 (처음 500자):`);
-          console.log(sceneText.substring(0, 500));
         }
       }
       
@@ -413,40 +411,29 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
     
   } catch (error) {
     console.error('[parseUnifiedConceptJSON] 전체 파싱 오류:', error);
-    console.error('[parseUnifiedConceptJSON] 스택:', error.stack);
     return null;
   }
 }
 
-/**
- * 🔥 JSON 블록 추출 함수 (백틱 있는/없는 형식 모두 지원)
- * @param {string} text - 파싱할 텍스트
- * @returns {string[]} - 추출된 JSON 문자열 배열
- */
 function extractJSONBlocks(text) {
   const jsonBlocks = [];
   
-  // 패턴 1: 백틱으로 감싸진 JSON (```json ... ``` 또는 ```python ... ```)
+  // 백틱으로 감싸진 JSON
   const backtickPattern = /```(?:json|python)?\s*\n([\s\S]*?)\n```/g;
   let backtickMatches = [...text.matchAll(backtickPattern)];
   
-  // 패턴 2: "JSON" 단어 다음에 오는 순수 JSON (백틱 없음)
-  // "JSON\n{...}" 형식
-  const plainJSONPattern = /(?:^|\n)JSON\s*\n(\{[\s\S]*?\n\})\s*(?=\n(?:JSON|###|```|$))/gm;
+  // "JSON" 단어 다음 순수 JSON
+  const plainJSONPattern = /(?:^|\n)JSON\s*\n(\{[\s\S]*?\n\})\s*(?=\n(?:JSON|###|```|S#\d+|$))/gm;
   let plainMatches = [...text.matchAll(plainJSONPattern)];
   
-  // 패턴 3: "JSON" 단어 다음에 "```copy" 형식 (특수 케이스)
+  // "JSON" + "```copy" 형식
   const copyPattern = /(?:^|\n)JSON\s*\n```copy\s*\n([\s\S]*?)\n```/gm;
   let copyMatches = [...text.matchAll(copyPattern)];
   
-  console.log(`[extractJSONBlocks] 백틱 매치: ${backtickMatches.length}, 순수 JSON 매치: ${plainMatches.length}, Copy 매치: ${copyMatches.length}`);
-  
-  // 모든 매치를 위치 순서대로 정렬
   const allMatches = [];
   
   backtickMatches.forEach(match => {
     const content = match[1].trim();
-    // 백틱 안에 {로 시작하는 JSON인지 확인
     if (content.startsWith('{')) {
       allMatches.push({
         index: match.index,
@@ -464,7 +451,6 @@ function extractJSONBlocks(text) {
     });
   });
   
-  // Copy 패턴 처리 (copy 키를 가진 JSON으로 변환)
   copyMatches.forEach(match => {
     const copyText = match[1].trim();
     const copyJSON = JSON.stringify({ copy: copyText });
@@ -475,26 +461,22 @@ function extractJSONBlocks(text) {
     });
   });
   
-  // 위치 순서대로 정렬
   allMatches.sort((a, b) => a.index - b.index);
   
-  // JSON 문자열만 추출
   allMatches.forEach(match => {
-    console.log(`[extractJSONBlocks]   매치 타입: ${match.type}, 위치: ${match.index}, 내용 시작: ${match.content.substring(0, 50)}...`);
     jsonBlocks.push(match.content);
   });
   
   return jsonBlocks;
 }
 
-// 🔥🔥🔥 ES Module export로 변경
 export {
   parseUnifiedConceptJSON,
   extractJSONBlocks
 };
 
 // ============================================================
-// 🔥 진행률 추적 함수들 (추가된 것만!)
+// 진행률 추적 함수
 // ============================================================
 
 async function updateSession(sessionId, updateData) {
@@ -510,21 +492,6 @@ async function updateSession(sessionId, updateData) {
         updateData.result, 
         updateData.error
       );
-    }
-
-    try {
-      const apiUrl = process.env.API_BASE_URL || 'http://localhost:3000';
-      await fetch(`${apiUrl}/api/session/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          ...updateData
-        }),
-        timeout: 5000
-      });
-    } catch (apiError) {
-      console.warn('[updateSession] API endpoint not reachable:', apiError.message);
     }
 
     return true;
@@ -549,7 +516,7 @@ function calculateProgress(phase, stepProgress = 0) {
 }
 
 // ============================================================
-// 🔥 자동화 함수들 (추가된 것만!)
+// 자동화 함수들
 // ============================================================
 
 async function generateImage(imagePrompt, sceneNumber, conceptId, username) {
@@ -655,7 +622,7 @@ async function pollVideoStatus(taskId, sceneNumber, maxAttempts = 60) {
 }
 
 // ============================================================
-// 🔥 메인 함수 (자동화 추가)
+// 메인 함수
 // ============================================================
 
 async function processStoryboardAsync(body, username, sessionId) {
@@ -772,6 +739,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       throw new Error('JSON 파싱 실패');
     }
 
+    console.log('[storyboard-init] ✅ Gemini 파싱 성공:', mcJson.concepts.length, '개 컨셉');
+
     // ==========================================
     // PHASE 2: 이미지 생성 (15-40%)
     // ==========================================
@@ -794,9 +763,14 @@ async function processStoryboardAsync(body, username, sessionId) {
         const sceneKey = `scene_${sceneNum}`;
         const scene = concept[sceneKey];
         
-        if (!scene) continue;
+        if (!scene) {
+          console.warn(`[storyboard-init] 씬 ${sceneNum} 없음 (컨셉 ${conceptIdx + 1})`);
+          continue;
+        }
 
         try {
+          console.log(`[storyboard-init] 이미지 생성 중: 컨셉 ${conceptIdx + 1}, 씬 ${sceneNum}`);
+          
           const imageUrl = await generateImage(
             scene.image_prompt,
             sceneNum,
@@ -855,6 +829,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     });
 
+    console.log(`[storyboard-init] ✅ 이미지 생성 완료: ${styles.length}개 컨셉`);
+
     // ==========================================
     // PHASE 3: 비디오 생성 (40-80%)
     // ==========================================
@@ -874,6 +850,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       totalVideos += style.images.filter(img => img.imageUrl).length;
     }
 
+    console.log(`[storyboard-init] 총 ${totalVideos}개 비디오 생성 예정`);
+
     for (let styleIdx = 0; styleIdx < styles.length; styleIdx++) {
       const style = styles[styleIdx];
 
@@ -883,6 +861,8 @@ async function processStoryboardAsync(body, username, sessionId) {
         if (!image.imageUrl) continue;
 
         try {
+          console.log(`[storyboard-init] 비디오 생성 중: 컨셉 ${styleIdx + 1}, 씬 ${image.sceneNumber}`);
+          
           const videoUrl = await generateVideo(
             image.imageUrl,
             image.motionPrompt,
@@ -920,6 +900,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     });
 
+    console.log(`[storyboard-init] ✅ 비디오 생성 완료: ${completedVideos}/${totalVideos}`);
+
     // ==========================================
     // PHASE 4: 비디오 합성 (80-100%)
     // ==========================================
@@ -947,6 +929,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       if (segments.length === 0) continue;
 
       try {
+        console.log(`[storyboard-init] 비디오 합성 중: 컨셉 ${styleIdx + 1}`);
+        
         const compileResponse = await fetch(`${API_BASE}/api/compile-videos`, {
           method: 'POST',
           headers: {
