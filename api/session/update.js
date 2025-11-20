@@ -1,55 +1,73 @@
-// api/session/update.js
+/**
+ * API: 세션 진행률 업데이트
+ * POST /api/session/update
+ */
 
-import { sessions } from './start.js';
+import sessionStore from '../../utils/sessionStore.js';
 
 export default async function handler(req, res) {
+  // CORS 헤더 설정
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // Preflight 요청 처리
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  // POST 요청만 허용
   if (req.method !== 'POST') {
     return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed' 
+      error: 'Method not allowed',
+      message: 'Only POST requests are accepted'
     });
   }
 
   try {
-    const { sessionId, progress, message, completed, storyboard } = req.body;
+    const { sessionId, progress, status, result, error } = req.body;
 
-    const session = sessions.get(sessionId);
-
-    if (!session) {
-      return res.status(404).json({
-        success: false,
-        error: '세션을 찾을 수 없습니다'
+    // 필수 파라미터 검증
+    if (!sessionId) {
+      return res.status(400).json({ 
+        error: 'Bad request',
+        message: 'sessionId is required'
       });
     }
 
-    session.progress = progress || session.progress;
-    session.message = message || session.message;
-    session.completed = completed || session.completed;
-    session.storyboard = storyboard || session.storyboard;
-    session.updatedAt = new Date().toISOString();
+    // 세션이 존재하지 않으면 생성
+    let session = sessionStore.getSession(sessionId);
+    if (!session) {
+      console.log(`[API] Creating new session: ${sessionId}`);
+      session = sessionStore.createSession(sessionId);
+    }
 
-    sessions.set(sessionId, session);
+    // 진행률 업데이트
+    if (progress) {
+      session = sessionStore.updateProgress(sessionId, progress);
+    }
 
-    console.log(`[session/update] 세션 업데이트: ${sessionId}, 진행률: ${progress}%`);
+    // 상태 업데이트
+    if (status) {
+      session = sessionStore.updateStatus(sessionId, status, result, error);
+    }
 
+    // 업데이트된 세션 반환
     return res.status(200).json({
       success: true,
-      session
+      session: {
+        id: session.id,
+        progress: session.progress,
+        status: session.status,
+        lastUpdated: session.lastUpdated
+      }
     });
 
-  } catch (error) {
-    console.error('[session/update] 오류:', error);
-    return res.status(500).json({
-      success: false,
-      error: '세션 업데이트 중 오류가 발생했습니다'
+  } catch (err) {
+    console.error('[API] Error updating session:', err);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: err.message
     });
   }
 }
