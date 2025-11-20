@@ -1,6 +1,6 @@
 // api/session/update.js
 
-import { sessions } from './session/start.js';
+import { sessions } from './start.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
