@@ -514,6 +514,27 @@ async function processStoryboardAsync(body, username, sessionId) {
       aspectRatio, aspectRatioCode, imageUpload, mode, userDescription
     } = body;
 
+    // 🔥 추가: 세션 강제 생성 또는 확인
+    let session = sessionStore.getSession(sessionId);
+    if (!session) {
+      console.log(`[storyboard-init] ⚠️ 세션 없음! 새로 생성: ${sessionId}`);
+      sessionStore.createSession(sessionId, {
+        username: username,
+        formData: body,
+        startedAt: Date.now()
+      });
+    } else {
+      console.log(`[storyboard-init] ✅ 기존 세션 확인: ${sessionId}`);
+    }
+    
+    await updateSession(sessionId, {
+      progress: {
+        phase: 'GEMINI',
+        percentage: calculateProgress('GEMINI', 0),
+        currentStep: 'Gemini API 호출 준비 중...'
+      }
+    });
+    
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
