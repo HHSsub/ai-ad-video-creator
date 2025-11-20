@@ -1,4 +1,4 @@
-// api/storyboard-init.js - 🔥 Manual 모드 파싱 수정 완료!
+// api/storyboard-init.js - 🔥 비디오 폴링 + 진행률 업데이트 수정!
 
 export const config = {
   maxDuration: 9000,
@@ -14,12 +14,13 @@ const API_BASE = process.env.VITE_API_BASE_URL
       ? process.env.VITE_API_BASE_URL 
       : `https://upnexx.ai${process.env.VITE_API_BASE_URL}`)
   : 'http://localhost:3000';
+
 console.log('[storyboard-init] API_BASE:', API_BASE);
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 
 // ============================================================
-// 원본 함수들 - 절대 수정 안 함!
+// 원본 함수들
 // ============================================================
 
 const PROMPT_FILE_MAPPING = {
@@ -33,9 +34,9 @@ function getSceneCount(videoLength) {
   const length = parseInt(lengthStr, 10);
   
   if (length <= 5) return 3;
-  if (length <= 10) return 5;    // 10초 = 5개 씬
-  if (length <= 20) return 10;   // 20초 = 10개 씬
-  return 15;                      // 30초 = 15개 씬
+  if (length <= 10) return 5;
+  if (length <= 20) return 10;
+  return 15;
 }
 
 function mapAspectRatio(input) {
@@ -123,22 +124,9 @@ function analyzeCompositingInfo(requestBody, compositingScenes) {
 }
 
 function getPromptFile(videoPurpose, mode = 'auto') {
-  console.log(`[getPromptFile] videoPurpose: ${videoPurpose}, mode: ${mode}`);
-  
-  if (mode === 'manual') {
-    console.log('[getPromptFile] → 매뉴얼 프롬프트');
-    return 'manual';
-  }
-  
-  if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') {
-    console.log('[getPromptFile] → 제품용 프롬프트');
-    return 'product';
-  } else if (videoPurpose === 'service' || videoPurpose === 'brand') {
-    console.log('[getPromptFile] → 서비스용 프롬프트');
-    return 'service';
-  }
-  
-  console.log('[getPromptFile] → 기본값 (제품용)');
+  if (mode === 'manual') return 'manual';
+  if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') return 'product';
+  if (videoPurpose === 'service' || videoPurpose === 'brand') return 'service';
   return 'product';
 }
 
@@ -146,15 +134,9 @@ const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
 
 function loadUsers() {
   try {
-    if (!fs.existsSync(USERS_FILE)) {
-      console.error('[storyboard-init] 사용자 파일이 없습니다:', USERS_FILE);
-      return {};
-    }
-    
+    if (!fs.existsSync(USERS_FILE)) return {};
     const data = fs.readFileSync(USERS_FILE, 'utf8');
-    const users = JSON.parse(data);
-    console.log('[storyboard-init] 사용자 데이터 로드 완료');
-    return users;
+    return JSON.parse(data);
   } catch (error) {
     console.error('[storyboard-init] 사용자 데이터 로드 오류:', error);
     return {};
@@ -165,7 +147,6 @@ function saveUsers(users) {
   try {
     const data = JSON.stringify(users, null, 2);
     fs.writeFileSync(USERS_FILE, data, 'utf8');
-    console.log('[storyboard-init] 사용자 데이터 저장 완료');
     return true;
   } catch (error) {
     console.error('[storyboard-init] 사용자 데이터 저장 오류:', error);
@@ -175,46 +156,26 @@ function saveUsers(users) {
 
 function checkAndResetDaily(user) {
   const today = new Date().toISOString().split('T')[0];
-  
   if (user.lastResetDate !== today) {
     user.usageCount = 0;
     user.lastResetDate = today;
-    console.log('[storyboard-init] 일일 리셋:', user.id);
     return true;
   }
-  
   return false;
 }
 
 function checkUsageLimit(username) {
   try {
-    if (!username) {
-      console.warn('[storyboard-init] username이 없습니다');
-      return { allowed: false, message: '사용자 정보가 없습니다.' };
-    }
-
+    if (!username) return { allowed: false, message: '사용자 정보가 없습니다.' };
     const users = loadUsers();
     const user = users[username];
-
-    if (!user) {
-      console.warn('[storyboard-init] 사용자를 찾을 수 없습니다:', username);
-      return { allowed: false, message: '존재하지 않는 사용자입니다.' };
-    }
-
+    if (!user) return { allowed: false, message: '존재하지 않는 사용자입니다.' };
     checkAndResetDaily(user);
-
     if (user.usageCount >= user.dailyLimit) {
-      console.warn('[storyboard-init] 일일 사용 한도 초과:', username);
-      return { 
-        allowed: false, 
-        message: `일일 사용 한도(${user.dailyLimit}회)를 초과했습니다.`
-      };
+      return { allowed: false, message: `일일 사용 한도(${user.dailyLimit}회)를 초과했습니다.` };
     }
-
     return { allowed: true, user };
-
   } catch (error) {
-    console.error('[storyboard-init] 사용 한도 체크 오류:', error);
     return { allowed: false, message: '사용 한도 확인 중 오류가 발생했습니다.' };
   }
 }
@@ -223,12 +184,10 @@ function incrementUsageCount(username) {
   try {
     const users = loadUsers();
     const user = users[username];
-
     if (user) {
       user.usageCount = (user.usageCount || 0) + 1;
       users[username] = user;
       saveUsers(users);
-      console.log(`[storyboard-init] 사용 횟수 증가: ${username} (${user.usageCount}/${user.dailyLimit})`);
     }
   } catch (error) {
     console.error('[storyboard-init] 사용 횟수 증가 오류:', error);
@@ -238,16 +197,12 @@ function incrementUsageCount(username) {
 function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   try {
     const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
-    
     if (!fs.existsSync(responsesPath)) {
       fs.mkdirSync(responsesPath, { recursive: true });
-      console.log('[saveGeminiResponse] gemini_responses 폴더 생성');
     }
-
     const timestamp = Date.now();
     const fileName = `${promptKey}_${step}_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
-    
     const responseData = {
       promptKey,
       step,
@@ -256,44 +211,22 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
       timestamp: new Date().toISOString(),
       savedAt: new Date().toISOString()
     };
-
     fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
-
-    console.log(`[saveGeminiResponse] ✅ Gemini 응답 저장 완료: ${fileName}`);
-    return {
-      success: true,
-      fileName
-    };
-
+    return { success: true, fileName };
   } catch (error) {
-    console.error('[saveGeminiResponse] ❌ Gemini 응답 저장 실패:', error);
-    return {
-      success: false,
-      error: error.message
-    };
+    return { success: false, error: error.message };
   }
 }
 
-// ============================================================
-// 🔥 수정된 파싱 함수 - Manual 모드 지원!
-// ============================================================
-
 function parseUnifiedConceptJSON(text, mode = 'auto') {
   try {
-    console.log('[parseUnifiedConceptJSON] 파싱 시작, mode:', mode);
-    
     const expectedConceptCount = mode === 'manual' ? 1 : 3;
-    
-    // 1. 컨셉 블록 추출
     let conceptMatches = [];
     
     if (mode === 'manual') {
-      // Manual 모드: Section 2 찾기
       const manualConceptPattern = /Section\s*2[\s.:]*[^\n]*(?:Cinematic|Storyboard)[^\n]*/i;
       const match = text.match(manualConceptPattern);
-      
       if (match) {
-        console.log('[parseUnifiedConceptJSON] Manual 모드 - Section 2 발견:', match[0]);
         conceptMatches = [{
           0: match[0],
           1: '1',
@@ -303,17 +236,11 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
         }];
       }
     } else {
-      // Auto 모드
       const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
       conceptMatches = [...text.matchAll(conceptPattern)];
     }
     
-    if (conceptMatches.length === 0) {
-      console.error('[parseUnifiedConceptJSON] 컨셉 헤더를 찾을 수 없음');
-      return null;
-    }
-    
-    console.log(`[parseUnifiedConceptJSON] ${conceptMatches.length}개 컨셉 발견`);
+    if (conceptMatches.length === 0) return null;
     
     const concepts = [];
     const conceptsToProcess = conceptMatches.slice(0, expectedConceptCount);
@@ -323,36 +250,25 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
       const conceptNum = parseInt(conceptMatch[1]);
       const conceptName = conceptMatch[2].trim();
       const startIdx = conceptMatch.index;
-      
       let endIdx = text.length;
       if (i < conceptsToProcess.length - 1) {
         endIdx = conceptsToProcess[i + 1].index;
       }
-      
       const conceptText = text.substring(startIdx, endIdx);
-      
-      console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum}: ${conceptName}`);
       
       const bigIdeaMatch = conceptText.match(/Big Idea:\s*(.+)/);
       const bigIdea = bigIdeaMatch ? bigIdeaMatch[1].trim() : '';
-      
       const styleMatch = conceptText.match(/Style:\s*(.+)/);
       const style = styleMatch ? styleMatch[1].trim() : '';
       
-      // 🔥 씬 블록 추출 - Manual/Auto 모드 구분
       let scenePattern;
       if (mode === 'manual') {
-        // Manual 모드: "S#1 (0:00-0:02.5)" 패턴
         scenePattern = /S#(\d+)\s*\(([^)]+)\)/g;
       } else {
-        // Auto 모드: "### S#1 (...)" 패턴
         scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
       }
       
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
-      
-      console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum} - 발견된 씬: ${sceneMatches.length}개`);
-      
       const conceptData = {
         concept_name: conceptName,
         big_idea: bigIdea,
@@ -366,16 +282,9 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
         const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
         const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
         
-        console.log(`[parseUnifiedConceptJSON]   처리 중: S#${sceneNum} (${timecode})`);
-        
-        // Visual Description 추출
         const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=JSON|###|S#\d+|$)/s);
         const visualDescription = visualDescMatch ? visualDescMatch[1].trim() : '';
-        
-        // JSON 블록 추출
         const jsonBlocks = extractJSONBlocks(sceneText);
-        
-        console.log(`[parseUnifiedConceptJSON]   S#${sceneNum}: JSON 블록 ${jsonBlocks.length}개 발견`);
         
         if (jsonBlocks.length >= 3) {
           try {
@@ -391,98 +300,57 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
               motion_prompt: motionPromptJSON,
               copy: copyJSON
             };
-            
-            console.log(`[parseUnifiedConceptJSON]   → S#${sceneNum} 파싱 성공`);
           } catch (e) {
-            console.error(`[parseUnifiedConceptJSON] JSON 파싱 실패 (씬 ${sceneNum}):`, e.message);
+            console.error(`JSON 파싱 실패 (씬 ${sceneNum}):`, e.message);
           }
-        } else {
-          console.warn(`[parseUnifiedConceptJSON] 씬 ${sceneNum}에서 3개의 JSON 블록을 찾지 못함 (${jsonBlocks.length}개 발견)`);
         }
       }
-      
-      const sceneKeys = Object.keys(conceptData).filter(k => k.startsWith('scene_'));
-      console.log(`[parseUnifiedConceptJSON] 컨셉 ${conceptNum} 최종 씬 수: ${sceneKeys.length}개`);
       
       concepts.push(conceptData);
     }
     
-    console.log(`[parseUnifiedConceptJSON] ✅ 파싱 완료: ${concepts.length}개 컨셉`);
-    concepts.forEach((c, idx) => {
-      const sceneCount = Object.keys(c).filter(k => k.startsWith('scene_')).length;
-      console.log(`  컨셉 ${idx + 1} (${c.concept_name}): ${sceneCount}개 씬`);
-    });
-    
     return { concepts };
-    
   } catch (error) {
-    console.error('[parseUnifiedConceptJSON] 전체 파싱 오류:', error);
+    console.error('[parseUnifiedConceptJSON] 오류:', error);
     return null;
   }
 }
 
 function extractJSONBlocks(text) {
   const jsonBlocks = [];
-  
-  // 백틱으로 감싸진 JSON
   const backtickPattern = /```(?:json|python)?\s*\n([\s\S]*?)\n```/g;
   let backtickMatches = [...text.matchAll(backtickPattern)];
-  
-  // "JSON" 단어 다음 순수 JSON
   const plainJSONPattern = /(?:^|\n)JSON\s*\n(\{[\s\S]*?\n\})\s*(?=\n(?:JSON|###|```|S#\d+|$))/gm;
   let plainMatches = [...text.matchAll(plainJSONPattern)];
-  
-  // "JSON" + "```copy" 형식
   const copyPattern = /(?:^|\n)JSON\s*\n```copy\s*\n([\s\S]*?)\n```/gm;
   let copyMatches = [...text.matchAll(copyPattern)];
   
   const allMatches = [];
-  
   backtickMatches.forEach(match => {
     const content = match[1].trim();
     if (content.startsWith('{')) {
-      allMatches.push({
-        index: match.index,
-        content: content,
-        type: 'backtick'
-      });
+      allMatches.push({ index: match.index, content: content, type: 'backtick' });
     }
   });
-  
   plainMatches.forEach(match => {
-    allMatches.push({
-      index: match.index,
-      content: match[1].trim(),
-      type: 'plain'
-    });
+    allMatches.push({ index: match.index, content: match[1].trim(), type: 'plain' });
   });
-  
   copyMatches.forEach(match => {
     const copyText = match[1].trim();
     const copyJSON = JSON.stringify({ copy: copyText });
-    allMatches.push({
-      index: match.index,
-      content: copyJSON,
-      type: 'copy'
-    });
+    allMatches.push({ index: match.index, content: copyJSON, type: 'copy' });
   });
-  
   allMatches.sort((a, b) => a.index - b.index);
-  
   allMatches.forEach(match => {
     jsonBlocks.push(match.content);
   });
-  
   return jsonBlocks;
 }
 
-export {
-  parseUnifiedConceptJSON,
-  extractJSONBlocks
-};
+export { parseUnifiedConceptJSON, extractJSONBlocks };
 
 // ============================================================
-// 진행률 추적 함수
+// 진행률 추적
 // ============================================================
 
 async function updateSession(sessionId, updateData) {
@@ -490,16 +358,9 @@ async function updateSession(sessionId, updateData) {
     if (updateData.progress) {
       sessionStore.updateProgress(sessionId, updateData.progress);
     }
-    
     if (updateData.status) {
-      sessionStore.updateStatus(
-        sessionId, 
-        updateData.status, 
-        updateData.result, 
-        updateData.error
-      );
+      sessionStore.updateStatus(sessionId, updateData.status, updateData.result, updateData.error);
     }
-
     return true;
   } catch (error) {
     console.error('[updateSession] Error:', error);
@@ -514,15 +375,13 @@ function calculateProgress(phase, stepProgress = 0) {
     VIDEO: { start: 40, weight: 40 },
     COMPOSE: { start: 80, weight: 20 }
   };
-
   const phaseInfo = phases[phase];
   if (!phaseInfo) return 0;
-
   return Math.floor(phaseInfo.start + (phaseInfo.weight * stepProgress / 100));
 }
 
 // ============================================================
-// 자동화 함수들
+// 자동화 함수
 // ============================================================
 
 async function generateImage(imagePrompt, sceneNumber, conceptId, username) {
@@ -539,25 +398,16 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username) {
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const result = await response.json();
-  
-  if (!result.success || !result.url) {
-    throw new Error('이미지 생성 실패');
-  }
-
+  if (!result.success || !result.url) throw new Error('이미지 생성 실패');
   return result.url;
 }
 
 async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
   const response = await fetch(`${API_BASE}/api/image-to-video`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       imageUrl,
       prompt: motionPrompt?.prompt || 'smooth camera movement',
@@ -567,27 +417,21 @@ async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const result = await response.json();
-  
-  if (!result.success || !result.task?.taskId) {
-    throw new Error('비디오 생성 실패');
-  }
-
-  const videoUrl = await pollVideoStatus(result.task.taskId, sceneNumber);
-  return videoUrl;
+  if (!result.success || !result.task?.taskId) throw new Error('비디오 생성 실패');
+  return result.task.taskId;
 }
 
-async function pollVideoStatus(taskId, sceneNumber, maxAttempts = 60) {
+// 🔥 수정된 pollVideoStatus - 진행률 업데이트 추가
+async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex, totalVideos, maxAttempts = 120) {
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  
+  console.log(`[pollVideoStatus] 폴링 시작: ${taskId} (${currentVideoIndex}/${totalVideos})`);
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const apiKey = process.env.FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
-      
       const response = await fetch(`${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro/${taskId}`, {
         method: 'GET',
         headers: {
@@ -596,15 +440,25 @@ async function pollVideoStatus(taskId, sceneNumber, maxAttempts = 60) {
         }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
       const status = result.data?.status?.toUpperCase();
 
+      // 🔥 폴링 중 진행률 업데이트
+      if (attempt % 6 === 0) {  // 30초마다 (5초 * 6)
+        const videoProgress = ((currentVideoIndex - 1) / totalVideos) * 100;
+        await updateSession(sessionId, {
+          progress: {
+            phase: 'VIDEO',
+            percentage: calculateProgress('VIDEO', videoProgress),
+            currentStep: `비디오 ${currentVideoIndex}/${totalVideos} 생성 중... (${Math.floor(attempt * 5 / 60)}분 경과)`
+          }
+        });
+      }
+
       if (status === 'COMPLETED') {
         if (result.data?.generated?.[0]) {
+          console.log(`[pollVideoStatus] ✅ 완료: ${sceneNumber}`);
           return result.data.generated[0];
         }
         throw new Error('완료되었지만 URL 없음');
@@ -615,15 +469,11 @@ async function pollVideoStatus(taskId, sceneNumber, maxAttempts = 60) {
       }
 
       await sleep(5000);
-      
     } catch (error) {
-      if (attempt >= maxAttempts) {
-        throw new Error('비디오 폴링 타임아웃');
-      }
+      if (attempt >= maxAttempts) throw new Error('비디오 폴링 타임아웃');
       await sleep(5000);
     }
   }
-  
   throw new Error('비디오 폴링 타임아웃');
 }
 
@@ -636,7 +486,6 @@ async function processStoryboardAsync(body, username, sessionId) {
   
   try {
     const usageCheck = checkUsageLimit(username);
-    
     if (!usageCheck.allowed) {
       await updateSession(sessionId, {
         status: 'error',
@@ -647,19 +496,9 @@ async function processStoryboardAsync(body, username, sessionId) {
     }
 
     const {
-      brandName,
-      industryCategory,
-      productServiceCategory,
-      productServiceName,
-      videoLength,
-      videoPurpose,
-      coreTarget,
-      coreDifferentiation,
-      aspectRatio,
-      aspectRatioCode,
-      imageUpload,
-      mode,
-      userDescription
+      brandName, industryCategory, productServiceCategory, productServiceName,
+      videoLength, videoPurpose, coreTarget, coreDifferentiation,
+      aspectRatio, aspectRatioCode, imageUpload, mode, userDescription
     } = body;
 
     sessionStore.createSession(sessionId, {
@@ -676,20 +515,13 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     });
 
-    // ==========================================
     // PHASE 1: Gemini (0-15%)
-    // ==========================================
-    
     const promptFile = getPromptFile(videoPurpose, mode);
     const promptFileName = PROMPT_FILE_MAPPING[promptFile];
     const promptFilePath = path.join(process.cwd(), 'public', promptFileName);
-
-    if (!fs.existsSync(promptFilePath)) {
-      throw new Error(`프롬프트 파일을 찾을 수 없습니다: ${promptFileName}`);
-    }
+    if (!fs.existsSync(promptFilePath)) throw new Error(`프롬프트 파일을 찾을 수 없습니다: ${promptFileName}`);
 
     let promptTemplate = fs.readFileSync(promptFilePath, 'utf-8');
-
     const promptVariables = {
       brandName: brandName || '',
       industryCategory: industryCategory || '',
@@ -726,7 +558,6 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
     
     const fullOutput = geminiResponse.text;
-    
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
@@ -736,21 +567,14 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
     
     saveGeminiResponse(promptFile, 'unified', body, fullOutput);
-
     const sceneCountPerConcept = getSceneCount(videoLength);
     const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
-    
-    if (!mcJson || !mcJson.concepts || mcJson.concepts.length === 0) {
-      throw new Error('JSON 파싱 실패');
-    }
+    if (!mcJson || !mcJson.concepts || mcJson.concepts.length === 0) throw new Error('JSON 파싱 실패');
 
     console.log('[storyboard-init] ✅ Gemini 파싱 성공:', mcJson.concepts.length, '개 컨셉');
 
-    // ==========================================
     // PHASE 2: 이미지 생성 (15-40%)
-    // ==========================================
-    
     await updateSession(sessionId, {
       progress: {
         phase: 'IMAGE',
@@ -760,7 +584,6 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
 
     const styles = [];
-    
     for (let conceptIdx = 0; conceptIdx < mcJson.concepts.length; conceptIdx++) {
       const concept = mcJson.concepts[conceptIdx];
       const images = [];
@@ -768,22 +591,10 @@ async function processStoryboardAsync(body, username, sessionId) {
       for (let sceneNum = 1; sceneNum <= sceneCountPerConcept; sceneNum++) {
         const sceneKey = `scene_${sceneNum}`;
         const scene = concept[sceneKey];
-        
-        if (!scene) {
-          console.warn(`[storyboard-init] 씬 ${sceneNum} 없음 (컨셉 ${conceptIdx + 1})`);
-          continue;
-        }
+        if (!scene) continue;
 
         try {
-          console.log(`[storyboard-init] 이미지 생성 중: 컨셉 ${conceptIdx + 1}, 씬 ${sceneNum}`);
-          
-          const imageUrl = await generateImage(
-            scene.image_prompt,
-            sceneNum,
-            conceptIdx + 1,
-            username
-          );
-
+          const imageUrl = await generateImage(scene.image_prompt, sceneNum, conceptIdx + 1, username);
           images.push({
             sceneNumber: sceneNum,
             imageUrl: imageUrl,
@@ -796,7 +607,6 @@ async function processStoryboardAsync(body, username, sessionId) {
           });
 
           const progress = ((conceptIdx * sceneCountPerConcept + sceneNum) / (mcJson.concepts.length * sceneCountPerConcept)) * 100;
-          
           await updateSession(sessionId, {
             progress: {
               phase: 'IMAGE',
@@ -804,9 +614,8 @@ async function processStoryboardAsync(body, username, sessionId) {
               currentStep: `이미지 ${sceneNum}/${sceneCountPerConcept} 생성 완료 (컨셉 ${conceptIdx + 1})`
             }
           });
-
         } catch (error) {
-          console.error(`[storyboard-init] 이미지 생성 실패 (씬 ${sceneNum}):`, error);
+          console.error(`이미지 생성 실패 (씬 ${sceneNum}):`, error);
           images.push({
             sceneNumber: sceneNum,
             imageUrl: null,
@@ -835,12 +644,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     });
 
-    console.log(`[storyboard-init] ✅ 이미지 생성 완료: ${styles.length}개 컨셉`);
-
-    // ==========================================
     // PHASE 3: 비디오 생성 (40-80%)
-    // ==========================================
-    
     await updateSession(sessionId, {
       progress: {
         phase: 'VIDEO',
@@ -851,7 +655,6 @@ async function processStoryboardAsync(body, username, sessionId) {
 
     let totalVideos = 0;
     let completedVideos = 0;
-
     for (const style of styles) {
       totalVideos += style.images.filter(img => img.imageUrl).length;
     }
@@ -860,28 +663,23 @@ async function processStoryboardAsync(body, username, sessionId) {
 
     for (let styleIdx = 0; styleIdx < styles.length; styleIdx++) {
       const style = styles[styleIdx];
-
       for (let imgIdx = 0; imgIdx < style.images.length; imgIdx++) {
         const image = style.images[imgIdx];
-        
         if (!image.imageUrl) continue;
 
         try {
           console.log(`[storyboard-init] 비디오 생성 중: 컨셉 ${styleIdx + 1}, 씬 ${image.sceneNumber}`);
           
-          const videoUrl = await generateVideo(
-            image.imageUrl,
-            image.motionPrompt,
-            image.sceneNumber,
-            body
-          );
+          const taskId = await generateVideo(image.imageUrl, image.motionPrompt, image.sceneNumber, body);
+          
+          // 🔥 수정: sessionId, currentVideoIndex, totalVideos 전달
+          const videoUrl = await pollVideoStatus(taskId, image.sceneNumber, sessionId, completedVideos + 1, totalVideos);
 
           image.videoUrl = videoUrl;
           image.status = 'video_done';
           completedVideos++;
 
           const progress = (completedVideos / totalVideos) * 100;
-          
           await updateSession(sessionId, {
             progress: {
               phase: 'VIDEO',
@@ -889,9 +687,8 @@ async function processStoryboardAsync(body, username, sessionId) {
               currentStep: `비디오 ${completedVideos}/${totalVideos} 생성 완료`
             }
           });
-
         } catch (error) {
-          console.error(`[storyboard-init] 비디오 생성 실패 (씬 ${image.sceneNumber}):`, error);
+          console.error(`비디오 생성 실패 (씬 ${image.sceneNumber}):`, error);
           image.status = 'video_failed';
           image.error = error.message;
         }
@@ -908,10 +705,7 @@ async function processStoryboardAsync(body, username, sessionId) {
 
     console.log(`[storyboard-init] ✅ 비디오 생성 완료: ${completedVideos}/${totalVideos}`);
 
-    // ==========================================
     // PHASE 4: 비디오 합성 (80-100%)
-    // ==========================================
-    
     await updateSession(sessionId, {
       progress: {
         phase: 'COMPOSE',
@@ -921,10 +715,8 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
 
     const finalVideos = [];
-
     for (let styleIdx = 0; styleIdx < styles.length; styleIdx++) {
       const style = styles[styleIdx];
-      
       const segments = style.images
         .filter(img => img.videoUrl)
         .map(img => ({
@@ -936,12 +728,9 @@ async function processStoryboardAsync(body, username, sessionId) {
 
       try {
         console.log(`[storyboard-init] 비디오 합성 중: 컨셉 ${styleIdx + 1}`);
-        
         const compileResponse = await fetch(`${API_BASE}/api/compile-videos`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             segments,
             videoLength: videoLength,
@@ -950,15 +739,9 @@ async function processStoryboardAsync(body, username, sessionId) {
           })
         });
 
-        if (!compileResponse.ok) {
-          throw new Error(`HTTP ${compileResponse.status}`);
-        }
-
+        if (!compileResponse.ok) throw new Error(`HTTP ${compileResponse.status}`);
         const compileResult = await compileResponse.json();
-        
-        if (!compileResult.success || !compileResult.compiledVideoUrl) {
-          throw new Error('비디오 합성 실패');
-        }
+        if (!compileResult.success || !compileResult.compiledVideoUrl) throw new Error('비디오 합성 실패');
 
         finalVideos.push({
           conceptId: style.conceptId,
@@ -968,7 +751,6 @@ async function processStoryboardAsync(body, username, sessionId) {
         });
 
         const progress = ((styleIdx + 1) / styles.length) * 100;
-        
         await updateSession(sessionId, {
           progress: {
             phase: 'COMPOSE',
@@ -976,18 +758,13 @@ async function processStoryboardAsync(body, username, sessionId) {
             currentStep: `컨셉 ${styleIdx + 1}/${styles.length} 합성 완료`
           }
         });
-
       } catch (error) {
-        console.error(`[storyboard-init] 컨셉 ${styleIdx + 1} 합성 실패:`, error);
+        console.error(`컨셉 ${styleIdx + 1} 합성 실패:`, error);
       }
     }
 
-    // ==========================================
     // 완료
-    // ==========================================
-    
     const compositingInfo = analyzeCompositingInfo(body, compositingScenes);
-
     const metadata = {
       promptFile: promptFile,
       promptFileName: promptFileName,
@@ -1034,13 +811,9 @@ async function processStoryboardAsync(body, username, sessionId) {
 
   } catch (error) {
     console.error('[storyboard-init] ❌ 오류 발생:', error);
-
     await updateSession(sessionId, {
       status: 'error',
-      error: {
-        message: error.message || '오류 발생',
-        stack: error.stack
-      },
+      error: { message: error.message || '오류 발생', stack: error.stack },
       progress: {
         phase: 'ERROR',
         percentage: 0,
@@ -1056,15 +829,9 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
   res.setHeader('Access-Control-Max-Age', '86400');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
+  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed' 
-    });
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
   const username = req.headers['x-username'] || 'anonymous';
