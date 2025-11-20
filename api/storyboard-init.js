@@ -514,12 +514,6 @@ async function processStoryboardAsync(body, username, sessionId) {
       aspectRatio, aspectRatioCode, imageUpload, mode, userDescription
     } = body;
 
-    sessionStore.createSession(sessionId, {
-      prompt: body,
-      config: {},
-      startedAt: Date.now()
-    });
-
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
