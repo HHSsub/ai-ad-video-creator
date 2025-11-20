@@ -517,19 +517,6 @@ async function processStoryboardAsync(body, username, sessionId) {
       aspectRatio, aspectRatioCode, imageUpload, mode, userDescription
     } = body;
 
-    // 🔥 추가: 세션 강제 생성 또는 확인
-    let session = sessionStore.getSession(sessionId);
-    if (!session) {
-      console.log(`[storyboard-init] ⚠️ 세션 없음! 새로 생성: ${sessionId}`);
-      sessionStore.createSession(sessionId, {
-        username: username,
-        formData: body,
-        startedAt: Date.now()
-      });
-    } else {
-      console.log(`[storyboard-init] ✅ 기존 세션 확인: ${sessionId}`);
-    }
-    
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
@@ -537,14 +524,7 @@ async function processStoryboardAsync(body, username, sessionId) {
         currentStep: 'Gemini API 호출 준비 중...'
       }
     });
-    
-    await updateSession(sessionId, {
-      progress: {
-        phase: 'GEMINI',
-        percentage: calculateProgress('GEMINI', 0),
-        currentStep: 'Gemini API 호출 준비 중...'
-      }
-    });
+
 
     // PHASE 1: Gemini (0-15%)
     const promptFile = getPromptFile(videoPurpose, mode);
@@ -873,6 +853,19 @@ export default async function handler(req, res) {
 
   const username = req.headers['x-username'] || 'anonymous';
   const sessionId = req.body.sessionId || `session_${Date.now()}_${username}`;
+
+  // 🔥 추가: 세션 즉시 생성
+  let session = sessionStore.getSession(sessionId);
+  if (!session) {
+    console.log(`[storyboard-init] 🆕 세션 생성: ${sessionId}`);
+    sessionStore.createSession(sessionId, {
+      username: username,
+      formData: req.body,
+      startedAt: Date.now()
+    });
+  } else {
+    console.log(`[storyboard-init] ✅ 기존 세션 확인: ${sessionId}`);
+  }
 
   res.status(202).json({
     success: true,
