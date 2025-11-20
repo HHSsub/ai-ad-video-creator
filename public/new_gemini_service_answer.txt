@@ -1,0 +1,564 @@
+니베아 광고 영상 기획 제안서 (by GEMINI-CD)
+
+I. STRATEGIC ANALYSIS SUMMARY (Korean)
+
+  * **FAB Insight (Emotional Benefit / Credibility / Function):**
+      * **Function (기능):** 개개인의 피부 타입에 맞춘 정교한 스킨케어 진단 및 제품 추천 서비스.
+      * **Credibility (신뢰):** 30대 남성의 복잡하고 방치된 피부 문제에 대한 명확하고 개인화된 '새로운' 해법 제공.
+      * **Emotional Benefit (정서적 혜택):** 불확실성에서 벗어나 \*\*'자신감을 되찾고 매일 아침 거울 앞에서 느끼는 스트레스를 해소'\*\*하는 평온함.
+  * **Casting Note (캐스팅 정의):**
+      * **Protagonist (주인공 잠금):** **A 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair.** (30대 한국 남성, 깔끔하지만 약간 흐트러진 오피스 룩, 눈가에 미세한 스트레스 라인, 짧고 약간 부스스한 머리.)
+      * **Faceless Helper (도우미):** N/A (서비스 자체가 도우미 역할을 수행함. S\#2에서 \*\*'스마트폰을 쥔 손'\*\*으로 대체).
+
+비디오 길이가 **10초**이므로 총 **5개**의 씬(S\#1 \~ S\#5)을 구성합니다.
+
+-----
+
+II. CREATIVE CONCEPTS & PROMPTS (Total 3 Concepts)
+
+### 1\. 컨셉: 욕망의 시각화 (The Ideal Life: The Moment of Relief)
+
+Big Idea: 복잡했던 아침 루틴이 니베아 스킨케어 서비스를 통해 여유롭고 행복한 순간으로 변모하는 감성 다큐멘터리.
+
+Style: Warm Lifestyle Documentary
+
+### S\#1 (0:00-0:02) [THE PROBLEM / SITUATION]
+
+Visual Description: 욕실 거울 앞에서 30대 남성이 자신의 얼굴을 초조하게 클로즈업해 확인한다. 눈가에 미세한 스트레스와 피로가 보인다. 거울에 맺힌 희미한 습기와 함께 그의 불안한 감정이 강조된다.
+
+JSON
+
+```json
+{
+  "prompt": "Close-up shot of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, squinting anxiously at his reflection in a steamy bathroom mirror. Decisive Emotion: Confusion and mild distress. Natural light is dim and cool.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Warm Lifestyle Documentary", "color": "Cool Blues and Grays (Bathroom)", "lighting": "Dim, shadowy, cool tones, tense atmosphere. Low-key natural window light (Soft)." },
+  "guidance_scale": 7.5,
+  "seed": "47391",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slight, shaky push-in on the protagonist's concerned eyes, emphasizing the subtle twitch of frustration."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "아침마다 반복되는 고민. 도대체 나에게 맞는 스킨케어는 뭘까?"
+}
+```
+
+### S\#2 (0:02-0:04) [THE INTERVENTION / SERVICE CONTACT]
+
+Visual Description: 남성의 손이 스마트폰 화면을 부드럽게 터치하는 순간. 화면에는 복잡한 텍스트 대신, 피부 진단 결과가 명확한 색상과 선으로 구성된 추상적인 UI로 나타난다.
+
+JSON
+
+```json
+{
+  "prompt": "Close-up of a hand (Protagonist's) interacting with a smartphone screen. The screen displays an Abstract glowing UI showing biometric graphs and flow lines, clearly indicating a precise result. Warm light emanates from the screen onto the hand. NO text or specific app logos.",
+  "negative_prompt": "text, letters, numbers, logo, human face, distorted",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Warm Lifestyle Documentary", "color": "Warm Tones (Screen Glow)", "lighting": "Gradually brightening, warm light focuses on the hand and screen." },
+  "guidance_scale": 7.5,
+  "seed": "10528",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slow, deliberate interaction movement. A finger touches a screen, or a hand reaches out. Elegant and stable."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "이제는 니베아 스킨케어서비스로 정확하게."
+}
+```
+
+### S\#3 (0:04-0:06)
+
+Visual Description: 남성이 추천받은 니베아 제품을 집어 드는 손 클로즈업. 제품 패키지에 부드러운 햇빛이 비치며, 제품을 쥐는 손의 움직임에서 확신과 기대감이 느껴진다.
+
+JSON
+
+```json
+{
+  "prompt": "Close-up on a hand (Protagonist's) confidently picking up a sleek product bottle. Soft, diffused Golden Hour sunlight hits the packaging, making it glow gently. Subtle Decisive Emotion: Confirmation and expectation in the grip. Sony A7S III, 35mm Prime.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Warm Lifestyle Documentary", "color": "Amber Tones and Product Colors", "lighting": "Gradually brightening, shadows lifting. Soft Golden Hour light." },
+  "guidance_scale": 7.5,
+  "seed": "93604",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slow, gentle dolly-in on the hand, capturing the soft texture and lighting."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "나만을 위한 맞춤 솔루션."
+}
+```
+
+### S\#4 (0:06-0:08)
+
+Visual Description: 남성이 제품을 바르는 과정. 거울이 아닌 옆면에서 얼굴을 비스듬히 촬영하여, 그의 얼굴 표정(미세하게 긴장이 풀리는 모습)과 함께 제품의 텍스처가 피부에 흡수되는 느낌을 강조.
+
+JSON
+
+```json
+{
+  "prompt": "Medium close-up of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, gently applying a cream to his face. His micro-expression shows the initial feeling of relief and comfort. Warm Natural Window Light illuminates his skin softly. Handheld feel.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Warm Lifestyle Documentary", "color": "Soft White/Amber", "lighting": "Brightening significantly, soft diffused light." },
+  "guidance_scale": 7.5,
+  "seed": "28117",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "Subtle, smooth push-in on the skin texture and the relaxed expression."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "편안함이 스며드는 순간."
+}
+```
+
+### S\#5 (0:08-0:10) [THE NEW NORMAL]
+
+Visual Description: 다음 날 아침, 30대 남성이 거울을 보며 만족스럽고 여유로운 미소를 짓는다. 눈가의 스트레스 라인이 완화되어 보이며, 얼굴 전체에 밝고 건강한 빛이 감돈다.
+
+JSON
+
+```json
+{
+  "prompt": "Medium close-up of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, looking into a mirror with a confident, relaxed, and genuinely satisfied smile. Decisive Emotion: Peak Satisfaction and Confidence. Golden Hour light with a bright halo effect.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Warm Lifestyle Documentary", "color": "Pure Amber Tones", "lighting": "Brightest, Warmest, Halo effect. Full Golden Hour light." },
+  "guidance_scale": 7.5,
+  "seed": "71453",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "Smiling, breathing deeply, looking satisfied, subtle movement. A gentle, steady push-in to stabilize on the confident smile."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "니베아 스킨케어서비스. 이제 아침이 달라집니다."
+}
+```
+
+-----
+
+### 2\. 컨셉: 이질적 조합의 미학 (The Smart Solution: Geometry of Newness)
+
+Big Idea: 복잡한 피부 고민을 깔끔하고 이성적인 '새로운' 시스템이 재정렬해주는 미니멀리즘 비주얼.
+
+Style: Modern Surrealist / Minimalist
+
+### S\#1 (0:00-0:02) [THE PROBLEM / SITUATION]
+
+Visual Description: 30대 남성이 책상에 앉아 턱을 괴고 깊은 고민에 빠져있다. 그의 얼굴 주변 공간이 차갑고 복잡한 선과 기하학적 형태로 채워져 있어, 복잡한 문제에 갇힌 듯한 느낌을 연출.
+
+JSON
+
+```json
+{
+  "prompt": "Medium shot of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, sitting at a sparse desk, head resting on his hand. Decisive Emotion: Intellectual struggle and confusion. The background is filled with cold, intersecting geometric lines and shadows. Studio High-Contrast.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Modern Surrealist / Minimalist", "color": "Cold White and Black", "lighting": "Studio High-Contrast (Sharp), Clean White/Blue Tones, Hard Shadows. Tense atmosphere." },
+  "guidance_scale": 7.5,
+  "seed": "82099",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slight, frustrated head tilt. The camera remains static, emphasizing the geometric composition."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "복잡하게 얽힌 피부 문제, 어떻게 풀어야 할까요?"
+}
+```
+
+### S\#2 (0:02-0:04) [THE INTERVENTION / SERVICE CONTACT]
+
+Visual Description: 차가운 금속 테이블 위에 놓인 스마트폰 위로, 거대한 '가상의 빛의 구체(Surreal Portal)'가 열린다. 이 구체 속에서 니베아 서비스의 추상적인 UI(흐르는 데이터)가 쏟아져 나온다. (Surrealist Metaphor)
+
+JSON
+
+```json
+{
+  "prompt": "Surrealist view: A giant, perfectly spherical vortex of glowing data and Abstract glowing UI lines opens above a sleek, dark smartphone on a minimalist table. The light is intensely focused and clean. NO human hands or faces.",
+  "negative_prompt": "text, letters, numbers, logo, human face, human hand, distorted",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Modern Surrealist / Minimalist", "color": "Intense White/Cyan", "lighting": "Focused, Studio High-Contrast (Sharp), Clean White/Blue Tones." },
+  "guidance_scale": 7.5,
+  "seed": "33418",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slow, deliberate interaction movement. A finger touches a screen, or a hand reaches out. Elegant and stable."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "새로운 방식의 해답이 열립니다."
+}
+```
+
+### S\#3 (0:04-0:06)
+
+Visual Description: 남성의 얼굴에 비치던 복잡한 기하학적 그림자들이 순간적으로 사라지고, 그의 얼굴에 투영되는 빛이 명확하고 깔끔한 하나의 형태로 정돈된다. 남성은 눈을 감고 미세하게 안도한다.
+
+JSON
+
+```python
+{
+  "prompt": "Close-up of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, with eyes closed, showing a subtle micro-expression of relief and clarity. The light on his face shifts from fractured shadows to a single, clean, sharp shaft of light. Canon C70, 50mm Standard.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Modern Surrealist / Minimalist", "color": "Clean White Light", "lighting": "Gradually brightening, shadows lifting. Intense, focused Studio Light." },
+  "guidance_scale": 7.5,
+  "seed": "67902",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A silent, steady hold on the face. The background geometry dissolves into a smooth, clean white void."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "정교한 니베아 스킨케어 분석."
+}
+```
+
+### S\#4 (0:06-0:08)
+
+Visual Description: 남성이 이제는 확신에 찬 표정으로 깔끔한 디자인의 니베아 제품을 들고 있다. 제품과 그의 배경은 완전히 미니멀하고 깨끗한 화이트 톤으로 통일되어, '새로움'과 '정돈됨'을 강조.
+
+JSON
+
+```json
+{
+  "prompt": "Medium close-up of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, holding a sleek, minimalist product bottle. Decisive Emotion: Newfound clarity and intellectual confidence. The entire scene is stark white and perfectly lit. Geometric composition.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Modern Surrealist / Minimalist", "color": "Pure White/Product Accent Color", "lighting": "Brightening significantly, absolute, clean white light." },
+  "guidance_scale": 7.5,
+  "seed": "11385",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slow, clean dolly move that circles the protagonist and the product, maintaining the geometric balance."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "단 하나의, 명확한 답."
+}
+```
+
+### S\#5 (0:08-0:10) [THE NEW NORMAL]
+
+Visual Description: 30대 남성이 정면을 바라보며 깊은 미소를 짓는다. 복잡한 배경 없이, 오직 깔끔하고 강렬한 빛이 그의 얼굴에 평온함과 '새로운' 자신감을 부여한다.
+
+JSON
+
+```json
+{
+  "prompt": "Portrait shot of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair. Decisive Emotion: Peak Satisfaction and Confidence, showing a deep, relaxed smile. Lit by an intensely focused, clean white light with a high-key background. Halo effect on the edges.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Modern Surrealist / Minimalist", "color": "Stark White and Pure Light", "lighting": "Brightest, Warmest, Halo effect. Max studio brightness." },
+  "guidance_scale": 7.5,
+  "seed": "54261",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "Smiling, breathing deeply, looking satisfied, subtle movement. A steady, final, confident pose."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "니베아 스킨케어서비스. 당신의 '새로움'을 찾다."
+}
+```
+
+-----
+
+### 3\. 컨셉: 기회비용의 시각화 (The Pain Point: The Burden Lifted)
+
+Big Idea: '방치된 피부'가 가져오는 무거운 심리적 부담감을 어둡게 시각화하고, 니베아 서비스가 그 부담을 들어 올려주는 드라마틱한 전환.
+
+Style: Gritty Cinematic Drama
+
+### S\#1 (0:00-0:02) [THE PROBLEM / SITUATION]
+
+Visual Description: 어두운 사무실 구석, 30대 남성이 조명 없이 굳은 표정으로 앉아있다. 그의 어깨 위로 짙은 그림자가 드리워져, 마치 눈에 보이지 않는 무거운 짐을 지고 있는 듯한 느낌을 연출.
+
+JSON
+
+```json
+{
+  "prompt": "Medium close-up of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, sitting alone in a dimly lit, high-contrast corner of an office. Decisive Emotion: Heavy anxiety and weariness. A deep, heavy shadow (metaphorical burden) falls across his shoulders and face. Low-Key / Mood Lighting (Dramatic), Teal & Orange.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Gritty Cinematic Drama", "color": "Deep Teal and Black", "lighting": "Low-Key / Mood Lighting (Dramatic), Teal & Orange, Rim Light. Tense and shadowy." },
+  "guidance_scale": 7.5,
+  "seed": "18630",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A very slow, deliberate push-in on the protagonist's tense, weary facial micro-expressions."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "자신감을 잃게 하는 사소한 고민들."
+}
+```
+
+### S\#2 (0:02-0:04) [THE INTERVENTION / SERVICE CONTACT]
+
+Visual Description: 어둠 속에서 남성의 손이 스마트폰을 들어 올린다. 스마트폰 화면에 뜬 추상적인 니베아 서비스의 UI가 마치 '희망의 빛'처럼 남성의 얼굴을 아래에서부터 밝힌다.
+
+JSON
+
+```json
+{
+  "prompt": "Close-up on the Protagonist's hands holding a smartphone in the dark. The phone screen, displaying a brightly Abstract glowing UI (futuristic flow lines and biometric data), casts a powerful, warm orange glow upwards onto his face. Dramatic backlighting. NO text or specific app logos.",
+  "negative_prompt": "text, letters, numbers, logo, human face, distorted",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Gritty Cinematic Drama", "color": "Intense Orange (Screen Light)", "lighting": "Strong contrast, light sourced only from the screen, pushing back the shadows." },
+  "guidance_scale": 7.5,
+  "seed": "95742",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slow, deliberate interaction movement. A finger touches a screen, or a hand reaches out. Elegant and stable."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "이제 그 무게를 내려놓으세요."
+}
+```
+
+### S\#3 (0:04-0:06)
+
+Visual Description: 남성의 눈에 초점이 맞추어지고, 눈가에 드리워져 있던 짙은 그림자가 후광(Rim Light)을 받으며 서서히 벗겨지는 것을 강조. 눈빛에 미세한 '결단력'과 '변화'가 생긴다.
+
+JSON
+
+```json
+{
+  "prompt": "Extreme close-up on the eyes of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair. The deep shadow previously on his face lifts away, revealing sharp focus and determination in his eyes. Strong Rim Light from the side. ARRI Alexa, 85mm Portrait Lens.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Gritty Cinematic Drama", "color": "Teal & Warm Skin Tones", "lighting": "Gradually brightening, shadows lifting. Strong, focused Rim Light." },
+  "guidance_scale": 7.5,
+  "seed": "20104",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A dramatic, short rack focus from the dark background to the sharp, determined eyes."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "정확한 진단이 변화를 만듭니다."
+}
+```
+
+### S\#4 (0:06-0:08)
+
+Visual Description: 남성이 거울을 보며 니베아 제품을 바르는 모습. 거울 속 그의 얼굴이 '과거의 어둠'에서 벗어나 '현재의 밝음'으로 전환되는 시각적 대조를 강하게 보여준다.
+
+JSON
+
+```json
+{
+  "prompt": "Medium close-up of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, looking at his reflection while applying the product. His reflection is significantly brighter and clearer than the surrounding room. Decisive Emotion: Active relief and self-care. Teal & Orange contrast is strong.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Gritty Cinematic Drama", "color": "Strong Teal & Orange Contrast", "lighting": "Brightening significantly, strong contrast maintained for cinematic look." },
+  "guidance_scale": 7.5,
+  "seed": "55927",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "A slow, sweeping orbital arc around the protagonist, emphasizing the product application and the lighting shift."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "고민 대신 자신감을 채우세요."
+}
+```
+
+### S\#5 (0:08-0:10) [THE NEW NORMAL]
+
+Visual Description: 30대 남성이 고층 빌딩 유리창 앞에서 햇빛을 받으며 서있다. 그의 얼굴은 매우 밝고 건강해 보이며, 시원한 미소를 짓고 있다. 이전의 어깨를 짓누르던 그림자가 완전히 사라지고, 강력한 후광(Halo effect)만 남는다.
+
+JSON
+
+```json
+{
+  "prompt": "Full body shot of a 30s Korean male, sharp but slightly disheveled office wear, noticeable stress lines around the eyes, short, slightly messy hair, standing confidently by a large, sun-drenched window in a high-rise. Decisive Emotion: Peak Satisfaction, looking outward with a strong, optimistic smile. Strong, warm halo effect, dramatically bright lighting.",
+  "negative_prompt": "text, letters, numbers, logo, bad anatomy, distorted face, ugly, morphing, extra fingers, frozen, ice",
+  "num_images": 1,
+  "image": { "size": "16:9" },
+  "styling": { "style": "Gritty Cinematic Drama", "color": "Warm Sunlight & Bright Sky", "lighting": "Brightest, Warmest, Halo effect. Full, intense sunlight." },
+  "guidance_scale": 7.5,
+  "seed": "79813",
+  "filter_nsfw": true
+}
+```
+
+JSON
+
+```json
+{
+  "prompt": "Smiling, breathing deeply, looking satisfied, subtle movement. A final, steady pull-back dolly shot, widening the frame to show his freedom from the dark corner."
+}
+```
+
+JSON
+
+```json
+{
+  "copy": "니베아 스킨케어서비스. 당신의 새로운 시작."
+}
+```
