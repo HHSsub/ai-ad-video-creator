@@ -391,6 +391,7 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
 
 async function updateSession(sessionId, data) {
   try {
+    console.log(`[updateSession] 진행률: ${data.progress}%, 메시지: ${data.message || ''}`);
     await fetch(`http://localhost:3000/api/session/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -498,6 +499,11 @@ async function processStoryboardAsync(body, username, sessionId) {
       isImageComposition: false
     });
 
+    await updateSession(sessionId, {
+      progress: 30,
+      message: 'AI 응답 대기 중... (최대 5분 소요)'
+    });
+    
     const fullOutput = geminiResponse.text;
     console.log("[storyboard-init] ✅ 통합 응답 완료:", fullOutput.length, "chars");
     console.log('[storyboard-init] ⏰ 소요 시간:', (Date.now() - startTime) / 1000, '초');
@@ -528,6 +534,12 @@ async function processStoryboardAsync(body, username, sessionId) {
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
     console.log("[storyboard-init] 📊 JSON 파싱 결과:", mcJson);
 
+    // ✅ 추가
+    await updateSession(sessionId, {
+      progress: 80,
+      message: '이미지 프롬프트 생성 중...'
+    });
+        
     let styles = [];
     if (mcJson && Array.isArray(mcJson.concepts) && mcJson.concepts.length > 0) {
       styles = mcJson.concepts.map((concept, index) => {
@@ -639,23 +651,30 @@ async function processStoryboardAsync(body, username, sessionId) {
     };
 
     incrementUsageCount(username);
-
+    const finalStoryboard = {
+      success: true,
+      styles,
+      metadata,
+      compositingInfo,
+      fullOutput: fullOutput,
+      processingTime: Date.now() - startTime,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('[storyboard-init] 📊 최종 storyboard 객체:', {
+      conceptCount: styles.length,
+      sceneCount: styles[0]?.images?.length || 0,
+      totalImages: styles.length * (styles[0]?.images?.length || 0)
+    });
+    
     await updateSession(sessionId, {
       progress: 100,
-      message: '스토리보드 생성 완료',
+      message: '✅ 스토리보드 생성 완료!',
       completed: true,
-      storyboard: {
-        success: true,
-        styles,
-        metadata,
-        compositingInfo,
-        fullOutput: fullOutput,
-        processingTime: Date.now() - startTime,
-        timestamp: new Date().toISOString()
-      }
+      storyboard: finalStoryboard
     });
-
-    console.log('[storyboard-init] ✅ 백그라운드 처리 완료');
+    
+    console.log('[storyboard-init] ✅ 백그라운드 처리 완료 - 세션에 저장됨');
 
   } catch (error) {
     console.error('[storyboard-init] ❌ 오류 발생:', error);
