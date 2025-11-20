@@ -383,7 +383,6 @@ function calculateProgress(phase, stepProgress = 0) {
 // ============================================================
 // 자동화 함수
 // ============================================================
-
 async function generateImage(imagePrompt, sceneNumber, conceptId, username) {
   const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
     method: 'POST',
@@ -427,7 +426,7 @@ async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
 async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex, totalVideos, maxAttempts = 120) {
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   
-  console.log(`[pollVideoStatus] 폴링 시작: ${taskId} (${currentVideoIndex}/${totalVideos})`);
+  console.log(`[pollVideoStatus] 🚀 폴링 시작: ${taskId} (${currentVideoIndex}/${totalVideos})`);
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -440,43 +439,57 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
         }
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        console.log(`[pollVideoStatus] ⚠️ HTTP ${response.status} (시도 ${attempt}/${maxAttempts})`);
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const result = await response.json();
       const status = result.data?.status?.toUpperCase();
 
-      // 🔥 폴링 중 진행률 업데이트
-      if (attempt % 6 === 0) {  // 30초마다 (5초 * 6)
+      // 🔥 로그 추가: 상태 출력
+      if (attempt % 6 === 0) {  // 30초마다
+        console.log(`[pollVideoStatus] 📊 상태: ${status} (${Math.floor(attempt * 5 / 60)}분 ${(attempt * 5) % 60}초 경과)`);
+        
         const videoProgress = ((currentVideoIndex - 1) / totalVideos) * 100;
         await updateSession(sessionId, {
           progress: {
             phase: 'VIDEO',
             percentage: calculateProgress('VIDEO', videoProgress),
-            currentStep: `비디오 ${currentVideoIndex}/${totalVideos} 생성 중... (${Math.floor(attempt * 5 / 60)}분 경과)`
+            currentStep: `비디오 ${currentVideoIndex}/${totalVideos} 생성 중... (${Math.floor(attempt * 5 / 60)}분 경과, 상태: ${status})`
           }
         });
       }
 
       if (status === 'COMPLETED') {
         if (result.data?.generated?.[0]) {
-          console.log(`[pollVideoStatus] ✅ 완료: ${sceneNumber}`);
+          console.log(`[pollVideoStatus] ✅ 완료: 씬 ${sceneNumber} (총 ${Math.floor(attempt * 5 / 60)}분 ${(attempt * 5) % 60}초 소요)`);
           return result.data.generated[0];
         }
         throw new Error('완료되었지만 URL 없음');
       }
 
       if (status === 'FAILED' || status === 'ERROR') {
+        console.error(`[pollVideoStatus] ❌ 실패: ${status}`);
         throw new Error(`비디오 생성 실패: ${status}`);
+      }
+
+      // 🔥 로그: 진행 중
+      if (attempt % 2 === 0) {  // 10초마다
+        console.log(`[pollVideoStatus] 🔄 진행 중... (시도 ${attempt}/${maxAttempts}, 상태: ${status})`);
       }
 
       await sleep(5000);
     } catch (error) {
-      if (attempt >= maxAttempts) throw new Error('비디오 폴링 타임아웃');
+      if (attempt >= maxAttempts) {
+        console.error(`[pollVideoStatus] ❌ 타임아웃: ${taskId} (${maxAttempts * 5 / 60}분 경과)`);
+        throw new Error('비디오 폴링 타임아웃');
+      }
       await sleep(5000);
     }
   }
   throw new Error('비디오 폴링 타임아웃');
 }
-
 // ============================================================
 // 메인 함수
 // ============================================================
