@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { loadFieldConfig, saveFieldConfig, loadAdminSettings, saveAdminSettings } from '../utils/fieldConfig';
 import RealtimeConfigSync from './RealtimeConfigSync';
 
-const Step1 = ({ formData, setFormData, user, onNext }) => {
+const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
   const [fieldConfig, setFieldConfig] = useState({});
   const [adminSettings, setAdminSettings] = useState({});
   const [errors, setErrors] = useState({});
@@ -847,6 +847,13 @@ className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 ho
               </div>
 
               <div className="flex justify-end mt-16">
+                {/* ✅ 이전 버튼 추가 */}
+                <button
+                  onClick={onPrev}
+                  className="px-8 py-5 border-2 border-gray-600/50 text-gray-300 rounded-2xl text-xl font-semibold hover:bg-gray-800/40 hover:border-gray-500/70 transition-all duration-300 backdrop-blur-xl"
+                >
+                  ← 이전 단계
+                </button>
                 <button
                   onClick={handleSubmit}
                   className="group relative bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 hover:from-blue-500 hover:via-blue-400 hover:to-purple-500 text-white px-12 py-5 rounded-2xl text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25 shadow-xl"
@@ -893,6 +900,7 @@ Step1.propTypes = {
   formData: PropTypes.object.isRequired,
   setFormData: PropTypes.func.isRequired,
   user: PropTypes.object,
+  onPrev: PropTypes.func, 
   onNext: PropTypes.func.isRequired
 };
 
