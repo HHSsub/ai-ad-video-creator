@@ -579,8 +579,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   const getButtonText = () => {
     const imageInfo = getUnifiedImageData(formData);
     return imageInfo.hasImage
-      ? '스토리보드 생성 + 이미지 합성 시작'
-      : '스토리보드 생성 시작';
+      ? '광고 영상 생성 + 이미지 합성 시작'
+      : '광고 영상 생성 시작';
   };
 
   return (
