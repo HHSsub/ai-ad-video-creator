@@ -6,6 +6,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
+import sessionStore from '../src/utils/sessionStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,36 +42,42 @@ import authRouter from './routes/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-// 🔥 세션 저장소 (메모리)
-const activeSessions = new Map();
 
-// 🔥 미들웨어 설정 (반드시 최상단)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(cors());
+// ============================================================
+// 🔥 세션 API - sessionStore 싱글톤 사용 (통합)
+// ============================================================
 
 // 세션 시작
-app.post('/api/session/start', (req, res) => { // 수정됨: /api/ 추가
+app.post('/api/session/start', (req, res) => {
   try {
     const { sessionId, formData, timestamp } = req.body;
     const username = req.headers['x-username'] || 'anonymous';
 
-    activeSessions.set(username, {
-      sessionId,
-      formData,
-      timestamp,
-      progress: 0,
-      completed: false,
-      storyboard: null
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+
+    // sessionStore 싱글톤 사용
+    sessionStore.createSession(sessionId, {
+      username: username,
+      formData: formData,
+      startedAt: timestamp || new Date().toISOString()
     });
 
-    console.log(`[session] 세션 시작: ${username} (${sessionId})`);
+    sessionStore.updateProgress(sessionId, {
+      phase: 'INIT',
+      percentage: 0,
+      currentStep: '광고 영상 생성 준비 중...'
+    });
+
+    console.log(`[session/start] ✅ 세션 생성: ${sessionId} (${username})`);
 
     res.json({
       success: true,
-      sessionId
+      sessionId: sessionId
     });
   } catch (error) {
+    console.error('[session/start] ❌ 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -79,12 +86,16 @@ app.post('/api/session/start', (req, res) => { // 수정됨: /api/ 추가
 app.get('/api/session/check', (req, res) => {
   try {
     const username = req.headers['x-username'] || 'anonymous';
-    const session = activeSessions.get(username);
 
-    if (session && !session.completed) {
+    const allSessions = sessionStore.getAllSessions();
+    const userSessions = allSessions.filter(
+      s => s.username === username && s.status !== 'completed' && s.status !== 'error'
+    );
+
+    if (userSessions.length > 0) {
       res.json({
         hasOngoingSession: true,
-        session
+        session: userSessions[0]
       });
     } else {
       res.json({
@@ -92,21 +103,32 @@ app.get('/api/session/check', (req, res) => {
       });
     }
   } catch (error) {
+    console.error('[session/check] ❌ 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 세션 상태 조회
+// 세션 상태 조회 🔥 핵심 수정
 app.get('/api/session/status/:sessionId', (req, res) => {
   try {
     const { sessionId } = req.params;
-    const username = req.headers['x-username'] || 'anonymous';
-    const session = activeSessions.get(username);
 
-    if (session && session.sessionId === sessionId) {
+    // sessionStore에서 직접 조회
+    const session = sessionStore.getSession(sessionId);
+
+    if (session) {
       res.json({
         success: true,
-        ...session
+        session: {
+          id: session.id,
+          sessionId: session.id,
+          progress: session.progress,
+          status: session.status,
+          error: session.error,
+          result: session.result,
+          createdAt: session.createdAt,
+          lastUpdated: session.lastUpdated
+        }
       });
     } else {
       res.json({
@@ -115,45 +137,59 @@ app.get('/api/session/status/:sessionId', (req, res) => {
       });
     }
   } catch (error) {
+    console.error('[session/status] ❌ 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 세션 업데이트 (storyboard-init에서 호출)
-app.post('/api/session/update', (req, res) => { // 수정됨: /api/ 추가
+// 세션 업데이트
+app.post('/api/session/update', (req, res) => {
   try {
-    const { sessionId, progress, message, storyboard, completed } = req.body;
-    const username = req.headers['x-username'] || 'anonymous';
-    const session = activeSessions.get(username);
+    const { sessionId, progress, status, result, error } = req.body;
 
-    if (session && session.sessionId === sessionId) {
-      session.progress = progress || session.progress;
-      session.message = message;
-      session.completed = completed || false;
-
-      if (storyboard) {
-        session.storyboard = storyboard;
-      }
-
-      activeSessions.set(username, session);
-
-      res.json({ success: true });
-    } else {
-      res.json({ success: false, message: '세션을 찾을 수 없습니다.' });
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
     }
+
+    let session = sessionStore.getSession(sessionId);
+    if (!session) {
+      session = sessionStore.createSession(sessionId);
+    }
+
+    if (progress) {
+      sessionStore.updateProgress(sessionId, progress);
+    }
+
+    if (status) {
+      sessionStore.updateStatus(sessionId, status, result, error);
+    }
+
+    res.json({ success: true });
   } catch (error) {
+    console.error('[session/update] ❌ 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 세션 클리어
-app.post('/api/session/clear', (req, res) => { // 수정됨: /api/ 추가
+app.post('/api/session/clear', (req, res) => {
   try {
     const username = req.headers['x-username'] || 'anonymous';
-    activeSessions.delete(username);
 
-    res.json({ success: true });
+    const allSessions = sessionStore.getAllSessions();
+    const userSessions = allSessions.filter(s => s.username === username);
+
+    let deletedCount = 0;
+    userSessions.forEach(session => {
+      sessionStore.deleteSession(session.id);
+      deletedCount++;
+    });
+
+    console.log(`[session/clear] 사용자 세션 삭제: ${username} (${deletedCount}개)`);
+
+    res.json({ success: true, deletedCount: deletedCount });
   } catch (error) {
+    console.error('[session/clear] ❌ 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
