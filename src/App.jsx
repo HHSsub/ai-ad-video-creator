@@ -35,7 +35,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentProject, setCurrentProject] = useState(null);
   const [currentMode, setCurrentMode] = useState(null);
-
+  const [userRole, setUserRole] = useState('owner');  // 사용자 역할 상태 추가(1122_1700)
+  
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
@@ -76,6 +77,22 @@ useEffect(() => {
             setStoryboard(data.project.storyboard);
             console.log('[App] 프로젝트 storyboard 복구');
           }
+          // 사용자 역할 로드(1122_1700)
+          try {
+            const membersResponse = await fetch(`/nexxii/api/projects/${currentProject.id}/members`, {
+              headers: { 'x-username': user?.username }
+            });
+            if (membersResponse.ok) {
+              const membersData = await membersResponse.json();
+              const myMembership = membersData.members?.find(m => m.username === user?.username);
+              setUserRole(myMembership?.role || 'owner');
+              console.log('[App] 사용자 역할 로드:', myMembership?.role || 'owner');
+            }
+          } catch (memberErr) {
+            console.log('[App] 멤버 API 없음, 기본 역할 사용:', 'owner');
+            setUserRole('owner');
+          }
+          
         }
       } catch (error) {
         console.error('[App] 프로젝트 데이터 로드 실패:', error);
@@ -562,23 +579,19 @@ useEffect(() => {
               storyboard={storyboard}
               selectedConceptId={selectedConceptId}
               setSelectedConceptId={setSelectedConceptId}
-              isLoading={isLoading}
-              setIsLoading={setIsLoading}
               onPrev={() => {
                 setStep(2);
                 setCurrentView('step2');
               }}
-              user={user}
               onNext={() => {
-                if (!selectedConceptId) {
-                  alert('컨셉을 선택해주세요.');
-                  return;
-                }
-                console.log('Step3 완료, selectedConceptId:', selectedConceptId);
-                console.log('🔥 전달될 영상 길이:', formData.videoLength);
+                // Step4 (편집 화면)으로 이동
+                console.log('Step3 → Step4 이동, selectedConceptId:', selectedConceptId);
                 setStep(4);
                 setCurrentView('step4');
               }}
+              formData={formData}
+              user={user}
+              currentProject={currentProject}
             />
           )}
 
@@ -591,32 +604,15 @@ useEffect(() => {
                 setStep(3);
                 setCurrentView('step3');
               }}
-              user={user}
-              onReset={() => {
-                setStep(1);
-                setFormData({
-                  mode: 'auto',
-                  userdescription: '',
-                  videoLength: '',
-                  aspectRatioCode: '',
-                  videoPurpose: '',
-                  brandName: '',
-                  industryCategory: '',
-                  productServiceCategory: '',
-                  productServiceName: '',
-                  coreTarget: '',
-                  coreDifferentiation: '',
-                  videoRequirements: '',
-                  imageUpload: null
-                });
-                setStoryboard(null);
-                setSelectedConceptId(null);
-                setIsLoading(false);
-                setCurrentProject(null);
-                setCurrentMode(null);
-                setCurrentView('projects');
-                console.log('🔄 전체 초기화 완료');
+              onComplete={() => {
+                // 편집 완료 후 Step3으로 복귀 (수정된 영상 표시)
+                console.log('Step4 완료 → Step3 복귀');
+                setStep(3);
+                setCurrentView('step3');
               }}
+              user={user}
+              currentProject={currentProject}
+              userRole={userRole}
             />
           )}
         </div>
