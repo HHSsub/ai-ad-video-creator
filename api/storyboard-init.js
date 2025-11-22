@@ -459,7 +459,7 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const apiKey = process.env.FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
+      const apiKey = process.env.FREEPIK_API_KEY;
       
       // 🔥🔥🔥 핵심 수정: kling-v2-1-pro → kling-v2-1 🔥🔥🔥
       // Freepik API 공식 문서에 따르면:
