@@ -383,26 +383,52 @@ function calculateProgress(phase, stepProgress = 0) {
 // ============================================================
 // 자동화 함수
 // ============================================================
-async function generateImage(imagePrompt, sceneNumber, conceptId, username) {
-  const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-username': username
-    },
-    body: JSON.stringify({
-      imagePrompt,
-      sceneNumber,
-      conceptId
-    })
-  });
+async function generateImage(imagePrompt, sceneNumber, conceptId, username, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId})`);
+      
+      const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': username
+        },
+        body: JSON.stringify({
+          imagePrompt,
+          sceneNumber,
+          conceptId
+        })
+      });
 
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const result = await response.json();
-  console.log(`[generateImage] 응답:`, JSON.stringify(result));
-  const imageUrl = result.url || result.imageUrl;
-  if (!result.success || !imageUrl) throw new Error('이미지 생성 실패');
-  return imageUrl;
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      console.log(`[generateImage] 응답:`, JSON.stringify(result));
+      
+      const imageUrl = result.url || result.imageUrl;
+      
+      // 🔥 fallback 이미지 체크 - 재시도
+      if (result.fallback === true || !imageUrl || imageUrl.includes('via.placeholder.com')) {
+        console.log(`[generateImage] ⚠️ 씬 ${sceneNumber} fallback 이미지 감지 - 재시도 필요`);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+          continue;
+        }
+        throw new Error('이미지 생성 실패 (fallback)');
+      }
+      
+      if (!result.success || !imageUrl) throw new Error('이미지 생성 실패');
+      
+      console.log(`[generateImage] ✅ 씬 ${sceneNumber} 성공: ${imageUrl.substring(0, 60)}...`);
+      return imageUrl;
+      
+    } catch (error) {
+      console.error(`[generateImage] ❌ 씬 ${sceneNumber} 시도 ${attempt} 실패:`, error.message);
+      if (attempt >= maxRetries) throw error;
+      await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+    }
+  }
+  throw new Error('이미지 생성 최대 재시도 초과');
 }
 
 
@@ -696,6 +722,12 @@ async function processStoryboardAsync(body, username, sessionId) {
       const style = styles[styleIdx];
       for (let imgIdx = 0; imgIdx < style.images.length; imgIdx++) {
         const image = style.images[imgIdx];
+        // 🔥 placeholder 이미지 체크
+        if (!image.imageUrl || image.imageUrl.includes('via.placeholder.com')) {
+          console.log(`[storyboard-init] ⚠️ 컨셉 ${styleIdx + 1} 씬 ${image.sceneNumber} - placeholder 이미지, 비디오 생성 건너뛰기`);
+          image.status = 'skipped_placeholder';
+          continue;
+        }
         if (!image.imageUrl) continue;
 
         try {
