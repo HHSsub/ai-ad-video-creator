@@ -434,7 +434,12 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const apiKey = process.env.FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
-      const response = await fetch(`${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro/${taskId}`, {
+      
+      // 🔥🔥🔥 핵심 수정: kling-v2-1-pro → kling-v2-1 🔥🔥🔥
+      // Freepik API 공식 문서에 따르면:
+      // - POST (생성): /ai/image-to-video/kling-v2-1-pro
+      // - GET (조회): /ai/image-to-video/kling-v2-1/{task-id}
+      const response = await fetch(`${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1/${taskId}`, {
         method: 'GET',
         headers: {
           'x-freepik-api-key': apiKey,
@@ -443,59 +448,66 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
       });
 
       if (!response.ok) {
-        console.log(`[pollVideoStatus] ⚠️ HTTP ${response.status} (시도 ${attempt}/${maxAttempts})`);
-        throw new Error(`HTTP ${response.status}`);
+        // 404가 아닌 경우에만 로그 출력 (404는 일시적일 수 있음)
+        if (response.status !== 404) {
+          console.log(`[pollVideoStatus] ⚠️ HTTP ${response.status} (시도 ${attempt}/${maxAttempts})`);
+        } else if (attempt <= 3 || attempt % 12 === 0) {
+          // 404는 처음 3번과 1분마다만 로그
+          console.log(`[pollVideoStatus] ⏳ 대기 중... (시도 ${attempt}/${maxAttempts}, ${Math.floor(attempt * 5 / 60)}분 경과)`);
+        }
+        await sleep(5000);
+        continue;
       }
 
       const result = await response.json();
       const status = result.data?.status?.toUpperCase();
 
-      // 🔥 로그 추가: 상태 출력
-      if (attempt % 6 === 0) {  // 30초마다
+      // 🔥 로그 추가: 상태 출력 (30초마다)
+      if (attempt % 6 === 0) {
         console.log(`[pollVideoStatus] 📊 상태: ${status} (${Math.floor(attempt * 5 / 60)}분 ${(attempt * 5) % 60}초 경과)`);
         
         const videoProgress = ((currentVideoIndex - 1) / totalVideos) * 100;
-        const session = sessionStore.getSession(sessionId);  // 🔥 추가
-        if (session) {  // 🔥 추가
-        await updateSession(sessionId, {
-          progress: {
-            phase: 'VIDEO',
-            percentage: calculateProgress('VIDEO', videoProgress),
-            currentStep: `비디오 ${currentVideoIndex}/${totalVideos} 생성 중... (${Math.floor(attempt * 5 / 60)}분 경과, 상태: ${status})`
-          }
-        });
-       }
+        const session = sessionStore.getSession(sessionId);
+        if (session) {
+          await updateSession(sessionId, {
+            progress: {
+              phase: 'VIDEO',
+              percentage: calculateProgress('VIDEO', videoProgress),
+              currentStep: `비디오 ${currentVideoIndex}/${totalVideos} 생성 중... (${Math.floor(attempt * 5 / 60)}분 경과)`
+            }
+          });
+        }
       }
 
       if (status === 'COMPLETED') {
-        if (result.data?.generated?.[0]) {
-          console.log(`[pollVideoStatus] ✅ 완료: 씬 ${sceneNumber} (총 ${Math.floor(attempt * 5 / 60)}분 ${(attempt * 5) % 60}초 소요)`);
-          return result.data.generated[0];
+        if (result.data?.generated?.length > 0) {
+          const videoUrl = result.data.generated[0];
+          console.log(`[pollVideoStatus] ✅ 완료: ${taskId.substring(0, 8)}... → ${videoUrl.substring(0, 50)}...`);
+          return videoUrl;
         }
-        throw new Error('완료되었지만 URL 없음');
       }
-
+      
       if (status === 'FAILED' || status === 'ERROR') {
-        console.error(`[pollVideoStatus] ❌ 실패: ${status}`);
-        throw new Error(`비디오 생성 실패: ${status}`);
-      }
-
-      // 🔥 로그: 진행 중
-      if (attempt % 2 === 0) {  // 10초마다
-        console.log(`[pollVideoStatus] 🔄 진행 중... (시도 ${attempt}/${maxAttempts}, 상태: ${status})`);
+        console.error(`[pollVideoStatus] ❌ 실패: ${taskId}`);
+        throw new Error('비디오 생성 실패');
       }
 
       await sleep(5000);
     } catch (error) {
-      if (attempt >= maxAttempts) {
-        console.error(`[pollVideoStatus] ❌ 타임아웃: ${taskId} (${maxAttempts * 5 / 60}분 경과)`);
-        throw new Error('비디오 폴링 타임아웃');
+      if (error.message === '비디오 생성 실패') throw error;
+      
+      // 네트워크 에러 등은 재시도
+      if (attempt % 12 === 0) {
+        console.log(`[pollVideoStatus] ⚠️ 에러 발생, 재시도 중... (${attempt}/${maxAttempts})`);
       }
       await sleep(5000);
     }
   }
+  
+  console.error(`[pollVideoStatus] ❌ 타임아웃: ${taskId} (${Math.floor(maxAttempts * 5 / 60)}분 경과)`);
   throw new Error('비디오 폴링 타임아웃');
 }
+
 // ============================================================
 // 메인 함수
 // ============================================================
