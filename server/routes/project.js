@@ -106,42 +106,57 @@ router.post('/', (req, res) => {
   res.json({ project: newProject });
 });
 
-
 // 🔥 프로젝트 업데이트 (모드 저장)
 router.patch('/:id', (req, res) => {
   try {
     const { id } = req.params;
     const { mode, status, name, description } = req.body;
-    const userId = req.headers['x-user-id'] || req.headers['x-username'];
+    const username = req.headers['x-user-id'] || req.headers['x-username'];
 
-    if (!fs.existsSync(PROJECTS_FILE)) {
+    console.log(`[projects PATCH] 요청: ${id}, mode: ${mode}, user: ${username}`);
+
+    const projectsData = readJSON(projectsFile);
+    const membersData = readJSON(membersFile);
+
+    if (!projectsData || !membersData) {
+      return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
+    }
+
+    const projectIndex = projectsData.projects.findIndex(p => p.id === id);
+
+    if (projectIndex === -1) {
       return res.status(404).json({ success: false, error: 'Project not found' });
     }
 
-    const data = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8'));
-    const project = data.projects.find(p => p.id === id);
+    const project = projectsData.projects[projectIndex];
 
-    if (!project) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
+    // 권한 확인 (owner 또는 editor)
+    const membership = membersData.members.find(
+      m => m.projectId === id && m.username === username
+    );
 
-    if (project.owner_id !== userId) {
+    if (!membership || (membership.role !== 'owner' && membership.role !== 'editor')) {
       return res.status(403).json({ success: false, error: 'Permission denied' });
     }
 
     // 업데이트
-    if (mode) project.mode = mode;
-    if (status) project.status = status;
-    if (name) project.name = name;
+    if (mode !== undefined) project.mode = mode;
+    if (status !== undefined) project.status = status;
+    if (name !== undefined) project.name = name;
     if (description !== undefined) project.description = description;
-    project.updated_at = new Date().toISOString();
+    project.updatedAt = new Date().toISOString();
 
-    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(data, null, 2));
+    projectsData.projects[projectIndex] = project;
 
-    console.log(`[projects] ✅ 프로젝트 업데이트: ${id}, 모드: ${mode || '변경 없음'}`);
+    if (!writeJSON(projectsFile, projectsData)) {
+      return res.status(500).json({ success: false, error: 'DB 저장 실패' });
+    }
 
-    res.json({ success: true, project });
+    console.log(`[projects PATCH] ✅ 프로젝트 업데이트 완료: ${id}, mode: ${mode}`);
+
+    res.json({ success: true, project: project });
   } catch (error) {
+    console.error('[projects PATCH] ❌ 오류:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
