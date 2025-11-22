@@ -400,8 +400,9 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username) {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const result = await response.json();
   console.log(`[generateImage] 응답:`, JSON.stringify(result));
-  if (!result.success || !result.imageUrl) throw new Error('이미지 생성 실패');
-  return result.imageUrl;  // 🔥 result.url → result.imageUrl
+  const imageUrl = result.url || result.imageUrl;
+  if (!result.success || !imageUrl) throw new Error('이미지 생성 실패');
+  return imageUrl;
 }
 
 
