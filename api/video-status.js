@@ -46,9 +46,12 @@ async function safeApiCall(url, options, label) {
   throw lastError;
 }
 
-// 단일 태스크 상태 확인 - Kling v2.1 Pro API 스펙
+// 단일 태스크 상태 확인 - Kling v2.1 Pro API 스펙 
+// 🔥🔥🔥 핵심 수정: POST는 kling-v2-1-pro, GET은 kling-v2-1 🔥🔥🔥
 async function checkSingleTaskStatus(taskId, apiKey) {
-  // Kling 공식 엔드포인트
+  // 🔥 Freepik 공식 문서에 따른 올바른 GET 엔드포인트 <- 이 주석 절대 삭제금지
+  // POST (생성): /ai/image-to-video/kling-v2-1-pro <- 이 주석 절대 삭제금지
+  // GET (조회): /ai/image-to-video/kling-v2-1/{task-id} <- 이 주석 절대 삭제금지
   const url = `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1/${taskId}`;
 
   const options = {
@@ -62,7 +65,7 @@ async function checkSingleTaskStatus(taskId, apiKey) {
   try {
     const data = await safeApiCall(url, options, `status-${taskId.substring(0, 8)}`);
 
-    console.log(`[checkSingleTaskStatus] ${taskId.substring(0, 8)} 원본 응답:`, JSON.stringify(data, null, 2));
+    console.log(`[checkSingleTaskStatus] ${taskId.substring(0, 8)} 응답:`, JSON.stringify(data, null, 2));
 
     const taskData = data.data || data;
     const status = String(taskData.status || 'UNKNOWN').toUpperCase();
@@ -80,7 +83,7 @@ async function checkSingleTaskStatus(taskId, apiKey) {
       }
     } else if (status === 'FAILED' || status === 'ERROR') {
       normalizedStatus = 'failed';
-    } else if (['PROCESSING', 'IN_PROGRESS', 'QUEUED', 'PENDING', 'GENERATING'].includes(status)) {
+    } else if (['PROCESSING', 'IN_PROGRESS', 'QUEUED', 'PENDING', 'GENERATING', 'CREATED'].includes(status)) {
       normalizedStatus = 'in_progress';
     } else {
       normalizedStatus = 'in_progress';
@@ -193,116 +196,54 @@ export default async function handler(req, res) {
         return {
           sceneNumber: sceneNumber || 1,
           title: title || `Scene ${sceneNumber || 1}`,
-          taskId,
+          taskId: taskId,
           status: result.status,
           videoUrl: result.videoUrl,
           duration: duration || 5,
           providerStatus: result.providerStatus,
-          fromCache: result.fromCache || false,
-          error: result.error
+          error: result.error || null
         };
       } catch (error) {
-        console.error(`[video-status] Task ${taskId?.substring(0, 8)} 처리 실패:`, error.message);
         return {
           sceneNumber: sceneNumber || 1,
           title: title || `Scene ${sceneNumber || 1}`,
-          taskId,
+          taskId: taskId,
           status: 'error',
           videoUrl: null,
           duration: duration || 5,
-          providerStatus: 'ERROR',
+          providerStatus: 'EXCEPTION',
           error: error.message
         };
       }
     });
 
-    const results = await Promise.allSettled(statusPromises);
-
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        segments.push(result.value);
-      } else {
-        console.error(`[video-status] Task ${index} Promise 실패:`, result.reason);
-        const task = tasks[index];
-        segments.push({
-          sceneNumber: task?.sceneNumber || index + 1,
-          title: task?.title || `Scene ${index + 1}`,
-          taskId: task?.taskId || 'UNKNOWN',
-          status: 'error',
-          videoUrl: null,
-          duration: task?.duration || 5,
-          providerStatus: 'PROMISE_REJECTED',
-          error: result.reason?.message || 'Promise rejected'
-        });
-      }
-    });
-
-    const completed = segments.filter(s => s.status === 'completed');
-    const ready = segments.filter(s => s.status === 'completed' && s.videoUrl);
-    const inProgress = segments.filter(s => s.status === 'in_progress');
-    const failed = segments.filter(s => s.status === 'failed' || s.status === 'error');
-
+    const results = await Promise.all(statusPromises);
+    
     const summary = {
-      total: segments.length,
-      completed: completed.length,
-      ready: ready.length,
-      inProgress: inProgress.length,
-      failed: failed.length,
-      completionRate: segments.length > 0 ? Math.round((ready.length / segments.length) * 100) : 0
+      total: results.length,
+      ready: results.filter(r => r.status === 'completed').length,
+      inProgress: results.filter(r => r.status === 'in_progress').length,
+      failed: results.filter(r => r.status === 'failed' || r.status === 'error').length
     };
 
-    const processingTime = Date.now() - startTime;
     console.log('[video-status] 완료:', {
-      처리시간: processingTime + 'ms',
-      총태스크: summary.total,
-      완료: summary.ready,
-      진행중: summary.inProgress,
-      실패: summary.failed,
-      완료율: summary.completionRate + '%'
+      processingTime: Date.now() - startTime,
+      summary
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      segments,
+      segments: results,
       summary,
-      metadata: {
-        processingTime,
-        apiKeyAvailable: !!apiKey,
-        cacheSize: CACHE.size,
-        timestamp: new Date().toISOString()
-      }
+      processingTime: Date.now() - startTime
     });
 
   } catch (error) {
     console.error('[video-status] 전체 오류:', error);
-    const processingTime = Date.now() - startTime;
-    const fallbackSegments = (req.body?.tasks || []).map((task, index) => ({
-      sceneNumber: task?.sceneNumber || index + 1,
-      title: task?.title || `Scene ${index + 1}`,
-      taskId: task?.taskId || 'ERROR',
-      status: 'error',
-      videoUrl: null,
-      duration: task?.duration || 5,
-      providerStatus: 'HANDLER_ERROR',
-      error: error.message
-    }));
-    res.status(200).json({
+    return res.status(500).json({
       success: false,
       error: error.message,
-      segments: fallbackSegments,
-      summary: {
-        total: fallbackSegments.length,
-        completed: 0,
-        ready: 0,
-        inProgress: 0,
-        failed: fallbackSegments.length,
-        completionRate: 0
-      },
-      metadata: {
-        processingTime,
-        fallback: true,
-        timestamp: new Date().toISOString()
-      }
+      processingTime: Date.now() - startTime
     });
   }
 }
