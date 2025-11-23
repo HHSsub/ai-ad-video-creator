@@ -589,6 +589,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio),
       userdescription: userdescription || ''
     };
+    console.log("[DEBUG] RECEIVED userdescription:", userdescription);
 
     for (const [key, value] of Object.entries(promptVariables)) {
       const placeholder = new RegExp(`\\{${key}\\}`, 'g');
