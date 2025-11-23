@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
@@ -10,6 +10,13 @@ const ROLE_PERMISSIONS = {
   manager: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: true, invite: true },
   owner: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: true, invite: true }
 };
+
+const ROLE_OPTIONS = [
+  { value: 'viewer', label: 'Viewer (보기만)' },
+  { value: 'commenter', label: 'Commenter (코멘트)' },
+  { value: 'editor', label: 'Editor (편집)' },
+  { value: 'manager', label: 'Manager (관리)' }
+];
 
 const Step4 = ({
   storyboard,
@@ -30,6 +37,13 @@ const Step4 = ({
   const [logs, setLogs] = useState([]);
   const [modifiedScenes, setModifiedScenes] = useState([]);
 
+  // 🔥 추가: 멤버 초대 모달 상태
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [inviteRole, setInviteRole] = useState('viewer');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState(null);
+
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
   const styles = storyboard?.styles || [];
@@ -44,6 +58,26 @@ const Step4 = ({
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, `[${timestamp}] ${msg}`]);
     console.log(`[Step4] ${msg}`);
+  };
+
+  // 🔥 추가: 이미지 URL 헬퍼
+  const getImageSrc = (imageUrl) => {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('http')) return imageUrl;
+    if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+      return `${API_BASE}${imageUrl}`;
+    }
+    return imageUrl;
+  };
+
+  // 🔥 추가: 비디오 URL 헬퍼
+  const getVideoSrc = (videoUrl) => {
+    if (!videoUrl) return null;
+    if (videoUrl.startsWith('http')) return videoUrl;
+    if (videoUrl.startsWith('/') && !videoUrl.startsWith('//')) {
+      return `${API_BASE}${videoUrl}`;
+    }
+    return videoUrl;
   };
 
   useEffect(() => {
@@ -115,26 +149,40 @@ const Step4 = ({
     log(`씬 ${sceneNumber} 이미지 재생성 시작...`);
 
     try {
+      // 🔥 수정: API 요청 형식을 storyboard-render-image.js에 맞게 조정
       const response = await fetch(`${API_BASE}/nexxii/api/storyboard-render-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: editedPrompt,
-          aspectRatio: formData?.aspectRatioCode || 'widescreen_16_9',
-          sceneNumber: sceneNumber
+          imagePrompt: {
+            prompt: editedPrompt,
+            aspect_ratio: formData?.aspectRatioCode || 'widescreen_16_9',
+            guidance_scale: 2.5,
+            seed: Math.floor(Math.random() * 1000000)
+          },
+          sceneNumber: sceneNumber,
+          conceptId: selectedConceptId
         })
       });
 
       const result = await response.json();
+      console.log(`[Step4] 씬 ${sceneNumber} 이미지 재생성 응답:`, result);
 
-      if (result.success && result.imageUrl) {
-        scene.imageUrl = result.imageUrl;
+      // 🔥 수정: 응답 필드명 확인 (url 또는 imageUrl)
+      if (result.success && (result.url || result.imageUrl)) {
+        const newImageUrl = result.url || result.imageUrl;
+        scene.imageUrl = newImageUrl;
         scene.prompt = editedPrompt;
         scene.videoUrl = null;
         scene.status = 'image_done';
-        log(`씬 ${sceneNumber} 이미지 재생성 완료: ${result.imageUrl}`);
+        
+        if (!modifiedScenes.includes(sceneNumber)) {
+          setModifiedScenes(prev => [...prev, sceneNumber]);
+        }
+        
+        log(`씬 ${sceneNumber} 이미지 재생성 완료: ${newImageUrl}`);
       } else {
-        throw new Error(result.message || '이미지 재생성 실패');
+        throw new Error(result.message || result.error || '이미지 재생성 실패');
       }
     } catch (err) {
       setError(`씬 ${sceneNumber} 재생성 오류: ${err.message}`);
@@ -160,9 +208,13 @@ const Step4 = ({
     log('수정된 씬들의 영상 재생성 시작...');
 
     try {
+      // 1단계: 수정된 씬들의 이미지 → 영상 변환
       for (const sceneNumber of modifiedScenes) {
         const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
-        if (!scene || !scene.imageUrl) continue;
+        if (!scene || !scene.imageUrl) {
+          log(`씬 ${sceneNumber} 스킵: 이미지 없음`);
+          continue;
+        }
 
         log(`씬 ${sceneNumber} 영상 변환 중...`);
 
@@ -171,44 +223,67 @@ const Step4 = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageUrl: scene.imageUrl,
-            prompt: scene.motionPrompt?.prompt || '',
+            prompt: scene.motionPrompt?.prompt || 'smooth camera movement',
             duration: 2
           })
         });
 
         const result = await response.json();
+        console.log(`[Step4] 씬 ${sceneNumber} 영상 변환 응답:`, result);
 
         if (result.success && result.videoUrl) {
           scene.videoUrl = result.videoUrl;
           scene.status = 'video_done';
-          log(`씬 ${sceneNumber} 영상 변환 완료`);
+          log(`씬 ${sceneNumber} 영상 변환 완료: ${result.videoUrl}`);
         } else {
-          log(`씬 ${sceneNumber} 영상 변환 실패: ${result.message}`);
+          log(`씬 ${sceneNumber} 영상 변환 실패: ${result.message || result.error}`);
         }
       }
 
+      // 2단계: 전체 영상 합성
       log('영상 합성 시작...');
+      
+      // 🔥 수정: videos → segments 키로 변경
+      const segments = sortedImages
+        .filter(img => img.videoUrl)
+        .map(img => ({
+          sceneNumber: img.sceneNumber,
+          videoUrl: img.videoUrl
+        }));
+      
+      if (segments.length === 0) {
+        throw new Error('합성할 영상 클립이 없습니다.');
+      }
+      
+      log(`합성할 클립 개수: ${segments.length}`);
+      
       const compileResponse = await fetch(`${API_BASE}/nexxii/api/compile-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          conceptId: selectedConceptId,
-          videos: sortedImages.filter(img => img.videoUrl).map(img => ({
-            sceneNumber: img.sceneNumber,
-            videoUrl: img.videoUrl
-          })),
-          videoLength: formData?.videoLength || '10초'
+          segments: segments,
+          videoLength: formData?.videoLength || '10초',
+          formData: formData,
+          jsonMode: true
         })
       });
 
       const compileResult = await compileResponse.json();
+      console.log('[Step4] 영상 합성 응답:', compileResult);
 
-      if (compileResult.success) {
-        log('영상 합성 완료. Step3으로 이동합니다.');
+      if (compileResult.success && compileResult.compiledVideoUrl) {
+        log(`영상 합성 완료: ${compileResult.compiledVideoUrl}`);
+        
+        if (finalVideo) {
+          finalVideo.videoUrl = compileResult.compiledVideoUrl;
+          finalVideo.metadata = compileResult.metadata;
+        }
+        
         setModifiedScenes([]);
+        log('Step3으로 이동합니다.');
         onComplete();
       } else {
-        throw new Error(compileResult.message || '영상 합성 실패');
+        throw new Error(compileResult.error || compileResult.message || '영상 합성 실패');
       }
     } catch (err) {
       setError(`영상 재생성 오류: ${err.message}`);
@@ -226,6 +301,65 @@ const Step4 = ({
 
     log('영상 컨펌 완료. Step3으로 이동합니다.');
     onComplete();
+  };
+
+  // 🔥 추가: 멤버 초대 핸들러
+  const handleOpenInviteModal = () => {
+    if (!permissions.invite) {
+      setError('멤버 초대 권한이 없습니다.');
+      return;
+    }
+    setShowInviteModal(true);
+    setInviteUsername('');
+    setInviteRole('viewer');
+    setInviteError(null);
+  };
+
+  const handleCloseInviteModal = () => {
+    setShowInviteModal(false);
+    setInviteUsername('');
+    setInviteRole('viewer');
+    setInviteError(null);
+  };
+
+  const handleInviteMember = async () => {
+    if (!inviteUsername.trim()) {
+      setInviteError('사용자명을 입력해주세요.');
+      return;
+    }
+
+    setInviteLoading(true);
+    setInviteError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/nexxii/api/projects/${currentProject?.id}/members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          username: inviteUsername.trim(),
+          role: inviteRole
+        })
+      });
+
+      const result = await response.json();
+      console.log('[Step4] 멤버 초대 응답:', result);
+
+      if (result.success) {
+        log(`멤버 초대 완료: ${inviteUsername} (${inviteRole})`);
+        handleCloseInviteModal();
+        alert(`${inviteUsername}님을 ${inviteRole} 역할로 초대했습니다.`);
+      } else {
+        throw new Error(result.error || result.message || '멤버 초대 실패');
+      }
+    } catch (err) {
+      setInviteError(err.message);
+      log(`멤버 초대 오류: ${err.message}`);
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   if (!selectedStyle) {
@@ -277,7 +411,10 @@ const Step4 = ({
               </div>
             </div>
             {permissions.invite && (
-              <button className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm">
+              <button 
+                onClick={handleOpenInviteModal}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm"
+              >
                 👥 멤버 초대
               </button>
             )}
@@ -297,7 +434,14 @@ const Step4 = ({
             <div className="mb-8 bg-gray-900/50 rounded-xl p-4 border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-3">📹 현재 최종 영상</h3>
               <div className="aspect-video bg-black rounded-lg overflow-hidden max-w-2xl">
-                <video src={finalVideo.videoUrl} className="w-full h-full" controls />
+                <video 
+                  src={getVideoSrc(finalVideo.videoUrl)} 
+                  className="w-full h-full" 
+                  controls
+                  onError={(e) => {
+                    console.error('[Step4] 최종 영상 로드 실패:', finalVideo.videoUrl);
+                  }}
+                />
               </div>
             </div>
           )}
@@ -332,7 +476,7 @@ const Step4 = ({
                             ? 'bg-green-900/50 text-green-300' 
                             : 'bg-gray-700 text-gray-300'
                         }`}>
-                          {img.status === 'video_done' ? '영상 완료' : img.status}
+                          {img.status === 'video_done' ? '영상 완료' : img.status || '대기중'}
                         </span>
                       </div>
                     </div>
@@ -342,9 +486,14 @@ const Step4 = ({
                         <div className="aspect-square bg-black rounded-lg overflow-hidden mb-2">
                           {img.imageUrl ? (
                             <img
-                              src={img.imageUrl}
+                              src={getImageSrc(img.imageUrl)}
                               alt={`Scene ${img.sceneNumber}`}
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error(`[Step4] 씬 ${img.sceneNumber} 이미지 로드 실패:`, img.imageUrl);
+                                e.target.style.display = 'none';
+                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-500 text-sm">이미지 로드 실패</div>';
+                              }}
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-500">
@@ -354,10 +503,13 @@ const Step4 = ({
                         </div>
                         {img.videoUrl && (
                           <video
-                            src={img.videoUrl}
+                            src={getVideoSrc(img.videoUrl)}
                             className="w-full rounded-lg bg-black"
                             controls
                             muted
+                            onError={(e) => {
+                              console.error(`[Step4] 씬 ${img.sceneNumber} 영상 로드 실패:`, img.videoUrl);
+                            }}
                           />
                         )}
                       </div>
@@ -491,6 +643,75 @@ const Step4 = ({
           </div>
         </div>
       </div>
+
+      {/* 🔥 추가: 멤버 초대 모달 */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
+            <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
+            
+            {inviteError && (
+              <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
+                {inviteError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  사용자명 (계정 ID)
+                </label>
+                <input
+                  type="text"
+                  value={inviteUsername}
+                  onChange={(e) => setInviteUsername(e.target.value)}
+                  placeholder="예: guest, test1"
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                  disabled={inviteLoading}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  시스템에 등록된 사용자만 초대할 수 있습니다.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  역할 선택
+                </label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                  disabled={inviteLoading}
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleCloseInviteModal}
+                className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+                disabled={inviteLoading}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleInviteMember}
+                disabled={inviteLoading || !inviteUsername.trim()}
+                className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+              >
+                {inviteLoading ? '초대 중...' : '초대하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
