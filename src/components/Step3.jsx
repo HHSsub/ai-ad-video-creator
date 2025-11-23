@@ -29,37 +29,66 @@ const Step3 = ({
     console.log(`[Step3] ${msg}`);
   };
 
+  // 🔥 수정: 비디오 URL 헬퍼 - 상대경로를 절대경로로 변환
+  const getVideoSrc = (videoUrl) => {
+    if (!videoUrl) return '';
+    if (videoUrl.startsWith('http')) return videoUrl;
+    if (videoUrl.startsWith('/') && !videoUrl.startsWith('//')) {
+      return `${API_BASE}${videoUrl}`;
+    }
+    return videoUrl;
+  };
+
+  // 🔥 수정: BGM 목록 로드 - API 응답 형식 수정
   useEffect(() => {
     const loadBgmMoodList = async () => {
       try {
         log('BGM 분위기 목록 로드 중...');
         const response = await fetch(`${API_BASE}/nexxii/api/load-mood-list`);
+        
         if (response.ok) {
           const data = await response.json();
-          if (data.success && data.moodList) {
+          console.log('[Step3] BGM API 응답:', data);
+          
+          // 🔥 수정: 서버 응답이 { moods: [...] } 형식
+          if (data.moods && Array.isArray(data.moods)) {
+            const moodOptions = data.moods.map(mood => ({
+              value: mood,
+              label: mood
+            }));
+            setBgmMoodList(moodOptions);
+            log(`BGM 분위기 ${moodOptions.length}개 로드 완료: ${data.moods.join(', ')}`);
+          } else if (data.moodList && Array.isArray(data.moodList)) {
+            // 대체 형식 지원
             setBgmMoodList(data.moodList);
-            log(`BGM 분위기 ${data.moodList.length}개 로드 완료`);
+            log(`BGM 분위기 ${data.moodList.length}개 로드 완료 (moodList 형식)`);
+          } else {
+            log('BGM 목록 형식 불일치 - 기본값 사용');
+            console.warn('[Step3] 예상치 못한 API 응답 형식:', data);
+            setDefaultBgmList();
           }
         } else {
-          log('BGM 목록 로드 실패 - 기본값 사용');
-          setBgmMoodList([
-            { value: 'upbeat', label: '업비트/에너제틱' },
-            { value: 'calm', label: '차분한/평화로운' },
-            { value: 'dramatic', label: '드라마틱/영화적' },
-            { value: 'corporate', label: '기업/프로페셔널' },
-            { value: 'inspiring', label: '영감/동기부여' }
-          ]);
+          log(`BGM 목록 로드 실패 (HTTP ${response.status}) - 기본값 사용`);
+          setDefaultBgmList();
         }
       } catch (err) {
         log(`BGM 목록 로드 오류: ${err.message}`);
-        setBgmMoodList([
-          { value: 'upbeat', label: '업비트/에너제틱' },
-          { value: 'calm', label: '차분한/평화로운' },
-          { value: 'dramatic', label: '드라마틱/영화적' },
-          { value: 'corporate', label: '기업/프로페셔널' },
-          { value: 'inspiring', label: '영감/동기부여' }
-        ]);
+        console.error('[Step3] BGM 로드 에러:', err);
+        setDefaultBgmList();
       }
+    };
+
+    // 🔥 수정: 서버 BGM 폴더 구조에 맞는 기본값
+    const setDefaultBgmList = () => {
+      setBgmMoodList([
+        { value: '따뜻한', label: '감동적/따뜻한' },
+        { value: '세련된', label: '고급진/세련된' },
+        { value: '자동', label: '범용/자동' },
+        { value: '몽환적', label: '신비한/몽환적' },
+        { value: '에너지', label: '역동적/에너지' },
+        { value: '활발한', label: '유쾌한/활발한' },
+        { value: '안정적', label: '차분한/안정적' }
+      ]);
     };
 
     loadBgmMoodList();
@@ -102,12 +131,13 @@ const Step3 = ({
       });
 
       const result = await response.json();
+      console.log('[Step3] BGM 적용 응답:', result);
 
       if (result.success) {
         setBgmAppliedUrl(result.mergedVideoPath);
         log(`BGM 적용 완료: ${result.mergedVideoPath}`);
       } else {
-        throw new Error(result.message || 'BGM 적용 실패');
+        throw new Error(result.error || result.message || 'BGM 적용 실패');
       }
     } catch (err) {
       setError(`BGM 적용 오류: ${err.message}`);
@@ -125,8 +155,11 @@ const Step3 = ({
     }
 
     log(`다운로드 시작: ${downloadUrl}`);
+    
+    const fullUrl = getVideoSrc(downloadUrl);
+    
     const link = document.createElement('a');
-    link.href = downloadUrl;
+    link.href = fullUrl;
     link.download = `upnexx_video_${selectedVideo?.conceptName || 'final'}.mp4`;
     document.body.appendChild(link);
     link.click();
@@ -204,14 +237,17 @@ const Step3 = ({
                 >
                   <div className="aspect-video bg-black rounded-lg overflow-hidden mb-3">
                     <video
-                      src={video.videoUrl}
+                      src={getVideoSrc(video.videoUrl)}
                       className="w-full h-full object-cover"
                       muted
                       preload="metadata"
-                      onMouseEnter={(e) => e.target.play()}
+                      onMouseEnter={(e) => e.target.play().catch(() => {})}
                       onMouseLeave={(e) => {
                         e.target.pause();
                         e.target.currentTime = 0;
+                      }}
+                      onError={(e) => {
+                        console.error('[Step3] 비디오 로드 실패:', video.videoUrl);
                       }}
                     />
                   </div>
@@ -237,9 +273,12 @@ const Step3 = ({
               </h3>
               <div className="aspect-video bg-black rounded-lg overflow-hidden mb-4 max-w-4xl mx-auto">
                 <video
-                  src={bgmAppliedUrl || selectedVideo.videoUrl}
+                  src={getVideoSrc(bgmAppliedUrl || selectedVideo.videoUrl)}
                   className="w-full h-full"
                   controls
+                  onError={(e) => {
+                    console.error('[Step3] 미리보기 비디오 로드 실패:', bgmAppliedUrl || selectedVideo.videoUrl);
+                  }}
                 />
               </div>
               {bgmAppliedUrl && (
