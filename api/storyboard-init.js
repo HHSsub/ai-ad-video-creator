@@ -655,6 +655,11 @@ async function processStoryboardAsync(body, username, sessionId) {
             ...scene.image_prompt,
             aspect_ratio: mapAspectRatio(scene.image_prompt?.aspect_ratio || body.aspectRatioCode || 'widescreen_16_9')
           };
+          console.log('[DEBUG] imagePrompt before generateImage:', {
+            concept: conceptIdx + 1,
+            sceneNum,
+            prompt: scene.image_prompt?.prompt
+          });
           const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username);
           console.log(`[storyboard-init] 🖼️ 씬 ${sceneNum} 이미지 생성 완료: ${imageUrl}`);
           images.push({
