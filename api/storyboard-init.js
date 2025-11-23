@@ -558,6 +558,9 @@ async function processStoryboardAsync(body, username, sessionId) {
       aspectRatio, aspectRatioCode, imageUpload, mode, userdescription
     } = body;
 
+    console.log("🔥 [SERVER] BODY RECEIVED:", body);
+    console.log("🔥 [SERVER] userdescription =", userdescription);
+
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
