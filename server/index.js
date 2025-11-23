@@ -457,6 +457,8 @@ app.post('/api/prompts/restore', async (req, res) => {
 app.post('/api/prompts/save-response', async (req, res) => {
   try {
     const { promptKey, step, formData, response, timestamp } = req.body;
+    // 🔥 formData가 실제로 어떤 키를 갖고 오는지 확인
+    console.log('[save-response] formData keys:', formData ? Object.keys(formData) : null);
 
     if (!promptKey || !step || !response) {
       return res.status(400).json({
