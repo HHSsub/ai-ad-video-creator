@@ -555,7 +555,7 @@ async function processStoryboardAsync(body, username, sessionId) {
     const {
       brandName, industryCategory, productServiceCategory, productServiceName,
       videoLength, videoPurpose, coreTarget, coreDifferentiation,
-      aspectRatio, aspectRatioCode, imageUpload, mode, userDescription
+      aspectRatio, aspectRatioCode, imageUpload, mode, userdescription
     } = body;
 
     await updateSession(sessionId, {
@@ -587,7 +587,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       brandLogo: (imageUpload && imageUpload.url && (videoPurpose === 'service' || videoPurpose === 'brand')) ? '업로드됨' : '없음',
       productImage: (imageUpload && imageUpload.url && (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education')) ? '업로드됨' : '없음',
       aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio),
-      userdescription: userDescription || ''
+      userdescription: userdescription || ''
     };
 
     for (const [key, value] of Object.entries(promptVariables)) {
