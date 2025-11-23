@@ -327,4 +327,179 @@ router.delete('/:id', (req, res) => {
   res.json({ success: true, message: '프로젝트 삭제됨' });
 });
 
+
+const usersFile = path.join(__dirname, '../../config/users.json');
+
+// 7. 프로젝트 멤버 목록 조회 (GET /api/projects/:id/members)
+router.get('/:id/members', (req, res) => {
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+  const { id } = req.params;
+
+  console.log(`[projects GET /:id/members] 프로젝트: ${id}, 요청자: ${username}`);
+
+  const projectsData = readJSON(projectsFile);
+  const membersData = readJSON(membersFile);
+
+  if (!projectsData || !membersData) {
+    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
+  }
+
+  const project = projectsData.projects.find(p => p.id === id);
+  if (!project) {
+    return res.status(404).json({ success: false, error: '프로젝트 없음' });
+  }
+
+  // 해당 프로젝트의 멤버 목록
+  const projectMembers = membersData.members.filter(m => m.projectId === id);
+
+  console.log(`[projects GET /:id/members] ✅ 멤버 ${projectMembers.length}명 조회`);
+  res.json({ success: true, members: projectMembers });
+});
+
+// 8. 프로젝트 멤버 초대 (POST /api/projects/:id/members)
+router.post('/:id/members', (req, res) => {
+  const currentUsername = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+  const { id } = req.params;
+  const { username, role } = req.body;
+
+  console.log(`[projects POST /:id/members] 프로젝트: ${id}, 초대자: ${currentUsername}`);
+  console.log(`  - 초대할 사용자: ${username}, 역할: ${role}`);
+
+  // 필수 파라미터 확인
+  if (!username || !role) {
+    return res.status(400).json({ success: false, error: 'username과 role은 필수입니다' });
+  }
+
+  // 유효한 역할인지 확인
+  const validRoles = ['viewer', 'commenter', 'editor', 'manager', 'owner'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ success: false, error: `유효하지 않은 역할입니다. (${validRoles.join(', ')})` });
+  }
+
+  const projectsData = readJSON(projectsFile);
+  const membersData = readJSON(membersFile);
+  const usersData = readJSON(usersFile);
+
+  if (!projectsData || !membersData) {
+    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
+  }
+
+  // 프로젝트 존재 확인
+  const project = projectsData.projects.find(p => p.id === id);
+  if (!project) {
+    return res.status(404).json({ success: false, error: '프로젝트 없음' });
+  }
+
+  // 권한 확인: owner 또는 manager만 초대 가능
+  const currentMembership = membersData.members.find(
+    m => m.projectId === id && m.username === currentUsername
+  );
+  const isSystemUser = ['admin'].includes(currentUsername);
+  const isCreator = project.createdBy === currentUsername;
+  const canInvite = isSystemUser || isCreator || 
+    (currentMembership && ['owner', 'manager'].includes(currentMembership.role));
+
+  if (!canInvite) {
+    return res.status(403).json({ success: false, error: '멤버 초대 권한이 없습니다' });
+  }
+
+  // 🔥 사용자 존재 확인 (users.json에서)
+  if (!usersData || !usersData[username]) {
+    console.log(`[projects POST /:id/members] ❌ 존재하지 않는 계정: ${username}`);
+    return res.status(404).json({ success: false, error: '존재하지 않는 계정입니다' });
+  }
+
+  // 이미 멤버인지 확인
+  const existingMember = membersData.members.find(
+    m => m.projectId === id && m.username === username
+  );
+  if (existingMember) {
+    return res.status(400).json({ success: false, error: '이미 프로젝트 멤버입니다' });
+  }
+
+  // 멤버 추가
+  const newMember = {
+    id: `member_${Date.now()}`,
+    projectId: id,
+    username: username,
+    role: role,
+    addedAt: new Date().toISOString(),
+    addedBy: currentUsername
+  };
+
+  membersData.members.push(newMember);
+
+  if (!writeJSON(membersFile, membersData)) {
+    return res.status(500).json({ success: false, error: 'DB 저장 실패' });
+  }
+
+  console.log(`[projects POST /:id/members] ✅ 멤버 초대 완료: ${username} (${role})`);
+  res.json({ success: true, member: newMember });
+});
+
+// 9. 프로젝트 멤버 삭제 (DELETE /api/projects/:id/members/:memberId)
+router.delete('/:id/members/:memberId', (req, res) => {
+  const currentUsername = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+  const { id, memberId } = req.params;
+
+  console.log(`[projects DELETE /:id/members/:memberId] 프로젝트: ${id}, 멤버ID: ${memberId}`);
+
+  const projectsData = readJSON(projectsFile);
+  const membersData = readJSON(membersFile);
+
+  if (!projectsData || !membersData) {
+    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
+  }
+
+  // 프로젝트 존재 확인
+  const project = projectsData.projects.find(p => p.id === id);
+  if (!project) {
+    return res.status(404).json({ success: false, error: '프로젝트 없음' });
+  }
+
+  // 권한 확인: owner 또는 manager만 삭제 가능
+  const currentMembership = membersData.members.find(
+    m => m.projectId === id && m.username === currentUsername
+  );
+  const isSystemUser = ['admin'].includes(currentUsername);
+  const isCreator = project.createdBy === currentUsername;
+  const canRemove = isSystemUser || isCreator || 
+    (currentMembership && ['owner', 'manager'].includes(currentMembership.role));
+
+  if (!canRemove) {
+    return res.status(403).json({ success: false, error: '멤버 삭제 권한이 없습니다' });
+  }
+
+  // 삭제할 멤버 찾기
+  const memberIndex = membersData.members.findIndex(
+    m => m.id === memberId && m.projectId === id
+  );
+
+  if (memberIndex === -1) {
+    return res.status(404).json({ success: false, error: '멤버를 찾을 수 없습니다' });
+  }
+
+  // owner는 삭제 불가 (프로젝트당 최소 1명의 owner 필요)
+  const memberToDelete = membersData.members[memberIndex];
+  if (memberToDelete.role === 'owner') {
+    const ownerCount = membersData.members.filter(
+      m => m.projectId === id && m.role === 'owner'
+    ).length;
+    if (ownerCount <= 1) {
+      return res.status(400).json({ success: false, error: '프로젝트에는 최소 1명의 owner가 필요합니다' });
+    }
+  }
+
+  // 멤버 삭제
+  membersData.members.splice(memberIndex, 1);
+
+  if (!writeJSON(membersFile, membersData)) {
+    return res.status(500).json({ success: false, error: 'DB 저장 실패' });
+  }
+
+  console.log(`[projects DELETE /:id/members/:memberId] ✅ 멤버 삭제 완료: ${memberToDelete.username}`);
+  res.json({ success: true, message: '멤버가 삭제되었습니다' });
+});
+
+
 export default router;
