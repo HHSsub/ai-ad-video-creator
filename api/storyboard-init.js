@@ -224,7 +224,8 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
     let conceptMatches = [];
     
     if (mode === 'manual') {
-      const manualConceptPattern = /Section\s*2[\s.:]*[^\n]*(?:Cinematic|Storyboard)[^\n]*/i;
+      // const manualConceptPattern = /Section\s*2[\s.:]*[^\n]*(?:Cinematic|Storyboard)[^\n]*/i;
+      const manualConceptPattern = /(Section\s*2|Cinematic|Storyboard)/i;
       const match = text.match(manualConceptPattern);
       if (match) {
         conceptMatches = [{
