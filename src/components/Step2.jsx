@@ -526,7 +526,7 @@ const pollAndGenerateImages = async (sessionId) => {
         aspectRatioCode: formData.aspectRatioCode || 'widescreen_16_9',
         videoRequirements: formData.videoRequirements || '없음',
         mode: formData.mode || 'auto',
-        userDescription: formData.userDescription || '',
+        userdescription: formData.userdescription || '',
         imageUpload: formData.imageUpload ? {
           name: formData.imageUpload.name,
           size: formData.imageUpload.size,
