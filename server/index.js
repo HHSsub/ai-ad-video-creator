@@ -40,6 +40,10 @@ import adminFieldConfig from '../api/admin-field-config.js';
 import projectsRouter from './routes/projects.js';
 import authRouter from './routes/auth.js';
 
+// ✅ 엔진 관리 API 추가 (Express Router 버전)
+import enginesGet from '../api/engines-get.js';
+import enginesUpdate from '../api/engines-update.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -223,6 +227,9 @@ app.use('/api/users', usersApi); // 수정됨: /api/ 추가
 app.use('/api/admin-field-config', adminFieldConfig); // 수정됨: /api/ 추가
 app.use('/api/auth', authRouter);
 
+// ✅ 엔진 관리 API 라우팅 추가
+app.use('/api/engines/get', enginesGet);
+app.use('/api/engines/update', enginesUpdate);
 
 app.get('/health', (req, res) => {
   res.status(200).json({
