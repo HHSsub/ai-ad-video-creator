@@ -1,10 +1,12 @@
-// api/engines-update.js - 엔진 설정 업데이트 + 자동 재시작 API
+// api/engines-update.js - 엔진 설정 업데이트 + 자동 재시작 API (Express Router 버전)
 
+import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
+const router = express.Router();
 const execAsync = promisify(exec);
 
 const ENGINES_FILE = path.join(process.cwd(), 'config', 'engines.json');
@@ -71,7 +73,7 @@ function addEngineHistory(engines, changeType, engineType, newEngine, username) 
 async function restartApplication() {
   try {
     console.log('[engines-update] 🔄 PM2로 애플리케이션 재시작 시도...');
-    
+
     // PM2가 설치되어 있는지 확인
     try {
       await execAsync('which pm2');
@@ -84,16 +86,16 @@ async function restartApplication() {
     const { stdout: listOutput } = await execAsync('pm2 list');
     console.log('[engines-update] PM2 프로세스 목록:\n', listOutput);
 
-    // 'upnexx' 또는 'all'로 재시작 시도
-    const appName = process.env.PM2_APP_NAME || 'upnexx';
-    
+    // 'api-server'로 재시작 (ecosystem.config.cjs에서 확인한 이름)
+    const appName = process.env.PM2_APP_NAME || 'api-server';
+
     try {
       const { stdout: restartOutput } = await execAsync(`pm2 restart ${appName}`);
       console.log('[engines-update] ✅ PM2 재시작 성공:', restartOutput);
       return { success: true, message: 'PM2 재시작 성공' };
     } catch (restartError) {
       console.error('[engines-update] ❌ PM2 재시작 실패:', restartError.message);
-      
+
       // 폴백: pm2 reload 시도
       try {
         const { stdout: reloadOutput } = await execAsync(`pm2 reload ${appName}`);
@@ -112,8 +114,8 @@ async function restartApplication() {
 }
 
 /**
- * POST /nexxii/api/engines/update - 엔진 설정 업데이트
- * 
+ * POST /api/engines/update - 엔진 설정 업데이트
+ *
  * Body:
  * {
  *   "engineType": "textToImage" | "imageToVideo",
@@ -121,24 +123,7 @@ async function restartApplication() {
  *   "autoRestart": true | false (기본값: true)
  * }
  */
-export default async function handler(req, res) {
-  // CORS 설정
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
-  res.setHeader('Access-Control-Max-Age', '86400');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed'
-    });
-  }
-
+router.post('/', async (req, res) => {
   const username = req.headers['x-username'] || 'anonymous';
 
   try {
@@ -232,4 +217,6 @@ export default async function handler(req, res) {
       error: error.message || '서버 오류가 발생했습니다.'
     });
   }
-}
+});
+
+export default router;
