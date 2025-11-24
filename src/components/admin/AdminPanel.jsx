@@ -75,7 +75,7 @@ const AdminPanel = () => {
   const loadEngineInfo = async () => {
     setLoadingEngines(true);
     try {
-      const response = await fetch('/nexxii/api/engines/get');
+      const response = await fetch('/api/engines/get');
       const data = await response.json();
       
       if (data.success) {
@@ -101,7 +101,7 @@ const AdminPanel = () => {
 
     setUpdatingEngine(true);
     try {
-      const response = await fetch('/nexxii/api/engines/update', {
+      const response = await fetch('/api/engines/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
