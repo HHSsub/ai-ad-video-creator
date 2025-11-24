@@ -875,9 +875,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
 
-  server.timeout = 300000;
-  server.keepAliveTimeout = 300000;
-  server.headersTimeout = 305000;
+  server.timeout = 1200000; # 120분 (2시간 = 타임아웃)
+  server.keepAliveTimeout = 1200000;
+  server.headersTimeout = 1205000;
 
   console.log(`⏱️ 서버 타임아웃: ${server.timeout}ms`);
 });
