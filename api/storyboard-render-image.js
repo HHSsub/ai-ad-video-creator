@@ -1,6 +1,7 @@
-// api/storyboard-render-image.js - Freepik Seedream v4 공식 API 적용
+// api/storyboard-render-image.js - 🔥 동적 엔진 지원 버전 (2025-11-24 수정)
 
 import { safeCallFreepik, getApiKeyStatus } from '../src/utils/apiHelpers.js';
+import { getTextToImageUrl, getTextToImageStatusUrl } from '../utils/engineConfigLoader.js';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const POLLING_TIMEOUT = 120000; // 2 minutes
@@ -8,36 +9,37 @@ const POLLING_INTERVAL = 3000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// 🔥 Seedream v4 태스크 상태 폴링 (공식 API)
-async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
+// 🔥 동적 엔진 이미지 생성 태스크 상태 폴링 (엔진 독립적)
+async function pollTaskStatus(taskId, conceptId = 0) {
   const startTime = Date.now();
   
   while (Date.now() - startTime < POLLING_TIMEOUT) {
     try {
-      console.log(`[pollSeedreamV4TaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중... (컨셉: ${conceptId})`);
+      console.log(`[pollTaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중... (컨셉: ${conceptId})`);
  
-      const url = `${FREEPIK_API_BASE}/ai/text-to-image/seedream-v4/${encodeURIComponent(taskId)}`;
+      // 🔥 동적 URL 생성 - engines.json의 현재 엔진 사용
+      const url = getTextToImageStatusUrl(taskId);
       
       const result = await safeCallFreepik(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json'
         }
-      }, conceptId, `seedream-v4-status-${taskId.substring(0, 8)}`);
+      }, conceptId, `image-status-${taskId.substring(0, 8)}`);
 
-      console.log(`[pollSeedreamV4TaskStatus] 응답:`, result);
+      console.log(`[pollTaskStatus] 응답:`, result);
 
       if (result && result.data) {
         const taskData = result.data;
         const status = (taskData.status || '').toUpperCase();
 
-        console.log(`[pollSeedreamV4TaskStatus] 태스크 상태: ${status}`);
+        console.log(`[pollTaskStatus] 태스크 상태: ${status}`);
 
         // ✅ 완료
         if (status === 'COMPLETED') {
           if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated.length > 0) {
             const imageUrl = taskData.generated[0];
-            console.log(`[pollSeedreamV4TaskStatus] ✅ 완료 - 이미지 URL: ${imageUrl.substring(0, 80)}...`);
+            console.log(`[pollTaskStatus] ✅ 완료 - 이미지 URL: ${imageUrl.substring(0, 80)}...`);
             return { imageUrl, status: 'COMPLETED', raw: taskData };
           } else {
             throw new Error('COMPLETED 상태이지만 generated 배열이 비어있습니다');
@@ -46,12 +48,12 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
 
         // ❌ 실패
         if (status === 'FAILED' || status === 'ERROR') {
-          throw new Error(`Seedream v4 태스크 실패: ${status}`);
+          throw new Error(`이미지 생성 태스크 실패: ${status}`);
         }
 
         // ✅ 진행 중 - 정상 대기
         if (status === 'IN_PROGRESS' || status === 'PENDING' || status === 'PROCESSING' || status === 'CREATED') {
-          console.log(`[pollSeedreamV4TaskStatus] 대기 중... (${status})`);
+          console.log(`[pollTaskStatus] 대기 중... (${status})`);
           await sleep(POLLING_INTERVAL);
           continue;
         }
@@ -64,10 +66,10 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
 
     } catch (error) {
       if (Date.now() - startTime >= POLLING_TIMEOUT) {
-        throw new Error(`Seedream v4 태스크 타임아웃 (${POLLING_TIMEOUT}ms 초과)`);
+        throw new Error(`이미지 생성 태스크 타임아웃 (${POLLING_TIMEOUT}ms 초과)`);
       }
       
-      console.error(`[pollSeedreamV4TaskStatus] 폴링 에러 (컨셉: ${conceptId}):`, error);
+      console.error(`[pollTaskStatus] 폴링 에러 (컨셉: ${conceptId}):`, error);
       
       if (error.message.includes('FAILED') || error.message.includes('ERROR')) {
         throw error;
@@ -77,22 +79,24 @@ async function pollSeedreamV4TaskStatus(taskId, conceptId = 0) {
     }
   }
 
-  throw new Error(`Seedream v4 태스크 타임아웃 (${POLLING_TIMEOUT}ms)`);
+  throw new Error(`이미지 생성 태스크 타임아웃 (${POLLING_TIMEOUT}ms)`);
 }
 
 
-// 🔥 Seedream v4 이미지 생성 함수 (키 풀 활용)
-async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
+// 🔥 동적 엔진 이미지 생성 함수 (키 풀 활용 + 엔진 독립적)
+async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0) {
   try {
-    console.log(`[generateImageWithSeedreamV4] 시작 (컨셉: ${conceptId}):`, {
+    console.log(`[generateImageWithDynamicEngine] 시작 (컨셉: ${conceptId}):`, {
       prompt: imagePrompt.prompt.substring(0, 100),
       aspect_ratio: imagePrompt.aspect_ratio,
       guidance_scale: imagePrompt.guidance_scale,
       seed: imagePrompt.seed
     });
 
-    // 🔥 Seedream v4 태스크 생성 (키 풀 사용)
-    const createUrl = `${FREEPIK_API_BASE}/ai/text-to-image/seedream-v4`;
+    // 🔥 동적 URL 생성 - engines.json의 현재 textToImage 엔진 사용
+    const createUrl = getTextToImageUrl();
+    
+    console.log(`[generateImageWithDynamicEngine] 사용 중인 엔진 URL: ${createUrl}`);
     
     const createResult = await safeCallFreepik(createUrl, {
       method: 'POST',
@@ -101,35 +105,35 @@ async function generateImageWithSeedreamV4(imagePrompt, conceptId = 0) {
         'Accept': 'application/json'
       },
       body: JSON.stringify(imagePrompt)
-    }, conceptId, `seedream-v4-create-concept-${conceptId}`);
+    }, conceptId, `image-create-concept-${conceptId}`);
 
-    console.log(`[generateImageWithSeedreamV4] 태스크 생성 응답:`, createResult);
+    console.log(`[generateImageWithDynamicEngine] 태스크 생성 응답:`, createResult);
 
     if (!createResult || !createResult.data || !createResult.data.task_id) {
-      throw new Error('Seedream v4 태스크 ID를 받지 못했습니다: ' + JSON.stringify(createResult));
+      throw new Error('이미지 생성 태스크 ID를 받지 못했습니다: ' + JSON.stringify(createResult));
     }
 
     const taskId = createResult.data.task_id;
-    console.log(`[generateImageWithSeedreamV4] 태스크 생성 성공 (컨셉: ${conceptId}): ${taskId}`);
+    console.log(`[generateImageWithDynamicEngine] 태스크 생성 성공 (컨셉: ${conceptId}): ${taskId}`);
 
     // 🔥 태스크 상태 폴링
-    const pollResult = await pollSeedreamV4TaskStatus(taskId, conceptId);
+    const pollResult = await pollTaskStatus(taskId, conceptId);
 
-    console.log(`[generateImageWithSeedreamV4] 최종 성공 (컨셉: ${conceptId}):`, {
+    console.log(`[generateImageWithDynamicEngine] 최종 성공 (컨셉: ${conceptId}):`, {
       imageUrl: pollResult.imageUrl.substring(0, 80),
       status: pollResult.status
     });
 
     return {
       imageUrl: pollResult.imageUrl,
-      method: 'freepik-seedream-v4-polling-keypool',
+      method: 'freepik-dynamic-engine-keypool',
       taskId: taskId,
       conceptId: conceptId,
       raw: pollResult.raw
     };
 
   } catch (error) {
-    console.error('[generateImageWithSeedreamV4] 전체 실패 (컨셉:', conceptId, '):', error);
+    console.error('[generateImageWithDynamicEngine] 전체 실패 (컨셉:', conceptId, '):', error);
     throw error;
   }
 }
@@ -178,7 +182,7 @@ export default async function handler(req, res) {
     const keyStatus = getApiKeyStatus();
     console.log(`[storyboard-render-image] Freepik API 키 상태: ${keyStatus.freepik.availableKeys}/${keyStatus.freepik.totalKeys}개 사용가능`);
 
-    // 🔥 하위 호환 - 구형 형식을 Seedream v4 형식으로 변환
+    // 🔥 하위 호환 - 구형 형식을 표준 형식으로 변환
     if (!imagePrompt && prompt) {
       imagePrompt = {
         prompt,
@@ -186,12 +190,11 @@ export default async function handler(req, res) {
         guidance_scale: 2.5,
         seed: Math.floor(Math.random() * 1000000)
       };
-      console.log('[storyboard-render-image] 구형 요청을 Seedream v4 imagePrompt로 변환');
+      console.log('[storyboard-render-image] 구형 요청을 표준 imagePrompt로 변환');
     }
 
-    // 🔥 imagePrompt 구조를 Seedream v4 형식으로 정규화
+    // 🔥 imagePrompt 구조 정규화
     if (imagePrompt) {
-      // 기존 구조에서 Seedream v4 파라미터로 매핑
       const normalizedPrompt = {
         prompt: imagePrompt.prompt || imagePrompt.image_prompt?.prompt,
         aspect_ratio: imagePrompt.aspect_ratio || 
@@ -231,11 +234,11 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log(`[storyboard-render-image] 컨셉 ${conceptId}에 대한 Seedream v4 키 풀 활용 시작`);
+    console.log(`[storyboard-render-image] 컨셉 ${conceptId}에 대한 동적 엔진 키 풀 활용 시작`);
 
     try {
-      // 🔥 Seedream v4로 이미지 생성
-      const result = await generateImageWithSeedreamV4(imagePrompt, conceptId || 0);
+      // 🔥 동적 엔진으로 이미지 생성
+      const result = await generateImageWithDynamicEngine(imagePrompt, conceptId || 0);
 
       const processingTime = Date.now() - startTime;
 
@@ -261,7 +264,7 @@ export default async function handler(req, res) {
           sceneNumber,
           conceptId,
           promptUsed: imagePrompt.prompt,
-          apiProvider: 'Freepik Seedream v4 2025 KeyPool',
+          apiProvider: 'Freepik Dynamic Engine 2025 KeyPool',
           aspectRatio: imagePrompt.aspect_ratio,
           guidanceScale: imagePrompt.guidance_scale,
           seed: imagePrompt.seed,
