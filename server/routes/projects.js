@@ -1,9 +1,10 @@
 // ============================================================
-// 파일: server/routes/project.js
+// 파일: server/routes/projects.js
 // 수정 내용:
 // 1. PATCH 권한 확인 로직을 완화 (guest, anonymous 사용자 허용)
 // 2. 로그 추가로 디버깅 용이하게
 // 3. x-username 헤더도 함께 확인
+// 4. 🔥 storyboard 저장 시 상세 로그 추가 (2025-11-24)
 // ============================================================
 
 import express from 'express';
@@ -115,7 +116,7 @@ router.post('/', (req, res) => {
   res.json({ project: newProject });
 });
 
-// 🔥 3. 프로젝트 업데이트 - 모드 저장 (PATCH /api/projects/:id)
+// 🔥 3. 프로젝트 업데이트 - 모드 및 스토리보드 저장 (PATCH /api/projects/:id)
 router.patch('/:id', (req, res) => {
   try {
     const { id } = req.params;
@@ -126,6 +127,7 @@ router.patch('/:id', (req, res) => {
     console.log(`  - 프로젝트 ID: ${id}`);
     console.log(`  - 모드: ${mode}`);
     console.log(`  - 사용자: ${username}`);
+    console.log(`  - storyboard 포함: ${!!storyboard}`); // 🔥 추가
     console.log(`  - 헤더 x-user-id: ${req.headers['x-user-id']}`);
     console.log(`  - 헤더 x-username: ${req.headers['x-username']}`);
 
@@ -136,7 +138,7 @@ router.patch('/:id', (req, res) => {
       console.error(`[projects PATCH] ❌ projects.json 읽기 실패`);
       return res.status(500).json({ success: false, error: 'projects.json 읽기 실패' });
     }
-    
+
     if (!membersData) {
       console.error(`[projects PATCH] ❌ project-members.json 읽기 실패`);
       return res.status(500).json({ success: false, error: 'project-members.json 읽기 실패' });
@@ -153,8 +155,6 @@ router.patch('/:id', (req, res) => {
     const project = projectsData.projects[projectIndex];
 
     // 🔥 권한 확인 (완화된 버전)
-    // guest, anonymous, admin은 기본 허용
-    // 또는 프로젝트 생성자이거나 멤버인 경우 허용
     const isSystemUser = ['guest', 'anonymous', 'admin'].includes(username);
     const isCreator = project.createdBy === username;
     const membership = membersData.members.find(
@@ -180,8 +180,32 @@ router.patch('/:id', (req, res) => {
     if (status !== undefined) project.status = status;
     if (name !== undefined) project.name = name;
     if (description !== undefined) project.description = description;
-    if (formData !== undefined) project.formData = formData;
-    if (storyboard !== undefined) project.storyboard = storyboard;
+    
+    if (formData !== undefined) {
+      project.formData = formData;
+      console.log(`[projects PATCH] formData 저장됨`); // 🔥 추가
+    }
+    
+    // 🔥 storyboard 저장 로직 (상세 로그 추가)
+    if (storyboard !== undefined) {
+      project.storyboard = storyboard;
+      console.log(`[projects PATCH] ✅ storyboard 저장됨:`, {
+        stylesCount: storyboard.styles?.length || 0,
+        finalVideosCount: storyboard.finalVideos?.length || 0,
+        timestamp: storyboard.timestamp,
+        success: storyboard.success
+      });
+      
+      // 🔥 finalVideos의 videoUrl 확인 로그
+      if (storyboard.finalVideos && storyboard.finalVideos.length > 0) {
+        console.log(`[projects PATCH] finalVideos 상세:`);
+        storyboard.finalVideos.forEach((video, idx) => {
+          console.log(`  [${idx + 1}] conceptId: ${video.conceptId}, conceptName: ${video.conceptName}`);
+          console.log(`      videoUrl: ${video.videoUrl}`);
+        });
+      }
+    }
+    
     project.updatedAt = new Date().toISOString();
 
     projectsData.projects[projectIndex] = project;
@@ -303,7 +327,7 @@ router.delete('/:id', (req, res) => {
   const project = projectsData.projects[projectIndex];
 
   // owner 권한 확인 (완화)
-  const isSystemUser = ['admin'].includes(username); // 삭제는 admin만 예외
+  const isSystemUser = ['admin'].includes(username);
   const isCreator = project.createdBy === username;
   const membership = membersData.members.find(
     m => m.projectId === id && m.username === username && m.role === 'owner'
@@ -396,7 +420,7 @@ router.post('/:id/members', (req, res) => {
   );
   const isSystemUser = ['admin'].includes(currentUsername);
   const isCreator = project.createdBy === currentUsername;
-  const canInvite = isSystemUser || isCreator || 
+  const canInvite = isSystemUser || isCreator ||
     (currentMembership && ['owner', 'manager'].includes(currentMembership.role));
 
   if (!canInvite) {
@@ -463,7 +487,7 @@ router.delete('/:id/members/:memberId', (req, res) => {
   );
   const isSystemUser = ['admin'].includes(currentUsername);
   const isCreator = project.createdBy === currentUsername;
-  const canRemove = isSystemUser || isCreator || 
+  const canRemove = isSystemUser || isCreator ||
     (currentMembership && ['owner', 'manager'].includes(currentMembership.role));
 
   if (!canRemove) {
