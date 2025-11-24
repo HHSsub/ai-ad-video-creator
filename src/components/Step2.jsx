@@ -95,7 +95,7 @@ const getUnifiedImageData = (formData) => {
   };
 };
 
-const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading, user }) => {
+const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading, user, currentProject }) => {
   const [percent, setPercent] = useState(0);
   const [logs, setLogs] = useState([]);
   const [imagesDone, setImagesDone] = useState(0);
@@ -515,6 +515,7 @@ const pollAndGenerateImages = async (sessionId) => {
       }
       
       const apiPayload = {
+        projectId: currentProject?.id,  // 🔥 추가: 프로젝트 ID 전달
         brandName: formData.brandName || '',
         industryCategory: formData.industryCategory || '',
         productServiceCategory: formData.productServiceCategory || '',
@@ -719,6 +720,7 @@ Step2.propTypes = {
   setIsLoading: PropTypes.func,
   isLoading: PropTypes.bool,
   user: PropTypes.object.isRequired,
+  currentProject: PropTypes.object  // 🔥 추가
 };
 
 export default Step2;
