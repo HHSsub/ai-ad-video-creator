@@ -1,8 +1,10 @@
-// api/engines-get.js - 현재 엔진 설정 조회 API
+// api/engines-get.js - 현재 엔진 설정 조회 API (Express Router 버전)
 
+import express from 'express';
 import fs from 'fs';
 import path from 'path';
 
+const router = express.Router();
 const ENGINES_FILE = path.join(process.cwd(), 'config', 'engines.json');
 
 /**
@@ -23,26 +25,9 @@ function loadEngines() {
 }
 
 /**
- * GET /nexxii/api/engines/get - 현재 엔진 설정 조회
+ * GET /api/engines/get - 현재 엔진 설정 조회
  */
-export default async function handler(req, res) {
-  // CORS 설정
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-username');
-  res.setHeader('Access-Control-Max-Age', '86400');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed'
-    });
-  }
-
+router.get('/', (req, res) => {
   try {
     const engines = loadEngines();
 
@@ -69,4 +54,6 @@ export default async function handler(req, res) {
       error: error.message || '서버 오류가 발생했습니다.'
     });
   }
-}
+});
+
+export default router;
