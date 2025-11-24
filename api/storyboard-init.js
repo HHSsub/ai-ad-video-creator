@@ -882,6 +882,36 @@ async function processStoryboardAsync(body, username, sessionId) {
       result: finalStoryboard
     });
     
+    // 🔥 신규 추가: 프로젝트에 스토리보드 저장
+    if (body.projectId && username) {
+      try {
+        console.log(`[storyboard-init] 📁 프로젝트에 스토리보드 저장 시작: ${body.projectId}`);
+        
+        const saveResponse = await fetch(`${API_BASE}/nexxii/api/projects/${body.projectId}/storyboard`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-username': username
+          },
+          body: JSON.stringify({
+            storyboard: finalStoryboard,
+            formData: body // formData도 함께 저장
+          })
+        });
+    
+        if (saveResponse.ok) {
+          const saveResult = await saveResponse.json();
+          console.log(`[storyboard-init] ✅ 프로젝트 저장 성공:`, saveResult);
+        } else {
+          const errorText = await saveResponse.text();
+          console.error(`[storyboard-init] ❌ 프로젝트 저장 실패 (${saveResponse.status}):`, errorText);
+        }
+      } catch (saveError) {
+        console.error('[storyboard-init] ❌ 프로젝트 저장 오류:', saveError);
+        // 저장 실패해도 전체 프로세스는 성공으로 처리
+      }
+    }
+    
     console.log('[storyboard-init] ✅ 전체 자동화 완료!');
 
   } catch (error) {
