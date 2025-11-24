@@ -7,8 +7,6 @@ import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
 import sessionStore from '../src/utils/sessionStore.js';
-import enginesGet from '../api/engines-get.js';
-import enginesUpdate from '../api/engines-update.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -224,9 +222,7 @@ app.use('/api/admin-config', adminConfig);
 app.use('/api/users', usersApi); // 수정됨: /api/ 추가
 app.use('/api/admin-field-config', adminFieldConfig); // 수정됨: /api/ 추가
 app.use('/api/auth', authRouter);
-// 엔진 설정 동적 관리
-app.use('/api/engines/get', enginesGet);
-app.use('/api/engines/update', enginesUpdate);
+
 
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -875,7 +871,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
 
-  server.timeout = 1200000; # 120분 (2시간 = 타임아웃)
+  server.timeout = 1200000; // 2시간
   server.keepAliveTimeout = 1200000;
   server.headersTimeout = 1205000;
 
