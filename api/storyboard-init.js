@@ -888,7 +888,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       try {
         console.log(`[storyboard-init] 📁 프로젝트에 스토리보드 저장 시작: ${body.projectId}`);
         
-        const saveResponse = await fetch(`${API_BASE}/nexxii/api/projects/${body.projectId}`, {
+        const saveResponse = await fetch(`${API_BASE}/api/projects/${body.projectId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
