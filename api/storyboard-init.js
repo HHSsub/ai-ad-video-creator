@@ -811,6 +811,7 @@ async function processStoryboardAsync(body, username, sessionId) {
             videoLength: body.videoLength,
             formData: body,
             jsonMode: true,
+            mode: body.mode || 'auto'  // 🔥 이 줄 추가
           })
         });
 
