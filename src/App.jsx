@@ -557,6 +557,7 @@ useEffect(() => {
               isLoading={isLoading}
               setIsLoading={setIsLoading}
               user={user}
+              currentProject={currentProject}  // 🔥 추가
               onPrev={() => {
                 if (currentMode === 'auto') {
                   setCurrentView('step1-auto');
