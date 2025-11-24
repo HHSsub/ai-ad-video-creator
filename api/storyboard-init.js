@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../src/utils/sessionStore.js';
+import { getImageToVideoStatusUrl } from '../utils/engineConfigLoader.js';
 
 const API_BASE = process.env.VITE_API_BASE_URL 
   ? (process.env.VITE_API_BASE_URL.startsWith('http') 
@@ -467,6 +468,47 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
       // - POST (생성): /ai/image-to-video/kling-v2-1-pro
       // - GET (조회): /ai/image-to-video/kling-v2-1/{task-id}
       const response = await fetch(`${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1/${taskId}`, {
+        method: 'GET',
+        headers: {
+          'x-freepik-api-key': apiKey,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        // 404가 아닌 경우에만 로그 출력 (404는 일시적일 수 있음)
+        if (response.status !== 404) {
+          console.log(`[pollVideoStatus] ⚠️ HTTP ${response.status} (시도 ${attempt}/${maxAttempts})`);
+        } else if (attempt <= 3 || attempt % 12 === 0) {
+          // 404는 처음 3번과 1분마다만 로그
+          console.log(`[pollVideoStatus] ⏳ 대기 중... (시도 ${attempt}/${maxAttempts}, ${Math.floor(attempt * 5 / 60)}분 경과)`);
+        }
+        await sleep(5000);
+        continue;
+      }
+
+      const result = await response.json();
+      const status = result.data?.status?.toUpperCase();
+
+      // 🔥 로그 추가: 상태 출력 (30초마다)
+      if (attempt % 6 === 0) {
+        console.log(`[pollVideoStatus] 📊 상태: ${status} (${Math.floor(attempt * 5 / 60)}분 ${(attempt * 5) % 60}초 경과)`);
+        // 🔥 수정 후 코드 (동적 엔진):
+async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex, totalVideos, maxAttempts = 120) {
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  
+  console.log(`[pollVideoStatus] 🚀 폴링 시작: ${taskId} (${currentVideoIndex}/${totalVideos})`);
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const apiKey = process.env.FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
+      
+      // 🔥 동적 URL 생성 - engines.json의 현재 imageToVideo 엔진 사용
+      const statusUrl = getImageToVideoStatusUrl(taskId);
+      
+      console.log(`[pollVideoStatus] 🔥 사용 중인 상태 조회 URL: ${statusUrl}`);
+      
+      const response = await fetch(statusUrl, {
         method: 'GET',
         headers: {
           'x-freepik-api-key': apiKey,
