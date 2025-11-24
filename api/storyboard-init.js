@@ -882,12 +882,12 @@ async function processStoryboardAsync(body, username, sessionId) {
       result: finalStoryboard
     });
     
-    // 🔥 신규 추가: 프로젝트에 스토리보드 저장
+    // 🔥 신규 추가 (2025-11-24): 프로젝트에 스토리보드 저장
     if (body.projectId && username) {
       try {
         console.log(`[storyboard-init] 📁 프로젝트에 스토리보드 저장 시작: ${body.projectId}`);
         
-        const saveResponse = await fetch(`${API_BASE}/nexxii/api/projects/${body.projectId}/storyboard`, {
+        const saveResponse = await fetch(`${API_BASE}/nexxii/api/projects/${body.projectId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -895,13 +895,17 @@ async function processStoryboardAsync(body, username, sessionId) {
           },
           body: JSON.stringify({
             storyboard: finalStoryboard,
-            formData: body // formData도 함께 저장
+            formData: body
           })
         });
-    
+
         if (saveResponse.ok) {
           const saveResult = await saveResponse.json();
-          console.log(`[storyboard-init] ✅ 프로젝트 저장 성공:`, saveResult);
+          console.log(`[storyboard-init] ✅ 프로젝트 저장 성공:`, {
+            projectId: body.projectId,
+            stylesCount: finalStoryboard.styles?.length,
+            finalVideosCount: finalStoryboard.finalVideos?.length
+          });
         } else {
           const errorText = await saveResponse.text();
           console.error(`[storyboard-init] ❌ 프로젝트 저장 실패 (${saveResponse.status}):`, errorText);
@@ -913,6 +917,7 @@ async function processStoryboardAsync(body, username, sessionId) {
     }
     
     console.log('[storyboard-init] ✅ 전체 자동화 완료!');
+
 
   } catch (error) {
     console.error('[storyboard-init] ❌ 오류 발생:', error);
