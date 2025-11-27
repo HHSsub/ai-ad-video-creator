@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../src/utils/sessionStore.js';
-import { getImageToVideoStatusUrl } from '../utils/engineConfigLoader.js';
+import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
 
 
 export const config = {
