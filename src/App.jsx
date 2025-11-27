@@ -48,61 +48,6 @@ function App() {
     }
   }, []);
 
-  // App.jsx - useEffect 추가 (프로젝트 데이터 복구)
-
-useEffect(() => {
-  const loadProjectData = async () => {
-    if (currentProject && currentProject.id) {
-      try {
-        const response = await fetch(`/nexxii/api/projects/${currentProject.id}`, {
-          headers: {
-            'x-username': user?.username || 'anonymous'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (data.project.formData) {
-            setFormData(data.project.formData);
-            console.log('[App] 프로젝트 formData 복구:', data.project.formData);
-          }
-          
-          if (data.project.mode) {
-            setCurrentMode(data.project.mode);
-            console.log('[App] 프로젝트 mode 복구:', data.project.mode);
-          }
-          
-          if (data.project.storyboard) {
-            setStoryboard(data.project.storyboard);
-            console.log('[App] 프로젝트 storyboard 복구');
-          }
-          // 사용자 역할 로드(1122_1700)
-          try {
-            const membersResponse = await fetch(`/nexxii/api/projects/${currentProject.id}/members`, {
-              headers: { 'x-username': user?.username }
-            });
-            if (membersResponse.ok) {
-              const membersData = await membersResponse.json();
-              const myMembership = membersData.members?.find(m => m.username === user?.username);
-              setUserRole(myMembership?.role || 'owner');
-              console.log('[App] 사용자 역할 로드:', myMembership?.role || 'owner');
-            }
-          } catch (memberErr) {
-            console.log('[App] 멤버 API 없음, 기본 역할 사용:', 'owner');
-            setUserRole('owner');
-          }
-          
-        }
-      } catch (error) {
-        console.error('[App] 프로젝트 데이터 로드 실패:', error);
-      }
-    }
-  };
-  
-  loadProjectData();
-}, [currentProject?.id]);
-
   const handleLogin = (userData) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
@@ -140,28 +85,56 @@ useEffect(() => {
   const next = () => setStep(s => Math.min(4, s + 1));
   const prev = () => setStep(s => Math.max(1, s - 1));
 
-  const handleSelectProject = (project) => {
-    setCurrentProject(project);
-    setCurrentMode(null);
-    setFormData({
-      mode: 'auto',
-      userdescription: '',
-      videoLength: '',
-      aspectRatioCode: '',
-      videoPurpose: '',
-      brandName: '',
-      industryCategory: '',
-      productServiceCategory: '',
-      productServiceName: '',
-      coreTarget: '',
-      coreDifferentiation: '',
-      videoRequirements: '',
-      imageUpload: null
+  const handleSelectProject = async (project) => {
+  setCurrentProject(project);
+  
+  // 프로젝트 데이터 로드
+  try {
+    const response = await fetch(`/nexxii/api/projects/${project.id}`, {
+      headers: {
+        'x-username': user?.username || 'anonymous'
+      }
     });
-    setStoryboard(null);
-    setSelectedConceptId(null);
-    setCurrentView('mode-select');
-  };
+
+    if (response.ok) {
+      const data = await response.json();
+
+      // storyboard 있으면 Step4로 직행
+      if (data.project.storyboard && data.project.storyboard.styles) {
+        console.log('[App] ✅ 기존 작업 발견 - Step4로 이동');
+        setStoryboard(data.project.storyboard);
+        setFormData(data.project.formData || {});
+        setCurrentMode(data.project.mode);
+        setCurrentView('step4');
+        setStep(4);
+        return; // 여기서 종료
+      }
+    }
+  } catch (error) {
+    console.error('[App] 프로젝트 로드 실패:', error);
+  }
+
+  // storyboard 없으면 모드 선택
+  setCurrentMode(null);
+  setFormData({
+    mode: 'auto',
+    userdescription: '',
+    videoLength: '',
+    aspectRatioCode: '',
+    videoPurpose: '',
+    brandName: '',
+    industryCategory: '',
+    productServiceCategory: '',
+    productServiceName: '',
+    coreTarget: '',
+    coreDifferentiation: '',
+    videoRequirements: '',
+    imageUpload: null
+  });
+  setStoryboard(null);
+  setSelectedConceptId(null);
+  setCurrentView('mode-select');
+};
 
   const handleSelectMode = async (mode) => {
     setCurrentMode(mode);
