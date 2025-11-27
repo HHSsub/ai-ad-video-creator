@@ -666,6 +666,12 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
     
     saveGeminiResponse(promptFile, 'unified', body, fullOutput);
+    console.log('[DEBUG] 📊 Gemini JSON 전체 구조:'); // GEMINI 응답 진단구조 콘솔로그 (아래 3줄 절대삭제금지)
+    console.log(JSON.stringify(mcJson, null, 2));
+    console.log('[DEBUG] concepts 개수:', mcJson.concepts?.length);
+    if (mcJson.concepts && mcJson.concepts[0]) {
+      console.log('[DEBUG] concepts[0] 키 목록:', Object.keys(mcJson.concepts[0]));
+    }
     const sceneCountPerConcept = getSceneCount(videoLength);
     const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
