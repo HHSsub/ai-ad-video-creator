@@ -44,6 +44,10 @@ import authRouter from './routes/auth.js';
 import enginesGet from '../api/engines-get.js';
 import enginesUpdate from '../api/engines-update.js';
 
+// 🔥 프롬프트 조회 API - 엔진 기반 구조로 변경
+import promptsGetHandler from '../api/prompts-get.js';
+import promptsUpdateHandler from '../api/prompts-update.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -248,11 +252,9 @@ app.get('/health', (req, res) => {
 /*
 [이 위치에 있던 하드코딩된 app.post('/api/auth/login', ...) 로직이 삭제되었습니다.]
 */
-// 🔥 프롬프트 조회 API - 엔진 기반 구조로 변경
-import promptsGetHandler from '../api/prompts-get.js';
+
 app.get('/api/prompts/get', promptsGetHandler);
-
-
+app.post('/api/prompts/update', promptsUpdateHandler);
 
 app.get('/api/prompts/versions', async (req, res) => { // 수정됨: /api/ 추가
   try {
@@ -599,61 +601,6 @@ app.post('/api/prompts/test', async (req, res) => {
         preview: geminiResponse.substring(0, 500) + '...',
         success: true
       },
-      fileName: fileName,
-      processingTime: Date.now() - startTime
-    });
-
-  } catch (error) {
-    console.error('[prompts/test] ❌ 전체 오류:', error);
-    res.status(500).json({
-      success: false,
-      message: '프롬프트 테스트 중 오류가 발생했습니다.',
-      error: error.message,
-      processingTime: Date.now() - startTime
-    });
-  }
-});
-
-      // 응답 저장
-    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
-    if (!fs.existsSync(responsesPath)) {
-      fs.mkdirSync(responsesPath, { recursive: true });
-    }
-
-    const timestamp = Date.now();
-    const fileName = `${promptKey}_test_${timestamp}.json`;
-    const filePath = path.join(responsesPath, fileName);
-
-    const responseData = {
-      promptKey,
-      step: 'test',
-      formData: formData,
-      response: step2Response || step1Response,
-      rawStep1Response: step1Response,
-      rawStep2Response: step2Response,
-      timestamp: new Date().toISOString(),
-      savedAt: new Date().toISOString(),
-      isTest: true
-    };
-
-    fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
-
-    console.log('[prompts/test] ✅ 테스트 완료 및 저장:', fileName);
-
-    res.json({
-      success: true,
-      message: '프롬프트 테스트가 완료되었습니다.',
-      step1Response: step1Response ? {
-        length: step1Response.length,
-        preview: step1Response.substring(0, 500) + '...',
-        success: true
-      } : null,
-      step2Response: step2Response ? {
-        length: step2Response.length,
-        preview: step2Response.substring(0, 500) + '...',
-        success: true,
-        jsonParseStatus: step2Response.includes('###') ? '✅ 컨셉 헤더 발견 - 파싱 가능' : '⚠️ 컨셉 헤더 없음 - 파싱  실패 가능성'
-      } : null,
       fileName: fileName,
       processingTime: Date.now() - startTime
     });
