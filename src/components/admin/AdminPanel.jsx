@@ -3,8 +3,8 @@ import PropTypes from 'prop-types';
 
 const AdminPanel = () => {
   // ===== 상태 관리 =====
-  const [activeMainTab, setActiveMainTab] = useState('prompts'); // 'prompts' | 'engines'
-
+  const [activeMainTab, setActiveMainTab] = useState('engines');
+  
   // 프롬프트 관리 상태
   const [prompts, setPrompts] = useState({});
   const [activePromptTab, setActivePromptTab] = useState('');
@@ -35,7 +35,7 @@ const AdminPanel = () => {
   const [engineHistory, setEngineHistory] = useState([]);
   const [loadingEngines, setLoadingEngines] = useState(false);
   const [updatingEngine, setUpdatingEngine] = useState(false);
-  const [selectedEngineType, setSelectedEngineType] = useState('textToImage'); // 'textToImage' | 'imageToVideo'
+  const [selectedEngineType, setSelectedEngineType] = useState('textToImage');
 
   const versionsPerPage = 10;
 
@@ -53,14 +53,13 @@ const AdminPanel = () => {
 
   useEffect(() => {
     if (Object.keys(prompts).length > 0 && !activePromptTab) {
-      // 🔥 엔진 기반 탭 우선순위: manual → auto_product → auto_service
+      // 🔥 수정: manual 우선, 그 다음 auto_product, auto_service
       const keys = Object.keys(prompts);
       const manualKey = keys.find(k => k.includes('_manual'));
       const productKey = keys.find(k => k.includes('_auto_product'));
       const serviceKey = keys.find(k => k.includes('_auto_service'));
       
-      const firstKey = manualKey || productKey || serviceKey || keys[0];
-      setActivePromptTab(firstKey);
+      setActivePromptTab(manualKey || productKey || serviceKey || keys[0]);
     }
   }, [prompts, activePromptTab]);
 
@@ -125,7 +124,6 @@ const AdminPanel = () => {
       if (data.success) {
         showMessage('success', `✅ 엔진 변경 성공!\n\n이전: ${data.previousEngine}\n새 엔진: ${data.newEngine}\n\n${data.restartResult.success ? '시스템이 재시작되었습니다.' : '재시작은 수동으로 해주세요.'}`);
 
-        // 엔진 정보 새로고침
         setTimeout(() => {
           loadEngineInfo();
         }, 2000);
@@ -140,7 +138,7 @@ const AdminPanel = () => {
     }
   };
 
-  // ===== 프롬프트 관리 함수 (기존) =====
+  // ===== 프롬프트 관리 함수 =====
   const getPromptKeyFromVersion = (version) => {
     if (version.id && version.id.startsWith('current_')) {
       return version.id.replace('current_', '');
@@ -155,6 +153,14 @@ const AdminPanel = () => {
     return Object.keys(prompts)[0] || '';
   };
 
+  // 🔥 수정: 프롬프트 탭 이름을 보기 좋게 변환
+  const getPromptDisplayName = (promptKey) => {
+    if (promptKey.includes('_manual')) return '🎯 Manual 모드';
+    if (promptKey.includes('_auto_product')) return '🛍️ Auto - Product';
+    if (promptKey.includes('_auto_service')) return '🎨 Auto - Service';
+    return promptKey;
+  };
+
   const loadPrompts = async () => {
     setLoading(true);
     try {
@@ -163,6 +169,7 @@ const AdminPanel = () => {
 
       if (data.success) {
         setPrompts(data.prompts);
+        console.log('[AdminPanel] ✅ 프롬프트 로드:', Object.keys(data.prompts));
       } else {
         showMessage('error', '프롬프트 로드에 실패했습니다.');
       }
@@ -183,7 +190,7 @@ const AdminPanel = () => {
 
         const currentVersions = Object.keys(prompts).map(key => ({
           id: `current_${key}`,
-          filename: `[현재] ${key}`,
+          filename: `[현재] ${getPromptDisplayName(key)}`,
           promptKey: key,
           timestamp: new Date().toISOString(),
           preview: prompts[key]?.substring(0, 150) + '...',
@@ -429,7 +436,6 @@ const AdminPanel = () => {
               <h2 className="text-xl font-bold text-white mb-4">🎯 현재 사용 중인 엔진</h2>
 
               <div className="grid grid-cols-2 gap-6">
-                {/* Text-to-Image */}
                 <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
                   <h3 className="text-lg font-semibold text-blue-400 mb-2">🖼️ 이미지 생성</h3>
                   <div className="space-y-2 text-sm">
@@ -449,7 +455,6 @@ const AdminPanel = () => {
                   </div>
                 </div>
 
-                {/* Image-to-Video */}
                 <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
                   <h3 className="text-lg font-semibold text-purple-400 mb-2">🎬 영상 생성</h3>
                   <div className="space-y-2 text-sm">
@@ -475,7 +480,6 @@ const AdminPanel = () => {
             <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 p-6">
               <h2 className="text-xl font-bold text-white mb-4">🔄 엔진 변경</h2>
 
-              {/* 엔진 타입 선택 */}
               <div className="flex gap-2 mb-4">
                 <button
                   onClick={() => setSelectedEngineType('textToImage')}
@@ -499,7 +503,6 @@ const AdminPanel = () => {
                 </button>
               </div>
 
-              {/* 사용 가능한 엔진 목록 */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {availableEngines[selectedEngineType].map(engine => {
                   const isCurrent = currentEngines[selectedEngineType].model === engine.model;
@@ -578,10 +581,10 @@ const AdminPanel = () => {
           </div>
         )}
 
-        {/* ===== 프롬프트 관리 탭 (기존 코드 유지) ===== */}
+        {/* ===== 프롬프트 관리 탭 ===== */}
         {activeMainTab === 'prompts' && Object.keys(prompts).length > 0 && (
           <div className="grid grid-cols-12 gap-6">
-            {/* 버전 히스토리 (기존) */}
+            {/* 버전 히스토리 */}
             <div className="col-span-3">
               <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700">
                 <div className="px-4 py-3 border-b border-gray-700">
@@ -665,41 +668,28 @@ const AdminPanel = () => {
               </div>
             </div>
 
-            {/* 프롬프트 편집기 (기존) */}
+            {/* 프롬프트 편집기 */}
             <div className="col-span-6">
               <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700">
                 <div className="px-4 py-3 border-b border-gray-700">
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {Object.keys(prompts).map((key) => {
-                      // 🔥 탭 이름 표시 개선
-                      let displayName = key;
-                      if (key.includes('_manual')) {
-                        displayName = '🎯 Manual 모드';
-                      } else if (key.includes('_auto_product')) {
-                        displayName = '🛍️ Auto - Product';
-                      } else if (key.includes('_auto_service')) {
-                        displayName = '💼 Auto - Service';
-                      }
-                      
-                      return (
-                        <button
-                          key={key}
-                          onClick={() => setActivePromptTab(key)}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            activePromptTab === key
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          }`}
-                        >
-                          {displayName}
-                        </button>
-                      );
-                    })}
+                    {Object.keys(prompts).map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => setActivePromptTab(key)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          activePromptTab === key
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        {getPromptDisplayName(key)}
+                      </button>
+                    ))}
                   </div>
 
-
                   <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-white">{activePromptTab}</h3>
+                    <h3 className="text-lg font-medium text-white">{getPromptDisplayName(activePromptTab)}</h3>
                     <div className="flex gap-2">
                       <button
                         onClick={() => testPrompt(activePromptTab)}
@@ -743,7 +733,7 @@ const AdminPanel = () => {
               </div>
             </div>
 
-            {/* Gemini 응답 (기존) */}
+            {/* Gemini 응답 */}
             <div className="col-span-3">
               <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700">
                 <div className="px-4 py-3 border-b border-gray-700">
@@ -789,7 +779,7 @@ const AdminPanel = () => {
           </div>
         )}
 
-        {/* 응답 상세보기 모달 (기존) */}
+        {/* 응답 상세보기 모달 */}
         {selectedResponse && (
           <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
             <div className="bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden border border-gray-700">
