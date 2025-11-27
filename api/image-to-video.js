@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -116,6 +118,10 @@ export default async function handler(req, res) {
       throw new Error('Freepik API 키가 설정되지 않았습니다');
     }
 
+    // 🔥 엔진 동적 로드
+    const engineConfig = loadCurrentEngine();
+    console.log('[image-to-video] 🔥 사용 엔진:', engineConfig.model, engineConfig.endpoint);
+
     const optimized = optimizeVideoPrompt(prompt, formData);
 
     // duration은 반드시 "5" 또는 "10" (문자열)만 허용
@@ -136,7 +142,7 @@ export default async function handler(req, res) {
     console.log('[image-to-video] 최종 요청 바디:', JSON.stringify(requestBody));
 
     const result = await safeFreepikCall(
-      KLING_ENDPOINT,
+      engineConfig.endpoint,
       {
         method: 'POST',
         headers: {
@@ -146,12 +152,12 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify(requestBody)
       },
-      'image-to-video-kling',
+      `image-to-video-${engineConfig.model}`,
       {requestBody}
     );
 
     if (!result.data?.task_id) {
-      console.error('[image-to-video-kling] task_id 없음:', JSON.stringify(result,null,2));
+      console.error(`[image-to-video-${engineConfig.model}] task_id 없음:`, JSON.stringify(result,null,2));
       throw new Error('비디오 생성 태스크 ID를 받지 못했습니다');
     }
 
@@ -164,13 +170,14 @@ export default async function handler(req, res) {
       },
       meta:{
         processingTime: Date.now() - startTime,
-        provider:'Freepik image-to-video kling-v2-1-pro',
+        provider: `Freepik ${engineConfig.model}`,
+        engine: engineConfig.model,
         rawStatus: result.data.status || null
       }
     });
 
   } catch (error) {
-    console.error('[image-to-video-kling] 전체 실패:', error);
+    console.error('[image-to-video] 전체 실패:', error);
     res.status(500).json({
       success:false,
       error: error.message
