@@ -477,24 +477,38 @@ function loadEngineDuration() {
     }
     const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
     
-    // 🔥 수정: parameters.supportedDurations 경로
-    const imageToVideo = enginesData.currentEngine?.imageToVideo;
-    const supportedDurations = imageToVideo?.parameters?.supportedDurations;
+    // 🔥 수정: currentEngine에서 model 이름 가져오기
+    const currentModel = enginesData.currentEngine?.imageToVideo?.model;
+    
+    if (!currentModel) {
+      console.warn('[loadEngineDuration] 현재 엔진 모델이 없습니다. 기본값 6초 사용');
+      return '6';
+    }
+    
+    // 🔥 수정: availableEngines에서 현재 모델의 supportedDurations 찾기
+    const availableEngines = enginesData.availableEngines?.imageToVideo || [];
+    const currentEngineConfig = availableEngines.find(engine => engine.model === currentModel);
+    
+    if (!currentEngineConfig) {
+      console.warn(`[loadEngineDuration] ${currentModel} 엔진 설정을 찾을 수 없습니다. 기본값 6초 사용`);
+      return '6';
+    }
+    
+    const supportedDurations = currentEngineConfig.supportedDurations;
     
     console.log('[loadEngineDuration] 🔍 엔진 정보:', {
-      model: imageToVideo?.model,
-      parameters: imageToVideo?.parameters,
-      supportedDurations: supportedDurations
+      model: currentModel,
+      supportedDurations: supportedDurations,
+      foundIn: 'availableEngines'
     });
     
     if (!supportedDurations || !Array.isArray(supportedDurations) || supportedDurations.length === 0) {
       console.warn('[loadEngineDuration] ⚠️ supportedDurations가 없거나 빈 배열입니다. 기본값 6초 사용');
-      console.warn('[loadEngineDuration] 전체 imageToVideo:', JSON.stringify(imageToVideo, null, 2));
       return '6';
     }
     
     const duration = String(supportedDurations[0]);
-    console.log(`[loadEngineDuration] ✅ 엔진 duration: ${duration}초 (${imageToVideo.model})`);
+    console.log(`[loadEngineDuration] ✅ 엔진 duration: ${duration}초 (${currentModel})`);
     return duration;
   } catch (error) {
     console.error('[loadEngineDuration] 오류:', error.message);
