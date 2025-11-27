@@ -197,13 +197,39 @@ function incrementUsageCount(username) {
 
 function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   try {
-    // 🔥 새 구조: public/prompts/{engineId}/{mode}/responses/
-    const { getGeminiResponsesDir, generateEngineId } = require('../src/utils/enginePromptHelper.js');
-
-    // promptKey에서 mode 추출
+    // 🔥 수정: require 대신 직접 경로 계산
     const mode = promptKey.includes('manual') ? 'manual' : 'auto';
+    
+    // 🔥 engineId 생성 로직 (enginePromptHelper.js의 generateEngineId와 동일)
+    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+    let engineId = 'default';
+    
+    try {
+      if (fs.existsSync(enginesPath)) {
+        const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
+        const engines = enginesData.currentEngine;
+        const textToImageModel = engines.textToImage?.model || 'unknown';
+        const imageToVideoModel = engines.imageToVideo?.model || 'unknown';
+        engineId = `${textToImageModel}_${imageToVideoModel}`;
+      }
+    } catch (engineError) {
+      console.warn('[saveGeminiResponse] 엔진 ID 생성 실패, 기본값 사용:', engineError.message);
+    }
 
-    const responsesPath = getGeminiResponsesDir(mode);
+    // 🔥 responses 디렉토리 경로
+    const responsesPath = path.join(
+      process.cwd(), 
+      'public', 
+      'prompts', 
+      engineId, 
+      mode, 
+      'responses'
+    );
+
+    // 디렉토리 생성 (없으면)
+    if (!fs.existsSync(responsesPath)) {
+      fs.mkdirSync(responsesPath, { recursive: true });
+    }
 
     const timestamp = Date.now();
     const fileName = `${promptKey}_${step}_${timestamp}.json`;
@@ -450,18 +476,29 @@ function loadEngineDuration() {
       return '6';
     }
     const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
-    const supportedDurations = enginesData.currentEngine?.imageToVideo?.parameters?.supportedDurations;
+    
+    // 🔥 수정: parameters.supportedDurations 경로
+    const imageToVideo = enginesData.currentEngine?.imageToVideo;
+    const supportedDurations = imageToVideo?.parameters?.supportedDurations;
+    
+    console.log('[loadEngineDuration] 🔍 엔진 정보:', {
+      model: imageToVideo?.model,
+      parameters: imageToVideo?.parameters,
+      supportedDurations: supportedDurations
+    });
     
     if (!supportedDurations || !Array.isArray(supportedDurations) || supportedDurations.length === 0) {
-      console.warn('[loadEngineDuration] supportedDurations가 없습니다. 기본값 6초 사용');
+      console.warn('[loadEngineDuration] ⚠️ supportedDurations가 없거나 빈 배열입니다. 기본값 6초 사용');
+      console.warn('[loadEngineDuration] 전체 imageToVideo:', JSON.stringify(imageToVideo, null, 2));
       return '6';
     }
     
     const duration = String(supportedDurations[0]);
-    console.log(`[loadEngineDuration] ✅ 엔진 duration: ${duration}초 (${enginesData.currentEngine.imageToVideo.model})`);
+    console.log(`[loadEngineDuration] ✅ 엔진 duration: ${duration}초 (${imageToVideo.model})`);
     return duration;
   } catch (error) {
     console.error('[loadEngineDuration] 오류:', error.message);
+    console.error('[loadEngineDuration] 스택:', error.stack);
     return '6'; // fallback
   }
 }
@@ -745,6 +782,38 @@ async function processStoryboardAsync(body, username, sessionId) {
         style: concept.style || '',
         images: images
       });
+
+      // 🔥 추가: 컨셉 완료마다 프로젝트에 중간 저장
+      if (body.projectId && username) {
+        try {
+          const partialStoryboard = {
+            success: false, // 아직 완료 아님
+            styles: styles,
+            metadata: {
+              phase: 'IMAGE',
+              progress: calculateProgress('IMAGE', ((conceptIdx + 1) / mcJson.concepts.length) * 100),
+              generatedAt: new Date().toISOString(),
+              status: 'in_progress'
+            }
+          };
+
+          await fetch(`${API_BASE}/api/projects/${body.projectId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-username': username
+            },
+            body: JSON.stringify({
+              storyboard: partialStoryboard,
+              formData: body
+            })
+          });
+
+          console.log(`[storyboard-init] 💾 이미지 단계 중간 저장 완료 (컨셉 ${conceptIdx + 1}/${mcJson.concepts.length})`);
+        } catch (saveError) {
+          console.error('[storyboard-init] 중간 저장 실패:', saveError);
+        }
+      }
     }
 
     await updateSession(sessionId, {
@@ -808,6 +877,40 @@ async function processStoryboardAsync(body, username, sessionId) {
               currentStep: `비디오 ${completedVideos}/${totalVideos} 생성 완료`
             }
           });
+
+          // 🔥 추가: 비디오 1개 완료마다 프로젝트에 중간 저장
+          if (body.projectId && username && completedVideos % 1 === 0) {
+            try {
+              const partialStoryboard = {
+                success: false,
+                styles: styles,
+                metadata: {
+                  phase: 'VIDEO',
+                  progress: calculateProgress('VIDEO', progress),
+                  generatedAt: new Date().toISOString(),
+                  status: 'in_progress',
+                  completedVideos: completedVideos,
+                  totalVideos: totalVideos
+                }
+              };
+
+              await fetch(`${API_BASE}/api/projects/${body.projectId}`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-username': username
+                },
+                body: JSON.stringify({
+                  storyboard: partialStoryboard,
+                  formData: body
+                })
+              });
+
+              console.log(`[storyboard-init] 💾 비디오 단계 중간 저장 완료 (${completedVideos}/${totalVideos})`);
+            } catch (saveError) {
+              console.error('[storyboard-init] 비디오 중간 저장 실패:', saveError);
+            }
+          }
         } catch (error) {
           console.error(`비디오 생성 실패 (씬 ${image.sceneNumber}):`, error);
           image.videoUrl = null; // 🔥 추가: 실패 시 videoUrl 명시적으로 null
