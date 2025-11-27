@@ -75,7 +75,7 @@ const AdminPanel = () => {
   const loadEngineInfo = async () => {
     setLoadingEngines(true);
     try {
-      const response = await fetch('/api/engines');
+      const response = await fetch('/nexxii/api/engines');
       const data = await response.json();
 
       if (data.success) {
@@ -101,7 +101,7 @@ const AdminPanel = () => {
 
     setUpdatingEngine(true);
     try {
-      const response = await fetch('/api/engines', {
+      const response = await fetch('/nexxii/api/engines', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -196,7 +196,7 @@ const AdminPanel = () => {
 
   const loadGeminiResponses = async (promptKey) => {
     try {
-      const response = await fetch(`/api/prompts/responses/${promptKey}`);
+      const response = await fetch(`/nexxii/api/prompts/responses/${promptKey}`);
       const data = await response.json();
 
       if (data.success) {
@@ -325,7 +325,7 @@ const AdminPanel = () => {
 
   const viewResponseDetail = async (fileName) => {
     try {
-      const response = await fetch(`/api/prompts/response-detail/${fileName}`);
+      const response = await fetch(`/nexxii/api/prompts/response-detail/${fileName}`);
       const data = await response.json();
 
       if (data.success) {
