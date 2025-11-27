@@ -511,10 +511,15 @@ app.post('/api/prompts/save-response', async (req, res) => {
   }
 });
 
-app.get('/api/prompts/responses/:promptKey', async (req, res) => { // 수정됨: /api/ 추가
+app.get('/api/prompts/responses/:promptKey', async (req, res) => {
   try {
     const { promptKey } = req.params;
-    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
+    
+    // 🔥 엔진 기반 경로로 변경
+    const { getGeminiResponsesDir, generateEngineId } = await import('./src/utils/enginePromptHelper.js');
+    
+    const mode = promptKey.includes('manual') ? 'manual' : 'auto';
+    const responsesPath = getGeminiResponsesDir(mode);
 
     if (!fs.existsSync(responsesPath)) {
       return res.json({
@@ -543,21 +548,21 @@ app.get('/api/prompts/responses/:promptKey', async (req, res) => { // 수정됨:
           ...content,
           preview: content.response ? content.response.substring(0, 300) + '...' : ''
         });
-      } catch (error) {
-        console.error(`파일 읽기 실패: ${file}`, error.message);
+      } catch (err) {
+        console.error('[prompts/responses] 파일 읽기 오류:', file, err);
       }
     }
 
     res.json({
       success: true,
-      responses
+      responses,
+      responsesPath
     });
 
   } catch (error) {
-    console.error('Gemini 응답 조회 오류:', error);
+    console.error('[prompts/responses] 오류:', error);
     res.status(500).json({
       success: false,
-      message: 'Gemini 응답 조회에 실패했습니다.',
       error: error.message
     });
   }
