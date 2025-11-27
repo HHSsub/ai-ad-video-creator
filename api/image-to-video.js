@@ -1,9 +1,30 @@
 import 'dotenv/config';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
-const KLING_ENDPOINT = `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1-pro`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRY = 5;
+
+// 🔥 engines.json에서 현재 엔진 설정 로드
+function loadCurrentEngine() {
+  try {
+    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+    const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
+    const imageToVideo = enginesData.currentEngine.imageToVideo;
+    return {
+      endpoint: `${FREEPIK_API_BASE}${imageToVideo.endpoint}`,
+      model: imageToVideo.model,
+      statusEndpoint: imageToVideo.statusEndpoint
+    };
+  } catch (error) {
+    console.error('[loadCurrentEngine] 오류:', error.message);
+    // 폴백: hailuo 사용
+    return {
+      endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-1080p`,
+      model: 'hailuo-2.3-standard',
+      statusEndpoint: '/ai/image-to-video/minimax-hailuo-02-1080p/{task-id}'
+    };
+  }
+}
 
 function sanitizeCameraSegments(text) {
   if (!text) return '';
