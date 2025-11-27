@@ -197,13 +197,18 @@ function incrementUsageCount(username) {
 
 function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   try {
-    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
-    if (!fs.existsSync(responsesPath)) {
-      fs.mkdirSync(responsesPath, { recursive: true });
-    }
+    // 🔥 새 구조: public/prompts/{engineId}/{mode}/responses/
+    const { getGeminiResponsesDir, generateEngineId } = require('../src/utils/enginePromptHelper.js');
+    
+    // promptKey에서 mode 추출
+    const mode = promptKey.includes('manual') ? 'manual' : 'auto';
+    
+    const responsesPath = getGeminiResponsesDir(mode);
+    
     const timestamp = Date.now();
     const fileName = `${promptKey}_${step}_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
+    
     const responseData = {
       promptKey,
       step,
@@ -212,9 +217,13 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
       timestamp: new Date().toISOString(),
       savedAt: new Date().toISOString()
     };
+    
     fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
+    
+    console.log(`[saveGeminiResponse] ✅ 저장 완료: ${fileName}`);
     return { success: true, fileName };
   } catch (error) {
+    console.error('[saveGeminiResponse] ❌ 저장 실패:', error);
     return { success: false, error: error.message };
   }
 }
