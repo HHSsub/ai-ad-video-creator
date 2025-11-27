@@ -53,7 +53,13 @@ const AdminPanel = () => {
 
   useEffect(() => {
     if (Object.keys(prompts).length > 0 && !activePromptTab) {
-      const firstKey = Object.keys(prompts)[0];
+      // 🔥 엔진 기반 탭 우선순위: manual → auto_product → auto_service
+      const keys = Object.keys(prompts);
+      const manualKey = keys.find(k => k.includes('_manual'));
+      const productKey = keys.find(k => k.includes('_auto_product'));
+      const serviceKey = keys.find(k => k.includes('_auto_service'));
+      
+      const firstKey = manualKey || productKey || serviceKey || keys[0];
       setActivePromptTab(firstKey);
     }
   }, [prompts, activePromptTab]);
@@ -664,20 +670,33 @@ const AdminPanel = () => {
               <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700">
                 <div className="px-4 py-3 border-b border-gray-700">
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {Object.keys(prompts).map((key) => (
-                      <button
-                        key={key}
-                        onClick={() => setActivePromptTab(key)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          activePromptTab === key
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                      >
-                        {key}
-                      </button>
-                    ))}
+                    {Object.keys(prompts).map((key) => {
+                      // 🔥 탭 이름 표시 개선
+                      let displayName = key;
+                      if (key.includes('_manual')) {
+                        displayName = '🎯 Manual 모드';
+                      } else if (key.includes('_auto_product')) {
+                        displayName = '🛍️ Auto - Product';
+                      } else if (key.includes('_auto_service')) {
+                        displayName = '💼 Auto - Service';
+                      }
+                      
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setActivePromptTab(key)}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            activePromptTab === key
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {displayName}
+                        </button>
+                      );
+                    })}
                   </div>
+
 
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-medium text-white">{activePromptTab}</h3>
