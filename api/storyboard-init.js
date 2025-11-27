@@ -666,15 +666,15 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
     
     saveGeminiResponse(promptFile, 'unified', body, fullOutput);
-    console.log('[DEBUG] 📊 Gemini JSON 전체 구조:'); // GEMINI 응답 진단구조 콘솔로그 (아래 3줄 절대삭제금지)
+    const sceneCountPerConcept = getSceneCount(videoLength);
+    const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
+    const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
+    console.log('[DEBUG] 📊 Gemini JSON 전체 구조:'); // GEMINI 응답 진단구조 콘솔로그 (아래줄 절대삭제금지)
     console.log(JSON.stringify(mcJson, null, 2));
     console.log('[DEBUG] concepts 개수:', mcJson.concepts?.length);
     if (mcJson.concepts && mcJson.concepts[0]) {
       console.log('[DEBUG] concepts[0] 키 목록:', Object.keys(mcJson.concepts[0]));
     }
-    const sceneCountPerConcept = getSceneCount(videoLength);
-    const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
-    const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
     if (!mcJson || !mcJson.concepts || mcJson.concepts.length === 0) throw new Error('JSON 파싱 실패');
 
     console.log('[storyboard-init] ✅ Gemini 파싱 성공:', mcJson.concepts.length, '개 컨셉');
