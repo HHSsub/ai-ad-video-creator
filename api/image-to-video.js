@@ -15,15 +15,18 @@ function loadCurrentEngine() {
     return {
       endpoint: `${FREEPIK_API_BASE}${imageToVideo.endpoint}`,
       model: imageToVideo.model,
-      statusEndpoint: imageToVideo.statusEndpoint
+      statusEndpoint: imageToVideo.statusEndpoint,
+      // 🔥 supportedDurations 추가
+      supportedDurations: imageToVideo.parameters?.supportedDurations || ['6']
     };
   } catch (error) {
     console.error('[loadCurrentEngine] 오류:', error.message);
     // 폴백: hailuo 사용
     return {
       endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-1080p`,
-      model: 'hailuo-2.3-standard',
-      statusEndpoint: '/ai/image-to-video/minimax-hailuo-02-1080p/{task-id}'
+      model: 'minimax-hailuo-02-1080p',
+      statusEndpoint: '/ai/image-to-video/minimax-hailuo-02-1080p/{task-id}',
+      supportedDurations: ['6'] // 🔥 fallback도 6초 고정
     };
   }
 }
@@ -124,9 +127,19 @@ export default async function handler(req, res) {
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
-    // duration은 반드시 "5" 또는 "10" (문자열)만 허용
-    let validDuration = String([5,10].includes(Number(duration)) ? Number(duration) : 5);
-
+    // 🔥 엔진 설정에서 지원 duration 동적 로드
+    const supportedDurations = engineConfig.supportedDurations || ['5', '10']; // fallback
+    const numDuration = Number(duration);
+    const isValid = supportedDurations.map(Number).includes(numDuration);
+    let validDuration = String(isValid ? numDuration : Number(supportedDurations[0]));
+    
+    console.log('[image-to-video] Duration 검증:', {
+      입력값: duration,
+      지원목록: supportedDurations,
+      최종선택: validDuration,
+      엔진: engineConfig.model
+    });
+        
     // 공식문서 기반 인자만 남김
     const requestBody = {
       image: imageUrl,
