@@ -831,6 +831,158 @@ app.use('/api/load-mood-list', loadMoodList); // 수정됨: /api/ 추가
 app.use('/api/load-bgm-list', loadBgmList); // 수정됨: /api/ 추가
 app.use('/api/bgm-stream', bgmStream); // 수정됨: /api/ 추가
 app.use('/api/nanobanana-compose', nanobanaCompose); // 수정됨: /api/ 추가
+// 🔥 엔진 관리 API
+app.get('/api/engines', (req, res) => {
+  try {
+    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+    
+    if (!fs.existsSync(enginesPath)) {
+      return res.status(404).json({
+        success: false,
+        error: '엔진 설정 파일을 찾을 수 없습니다.'
+      });
+    }
+    
+    const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf-8'));
+    
+    res.json({
+      success: true,
+      currentEngine: enginesData.currentEngine,
+      availableEngines: enginesData.availableEngines,
+      engineHistory: enginesData.engineHistory || []
+    });
+  } catch (error) {
+    console.error('[GET /api/engines] 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '엔진 정보를 불러오는데 실패했습니다.'
+    });
+  }
+});
+
+app.post('/api/engines', (req, res) => {
+  try {
+    const { engineType, newEngineId, autoRestart } = req.body;
+    const username = req.headers['x-username'] || 'anonymous';
+    
+    console.log(`[POST /api/engines] 엔진 변경 요청:`, { engineType, newEngineId, username });
+    
+    if (!engineType || !newEngineId) {
+      return res.status(400).json({
+        success: false,
+        error: 'engineType과 newEngineId가 필요합니다.'
+      });
+    }
+    
+    if (!['textToImage', 'imageToVideo'].includes(engineType)) {
+      return res.status(400).json({
+        success: false,
+        error: '유효하지 않은 engineType입니다.'
+      });
+    }
+    
+    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+    
+    if (!fs.existsSync(enginesPath)) {
+      return res.status(404).json({
+        success: false,
+        error: '엔진 설정 파일을 찾을 수 없습니다.'
+      });
+    }
+    
+    const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf-8'));
+    
+    // 새 엔진 정보 찾기
+    const newEngine = enginesData.availableEngines[engineType].find(
+      e => e.id === newEngineId
+    );
+    
+    if (!newEngine) {
+      return res.status(404).json({
+        success: false,
+        error: '요청한 엔진을 찾을 수 없습니다.'
+      });
+    }
+    
+    // 이전 엔진 정보 저장
+    const previousEngine = enginesData.currentEngine[engineType];
+    const previousEngineId = previousEngine.model;
+    
+    // 엔진 변경
+    enginesData.currentEngine[engineType] = {
+      provider: newEngine.provider,
+      model: newEngine.model,
+      endpoint: newEngine.endpoint,
+      statusEndpoint: newEngine.statusEndpoint,
+      displayName: newEngine.displayName,
+      description: newEngine.description,
+      parameters: newEngine.parameters,
+      updatedAt: new Date().toISOString(),
+      updatedBy: username
+    };
+    
+    // 히스토리 추가
+    if (!enginesData.engineHistory) {
+      enginesData.engineHistory = [];
+    }
+    
+    enginesData.engineHistory.unshift({
+      timestamp: new Date().toISOString(),
+      changeType: 'update',
+      engineType: engineType,
+      previousEngine: previousEngineId,
+      newEngine: newEngineId,
+      updatedBy: username
+    });
+    
+    // 히스토리 최대 100개 유지
+    if (enginesData.engineHistory.length > 100) {
+      enginesData.engineHistory = enginesData.engineHistory.slice(0, 100);
+    }
+    
+    // 파일 저장
+    fs.writeFileSync(enginesPath, JSON.stringify(enginesData, null, 2), 'utf-8');
+    
+    console.log(`[POST /api/engines] ✅ 엔진 변경 완료: ${previousEngineId} → ${newEngineId}`);
+    
+    // PM2 재시작 (옵션)
+    let restartResult = { success: false, message: '수동으로 재시작하세요.' };
+    
+    if (autoRestart) {
+      try {
+        const { exec } = require('child_process');
+        exec('pm2 restart all', (error, stdout, stderr) => {
+          if (error) {
+            console.error('[PM2 재시작 오류]:', error);
+          } else {
+            console.log('[PM2 재시작 성공]:', stdout);
+          }
+        });
+        restartResult = { success: true, message: 'PM2 재시작 명령을 실행했습니다.' };
+      } catch (error) {
+        console.error('[PM2 재시작 실패]:', error);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: '엔진이 성공적으로 변경되었습니다.',
+      previousEngine: previousEngineId,
+      newEngine: newEngineId,
+      engineType: engineType,
+      restartResult: restartResult
+    });
+    
+  } catch (error) {
+    console.error('[POST /api/engines] 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: '엔진 변경 중 오류가 발생했습니다.',
+      details: error.message
+    });
+  }
+});
+
 
 app.use('/tmp', express.static('tmp', {
   setHeaders: (res, path) => {
