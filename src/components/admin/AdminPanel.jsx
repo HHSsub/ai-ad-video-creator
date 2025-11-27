@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 const AdminPanel = () => {
   // ===== 상태 관리 =====
   const [activeMainTab, setActiveMainTab] = useState('prompts'); // 'prompts' | 'engines'
-  
+
   // 프롬프트 관리 상태
   const [prompts, setPrompts] = useState({});
   const [activePromptTab, setActivePromptTab] = useState('');
@@ -75,9 +75,9 @@ const AdminPanel = () => {
   const loadEngineInfo = async () => {
     setLoadingEngines(true);
     try {
-      const response = await fetch('/api/engines/get');
+      const response = await fetch('/api/engines');
       const data = await response.json();
-      
+
       if (data.success) {
         setCurrentEngines(data.currentEngine);
         setAvailableEngines(data.availableEngines);
@@ -101,7 +101,7 @@ const AdminPanel = () => {
 
     setUpdatingEngine(true);
     try {
-      const response = await fetch('/api/engines/update', {
+      const response = await fetch('/api/engines', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,10 +115,10 @@ const AdminPanel = () => {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         showMessage('success', `✅ 엔진 변경 성공!\n\n이전: ${data.previousEngine}\n새 엔진: ${data.newEngine}\n\n${data.restartResult.success ? '시스템이 재시작되었습니다.' : '재시작은 수동으로 해주세요.'}`);
-        
+
         // 엔진 정보 새로고침
         setTimeout(() => {
           loadEngineInfo();
@@ -139,13 +139,13 @@ const AdminPanel = () => {
     if (version.id && version.id.startsWith('current_')) {
       return version.id.replace('current_', '');
     }
-    
+
     const filename = version.filename || version.id;
     const parts = filename.split('_');
     if (parts.length >= 2) {
       return `${parts[0]}_${parts[1]}`;
     }
-    
+
     return Object.keys(prompts)[0] || '';
   };
 
@@ -154,7 +154,7 @@ const AdminPanel = () => {
     try {
       const response = await fetch('/nexxii/api/prompts/get');
       const data = await response.json();
-      
+
       if (data.success) {
         setPrompts(data.prompts);
       } else {
@@ -171,10 +171,10 @@ const AdminPanel = () => {
     try {
       const response = await fetch('/nexxii/api/prompts/versions');
       const data = await response.json();
-      
+
       if (data.success) {
         let allVersions = data.versions || [];
-        
+
         const currentVersions = Object.keys(prompts).map(key => ({
           id: `current_${key}`,
           filename: `[현재] ${key}`,
@@ -184,7 +184,7 @@ const AdminPanel = () => {
           isCurrent: true,
           versionFile: null
         }));
-        
+
         setVersions([...currentVersions, ...allVersions]);
       } else {
         showMessage('error', '버전 목록 로드에 실패했습니다.');
@@ -198,7 +198,7 @@ const AdminPanel = () => {
     try {
       const response = await fetch(`/api/prompts/responses/${promptKey}`);
       const data = await response.json();
-      
+
       if (data.success) {
         setGeminiResponses(data.responses || []);
       } else {
@@ -225,7 +225,7 @@ const AdminPanel = () => {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         showMessage('success', '프롬프트가 성공적으로 저장되었습니다.');
         loadVersions();
@@ -249,13 +249,13 @@ const AdminPanel = () => {
 
     try {
       const promptKey = getPromptKeyFromVersion(version);
-      
+
       const response = await fetch('/nexxii/api/prompts/restore', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           versionId: version.id,
           versionFile: version.versionFile,
           promptKey: promptKey
@@ -263,7 +263,7 @@ const AdminPanel = () => {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         showMessage('success', '성공적으로 복원되었습니다.');
         setActivePromptTab(promptKey);
@@ -280,10 +280,10 @@ const AdminPanel = () => {
   const testPrompt = async (promptKey) => {
     setTestMode(true);
     setMessage({ type: '', text: '' });
-    
+
     try {
       showMessage('info', '⏳ 프롬프트 테스트 진행 중...');
-      
+
       const response = await fetch('/nexxii/api/prompts/test', {
         method: 'POST',
         headers: {
@@ -297,15 +297,15 @@ const AdminPanel = () => {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         let successMsg = '✅ 프롬프트 테스트 완료!\n\n';
         successMsg += `📝 응답: ${data.response?.length || 0}자\n`;
         successMsg += `⏱️ 처리 시간: ${Math.round(data.processingTime / 1000)}초`;
         successMsg += `\n💾 응답이 히스토리에 저장되었습니다.`;
-        
+
         showMessage('success', successMsg);
-        
+
         if (selectedVersion) {
           const promptKeyToRefresh = selectedVersion.promptKey || getPromptKeyFromVersion(selectedVersion);
           loadGeminiResponses(promptKeyToRefresh);
@@ -315,7 +315,7 @@ const AdminPanel = () => {
         errorMsg += data.error || '알 수 없는 오류가 발생했습니다.';
         showMessage('error', errorMsg);
       }
-      
+
     } catch (error) {
       showMessage('error', `❌ 프롬프트 테스트 실패\n\n네트워크 오류: ${error.message}`);
     } finally {
@@ -327,7 +327,7 @@ const AdminPanel = () => {
     try {
       const response = await fetch(`/api/prompts/response-detail/${fileName}`);
       const data = await response.json();
-      
+
       if (data.success) {
         setSelectedResponse(data.data);
       }
@@ -338,7 +338,7 @@ const AdminPanel = () => {
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
-    
+
     if (type !== 'info') {
       setTimeout(() => setMessage({ type: '', text: '' }), 10000);
     }
@@ -405,8 +405,8 @@ const AdminPanel = () => {
 
         {message.text && (
           <div className={`mb-6 p-4 rounded-lg whitespace-pre-wrap ${
-            message.type === 'success' 
-              ? 'bg-green-900/30 text-green-300 border border-green-800' 
+            message.type === 'success'
+              ? 'bg-green-900/30 text-green-300 border border-green-800'
               : message.type === 'info'
                 ? 'bg-blue-900/30 text-blue-300 border border-blue-800'
                 : 'bg-red-900/30 text-red-300 border border-red-800'
@@ -421,7 +421,7 @@ const AdminPanel = () => {
             {/* 현재 엔진 정보 */}
             <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 p-6">
               <h2 className="text-xl font-bold text-white mb-4">🎯 현재 사용 중인 엔진</h2>
-              
+
               <div className="grid grid-cols-2 gap-6">
                 {/* Text-to-Image */}
                 <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
@@ -437,7 +437,7 @@ const AdminPanel = () => {
                     </div>
                     <div className="text-gray-400 text-xs mt-2">{currentEngines.textToImage.description}</div>
                     <div className="text-gray-500 text-xs mt-2">
-                      업데이트: {formatDateTime(currentEngines.textToImage.updatedAt)} 
+                      업데이트: {formatDateTime(currentEngines.textToImage.updatedAt)}
                       <br/>by {currentEngines.textToImage.updatedBy}
                     </div>
                   </div>
@@ -468,7 +468,7 @@ const AdminPanel = () => {
             {/* 엔진 변경 */}
             <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 p-6">
               <h2 className="text-xl font-bold text-white mb-4">🔄 엔진 변경</h2>
-              
+
               {/* 엔진 타입 선택 */}
               <div className="flex gap-2 mb-4">
                 <button
@@ -497,13 +497,13 @@ const AdminPanel = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {availableEngines[selectedEngineType].map(engine => {
                   const isCurrent = currentEngines[selectedEngineType].model === engine.model;
-                  
+
                   return (
-                    <div 
+                    <div
                       key={engine.id}
                       className={`bg-gray-900/50 rounded-lg p-4 border transition-all ${
-                        isCurrent 
-                          ? 'border-green-600 bg-green-900/20' 
+                        isCurrent
+                          ? 'border-green-600 bg-green-900/20'
                           : 'border-gray-700 hover:border-gray-600'
                       }`}
                     >
@@ -513,9 +513,9 @@ const AdminPanel = () => {
                           <span className="px-2 py-1 text-xs bg-green-600 text-white rounded">현재</span>
                         )}
                       </div>
-                      
+
                       <p className="text-gray-400 text-xs mb-3">{engine.description}</p>
-                      
+
                       <div className="text-xs text-gray-500 space-y-1 mb-3">
                         <div>모델 ID: <span className="font-mono">{engine.model}</span></div>
                         {engine.maxResolution && <div>최대 해상도: {engine.maxResolution}</div>}
@@ -545,10 +545,10 @@ const AdminPanel = () => {
             {engineHistory.length > 0 && (
               <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 p-6">
                 <h2 className="text-xl font-bold text-white mb-4">📜 변경 히스토리</h2>
-                
+
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {engineHistory.slice(0, 20).map((entry, index) => (
-                    <div 
+                    <div
                       key={index}
                       className="bg-gray-900/50 rounded-lg p-3 border border-gray-700 text-sm"
                     >
@@ -582,7 +582,7 @@ const AdminPanel = () => {
                   <h3 className="text-lg font-medium text-white">버전 히스토리</h3>
                   <p className="text-sm text-gray-400">프롬프트 수정 이력</p>
                 </div>
-            
+
                 <div className="p-4">
                   {versions.length === 0 ? (
                     <p className="text-gray-500 text-center py-8">버전 히스토리가 없습니다.</p>
@@ -592,15 +592,15 @@ const AdminPanel = () => {
                         <div
                           key={version.id}
                           className={`p-3 rounded-lg border cursor-pointer transition-colors relative group
-                            ${version.isCurrent 
+                            ${version.isCurrent
                               ? 'border-green-600 bg-green-900/20'
-                              : selectedVersion?.id === version.id 
-                                ? 'border-blue-600 bg-blue-900/20' 
+                              : selectedVersion?.id === version.id
+                                ? 'border-blue-600 bg-blue-900/20'
                                 : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'}`}
                           onClick={() => setSelectedVersion(version)}
                         >
                           <div className="flex justify-between items-start mb-2">
-                            <span className={`text-sm font-medium line-clamp-1 
+                            <span className={`text-sm font-medium line-clamp-1
                               ${version.isCurrent ? 'text-green-400 font-bold' : 'text-gray-200'}`}>
                               {version.filename}
                             </span>
@@ -789,7 +789,7 @@ const AdminPanel = () => {
                   </button>
                 </div>
               </div>
-              
+
               <div className="p-6 overflow-y-auto max-h-[75vh]">
                 <div className="mb-6">
                   <h4 className="font-medium text-white mb-2 flex items-center">
@@ -800,7 +800,7 @@ const AdminPanel = () => {
                     {JSON.stringify(selectedResponse.formData || selectedResponse.input || {}, null, 2)}
                   </pre>
                 </div>
-                
+
                 <div className="mb-6">
                   <h4 className="font-medium text-white mb-2 flex items-center">
                     <span className="bg-green-600 text-white text-xs px-2 py-1 rounded mr-2">2</span>
@@ -812,7 +812,7 @@ const AdminPanel = () => {
                     </pre>
                   </div>
                 </div>
-                
+
                 <div className="mt-4 text-xs text-gray-500 text-center">
                   생성 시간: {formatDateTime(selectedResponse.timestamp || new Date())}
                 </div>
