@@ -1,4 +1,4 @@
-// api/storyboard-init.js - 🔥 비디오 폴링 + 진행률 업데이트 수정!
+// api/storyboard-init.js - 🔥 비디오 폴링 + 진행률 업데이트 + duration 동적 로드
 import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
@@ -10,9 +10,9 @@ export const config = {
   maxDuration: 9000,
 };
 
-const API_BASE = process.env.VITE_API_BASE_URL 
-  ? (process.env.VITE_API_BASE_URL.startsWith('http') 
-      ? process.env.VITE_API_BASE_URL 
+const API_BASE = process.env.VITE_API_BASE_URL
+  ? (process.env.VITE_API_BASE_URL.startsWith('http')
+      ? process.env.VITE_API_BASE_URL
       : `https://upnexx.ai${process.env.VITE_API_BASE_URL}`)
   : 'http://localhost:3000';
 
@@ -33,7 +33,7 @@ const PROMPT_FILE_MAPPING = {
 function getSceneCount(videoLength) {
   const lengthStr = String(videoLength).replace(/[^0-9]/g, '');
   const length = parseInt(lengthStr, 10);
-  
+
   if (length <= 5) return 3;
   if (length <= 10) return 5;
   if (length <= 20) return 10;
@@ -43,7 +43,7 @@ function getSceneCount(videoLength) {
 function mapAspectRatio(input) {
   if (!input) return 'widescreen_16_9';
   const normalized = String(input).toLowerCase().trim();
-  
+
   if (normalized.includes('16:9') || normalized.includes('16_9') || normalized === '가로') {
     return 'widescreen_16_9';
   }
@@ -53,7 +53,7 @@ function mapAspectRatio(input) {
   if (normalized.includes('1:1') || normalized.includes('1_1') || normalized === '정사각형') {
     return 'square_1_1';
   }
-  
+
   return 'widescreen_16_9';
 }
 
@@ -77,11 +77,11 @@ function getHeightFromAspectRatio(aspectRatio) {
 
 function detectProductCompositingScenes(fullOutput, videoPurpose) {
   const scenes = [];
-  
+
   if (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') {
     const regex = /S#(\d+)[^:]*:[^[]*\[PRODUCT COMPOSITING SCENE\]/gi;
     const matches = [...fullOutput.matchAll(regex)];
-    
+
     matches.forEach(match => {
       const sceneNum = parseInt(match[1], 10);
       scenes.push({
@@ -90,7 +90,7 @@ function detectProductCompositingScenes(fullOutput, videoPurpose) {
         explicit: true
       });
     });
-    
+
     if (scenes.length === 0) {
       scenes.push({
         sceneNumber: 2,
@@ -99,16 +99,16 @@ function detectProductCompositingScenes(fullOutput, videoPurpose) {
       });
     }
   }
-  
+
   return scenes;
 }
 
 function analyzeCompositingInfo(requestBody, compositingScenes) {
   const { videoPurpose, imageUpload, productServiceName, brandName } = requestBody;
-  
+
   const needsProductImage = (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education');
   const needsBrandLogo = (videoPurpose === 'service' || videoPurpose === 'brand');
-  
+
   return {
     videoPurpose: videoPurpose || 'product',
     sceneDescription: productServiceName || brandName || '제품/서비스',
@@ -199,16 +199,16 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   try {
     // 🔥 새 구조: public/prompts/{engineId}/{mode}/responses/
     const { getGeminiResponsesDir, generateEngineId } = require('../src/utils/enginePromptHelper.js');
-    
+
     // promptKey에서 mode 추출
     const mode = promptKey.includes('manual') ? 'manual' : 'auto';
-    
+
     const responsesPath = getGeminiResponsesDir(mode);
-    
+
     const timestamp = Date.now();
     const fileName = `${promptKey}_${step}_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
-    
+
     const responseData = {
       promptKey,
       step,
@@ -217,9 +217,9 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
       timestamp: new Date().toISOString(),
       savedAt: new Date().toISOString()
     };
-    
+
     fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
-    
+
     console.log(`[saveGeminiResponse] ✅ 저장 완료: ${fileName}`);
     return { success: true, fileName };
   } catch (error) {
@@ -232,9 +232,8 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
   try {
     const expectedConceptCount = mode === 'manual' ? 1 : 3;
     let conceptMatches = [];
-    
+
     if (mode === 'manual') {
-      // const manualConceptPattern = /Section\s*2[\s.:]*[^\n]*(?:Cinematic|Storyboard)[^\n]*/i;
       const manualConceptPattern = /(Section\s*2|Cinematic|Storyboard)/i;
       const match = text.match(manualConceptPattern);
       if (match) {
@@ -250,12 +249,12 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
       const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
       conceptMatches = [...text.matchAll(conceptPattern)];
     }
-    
+
     if (conceptMatches.length === 0) return null;
-    
+
     const concepts = [];
     const conceptsToProcess = conceptMatches.slice(0, expectedConceptCount);
-    
+
     for (let i = 0; i < conceptsToProcess.length; i++) {
       const conceptMatch = conceptsToProcess[i];
       const conceptNum = parseInt(conceptMatch[1]);
@@ -266,43 +265,43 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
         endIdx = conceptsToProcess[i + 1].index;
       }
       const conceptText = text.substring(startIdx, endIdx);
-      
+
       const bigIdeaMatch = conceptText.match(/Big Idea:\s*(.+)/);
       const bigIdea = bigIdeaMatch ? bigIdeaMatch[1].trim() : '';
       const styleMatch = conceptText.match(/Style:\s*(.+)/);
       const style = styleMatch ? styleMatch[1].trim() : '';
-      
+
       let scenePattern;
       if (mode === 'manual') {
         scenePattern = /S#(\d+)\s*\(([^)]+)\)/g;
       } else {
         scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
       }
-      
+
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
       const conceptData = {
         concept_name: conceptName,
         big_idea: bigIdea,
         style: style
       };
-      
+
       for (let j = 0; j < sceneMatches.length; j++) {
         const sceneNum = parseInt(sceneMatches[j][1]);
         const timecode = sceneMatches[j][2].trim();
         const sceneStartIdx = sceneMatches[j].index;
         const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
         const sceneText = conceptText.substring(sceneStartIdx, sceneEndIdx);
-        
+
         const visualDescMatch = sceneText.match(/Visual Description:\s*(.+?)(?=JSON|###|S#\d+|$)/s);
         const visualDescription = visualDescMatch ? visualDescMatch[1].trim() : '';
         const jsonBlocks = extractJSONBlocks(sceneText);
-        
+
         if (jsonBlocks.length >= 3) {
           try {
             const imagePromptJSON = JSON.parse(jsonBlocks[0]);
             const motionPromptJSON = JSON.parse(jsonBlocks[1]);
             const copyJSON = JSON.parse(jsonBlocks[2]);
-            
+
             conceptData[`scene_${sceneNum}`] = {
               title: `Scene ${sceneNum}`,
               timecode: timecode,
@@ -316,10 +315,10 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
           }
         }
       }
-      
+
       concepts.push(conceptData);
     }
-    
+
     return { concepts };
   } catch (error) {
     console.error('[parseUnifiedConceptJSON] 오류:', error);
@@ -335,7 +334,7 @@ function extractJSONBlocks(text) {
   let plainMatches = [...text.matchAll(plainJSONPattern)];
   const copyPattern = /(?:^|\n)JSON\s*\n```copy\s*\n([\s\S]*?)\n```/gm;
   let copyMatches = [...text.matchAll(copyPattern)];
-  
+
   const allMatches = [];
   backtickMatches.forEach(match => {
     const content = match[1].trim();
@@ -398,7 +397,7 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, maxR
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId})`);
-      
+
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
         headers: {
@@ -415,9 +414,9 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, maxR
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
       console.log(`[generateImage] 응답:`, JSON.stringify(result));
-      
+
       const imageUrl = result.url || result.imageUrl;
-      
+
       // 🔥 fallback 이미지 체크 - 재시도
       if (result.fallback === true || !imageUrl || imageUrl.includes('via.placeholder.com')) {
         console.log(`[generateImage] ⚠️ 씬 ${sceneNumber} fallback 이미지 감지 - 재시도 필요`);
@@ -427,12 +426,12 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, maxR
         }
         throw new Error('이미지 생성 실패 (fallback)');
       }
-      
+
       if (!result.success || !imageUrl) throw new Error('이미지 생성 실패');
-      
+
       console.log(`[generateImage] ✅ 씬 ${sceneNumber} 성공: ${imageUrl.substring(0, 60)}...`);
       return imageUrl;
-      
+
     } catch (error) {
       console.error(`[generateImage] ❌ 씬 ${sceneNumber} 시도 ${attempt} 실패:`, error.message);
       if (attempt >= maxRetries) throw error;
@@ -442,8 +441,37 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, maxR
   throw new Error('이미지 생성 최대 재시도 초과');
 }
 
+// 🔥 엔진별 지원 duration 로드
+function loadEngineDuration() {
+  try {
+    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+    if (!fs.existsSync(enginesPath)) {
+      console.warn('[loadEngineDuration] engines.json 파일이 없습니다. 기본값 6초 사용');
+      return '6';
+    }
+    const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
+    const supportedDurations = enginesData.currentEngine?.imageToVideo?.parameters?.supportedDurations;
+    
+    if (!supportedDurations || !Array.isArray(supportedDurations) || supportedDurations.length === 0) {
+      console.warn('[loadEngineDuration] supportedDurations가 없습니다. 기본값 6초 사용');
+      return '6';
+    }
+    
+    const duration = String(supportedDurations[0]);
+    console.log(`[loadEngineDuration] ✅ 엔진 duration: ${duration}초 (${enginesData.currentEngine.imageToVideo.model})`);
+    return duration;
+  } catch (error) {
+    console.error('[loadEngineDuration] 오류:', error.message);
+    return '6'; // fallback
+  }
+}
 
 async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
+  // 🔥 동적으로 duration 로드
+  const duration = loadEngineDuration();
+  
+  console.log(`[generateVideo] 씬 ${sceneNumber} - imageUrl: ${imageUrl.substring(0, 60)}..., duration: ${duration}초`);
+  
   const response = await fetch(`${API_BASE}/api/image-to-video`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -451,7 +479,7 @@ async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
       imageUrl,
       prompt: motionPrompt?.prompt || 'smooth camera movement',
       negativePrompt: motionPrompt?.negative_prompt || 'blurry',
-      duration: '5',
+      duration: duration, // 🔥 수정: 동적 로드
       formData
     })
   });
@@ -464,18 +492,18 @@ async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
 
 async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex, totalVideos, maxAttempts = 120) {
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-  
+
   console.log(`[pollVideoStatus] 🚀 폴링 시작: ${taskId} (${currentVideoIndex}/${totalVideos})`);
-  
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const apiKey = process.env.FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
-      
+
       // 🔥 동적 URL 생성 - engines.json의 현재 imageToVideo 엔진 사용
       const statusUrl = getImageToVideoStatusUrl(taskId);
-      
+
       console.log(`[pollVideoStatus] 🔥 사용 중인 상태 조회 URL: ${statusUrl}`);
-      
+
       const response = await fetch(statusUrl, {
         method: 'GET',
         headers: {
@@ -502,7 +530,7 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
       // 🔥 로그 추가: 상태 출력 (30초마다)
       if (attempt % 6 === 0) {
         console.log(`[pollVideoStatus] 📊 상태: ${status} (${Math.floor(attempt * 5 / 60)}분 ${(attempt * 5) % 60}초 경과)`);
-        
+
         const videoProgress = ((currentVideoIndex - 1) / totalVideos) * 100;
         const session = sessionStore.getSession(sessionId);
         if (session) {
@@ -523,7 +551,7 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
           return videoUrl;
         }
       }
-      
+
       if (status === 'FAILED' || status === 'ERROR') {
         console.error(`[pollVideoStatus] ❌ 실패: ${taskId}`);
         throw new Error('비디오 생성 실패');
@@ -532,7 +560,7 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
       await sleep(5000);
     } catch (error) {
       if (error.message === '비디오 생성 실패') throw error;
-      
+
       // 네트워크 에러 등은 재시도
       if (attempt % 12 === 0) {
         console.log(`[pollVideoStatus] ⚠️ 에러 발생, 재시도 중... (${attempt}/${maxAttempts})`);
@@ -540,7 +568,7 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
       await sleep(5000);
     }
   }
-  
+
   console.error(`[pollVideoStatus] ❌ 타임아웃: ${taskId} (${Math.floor(maxAttempts * 5 / 60)}분 경과)`);
   throw new Error('비디오 폴링 타임아웃');
 }
@@ -551,7 +579,7 @@ async function pollVideoStatus(taskId, sceneNumber, sessionId, currentVideoIndex
 
 async function processStoryboardAsync(body, username, sessionId) {
   const startTime = Date.now();
-  
+
   try {
     const usageCheck = checkUsageLimit(username);
     if (!usageCheck.allowed) {
@@ -599,7 +627,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       coreDifferentiation: coreDifferentiation || '',
       videoRequirements: body.videoRequirements || '없음',
       brandLogo: (imageUpload && imageUpload.url && (videoPurpose === 'service' || videoPurpose === 'brand')) ? '업로드됨' : '없음',
-      productImage: (imageUpload && imageUpload.url && (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education')) ? '업로드됨' : '없음',
+      productImage: (imageUpload && imageUpload.url && (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education')) ? '업로드 됨' : '없음',
       aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio),
       userdescription: userdescription || ''
     };
@@ -617,13 +645,13 @@ async function processStoryboardAsync(body, username, sessionId) {
         currentStep: 'Gemini 모델에 프롬프트 전송 중...'
       }
     });
-    
+
     const geminiResponse = await safeCallGemini(promptTemplate, {
       label: 'UNIFIED-storyboard-init',
       maxRetries: 3,
       isImageComposition: false
     });
-    
+
     const fullOutput = geminiResponse.text;
     await updateSession(sessionId, {
       progress: {
@@ -632,12 +660,12 @@ async function processStoryboardAsync(body, username, sessionId) {
         currentStep: '스토리보드 데이터 파싱 완료'
       }
     });
-    
+
     saveGeminiResponse(promptFile, 'unified', body, fullOutput);
     const sceneCountPerConcept = getSceneCount(videoLength);
     const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
-    console.log('[DEBUG] 📊 Gemini JSON 전체 구조:'); // GEMINI 응답 진단구조 콘솔로그 (아래줄 절대삭제금지)
+    console.log('[DEBUG] 📊 Gemini JSON 전체 구조:');
     console.log(JSON.stringify(mcJson, null, 2));
     console.log('[DEBUG] concepts 개수:', mcJson.concepts?.length);
     if (mcJson.concepts && mcJson.concepts[0]) {
@@ -660,7 +688,7 @@ async function processStoryboardAsync(body, username, sessionId) {
     for (let conceptIdx = 0; conceptIdx < mcJson.concepts.length; conceptIdx++) {
       const concept = mcJson.concepts[conceptIdx];
       const images = [];
-      
+
       for (let sceneNum = 1; sceneNum <= sceneCountPerConcept; sceneNum++) {
         const sceneKey = `scene_${sceneNum}`;
         const scene = concept[sceneKey];
@@ -751,16 +779,20 @@ async function processStoryboardAsync(body, username, sessionId) {
         // 🔥 placeholder 이미지 체크
         if (!image.imageUrl || image.imageUrl.includes('via.placeholder.com')) {
           console.log(`[storyboard-init] ⚠️ 컨셉 ${styleIdx + 1} 씬 ${image.sceneNumber} - placeholder 이미지, 비디오 생성 건너뛰기`);
+          image.videoUrl = null; // 🔥 명시적으로 null 설정
           image.status = 'skipped_placeholder';
           continue;
         }
-        if (!image.imageUrl) continue;
+        if (!image.imageUrl) {
+          image.videoUrl = null; // 🔥 명시적으로 null 설정
+          continue;
+        }
 
         try {
           console.log(`[storyboard-init] 비디오 생성 중: 컨셉 ${styleIdx + 1}, 씬 ${image.sceneNumber}`);
-          
+
           const taskId = await generateVideo(image.imageUrl, image.motionPrompt, image.sceneNumber, body);
-          
+
           // 🔥 수정: sessionId, currentVideoIndex, totalVideos 전달
           const videoUrl = await pollVideoStatus(taskId, image.sceneNumber, sessionId, completedVideos + 1, totalVideos);
 
@@ -778,6 +810,7 @@ async function processStoryboardAsync(body, username, sessionId) {
           });
         } catch (error) {
           console.error(`비디오 생성 실패 (씬 ${image.sceneNumber}):`, error);
+          image.videoUrl = null; // 🔥 추가: 실패 시 videoUrl 명시적으로 null
           image.status = 'video_failed';
           image.error = error.message;
         }
@@ -827,7 +860,7 @@ async function processStoryboardAsync(body, username, sessionId) {
             videoLength: body.videoLength,
             formData: body,
             jsonMode: true,
-            mode: body.mode || 'auto'  // 🔥 이 줄 추가
+            mode: body.mode || 'auto'
           })
         });
 
@@ -877,7 +910,7 @@ async function processStoryboardAsync(body, username, sessionId) {
     };
 
     incrementUsageCount(username);
-    
+
     const finalStoryboard = {
       success: true,
       styles,
@@ -888,7 +921,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       processingTime: Date.now() - startTime,
       timestamp: new Date().toISOString()
     };
-    
+
     await updateSession(sessionId, {
       status: 'completed',
       progress: {
@@ -898,12 +931,12 @@ async function processStoryboardAsync(body, username, sessionId) {
       },
       result: finalStoryboard
     });
-    
+
     // 🔥 신규 추가 (2025-11-24): 프로젝트에 스토리보드 저장
     if (body.projectId && username) {
       try {
         console.log(`[storyboard-init] 📁 프로젝트에 스토리보드 저장 시작: ${body.projectId}`);
-        
+
         const saveResponse = await fetch(`${API_BASE}/api/projects/${body.projectId}`, {
           method: 'PATCH',
           headers: {
@@ -932,7 +965,7 @@ async function processStoryboardAsync(body, username, sessionId) {
         // 저장 실패해도 전체 프로세스는 성공으로 처리
       }
     }
-    
+
     console.log('[storyboard-init] ✅ 전체 자동화 완료!');
 
 
