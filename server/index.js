@@ -227,9 +227,9 @@ app.use('/api/users', usersApi); // 수정됨: /api/ 추가
 app.use('/api/admin-field-config', adminFieldConfig); // 수정됨: /api/ 추가
 app.use('/api/auth', authRouter);
 
-// ✅ 엔진 관리 API 라우팅 추가
-app.use('/api/engines/get', enginesGet);
-app.use('/api/engines/update', enginesUpdate);
+// ✅ 엔진 관리 API 라우팅 추가 - 🔥 수정: /get, /update 제거
+app.use('/api/engines', enginesGet);
+app.use('/api/engines', enginesUpdate);
 
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -874,8 +874,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`📍 주소: http://0.0.0.0:${PORT}`);
   console.log(`🌍 환경: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔑 API 키 상태:`);
-  console.log(`   - Freepik: ${process.env.FREEPIK_API_KEY ? '✅' : '❌'}`);
-  console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
+  console.log(`   - Freepik: ${process.env.FREEPIK_API_KEY ? '✅' : '❌'}`);
+  console.log(`   - Gemini: ${process.env.GEMINI_API_KEY ? '✅' : '❌'}`);
   console.log(`💡 디버깅: http://0.0.0.0:${PORT}/api/debug?test=true`);
 
   server.timeout = 1200000; // 2시간
