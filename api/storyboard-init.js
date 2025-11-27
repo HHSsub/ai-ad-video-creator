@@ -1,14 +1,14 @@
 // api/storyboard-init.js - 🔥 비디오 폴링 + 진행률 업데이트 수정!
-
-export const config = {
-  maxDuration: 9000,
-};
-
 import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../src/utils/sessionStore.js';
 import { getImageToVideoStatusUrl } from '../utils/engineConfigLoader.js';
+
+
+export const config = {
+  maxDuration: 9000,
+};
 
 const API_BASE = process.env.VITE_API_BASE_URL 
   ? (process.env.VITE_API_BASE_URL.startsWith('http') 
