@@ -248,42 +248,9 @@ app.get('/health', (req, res) => {
 /*
 [이 위치에 있던 하드코딩된 app.post('/api/auth/login', ...) 로직이 삭제되었습니다.]
 */
-
-const PROMPT_FILES = {
-  step1_product: 'public/Prompt_step1_product.txt',
-  step1_service: 'public/Prompt_step1_service.txt',
-  step2_product: 'public/Prompt_step2_product.txt',
-  step2_service: 'public/Prompt_step2_service.txt'
-};
-
-app.get('/api/prompts/get', async (req, res) => { // 수정됨: /api/ 추가
-  try {
-    const publicPath = path.join(process.cwd(), 'public');
-    const prompts = {};
-
-    for (const [key, relativePath] of Object.entries(PROMPT_FILES)) {
-      try {
-        const content = fs.readFileSync(path.join(publicPath, path.basename(relativePath)), 'utf-8');
-        prompts[key] = content;
-      } catch (error) {
-        console.error(`프롬프트 파일 읽기 실패: ${key}`, error.message);
-        prompts[key] = '';
-      }
-    }
-
-    res.json({
-      success: true,
-      prompts
-    });
-  } catch (error) {
-    console.error('프롬프트 로드 오류:', error);
-    res.status(500).json({
-      success: false,
-      message: '프롬프트 파일을 읽는데 실패했습니다.',
-      error: error.message
-    });
-  }
-});
+// 🔥 프롬프트 조회 API - 엔진 기반 구조로 변경
+import promptsGetHandler from '../api/prompts-get.js';
+app.get('/api/prompts/get', promptsGetHandler);
 
 app.post('/api/prompts/update', async (req, res) => {
   try {
