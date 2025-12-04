@@ -10,12 +10,15 @@ export const config = {
   maxDuration: 9000,
 };
 
+// 🔥 환경변수로 도메인 관리
+const API_DOMAIN = process.env.API_DOMAIN || 'https://upnexx.ai';
 const API_BASE = process.env.VITE_API_BASE_URL
   ? (process.env.VITE_API_BASE_URL.startsWith('http')
       ? process.env.VITE_API_BASE_URL
-      : `https://upnexx.ai${process.env.VITE_API_BASE_URL}`)
+      : `${API_DOMAIN}${process.env.VITE_API_BASE_URL}`)
   : 'http://localhost:3000';
 
+console.log('[storyboard-init] API_DOMAIN:', API_DOMAIN);
 console.log('[storyboard-init] API_BASE:', API_BASE);
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
