@@ -1,5 +1,5 @@
 // src/components/Step2.jsx - 완전한 전체 코드 (생략 없음)
-import { useState, useEffect  } from 'react';
+import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -115,9 +115,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             'x-username': user?.username || 'anonymous'
           }
         });
-        
+
         const data = await response.json();
-        
+
         if (data.hasOngoingSession && data.session) {
           const shouldResume = window.confirm(
             `⚠️ 진행 중이던 광고 영상 생성 작업이 있습니다.\n` +
@@ -125,10 +125,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             `진행률: ${data.session.progress || 0}%\n\n` +
             `이어서 진행하시겠습니까?`
           );
-          
+
           if (shouldResume) {
             log('🔄 이전 세션을 복구합니다...');
-            
+
             if (data.session.storyboard) {
               setStoryboard(data.session.storyboard);
               setStyles(data.session.storyboard.styles || []);
@@ -151,7 +151,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         console.error('세션 확인 실패:', error);
       }
     };
-    
+
     if (user?.username) {
       checkOngoingSession();
     }
@@ -243,7 +243,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
   const generateImagesAndCompose = async (finalStyles, finalCompositingInfo) => {
     const startTime = Date.now();
-    
+
     const imageInfo = getUnifiedImageData(formData);
     if (imageInfo.hasImage) {
       if (formData.videoPurpose === 'product') {
@@ -253,7 +253,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       }
     }
 
-    const perStyle = finalStyles.length > 0 && finalStyles[0].images?.length > 0 ? 
+    const perStyle = finalStyles.length > 0 && finalStyles[0].images?.length > 0 ?
       finalStyles[0].images.length : 0;
     const totalImages = finalStyles.length * perStyle;
 
@@ -414,70 +414,85 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     return { successImages: 0, failedImages: 0, processingTimeMs: 0 };
   };
 
-const pollAndGenerateImages = async (sessionId) => {
-  setIsLoading(true);
-  progressManager.startPhase('INIT');
-  
-  const pollInterval = setInterval(async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/session/status/${sessionId}`);
-      const data = await response.json();
-      
-      // 🔥 수정: data.session.progress로 읽기
-      if (data.success && data.session && data.session.progress) {
-        const progress = data.session.progress;
-        
-        // 진행률 업데이트
-        setPercent(progress.percentage || 0);
-        log(`📊 ${progress.phase || ''} ${progress.percentage || 0}% - ${progress.currentStep || ''}`);
-      }
-      
-      // 🔥 수정: data.session.status로 완료 확인
-      if (data.success && data.session && data.session.status === 'completed' && data.session.result) {
-        clearInterval(pollInterval);
-        progressManager.completePhase('INIT');
-        log('✅ 전체 구조 생성 완료!');
-        
-        const result = data.session.result;
-        const { styles, metadata, compositingInfo } = result;
-        
-        setDebugInfo({
-          totalConcepts: styles.length,
-          imagesPerConcept: styles[0]?.images?.length || 0
-        });
-        
-        // 🔥 최종 스토리보드 설정
-        setStoryboard(result);
-        setStyles(styles);
-        setPercent(100);
-        setIsLoading(false);
-        
-        log('🚀 다음 단계로 자동 이동합니다...');
-        
-        setTimeout(() => {
-          if (onNext) {
-            console.log('🎯 Step2 → Step3 자동 이동 실행');
-            onNext();
+  const pollAndGenerateImages = async (sessionId) => {
+    setIsLoading(true);
+    progressManager.startPhase('INIT');
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/session/status/${sessionId}`);
+        const data = await response.json();
+
+        // 🔥 수정: data.session.progress로 읽기
+        if (data.success && data.session && data.session.progress) {
+          const progress = data.session.progress;
+
+          // 진행률 업데이트
+          setPercent(progress.percentage || 0);
+          log(`📊 ${progress.phase || ''} ${progress.percentage || 0}% - ${progress.currentStep || ''}`);
+        }
+
+        // 🔥 v4.1: imageSetMode 확인하여 완료 처리
+        if (data.success && data.session && data.session.status === 'completed' && data.session.result) {
+          clearInterval(pollInterval);
+          progressManager.completePhase('INIT');
+
+          const result = data.session.result;
+          const { styles, metadata, imageSetMode } = result;
+
+          // 🔥 v4.1: imageSetMode 확인
+          if (imageSetMode) {
+            log('✅ 이미지 세트 생성 완료!');
+
+            setDebugInfo({
+              totalConcepts: styles.length,
+              imagesPerConcept: styles[0]?.images?.length || 0,
+              mode: 'imageSetMode'
+            });
+
+            setStoryboard(result);
+            setStyles(styles);
+            setPercent(100);
+            setIsLoading(false);
+
+            log('🚀 Step3으로 이동합니다 (이미지 세트 선택)...');
+
+            setTimeout(() => {
+              if (onNext) {
+                console.log('🎯 Step2 → Step3 자동 이동 (이미지 세트 모드)');
+                onNext();
+              }
+            }, 2000);
+          } else {
+            // 구버전 호환 (finalVideos 있는 경우)
+            log('✅ 전체 구조 생성 완료!');
+            setStoryboard(result);
+            setStyles(styles);
+            setPercent(100);
+            setIsLoading(false);
+
+            setTimeout(() => {
+              if (onNext) onNext();
+            }, 2000);
           }
-        }, 2000);
-        
-      } else if (data.success && data.session && data.session.status === 'error') {
-        clearInterval(pollInterval);
-        const errorMsg = data.session.error?.message || '알 수 없는 오류';
-        setError(errorMsg);
-        setIsLoading(false);
-        log(`❌ 오류: ${errorMsg}`);
+
+        } else if (data.success && data.session && data.session.status === 'error') {
+          clearInterval(pollInterval);
+          const errorMsg = data.session.error?.message || '알 수 없는 오류';
+          setError(errorMsg);
+          setIsLoading(false);
+          log(`❌ 오류: ${errorMsg}`);
+        }
+      } catch (error) {
+        console.error('세션 상태 확인 실패:', error);
       }
-    } catch (error) {
-      console.error('세션 상태 확인 실패:', error);
-    }
-  }, 3000);  // 🔥 3초로 변경 (더 빠른 업데이트)
-  
-  setTimeout(() => {
-    clearInterval(pollInterval);
-    setIsLoading(false);
-  }, 1800000);
-};
+    }, 3000);  // 🔥 3초로 변경 (더 빠른 업데이트)
+
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setIsLoading(false);
+    }, 1800000);
+  };
 
   const handleGenerateStoryboard = async () => {
     setIsLoading(true);
@@ -488,14 +503,14 @@ const pollAndGenerateImages = async (sessionId) => {
     setImagesFail(0);
     setDebugInfo(null);
     setStyles([]);
-  
+
     try {
       log('🚀 광고 영상 생성을 시작합니다...');
-      log('⏱️ 대기시간은 약 10분 내외입니다'); 
+      log('⏱️ 대기시간은 약 10분 내외입니다');
       log('☕ 잠시만 기다려주세요...');
 
       const sessionId = `session_${Date.now()}_${user?.username || 'anonymous'}`;
-      
+
       try {
         await fetch(`${API_BASE}/api/session/start`, {
           method: 'POST',
@@ -513,7 +528,7 @@ const pollAndGenerateImages = async (sessionId) => {
       } catch (sessionError) {
         console.error('세션 저장 실패:', sessionError);
       }
-      
+
       const apiPayload = {
         projectId: currentProject?.id,  // 🔥 추가: 프로젝트 ID 전달
         brandName: formData.brandName || '',
@@ -549,16 +564,16 @@ const pollAndGenerateImages = async (sessionId) => {
       } catch (fetchError) {
         throw new Error('서버에 연결할 수 없습니다. 네트워크를 확인해주세요.');
       }
-  
+
       log(`📡 서버 응답 상태: ${initResponse.status} ${initResponse.statusText}`);
-  
+
       if (initResponse.status === 202) {
         const data = await initResponse.json();
         log(`✅ 작업 시작됨. 세션 ID: ${data.sessionId}`);
         pollAndGenerateImages(data.sessionId);
         return;
       }
-  
+
       throw new Error('예상치 못한 응답 형식입니다');
 
     } catch (e) {
@@ -587,7 +602,7 @@ const pollAndGenerateImages = async (sessionId) => {
               광고 영상 생성
             </h2>
             <p className="text-gray-400">
-              {formData.mode === 'manual' 
+              {formData.mode === 'manual'
                 ? '자유롭게 입력하신 내용을 바탕으로 광고 컨셉을 생성합니다'
                 : '입력하신 정보를 바탕으로 광고 컨셉을 생성합니다'
               }
@@ -643,7 +658,7 @@ const pollAndGenerateImages = async (sessionId) => {
 
           {styles && styles.length > 0 && (
             <div className="mb-6">
-              <h3 className="text-xl font-semibold text-white mb-4">생성된 컨셉 미리보기</h3>
+              <h3 className="text-xl font-semibold text-white mb-4">생성된 이미지 세트 미리보기</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {styles.map((style, idx) => (
                   <div key={idx} className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">

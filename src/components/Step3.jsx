@@ -13,15 +13,13 @@ const Step3 = ({
   user,
   currentProject
 }) => {
-  const [selectedVideoId, setSelectedVideoId] = useState(selectedConceptId || null);
-  const [bgmMood, setBgmMood] = useState('');
-  const [bgmMoodList, setBgmMoodList] = useState([]);
-  const [bgmAppliedUrl, setBgmAppliedUrl] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState(selectedConceptId || null);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
 
-  const finalVideos = storyboard?.finalVideos || [];
+  // 🔥 v4.1: styles 데이터 소스로 변경
+  const styles = storyboard?.styles || [];
+  const imageSetMode = storyboard?.imageSetMode || false;
 
   const log = (msg) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -29,162 +27,52 @@ const Step3 = ({
     console.log(`[Step3] ${msg}`);
   };
 
-  // 🔥 수정: 비디오 URL 헬퍼 - 상대경로를 절대경로로 변환
-  const getVideoSrc = (videoUrl) => {
-    if (!videoUrl) return '';
-    if (videoUrl.startsWith('http')) return videoUrl;
-    if (videoUrl.startsWith('/') && !videoUrl.startsWith('//')) {
-      return `${API_BASE}${videoUrl}`;
+  // 🔥 v4.1: 이미지 URL 헬퍼
+  const getImageSrc = (imageUrl) => {
+    if (!imageUrl) return '/placeholder.png';
+    if (imageUrl.startsWith('http')) return imageUrl;
+    if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
+      return `${API_BASE}${imageUrl}`;
     }
-    return videoUrl;
+    return imageUrl;
   };
 
-  // 🔥 수정: BGM 목록 로드 - API 응답 형식 수정
   useEffect(() => {
-    const loadBgmMoodList = async () => {
-      try {
-        log('BGM 분위기 목록 로드 중...');
-        const response = await fetch(`${API_BASE}/nexxii/api/load-mood-list`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Step3] BGM API 응답:', data);
-          
-          // 🔥 수정: 서버 응답이 { moods: [...] } 형식
-          if (data.moods && Array.isArray(data.moods)) {
-            const moodOptions = data.moods.map(mood => ({
-              value: mood,
-              label: mood
-            }));
-            setBgmMoodList(moodOptions);
-            log(`BGM 분위기 ${moodOptions.length}개 로드 완료: ${data.moods.join(', ')}`);
-          } else if (data.moodList && Array.isArray(data.moodList)) {
-            // 대체 형식 지원
-            setBgmMoodList(data.moodList);
-            log(`BGM 분위기 ${data.moodList.length}개 로드 완료 (moodList 형식)`);
-          } else {
-            log('BGM 목록 형식 불일치 - 기본값 사용');
-            console.warn('[Step3] 예상치 못한 API 응답 형식:', data);
-            setDefaultBgmList();
-          }
-        } else {
-          log(`BGM 목록 로드 실패 (HTTP ${response.status}) - 기본값 사용`);
-          setDefaultBgmList();
-        }
-      } catch (err) {
-        log(`BGM 목록 로드 오류: ${err.message}`);
-        console.error('[Step3] BGM 로드 에러:', err);
-        setDefaultBgmList();
-      }
-    };
-
-    // 🔥 수정: 서버 BGM 폴더 구조에 맞는 기본값
-    const setDefaultBgmList = () => {
-      setBgmMoodList([
-        { value: '따뜻한', label: '감동적/따뜻한' },
-        { value: '세련된', label: '고급진/세련된' },
-        { value: '자동', label: '범용/자동' },
-        { value: '몽환적', label: '신비한/몽환적' },
-        { value: '에너지', label: '역동적/에너지' },
-        { value: '활발한', label: '유쾌한/활발한' },
-        { value: '안정적', label: '차분한/안정적' }
-      ]);
-    };
-
-    loadBgmMoodList();
-  }, []);
-
-  useEffect(() => {
-    if (selectedConceptId && !selectedVideoId) {
-      setSelectedVideoId(selectedConceptId);
+    if (selectedConceptId && !selectedId) {
+      setSelectedId(selectedConceptId);
     }
-  }, [selectedConceptId, selectedVideoId]);
+  }, [selectedConceptId, selectedId]);
 
-  const selectedVideo = finalVideos.find(v => v.conceptId === selectedVideoId);
-
-  const handleSelectVideo = (conceptId) => {
-    setSelectedVideoId(conceptId);
+  // 🔥 v4.1: 컨셉 선택 핸들러
+  const handleSelectConcept = (conceptId) => {
+    setSelectedId(conceptId);
     setSelectedConceptId(conceptId);
-    setBgmAppliedUrl(null);
     log(`컨셉 ${conceptId} 선택됨`);
   };
 
-  const handleApplyBgm = async () => {
-    if (!selectedVideo || !bgmMood) {
-      setError('영상과 BGM 분위기를 모두 선택해주세요.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    log(`BGM 적용 시작 - 분위기: ${bgmMood}`);
-
-    try {
-      const response = await fetch(`${API_BASE}/nexxii/api/apply-bgm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoPath: selectedVideo.videoUrl,
-          mood: bgmMood,
-          videoLength: formData?.videoLength || '10초'
-        })
-      });
-
-      const result = await response.json();
-      console.log('[Step3] BGM 적용 응답:', result);
-
-      if (result.success) {
-        setBgmAppliedUrl(result.mergedVideoPath);
-        log(`BGM 적용 완료: ${result.mergedVideoPath}`);
-      } else {
-        throw new Error(result.error || result.message || 'BGM 적용 실패');
-      }
-    } catch (err) {
-      setError(`BGM 적용 오류: ${err.message}`);
-      log(`BGM 적용 오류: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDownload = () => {
-    const downloadUrl = bgmAppliedUrl || selectedVideo?.videoUrl;
-    if (!downloadUrl) {
-      setError('다운로드할 영상이 없습니다.');
-      return;
-    }
-
-    log(`다운로드 시작: ${downloadUrl}`);
-    
-    const fullUrl = getVideoSrc(downloadUrl);
-    
-    const link = document.createElement('a');
-    link.href = fullUrl;
-    link.download = `upnexx_video_${selectedVideo?.conceptName || 'final'}.mp4`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+  // 🔥 v4.1: Step4로 이동
   const handleGoToEdit = () => {
-    if (!selectedVideoId) {
-      setError('편집할 영상을 선택해주세요.');
+    if (!selectedId) {
+      setError('편집할 이미지 세트를 선택해주세요.');
       return;
     }
-    setSelectedConceptId(selectedVideoId);
-    log(`편집 화면으로 이동 - 컨셉 ID: ${selectedVideoId}`);
+    setSelectedConceptId(selectedId);
+    log(`Step4로 이동 - 컨셉 ID: ${selectedId}`);
     onNext();
   };
 
-  if (finalVideos.length === 0) {
+  const selectedStyle = styles.find(s => s.conceptId === selectedId || s.id === selectedId);
+
+  // 🔥 v4.1: 이미지 세트가 없는 경우
+  if (styles.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black">
         <div className="max-w-7xl mx-auto p-6">
           <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
-            <h2 className="text-3xl font-bold mb-4 text-white">🎬 최종 영상 선택</h2>
+            <h2 className="text-3xl font-bold mb-4 text-white">🖼️ 이미지 세트 선택</h2>
             <div className="bg-yellow-900/30 border border-yellow-800 text-yellow-300 p-6 rounded-lg">
-              <p className="font-semibold mb-2">아직 생성된 영상이 없습니다.</p>
-              <p className="text-sm">이전 단계에서 스토리보드 생성을 완료해주세요.</p>
+              <p className="font-semibold mb-2">아직 생성된 이미지 세트가 없습니다.</p>
+              <p className="text-sm">이전 단계에서 이미지 생성을 완료해주세요.</p>
             </div>
             <div className="mt-6">
               <button
@@ -205,8 +93,13 @@ const Step3 = ({
       <div className="max-w-7xl mx-auto p-6">
         <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold mb-2 text-white">🎬 최종 영상 선택 & 완성</h2>
-            <p className="text-gray-400">원하는 영상을 선택하고 BGM을 적용하세요</p>
+            <h2 className="text-3xl font-bold mb-2 text-white">🖼️ 이미지 세트 선택</h2>
+            <p className="text-gray-400">원하는 이미지 세트를 선택하고 편집을 시작하세요</p>
+            {imageSetMode && (
+              <div className="mt-2 text-sm text-blue-400">
+                ✨ 이미지 세트 모드 - Step4에서 선택적으로 영상 변환 가능
+              </div>
+            )}
           </div>
 
           {error && (
@@ -223,127 +116,107 @@ const Step3 = ({
           )}
 
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-white mb-4">📹 생성된 영상 ({finalVideos.length}개)</h3>
-            <div className="grid md:grid-cols-3 gap-4">
-              {finalVideos.map((video) => (
+            <h3 className="text-lg font-semibold text-white mb-4">📸 생성된 이미지 세트 ({styles.length}개)</h3>
+            <div className="grid md:grid-cols-3 gap-6">
+              {styles.map((style, idx) => (
                 <div
-                  key={video.conceptId}
-                  onClick={() => !loading && handleSelectVideo(video.conceptId)}
-                  className={`border-2 rounded-xl p-4 cursor-pointer transition-all bg-gray-900/50 ${
-                    selectedVideoId === video.conceptId
+                  key={style.conceptId || style.id || idx}
+                  onClick={() => handleSelectConcept(style.conceptId || style.id)}
+                  className={`border-2 rounded-xl p-4 cursor-pointer transition-all bg-gray-900/50 ${selectedId === (style.conceptId || style.id)
                       ? 'border-blue-500 shadow-lg shadow-blue-500/20'
                       : 'border-gray-700 hover:border-gray-600'
-                  } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    }`}
                 >
-                  <div className="aspect-video bg-black rounded-lg overflow-hidden mb-3">
-                    <video
-                      src={getVideoSrc(video.videoUrl)}
-                      className="w-full h-full object-cover"
-                      muted
-                      preload="metadata"
-                      onMouseEnter={(e) => e.target.play().catch(() => {})}
-                      onMouseLeave={(e) => {
-                        e.target.pause();
-                        e.target.currentTime = 0;
-                      }}
-                      onError={(e) => {
-                        console.error('[Step3] 비디오 로드 실패:', video.videoUrl);
-                      }}
-                    />
+                  <h4 className="font-semibold text-white mb-2">
+                    {style.concept_name || style.conceptName || `컨셉 ${idx + 1}`}
+                  </h4>
+
+                  {/* 🔥 v4.1: 이미지 그리드 표시 */}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {(style.images || []).slice(0, 4).map((img, imgIdx) => (
+                      <div key={imgIdx} className="relative">
+                        <img
+                          src={getImageSrc(img.imageUrl || img.url)}
+                          alt={`Scene ${img.sceneNumber}`}
+                          className="w-full aspect-square object-cover rounded-lg border border-gray-600"
+                          onError={(e) => {
+                            e.target.src = '/placeholder.png';
+                          }}
+                          loading="lazy"
+                        />
+                        <span className="absolute top-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded">
+                          #{img.sceneNumber}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="font-semibold text-white mb-1">{video.conceptName}</div>
-                  <div className="text-xs text-gray-400">
-                    컨셉 {video.conceptId}
-                    {video.metadata?.actualCompiledDuration && (
-                      <span className="ml-2">| {video.metadata.actualCompiledDuration}초</span>
-                    )}
+
+                  <div className="text-xs text-gray-400 mb-2">
+                    씬 개수: {style.images?.length || 0}개
                   </div>
-                  {selectedVideoId === video.conceptId && (
-                    <div className="mt-2 text-xs text-blue-400 font-medium">✓ 선택됨</div>
+
+                  {style.big_idea && (
+                    <div className="text-xs text-gray-500 mb-2 line-clamp-2">
+                      {style.big_idea}
+                    </div>
+                  )}
+
+                  {selectedId === (style.conceptId || style.id) && (
+                    <div className="mt-2 text-xs text-blue-400 font-medium">
+                      ✓ 선택됨
+                    </div>
                   )}
                 </div>
               ))}
             </div>
           </div>
 
-          {selectedVideo && (
+          {selectedStyle && (
             <div className="mb-8 bg-gray-900/50 rounded-xl p-6 border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-4">
-                ✅ 선택된 영상: {selectedVideo.conceptName}
+                ✅ 선택된 이미지 세트: {selectedStyle.concept_name || selectedStyle.conceptName}
               </h3>
-              <div className="aspect-video bg-black rounded-lg overflow-hidden mb-4 max-w-4xl mx-auto">
-                <video
-                  src={getVideoSrc(bgmAppliedUrl || selectedVideo.videoUrl)}
-                  className="w-full h-full"
-                  controls
-                  onError={(e) => {
-                    console.error('[Step3] 미리보기 비디오 로드 실패:', bgmAppliedUrl || selectedVideo.videoUrl);
-                  }}
-                />
+
+              {/* 이미지 전체 미리보기 */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+                {(selectedStyle.images || []).map((img, idx) => (
+                  <div key={idx} className="relative">
+                    <img
+                      src={getImageSrc(img.imageUrl || img.url)}
+                      alt={`Scene ${img.sceneNumber}`}
+                      className="w-full aspect-video object-cover rounded-lg border border-gray-600"
+                      onError={(e) => {
+                        e.target.src = '/placeholder.png';
+                      }}
+                    />
+                    <span className="absolute top-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
+                      씬 #{img.sceneNumber}
+                    </span>
+                    {img.title && (
+                      <div className="mt-1 text-xs text-gray-400 truncate">
+                        {img.title}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-              {bgmAppliedUrl && (
-                <div className="text-center text-green-400 text-sm mb-4">
-                  🎵 BGM이 적용된 영상입니다
+
+              {selectedStyle.big_idea && (
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+                  <h4 className="text-sm font-semibold text-white mb-2">💡 Big Idea</h4>
+                  <p className="text-sm text-gray-300">{selectedStyle.big_idea}</p>
                 </div>
               )}
 
-              <div className="grid md:grid-cols-2 gap-6 mt-6">
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                  <h4 className="font-semibold text-white mb-3">🎵 BGM 적용</h4>
-                  <select
-                    value={bgmMood}
-                    onChange={(e) => setBgmMood(e.target.value)}
-                    disabled={loading}
-                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white mb-3 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-                  >
-                    <option value="">BGM 분위기 선택</option>
-                    {bgmMoodList.map((mood) => (
-                      <option key={mood.value} value={mood.value}>
-                        {mood.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={handleApplyBgm}
-                    disabled={loading || !bgmMood}
-                    className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? '적용 중...' : '🎵 BGM 적용'}
-                  </button>
-                </div>
-
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                  <h4 className="font-semibold text-white mb-3">💾 다운로드 & 편집</h4>
-                  <div className="space-y-3">
-                    <button
-                      onClick={handleDownload}
-                      disabled={loading}
-                      className="w-full px-4 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-                    >
-                      📥 영상 다운로드
-                    </button>
-                    <button
-                      onClick={handleGoToEdit}
-                      disabled={loading}
-                      className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-                    >
-                      ✏️ 씬별 편집하기 (Step4)
-                    </button>
-                  </div>
-                </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleGoToEdit}
+                  className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
+                >
+                  ✏️ 이미지 편집 및 영상 변환 (Step4)
+                </button>
               </div>
             </div>
-          )}
-
-          {selectedVideo?.metadata && (
-            <details className="mb-6">
-              <summary className="cursor-pointer font-semibold text-gray-300 hover:text-white">
-                📊 영상 메타데이터
-              </summary>
-              <div className="mt-2 bg-gray-900 p-4 rounded-lg text-sm text-gray-400 font-mono">
-                <pre>{JSON.stringify(selectedVideo.metadata, null, 2)}</pre>
-              </div>
-            </details>
           )}
 
           <details className="mb-6">
@@ -359,13 +232,12 @@ const Step3 = ({
             <button
               onClick={onPrev}
               className="px-6 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
-              disabled={loading}
             >
               ← 이전 단계
             </button>
-            {!selectedVideo && (
+            {!selectedStyle && (
               <div className="text-gray-500 text-sm self-center">
-                영상을 선택해주세요
+                이미지 세트를 선택해주세요
               </div>
             )}
           </div>
@@ -377,13 +249,16 @@ const Step3 = ({
 
 Step3.propTypes = {
   storyboard: PropTypes.shape({
-    finalVideos: PropTypes.arrayOf(PropTypes.shape({
-      conceptId: PropTypes.number.isRequired,
-      conceptName: PropTypes.string.isRequired,
-      videoUrl: PropTypes.string.isRequired,
-      metadata: PropTypes.object
+    styles: PropTypes.arrayOf(PropTypes.shape({
+      conceptId: PropTypes.number,
+      id: PropTypes.number,
+      concept_name: PropTypes.string,
+      conceptName: PropTypes.string,
+      images: PropTypes.array,
+      big_idea: PropTypes.string
     })),
-    styles: PropTypes.array,
+    imageSetMode: PropTypes.bool,
+    finalVideos: PropTypes.array,
     metadata: PropTypes.object
   }),
   selectedConceptId: PropTypes.number,

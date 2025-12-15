@@ -833,183 +833,26 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     }
 
+    // 🔥 v4.1: 이미지 생성 완료 (95%까지)
     await updateSession(sessionId, {
       progress: {
         phase: 'IMAGE',
-        percentage: calculateProgress('IMAGE', 100),
-        currentStep: `모든 이미지 생성 완료`
+        percentage: 95,
+        currentStep: `모든 이미지 생성 완료 (${styles.length}개 컨셉)`
       }
     });
 
-    // PHASE 3: 비디오 생성 (40-80%)
-    await updateSession(sessionId, {
-      progress: {
-        phase: 'VIDEO',
-        percentage: calculateProgress('VIDEO', 0),
-        currentStep: '비디오 생성 준비 중...'
-      }
-    });
+    console.log(`[storyboard-init] ✅ 이미지 생성 완료 - 총 ${styles.reduce((sum, s) => sum + s.images.length, 0)}개 이미지`);
 
-    let totalVideos = 0;
-    let completedVideos = 0;
-    for (const style of styles) {
-      totalVideos += style.images.filter(img => img.imageUrl).length;
-    }
-
-    console.log(`[storyboard-init] 총 ${totalVideos}개 비디오 생성 예정`);
-
-    for (let styleIdx = 0; styleIdx < styles.length; styleIdx++) {
-      const style = styles[styleIdx];
-      for (let imgIdx = 0; imgIdx < style.images.length; imgIdx++) {
-        const image = style.images[imgIdx];
-        // 🔥 placeholder 이미지 체크
-        if (!image.imageUrl || image.imageUrl.includes('via.placeholder.com')) {
-          console.log(`[storyboard-init] ⚠️ 컨셉 ${styleIdx + 1} 씬 ${image.sceneNumber} - placeholder 이미지, 비디오 생성 건너뛰기`);
-          image.videoUrl = null; // 🔥 명시적으로 null 설정
-          image.status = 'skipped_placeholder';
-          continue;
-        }
-        if (!image.imageUrl) {
-          image.videoUrl = null; // 🔥 명시적으로 null 설정
-          continue;
-        }
-
-        try {
-          console.log(`[storyboard-init] 비디오 생성 중: 컨셉 ${styleIdx + 1}, 씬 ${image.sceneNumber}`);
-
-          const taskId = await generateVideo(image.imageUrl, image.motionPrompt, image.sceneNumber, body);
-
-          // 🔥 수정: sessionId, currentVideoIndex, totalVideos 전달
-          const videoUrl = await pollVideoStatus(taskId, image.sceneNumber, sessionId, completedVideos + 1, totalVideos);
-
-          image.videoUrl = videoUrl;
-          image.status = 'video_done';
-          completedVideos++;
-
-          const progress = (completedVideos / totalVideos) * 100;
-          await updateSession(sessionId, {
-            progress: {
-              phase: 'VIDEO',
-              percentage: calculateProgress('VIDEO', progress),
-              currentStep: `비디오 ${completedVideos}/${totalVideos} 생성 완료`
-            }
-          });
-
-          // 🔥 추가: 비디오 1개 완료마다 프로젝트에 중간 저장
-          if (body.projectId && username && completedVideos % 1 === 0) {
-            try {
-              const partialStoryboard = {
-                success: false,
-                styles: styles,
-                metadata: {
-                  phase: 'VIDEO',
-                  progress: calculateProgress('VIDEO', progress),
-                  generatedAt: new Date().toISOString(),
-                  status: 'in_progress',
-                  completedVideos: completedVideos,
-                  totalVideos: totalVideos
-                }
-              };
-
-              await fetch(`${API_BASE}/api/projects/${body.projectId}`, {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-username': username
-                },
-                body: JSON.stringify({
-                  storyboard: partialStoryboard,
-                  formData: body
-                })
-              });
-
-              console.log(`[storyboard-init] 💾 비디오 단계 중간 저장 완료 (${completedVideos}/${totalVideos})`);
-            } catch (saveError) {
-              console.error('[storyboard-init] 비디오 중간 저장 실패:', saveError);
-            }
-          }
-        } catch (error) {
-          console.error(`비디오 생성 실패 (씬 ${image.sceneNumber}):`, error);
-          image.videoUrl = null; // 🔥 추가: 실패 시 videoUrl 명시적으로 null
-          image.status = 'video_failed';
-          image.error = error.message;
-        }
-      }
-    }
-
-    await updateSession(sessionId, {
-      progress: {
-        phase: 'VIDEO',
-        percentage: calculateProgress('VIDEO', 100),
-        currentStep: `모든 비디오 생성 완료`
-      }
-    });
-
-    console.log(`[storyboard-init] ✅ 비디오 생성 완료: ${completedVideos}/${totalVideos}`);
-
-    // PHASE 4: 비디오 합성 (80-100%)
-    await updateSession(sessionId, {
-      progress: {
-        phase: 'COMPOSE',
-        percentage: calculateProgress('COMPOSE', 0),
-        currentStep: '비디오 합성 준비 중...'
-      }
-    });
-
+    // 🔥 v4.1: 영상 생성 및 합성 로직 제거됨
+    // Step4에서 사용자가 선택적으로 영상 변환 수행
     const finalVideos = [];
-    for (let styleIdx = 0; styleIdx < styles.length; styleIdx++) {
-      const style = styles[styleIdx];
-      const segments = style.images
-        .filter(img => img.videoUrl)
-        .map(img => ({
-          videoUrl: img.videoUrl,
-          sceneNumber: img.sceneNumber
-        }));
 
-      if (segments.length === 0) continue;
-
-      try {
-        console.log(`[storyboard-init] 비디오 합성 중: 컨셉 ${styleIdx + 1}`);
-        const compileResponse = await fetch(`${API_BASE}/api/compile-videos`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: sessionId,
-            concept: style.conceptName,
-            segments: segments,
-            videoLength: body.videoLength,
-            formData: body,
-            jsonMode: true,
-            mode: body.mode || 'auto'
-          })
-        });
-
-        if (!compileResponse.ok) throw new Error(`HTTP ${compileResponse.status}`);
-        const compileResult = await compileResponse.json();
-        if (!compileResult.success || !compileResult.compiledVideoUrl) throw new Error('비디오 합성 실패');
-
-        finalVideos.push({
-          conceptId: style.conceptId,
-          conceptName: style.conceptName,
-          videoUrl: compileResult.compiledVideoUrl,
-          metadata: compileResult.metadata
-        });
-
-        const progress = ((styleIdx + 1) / styles.length) * 100;
-        await updateSession(sessionId, {
-          progress: {
-            phase: 'COMPOSE',
-            percentage: calculateProgress('COMPOSE', progress),
-            currentStep: `컨셉 ${styleIdx + 1}/${styles.length} 합성 완료`
-          }
-        });
-      } catch (error) {
-        console.error(`컨셉 ${styleIdx + 1} 합성 실패:`, error);
-      }
-    }
-
-    // 완료
+    // 🔥 v4.1: 완료 (이미지 세트 모드)
     const compositingInfo = analyzeCompositingInfo(body, compositingScenes);
+    
+    const totalImages = styles.reduce((sum, s) => sum + s.images.length, 0);
+    
     const metadata = {
       promptFile: promptFile,
       promptFileName: promptFileName,
@@ -1023,10 +866,11 @@ async function processStoryboardAsync(body, username, sessionId) {
       geminiModel: "gemini-2.5-flash",
       brandName,
       totalConcepts: styles.length,
+      totalImages: totalImages,
       compositingScenes: compositingScenes.length,
       hasImageUpload: !!(imageUpload && imageUpload.url),
       compositingInfo: compositingInfo,
-      finalVideos: finalVideos
+      workflowMode: 'image_only'  // 🔥 v4.1: 이미지만 생성
     };
 
     incrementUsageCount(username);
@@ -1034,7 +878,8 @@ async function processStoryboardAsync(body, username, sessionId) {
     const finalStoryboard = {
       success: true,
       styles,
-      finalVideos,
+      finalVideos: [],  // 🔥 v4.1: 빈 배열 (Step4에서 생성)
+      imageSetMode: true,  // 🔥 v4.1: 신규 플래그
       metadata,
       compositingInfo,
       fullOutput: fullOutput,
@@ -1042,12 +887,13 @@ async function processStoryboardAsync(body, username, sessionId) {
       timestamp: new Date().toISOString()
     };
 
+    // 🔥 v4.1: 이미지 세트 생성 완료
     await updateSession(sessionId, {
       status: 'completed',
       progress: {
         phase: 'COMPLETE',
         percentage: 100,
-        currentStep: `🎉 최종 완성! ${finalVideos.length}개 비디오 생성 완료!`
+        currentStep: `✅ 이미지 세트 생성 완료! ${totalImages}개 이미지 (${styles.length}개 컨셉)`
       },
       result: finalStoryboard
     });
@@ -1086,7 +932,7 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     }
 
-    console.log('[storyboard-init] ✅ 전체 자동화 완료!');
+    console.log('[storyboard-init] ✅ 이미지 세트 생성 완료! (v4.1 워크플로우)');
 
 
   } catch (error) {
