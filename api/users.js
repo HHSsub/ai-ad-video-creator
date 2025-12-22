@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import bcrypt from 'bcrypt';
 
 const router = express.Router();
 const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
@@ -13,7 +14,7 @@ function loadUsers() {
       console.error('[users] ❌ 파일이 없습니다:', USERS_FILE);
       throw new Error('사용자 설정 파일이 없습니다.');
     }
-    
+
     const data = fs.readFileSync(USERS_FILE, 'utf8');
     const users = JSON.parse(data);
     console.log('[users] ✅ 로드 완료, 사용자 수:', Object.keys(users).length);
@@ -27,15 +28,15 @@ function loadUsers() {
 function saveUsers(users) {
   try {
     const data = JSON.stringify(users, null, 2);
-    
+
     console.log('[users] 💾 저장 시도:', USERS_FILE);
     console.log('[users] 저장할 데이터:', data);
-    
+
     fs.writeFileSync(USERS_FILE, data, 'utf8');
-    
+
     const verification = fs.readFileSync(USERS_FILE, 'utf8');
     console.log('[users] ✅ 저장 확인:', verification);
-    
+
     return true;
   } catch (error) {
     console.error('[users] ❌ 저장 실패:', error);
@@ -48,14 +49,14 @@ function saveUsers(users) {
 // 🔥 일일 리셋 함수 (오늘 사용량만 리셋)
 function checkAndResetDaily(user) {
   const today = new Date().toISOString().split('T')[0];
-  
+
   if (user.lastResetDate !== today) {
     console.log(`[users] 🔄 일일 리셋: ${user.id} (${user.usageCount}회 → 0회)`);
     user.usageCount = 0; // 오늘 사용량만 리셋
     user.lastResetDate = today;
     return true;
   }
-  
+
   return false;
 }
 
@@ -65,16 +66,16 @@ router.get('/', (req, res) => {
     const users = loadUsers();
     const currentUsername = req.headers['x-username'];
     const currentUser = users[currentUsername];
-    
+
     console.log('[users GET] 요청자:', currentUsername, '권한:', currentUser?.role);
-    
+
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: '관리자 권한이 필요합니다.'
       });
     }
-    
+
     // 🔥 모든 사용자에 대해 일일 리셋 확인
     let needsSave = false;
     Object.keys(users).forEach(username => {
@@ -88,18 +89,18 @@ router.get('/', (req, res) => {
         needsSave = true;
       }
     });
-    
+
     if (needsSave) {
       saveUsers(users);
     }
-    
+
     const userList = Object.keys(users).map(username => {
       const { password, ...userInfo } = users[username];
       return { username, ...userInfo };
     });
-    
+
     console.log('[users GET] 응답:', userList.length, '명');
-    
+
     res.json({
       success: true,
       users: userList
@@ -113,42 +114,46 @@ router.get('/', (req, res) => {
   }
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     console.log('[users POST] 요청 받음');
     console.log('[users POST] body:', req.body);
     const users = loadUsers();
     const currentUsername = req.headers['x-username'];
     const currentUser = users[currentUsername];
-    
+
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: '관리자 권한이 필요합니다.'
       });
     }
-    
+
     const { username, password, name, usageLimit } = req.body;
-    
+
     console.log('[users POST] 추가 요청:', { username, name, usageLimit });
-    
+
     if (!username || !password) {
       return res.status(400).json({
         success: false,
         message: '아이디와 비밀번호는 필수입니다.'
       });
     }
-    
+
     if (users[username]) {
       return res.status(400).json({
         success: false,
         message: '이미 존재하는 아이디입니다.'
       });
     }
-    
+
+    // 🔥 비밀번호 해싱
+    const hashedPassword = await bcrypt.hash(password, 10);
+    console.log('[users POST] 🔐 비밀번호 해싱 완료:', username);
+
     users[username] = {
       id: username,
-      password,
+      password: hashedPassword,
       role: 'user',
       name: name || username,
       usageLimit: usageLimit !== undefined && usageLimit !== null && usageLimit !== '' ? parseInt(usageLimit) : null,
@@ -156,15 +161,15 @@ router.post('/', (req, res) => {
       totalUsageCount: 0, // 🔥 전체 누적 사용량
       lastResetDate: new Date().toISOString().split('T')[0]
     };
-    
+
     const saved = saveUsers(users);
-    
+
     if (!saved) {
       throw new Error('파일 저장에 실패했습니다.');
     }
-    
+
     console.log('[users POST] ✅ 성공:', username);
-    
+
     res.json({
       success: true,
       message: '사용자가 추가되었습니다.',
@@ -179,72 +184,75 @@ router.post('/', (req, res) => {
   }
 });
 
-router.put('/', (req, res) => {
+router.put('/', async (req, res) => {
   try {
     console.log('[users PUT] 요청 받음');
     console.log('[users PUT] query:', req.query);
     console.log('[users PUT] body:', req.body);
     console.log('[users PUT] headers:', req.headers);
-    
+
     const users = loadUsers();
     const currentUsername = req.headers['x-username'];
     const currentUser = users[currentUsername];
-    
+
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: '관리자 권한이 필요합니다.'
       });
     }
-    
+
     const { username } = req.query;
-    
+
     if (!username) {
       return res.status(400).json({
         success: false,
         message: 'username 파라미터가 필요합니다.'
       });
     }
-    
+
     if (!users[username]) {
       return res.status(404).json({
         success: false,
         message: '사용자를 찾을 수 없습니다.'
       });
     }
-    
+
     console.log('[users PUT] 수정 전:', JSON.stringify(users[username], null, 2));
-    
+
     // 🔥 totalUsageCount 필드가 없으면 추가 (기존 데이터 마이그레이션)
     if (users[username].totalUsageCount === undefined) {
       users[username].totalUsageCount = users[username].usageCount || 0;
     }
-    
+
     const updateData = req.body || {};
-    
+
     if (updateData.password) {
-      users[username].password = updateData.password;
+      // 🔥 비밀번호 해싱
+      const hashedPassword = await bcrypt.hash(updateData.password, 10);
+      users[username].password = hashedPassword;
+      console.log('[users PUT] 🔐 비밀번호 해싱 완료:', username);
     }
-    
+
     if (updateData.name) {
       users[username].name = updateData.name;
     }
-    
+
     if (updateData.hasOwnProperty('usageLimit')) {
       const limit = updateData.usageLimit;
       users[username].usageLimit = (limit === null || limit === '' || limit === undefined) ? null : parseInt(limit);
     }
-    
+
     console.log('[users PUT] 수정 후:', JSON.stringify(users[username], null, 2));
-    
+
     const saved = saveUsers(users);
-    
+
     if (!saved) {
       throw new Error('파일 저장에 실패했습니다.');
     }
-    
+
     console.log('[users PUT] ✅ 성공:', username);
-    
+
     res.json({
       success: true,
       message: '사용자 정보가 수정되었습니다.',
@@ -265,49 +273,49 @@ router.delete('/', (req, res) => {
     const users = loadUsers();
     const currentUsername = req.headers['x-username'];
     const currentUser = users[currentUsername];
-    
+
     if (!currentUser || currentUser.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: '관리자 권한이 필요합니다.'
       });
     }
-    
+
     const { username } = req.query;
-    
+
     console.log('[users DELETE] 삭제 대상:', username);
-    
+
     if (!username) {
       return res.status(400).json({
         success: false,
         message: 'username 파라미터가 필요합니다.'
       });
     }
-    
+
     if (username === 'admin') {
       return res.status(400).json({
         success: false,
         message: '관리자 계정은 삭제할 수 없습니다.'
       });
     }
-    
+
     if (!users[username]) {
       return res.status(404).json({
         success: false,
         message: '사용자를 찾을 수 없습니다.'
       });
     }
-    
+
     delete users[username];
-    
+
     const saved = saveUsers(users);
-    
+
     if (!saved) {
       throw new Error('파일 저장에 실패했습니다.');
     }
-    
+
     console.log('[users DELETE] ✅ 성공:', username);
-    
+
     res.json({
       success: true,
       message: '사용자가 삭제되었습니다.'
@@ -326,30 +334,30 @@ export function checkUsageLimit(username) {
   try {
     const users = loadUsers();
     const user = users[username];
-    
+
     if (!user) {
       return { allowed: false, message: '사용자를 찾을 수 없습니다.' };
     }
-    
+
     // 🔥 totalUsageCount 필드가 없으면 추가
     if (user.totalUsageCount === undefined) {
       user.totalUsageCount = user.usageCount || 0;
       saveUsers(users);
     }
-    
+
     const wasReset = checkAndResetDaily(user);
     if (wasReset) {
       saveUsers(users);
     }
-    
+
     if (user.role === 'admin') {
       return { allowed: true };
     }
-    
+
     if (user.usageLimit === null || user.usageLimit === undefined) {
       return { allowed: true };
     }
-    
+
     // 🔥 오늘 사용량 기준으로 체크
     if (user.usageCount >= user.usageLimit) {
       return {
@@ -357,7 +365,7 @@ export function checkUsageLimit(username) {
         message: `일일 사용 횟수를 초과했습니다. (오늘: ${user.usageCount}/${user.usageLimit})`
       };
     }
-    
+
     return { allowed: true, remaining: user.usageLimit - user.usageCount };
   } catch (error) {
     console.error('[checkUsageLimit] ❌ 오류:', error);
@@ -370,23 +378,23 @@ export function incrementUsage(username) {
   try {
     const users = loadUsers();
     const user = users[username];
-    
+
     if (!user) return false;
-    
+
     // 🔥 totalUsageCount 필드가 없으면 추가
     if (user.totalUsageCount === undefined) {
       user.totalUsageCount = user.usageCount || 0;
     }
-    
+
     checkAndResetDaily(user);
-    
+
     user.usageCount += 1; // 오늘 사용량 증가
     user.totalUsageCount += 1; // 전체 사용량 증가
-    
+
     saveUsers(users);
-    
+
     console.log(`[incrementUsage] ✅ ${username}: 오늘 ${user.usageCount}/${user.usageLimit || '무제한'}, 전체 ${user.totalUsageCount}회`);
-    
+
     return true;
   } catch (error) {
     console.error('[incrementUsage] ❌ 오류:', error);
