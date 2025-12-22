@@ -77,13 +77,18 @@
 
 | 작업ID | 작업명 | 대상 파일 | 작업 내용 | AI 작업 현황 | 사용자 승인 |
 |--------|--------|-----------|-----------|--------------|-------------|
-| **A** | storyboard-init.js 영상 생성 로직 제거 | `api/storyboard-init.js` | Line 844-1009: generateVideo(), compileVideos() 호출 제거<br>결과 반환: finalVideos=[], imageSetMode=true<br>진행률: IMAGE(95%까지)<br>metadata에 totalImages, workflowMode 추가 | � 완료 | ⬜ 대기 |
-| **B** | sessionStore imageSetMode 지원 | `src/utils/sessionStore.js` | imageSetMode 플래그 추가 | � 완료 | ⬜ 대기 |
-| **C** | Step2 폴링 로직 수정 | `src/components/Step2.jsx` | pollAndGenerateImages(): imageSetMode 확인<br>UI 텍스트: "영상" → "이미지 세트"<br>컨셉 미리보기: 영상 표시 제거 | � 완료 | ⬜ 대기 |
-| **D** | Step3 UI 전면 개편 | `src/components/Step3.jsx` | finalVideos → styles 데이터 소스 변경<br>영상 미리보기 → 이미지 그리드<br>handleSelectVideo() → handleSelectConcept()<br>BGM UI 제거 (Step4로 이동) | in Progress | ⬜ 대기 |
-| **E** | Step4 선택적 영상 변환 기능 추가 | `src/components/Step4.jsx` | State 추가: sceneVideoStatus, convertingScenes, allScenesConfirmed<br>함수 추가: handleConvertSceneToVideo(), pollVideoStatus(), handleConfirmAndCompile()<br>UI: 씬별 영상 변환 버튼, 상태 표시, 전체 확정 버튼, BGM 섹션 | 🔴 미작업 | ⬜ 대기 |
-| **F** | App.jsx 프로젝트 복구 로직 강화 | `src/App.jsx` | handleSelectProject(): imageSetMode 확인<br>imageSetMode 있으면 Step3으로<br>finalVideos 있으면 Step4로 | 🔴 미작업 | ⬜ 대기 |
-| **G** | 통합 테스트 | 전체 | Auto/Manual 모드 전체 플로우 테스트<br>프로젝트 복구 테스트<br>개별 씬 영상 변환 테스트<br>전체 합성 테스트 | 🔴 미작업 | ⬜ 대기 |
+| **A** | storyboard-init.js 영상 생성 로직 제거 | `api/storyboard-init.js` | Line 844-1009: generateVideo(), compileVideos() 호출 제거<br>결과 반환: finalVideos=[], imageSetMode=true<br>진행률: IMAGE(95%까지)<br>metadata에 totalImages, workflowMode 추가 | 🟢 완료 | ⬜ 대기 |
+| **B** | sessionStore imageSetMode 지원 | `src/utils/sessionStore.js` | imageSetMode 플래그 추가 | 🟢 완료 | ⬜ 대기 |
+| **C** | Step2 폴링 로직 수정 | `src/components/Step2.jsx` | pollAndGenerateImages(): imageSetMode 확인<br>UI 텍스트: "영상" → "이미지 세트"<br>컨셉 미리보기: 영상 표시 제거 | 🟢 완료 | ⬜ 대기 |
+| **D** | Step3 UI 전면 개편 | `src/components/Step3.jsx` | finalVideos → styles 데이터 소스 변경<br>영상 미리보기 → 이미지 그리드<br>handleSelectVideo() → handleSelectConcept()<br>BGM UI 제거 (Step4로 이동) | 🟢 완료 | ⬜ 대기 |
+| **E** | Step4 선택적 영상 변환 기능 추가 | `src/components/Step4.jsx` | State 추가: sceneVideoStatus, convertingScenes, allScenesConfirmed<br>함수 추가: handleConvertSceneToVideo(), pollVideoStatus(), handleConfirmAndCompile()<br>UI: 씬별 영상 변환 버튼, 상태 표시, 전체 확정 버튼, BGM 섹션 | 🟡 보류 | ⬜ 대기 |
+| **F** | App.jsx 프로젝트 복구 로직 강화 | `src/App.jsx` | handleSelectProject(): imageSetMode 확인<br>imageSetMode 있으면 Step3으로<br>finalVideos 있으면 Step4로 | 🟢 완료 | ⬜ 대기 |
+| **G-1** | Step2 스토리보드 자동 저장 (최우선) | `src/components/Step2.jsx` | saveStoryboardToProject 함수 추가<br>이미지 생성 완료 시 프로젝트 API 저장<br>storyboard, formData, lastStep 저장 | 🟢 완료 | ⬜ 대기 |
+| **G-2** | ProjectDashboard 진행 상황 표시 | `src/components/ProjectDashboard.jsx` | 프로젝트 카드에 진행 상황 배지 추가<br>상태 계산 로직 (시작 전/이미지 완료/영상 완성)<br>lastStep 표시 | 🟢 완료 | ⬜ 대기 |
+| **G-3** | Step3/4 저장 로직 추가 | `src/components/Step3.jsx`<br>`src/components/Step4.jsx` | Step3: selectedConceptId 저장<br>Step4: finalVideos 저장<br>각 단계별 lastStep 업데이트 | 🟢 완료 | ⬜ 대기 |
+| **G-4** | "이전 단계" 버튼 로직 수정 | `src/App.jsx` | Step2 onPrev: storyboard 있으면 프로젝트 목록으로<br>없으면 Step1으로 이동 | 🟢 완료 | ⬜ 대기 |
+| **G-5** | 프로젝트 API 검증 및 수정 | `server/routes/projects.js` | PATCH 엔드포인트 확인<br>storyboard, selectedConceptId 저장 지원<br>필요 시 엔드포인트 추가/수정 | 🟢 완료 | ⬜ 대기 |
+| **H** | 로그인 인증 시스템 구현 | `server/routes/auth.js`<br>`api/users.js`<br>`package.json` | auth.js 생성: 로그인 엔드포인트<br>bcrypt 비밀번호 해싱 적용<br>평문 자동 마이그레이션 지원 | 🟢 완료 | ✅ 승인 |
 
 **작업 상태 범례**:
 - 🔴 미작업
@@ -94,6 +99,77 @@
 ---
 
 ## 📝 작업 히스토리 (최신순)
+
+### 2025-12-22 19:10 - 작업G 완료: 프로젝트 진행 상황 저장 및 복구 시스템 구현
+- **파일**: `src/components/Step2.jsx`, `src/components/ProjectDashboard.jsx`, `src/components/Step3.jsx`, `src/App.jsx`
+- **수정 내용**:
+  - **G-5**: `server/routes/projects.js` PATCH 엔드포인트 검증 완료
+  - **G-1**: Step2에 자동 저장 로직 추가
+    - Line 455-485: 이미지 생성 완료 시 프로젝트 API 호출
+    - storyboard, formData, lastStep=3 저장
+    - 저장 실패 시에도 작업 계속 진행 (에러 핸들링)
+  - **G-2**: ProjectDashboard에 진행 상황 표시
+    - `getProjectStatus` 함수 추가: 시작 전/이미지 생성 완료/영상 완성/진행 중 판별
+    - 프로젝트 카드에 색상별 배지 추가 (gray/blue/green/yellow)
+    - lastStep 표시 (Step 2/3/4)
+  - **G-3**: Step3 저장 로직 추가
+    - `handleSelectConcept`: 컨셉 선택 시 selectedConceptId, lastStep=3 저장
+    - `handleGoToEdit`: Step4 이동 전 lastStep=4 저장
+  - **G-4**: App.jsx "이전 단계" 버튼 로직 수정
+    - Step2 onPrev: storyboard 존재 시 프로젝트 목록으로 이동
+    - storyboard 없으면 Step1으로 이동
+- **결과**: 새로고침/로그아웃 후에도 작업 이어하기 가능
+- **상태**: 코드 수정 완료, 사용자 테스트 대기
+
+### 2025-12-22 18:25 - 작업G 재정의: 프로젝트 진행 상황 저장 및 복구
+- **문제 발견**: 이미지 스토리보드 생성 후 새로고침하면 진행 상황이 사라짐
+- **근본 원인**: Step2에서 생성된 storyboard가 프로젝트에 저장되지 않음
+- **작업 재정의**: 통합 테스트(G) → 프로젝트 진행 상황 저장 시스템 구현(G-1~G-5)
+- **세부 작업**:
+  - **G-1**: Step2 스토리보드 자동 저장 (최우선)
+  - **G-2**: ProjectDashboard 진행 상황 표시
+  - **G-3**: Step3/4 저장 로직 추가
+  - **G-4**: "이전 단계" 버튼 로직 수정
+  - **G-5**: 프로젝트 API 검증 및 수정
+- **상태**: 작업 계획 수립 완료, 구현 대기
+
+### 2025-12-22 18:05 - 작업F 완료: App.jsx 프로젝트 복구 로직 강화
+- **파일**: `src/App.jsx`
+- **수정 내용**:
+  - Line 88-137: handleSelectProject() 함수 수정
+  - imageSetMode 확인 로직 추가: imageSetMode가 true면 Step3으로 라우팅
+  - finalVideos 확인 로직 추가: finalVideos가 있으면 Step4로 라우팅
+  - 구버전 호환성 유지: 기타 경우 Step4로 라우팅
+  - 콘솔 로그 개선: 각 분기별 명확한 로그 메시지
+- **상태**: 코드 수정 완료, 사용자 승인 대기
+
+### 2025-12-22 17:59 - 작업H 완료: 로그인 인증 시스템 구현 및 EC2 배포
+- **파일**: `server/routes/auth.js` (신규), `api/users.js`, `package.json`, `DEPLOYMENT_GUIDE.md` (신규)
+- **수정 내용**:
+  - **server/routes/auth.js 생성**: POST /api/auth/login 엔드포인트 구현
+    - 평문 비밀번호와 bcrypt 해시 자동 감지
+    - 평문 로그인 성공 시 자동으로 해시로 변환 (점진적 마이그레이션)
+    - 원자적 파일 쓰기로 데이터 손실 방지
+  - **api/users.js 수정**: bcrypt 해싱 적용
+    - POST 핸들러: 사용자 추가 시 비밀번호 해싱 (10 라운드)
+    - PUT 핸들러: 비밀번호 변경 시 해싱
+    - async/await 적용
+  - **package.json**: bcrypt ^5.1.1 의존성 추가
+  - **DEPLOYMENT_GUIDE.md 생성**: EC2 배포 가이드 (10단계 상세 절차)
+- **EC2 배포**: 성공적으로 배포 완료
+  - git pull 완료
+  - npm install 완료 (bcrypt 설치)
+  - PM2 재시작 완료
+  - 로그인 테스트 성공
+- **상태**: 완료 및 사용자 승인
+
+### 2025-12-22 17:40 - 작업E 보류: Step4 선택적 영상 변환 기능
+- **결정**: 작업 E는 현재 보류
+- **이유**: 
+  - 기존 Step4.jsx가 이미 복잡한 구조로 구현되어 있음
+  - v4.1 워크플로우의 핵심 기능(이미지 우선 생성)은 작업 A~D, F로 충분히 구현됨
+  - Step4의 선택적 영상 변환 기능은 향후 필요 시 추가 가능
+- **상태**: 보류
 
 ### 2025-12-11 17:08 - 작업D 완료: Step3 UI 전면 개편
 - **파일**: `src/components/Step3.jsx`

@@ -455,6 +455,36 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             setPercent(100);
             setIsLoading(false);
 
+            // 🔥 G-1: 프로젝트에 자동 저장
+            if (currentProject?.id) {
+              log('💾 프로젝트에 저장 중...');
+              try {
+                const saveResponse = await fetch(`${API_BASE}/nexxii/api/projects/${currentProject.id}`, {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-username': user?.username || 'anonymous'
+                  },
+                  body: JSON.stringify({
+                    storyboard: result,
+                    formData: formData,
+                    lastStep: 3,  // Step3으로 복구되도록
+                    updatedAt: new Date().toISOString()
+                  })
+                });
+
+                if (saveResponse.ok) {
+                  log('✅ 프로젝트 저장 완료!');
+                } else {
+                  console.error('[Step2] 프로젝트 저장 실패:', saveResponse.status);
+                  log('⚠️ 프로젝트 저장 실패 (작업은 계속됩니다)');
+                }
+              } catch (saveError) {
+                console.error('[Step2] 프로젝트 저장 오류:', saveError);
+                log('⚠️ 프로젝트 저장 오류 (작업은 계속됩니다)');
+              }
+            }
+
             log('🚀 Step3으로 이동합니다 (이미지 세트 선택)...');
 
             setTimeout(() => {
@@ -475,6 +505,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               if (onNext) onNext();
             }, 2000);
           }
+
 
         } else if (data.success && data.session && data.session.status === 'error') {
           clearInterval(pollInterval);

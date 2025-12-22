@@ -44,19 +44,62 @@ const Step3 = ({
   }, [selectedConceptId, selectedId]);
 
   // 🔥 v4.1: 컨셉 선택 핸들러
-  const handleSelectConcept = (conceptId) => {
+  const handleSelectConcept = async (conceptId) => {
     setSelectedId(conceptId);
     setSelectedConceptId(conceptId);
     log(`컨셉 ${conceptId} 선택됨`);
+
+    // 🔥 G-3: 프로젝트에 저장
+    if (currentProject?.id) {
+      try {
+        const response = await fetch(`${API_BASE}/nexxii/api/projects/${currentProject.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-username': user?.username || 'anonymous'
+          },
+          body: JSON.stringify({
+            selectedConceptId: conceptId,
+            lastStep: 3
+          })
+        });
+
+        if (response.ok) {
+          console.log('[Step3] 선택된 컨셉 저장 완료');
+        }
+      } catch (error) {
+        console.error('[Step3] 컨셉 저장 오류:', error);
+      }
+    }
   };
 
   // 🔥 v4.1: Step4로 이동
-  const handleGoToEdit = () => {
+  const handleGoToEdit = async () => {
     if (!selectedId) {
       setError('편집할 이미지 세트를 선택해주세요.');
       return;
     }
     setSelectedConceptId(selectedId);
+
+    // 🔥 G-3: Step4로 이동 전 저장
+    if (currentProject?.id) {
+      try {
+        await fetch(`${API_BASE}/nexxii/api/projects/${currentProject.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-username': user?.username || 'anonymous'
+          },
+          body: JSON.stringify({
+            selectedConceptId: selectedId,
+            lastStep: 4  // Step4로 이동
+          })
+        });
+      } catch (error) {
+        console.error('[Step3] Step4 이동 전 저장 오류:', error);
+      }
+    }
+
     log(`Step4로 이동 - 컨셉 ID: ${selectedId}`);
     onNext();
   };
@@ -123,8 +166,8 @@ const Step3 = ({
                   key={style.conceptId || style.id || idx}
                   onClick={() => handleSelectConcept(style.conceptId || style.id)}
                   className={`border-2 rounded-xl p-4 cursor-pointer transition-all bg-gray-900/50 ${selectedId === (style.conceptId || style.id)
-                      ? 'border-blue-500 shadow-lg shadow-blue-500/20'
-                      : 'border-gray-700 hover:border-gray-600'
+                    ? 'border-blue-500 shadow-lg shadow-blue-500/20'
+                    : 'border-gray-700 hover:border-gray-600'
                     }`}
                 >
                   <h4 className="font-semibold text-white mb-2">
