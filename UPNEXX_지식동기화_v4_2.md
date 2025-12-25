@@ -87,6 +87,32 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-26 02:42 - 마이그레이션 중복 실행 수정
+- **문제**: 프롬프트 관리 접속할 때마다 마이그레이션 실행
+- **원인**: `migrateFromLegacy()` 함수에 실행 플래그 없음
+- **해결**:
+  - `enginePromptHelper.js`에 `migrationCompleted` 플래그 추가
+  - 파일 존재 여부 확인하여 이미 마이그레이션 완료 시 스킵
+- **상태**: 🟢 완료
+
+### 2025-12-26 02:30 - projectId 전달 누락 수정
+- **문제**: 이미지 재생성 시 S3 업로드 스킵 (projectId=null)
+- **원인**: Step4에서 이미지 재생성 API 호출 시 projectId 미전달
+- **해결**: 
+  - `Step4.jsx` `handleRegenerateImage`에 `projectId: currentProject?.id` 추가
+  - `Step2.jsx` `handleManualSubmit`에 `projectId` 추가
+- **영향**: 이제 모든 이미지가 S3에 자동 업로드됨
+- **상태**: 🟢 완료
+
+### 2025-12-26 02:15 - BGM/SFX 표시 위치 수정
+- **문제**: Step3에 BGM/SFX 정보가 표시되어 있음 (잘못된 위치)
+- **요구사항**: Step4 각 씬 이미지 바로 아래에 해당 씬의 정보만 표시
+- **수정**:
+  - `Step3.jsx`: Audio & Editing Guide 섹션 완전 제거
+  - `Step4.jsx`: 각 씬 이미지 아래에 해당 씬의 SFX/Editing 정보 표시
+  - 씬 번호 기반 필터링 (`S#1`, `S#2` 등)
+- **상태**: 🟢 완료
+
 ### 2025-12-26 01:56 - 라우트 등록 순서 수정
 - **문제**: 멤버 초대 API 호출 시 오류 발생
 - **원인**: 라우트 등록 순서 문제 (projects 라우터가 다른 라우트보다 늦게 등록됨)
