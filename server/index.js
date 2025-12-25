@@ -53,6 +53,13 @@ import promptsUpdateHandler from '../api/prompts-update.js';
 import generatePrompt from '../api/generate-prompt.js';
 import storyboardManualInject from '../api/storyboard-manual-inject.js';
 
+// 🔥 저장소 관리 API
+import storageInfoHandler from '../api/storage-info.js';
+import storageBrowseHandler from '../api/storage-browse.js';
+
+// 🔥 모든 엔진 프롬프트 조회 API
+import promptsAllHandler from '../api/prompts-all.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -646,6 +653,14 @@ app.use('/api/load-mood-list', loadMoodList); // 수정됨: /api/ 추가
 app.use('/api/load-bgm-list', loadBgmList); // 수정됨: /api/ 추가
 app.use('/api/bgm-stream', bgmStream); // 수정됨: /api/ 추가
 app.use('/api/nanobanana-compose', nanobanaCompose); // 수정됨: /api/ 추가
+
+// 🔥 저장소 관리 API
+app.use('/api/storage/info', storageInfoHandler);
+app.use('/api/storage/browse', storageBrowseHandler);
+
+// 🔥 모든 엔진 프롬프트 조회 API
+app.use('/api/prompts/all', promptsAllHandler);
+
 // 🔥 엔진 관리 API
 app.get('/api/engines', (req, res) => {
   try {
