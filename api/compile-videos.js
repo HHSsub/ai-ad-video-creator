@@ -1,10 +1,11 @@
-// api/compile-videos.js - 🔥 Manual 모드 영상 길이 계산 수정 (2025-11-27)
+// api/compile-videos.js - 🔥 Manual 모드 영상 길이 계산 수정 + S3 업로드 (2025-12-25)
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
 import sessionStore from '../src/utils/sessionStore.js';
+import { uploadVideoToS3 } from '../server/utils/s3-uploader.js';
 
 const MAX_DOWNLOAD_RETRIES = 3;
 const DOWNLOAD_TIMEOUT = 30000;
@@ -242,13 +243,13 @@ export default async function handler(req, res) {
         console.warn('[compile-videos] ⚠️ Manual 모드에서 영상 길이 정보 없음, 기본값 10초 사용');
         userSelectedVideoLengthSeconds = 10;
       }
-      
+
       // 실제 생성된 씬 개수 사용
       requiredClipCount = segments.length;
-      
+
       // 🔥 씬당 길이 동적 계산: 사용자 선택 길이 ÷ 실제 씬 개수
       clipDurationSeconds = userSelectedVideoLengthSeconds / requiredClipCount;
-      
+
       console.log(`[compile-videos] 📌 Manual 모드:`, {
         사용자선택길이: `${userSelectedVideoLengthSeconds}초`,
         실제세그먼트: segments.length,
@@ -305,7 +306,7 @@ export default async function handler(req, res) {
       // 🔥 Manual: 실제 생성된 개수만 사용, 절대 반복 안 함
       segmentsToUse = segments.slice(0, segments.length);
       console.log(`[compile-videos] 🔥 Manual 모드 - ${segmentsToUse.length}개 씬 사용 (반복 없음)`);
-      
+
     } else {
       // Auto: 필요한 개수만큼 사용, 부족하면 반복
       segmentsToUse = segments.slice(0, requiredClipCount);
@@ -375,7 +376,7 @@ export default async function handler(req, res) {
           const trimmedPath = path.join(tempDir, trimmedFileName);
 
           console.log(`[compile-videos] 🔥 Manual 모드 - 세그먼트 ${i + 1} → ${clipDurationSeconds.toFixed(2)}초로 trim`);
-          
+
           // trim 수행
           await trimVideo(originalPath, trimmedPath, clipDurationSeconds);
 
@@ -532,32 +533,46 @@ export default async function handler(req, res) {
     });
 
     if (jsonMode) {
-      const projectRoot = process.cwd();
-      // 🔥 경로: /public/videos/compiled/
-      const publicDir = path.resolve(projectRoot, 'public', 'videos', 'compiled');
+      // 🔥 S3 업로드 (로컬 저장 제거)
+      const projectId = req.body.projectId || 'unknown';
+      const conceptId = req.body.concept || 'unknown';
+      const filename = outputFileName.replace('.mp4', '');
 
-      if (!fs.existsSync(publicDir)) {
-        fs.mkdirSync(publicDir, { recursive: true });
-        console.log('[compile-videos] 공개 디렉토리 생성:', publicDir);
-      }
+      console.log('[compile-videos] 🚀 S3 업로드 시작:', { projectId, conceptId, filename });
 
-      const publicFileName = outputFileName;
-      const publicPath = path.join(publicDir, publicFileName);
-
-      fs.copyFileSync(outputPath, publicPath);
-      console.log('[compile-videos] 파일 복사 완료:', outputPath, '→', publicPath);
-
+      let publicUrl;
       try {
-        fs.chmodSync(publicPath, 0o644);
-      } catch (e) {
-        console.warn('[compile-videos] 권한 설정 실패:', e.message);
+        publicUrl = await uploadVideoToS3(outputPath, projectId, conceptId, filename);
+        console.log('[compile-videos] ✅ S3 업로드 완료:', publicUrl);
+      } catch (s3Error) {
+        console.error('[compile-videos] ❌ S3 업로드 실패:', s3Error.message);
+
+        // Fallback: 로컬 저장
+        const projectRoot = process.cwd();
+        const publicDir = path.resolve(projectRoot, 'public', 'videos', 'compiled');
+
+        if (!fs.existsSync(publicDir)) {
+          fs.mkdirSync(publicDir, { recursive: true });
+          console.log('[compile-videos] 공개 디렉토리 생성:', publicDir);
+        }
+
+        const publicFileName = outputFileName;
+        const publicPath = path.join(publicDir, publicFileName);
+
+        fs.copyFileSync(outputPath, publicPath);
+        console.log('[compile-videos] Fallback: 로컬 저장 완료:', publicPath);
+
+        try {
+          fs.chmodSync(publicPath, 0o644);
+        } catch (e) {
+          console.warn('[compile-videos] 권한 설정 실패:', e.message);
+        }
+
+        publicUrl = `/videos/compiled/${publicFileName}`;
       }
 
-      // 🔥 URL: /videos/compiled/
-      const publicUrl = `/videos/compiled/${publicFileName}`;
-
-      const fileExists = fs.existsSync(publicPath);
-      const fileSize = fileExists ? fs.statSync(publicPath).size : 0;
+      const fileExists = publicUrl.startsWith('https://') ? true : fs.existsSync(path.join(process.cwd(), 'public', 'videos', 'compiled', outputFileName));
+      const fileSize = fileExists && !publicUrl.startsWith('https://') ? fs.statSync(path.join(process.cwd(), 'public', 'videos', 'compiled', outputFileName)).size : 0;
 
       console.log('[compile-videos] ✅ JSON 모드 완료:', {
         publicUrl,
@@ -601,12 +616,11 @@ export default async function handler(req, res) {
           videoLengthSource: isManualMode ? 'manual (calculated)' : videoLength || formData.videoLength,
           concept: concept || 'N/A',
           debug: {
-            publicPath,
+            s3Upload: publicUrl.startsWith('https://'),
+            publicUrl,
             fileExists,
             fileSize: `${(fileSize / 1024 / 1024).toFixed(2)} MB`,
-            publicDir,
             outputFileName,
-            publicFileName,
             requiredClipCount,
             clipDurationSeconds: parseFloat(clipDurationSeconds.toFixed(2))
           }
@@ -682,9 +696,9 @@ export default async function handler(req, res) {
         console.log('[compile-videos] 즉시 정리:', tempDir);
         const files = fs.readdirSync(tempDir).catch(() => []);
         for (const file of files) {
-          try { fs.unlinkSync(path.join(tempDir, file)); } catch {}
+          try { fs.unlinkSync(path.join(tempDir, file)); } catch { }
         }
-        try { fs.rmdirSync(tempDir); } catch {}
+        try { fs.rmdirSync(tempDir); } catch { }
       } catch (error) {
         console.error('[compile-videos] 정리 실패:', error.message);
       }

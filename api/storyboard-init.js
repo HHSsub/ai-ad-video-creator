@@ -14,8 +14,8 @@ export const config = {
 const API_DOMAIN = process.env.API_DOMAIN || 'https://upnexx.ai';
 const API_BASE = process.env.VITE_API_BASE_URL
   ? (process.env.VITE_API_BASE_URL.startsWith('http')
-      ? process.env.VITE_API_BASE_URL
-      : `${API_DOMAIN}${process.env.VITE_API_BASE_URL}`)
+    ? process.env.VITE_API_BASE_URL
+    : `${API_DOMAIN}${process.env.VITE_API_BASE_URL}`)
   : 'http://localhost:3000';
 
 console.log('[storyboard-init] API_DOMAIN:', API_DOMAIN);
@@ -202,11 +202,11 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   try {
     // 🔥 수정: require 대신 직접 경로 계산
     const mode = promptKey.includes('manual') ? 'manual' : 'auto';
-    
+
     // 🔥 engineId 생성 로직 (enginePromptHelper.js의 generateEngineId와 동일)
     const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
     let engineId = 'default';
-    
+
     try {
       if (fs.existsSync(enginesPath)) {
         const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
@@ -221,11 +221,11 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
 
     // 🔥 responses 디렉토리 경로
     const responsesPath = path.join(
-      process.cwd(), 
-      'public', 
-      'prompts', 
-      engineId, 
-      mode, 
+      process.cwd(),
+      'public',
+      'prompts',
+      engineId,
+      mode,
       'responses'
     );
 
@@ -422,10 +422,10 @@ function calculateProgress(phase, stepProgress = 0) {
 // ============================================================
 // 자동화 함수
 // ============================================================
-async function generateImage(imagePrompt, sceneNumber, conceptId, username, maxRetries = 3) {
+async function generateImage(imagePrompt, sceneNumber, conceptId, username, projectId, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId})`);
+      console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId}, 프로젝트: ${projectId})`);
 
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
@@ -436,7 +436,8 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, maxR
         body: JSON.stringify({
           imagePrompt,
           sceneNumber,
-          conceptId
+          conceptId,
+          projectId  // 🔥 추가: S3 업로드를 위한 projectId
         })
       });
 
@@ -479,37 +480,37 @@ function loadEngineDuration() {
       return '6';
     }
     const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
-    
+
     // 🔥 수정: currentEngine에서 model 이름 가져오기
     const currentModel = enginesData.currentEngine?.imageToVideo?.model;
-    
+
     if (!currentModel) {
       console.warn('[loadEngineDuration] 현재 엔진 모델이 없습니다. 기본값 6초 사용');
       return '6';
     }
-    
+
     // 🔥 수정: availableEngines에서 현재 모델의 supportedDurations 찾기
     const availableEngines = enginesData.availableEngines?.imageToVideo || [];
     const currentEngineConfig = availableEngines.find(engine => engine.model === currentModel);
-    
+
     if (!currentEngineConfig) {
       console.warn(`[loadEngineDuration] ${currentModel} 엔진 설정을 찾을 수 없습니다. 기본값 6초 사용`);
       return '6';
     }
-    
+
     const supportedDurations = currentEngineConfig.supportedDurations;
-    
+
     console.log('[loadEngineDuration] 🔍 엔진 정보:', {
       model: currentModel,
       supportedDurations: supportedDurations,
       foundIn: 'availableEngines'
     });
-    
+
     if (!supportedDurations || !Array.isArray(supportedDurations) || supportedDurations.length === 0) {
       console.warn('[loadEngineDuration] ⚠️ supportedDurations가 없거나 빈 배열입니다. 기본값 6초 사용');
       return '6';
     }
-    
+
     const duration = String(supportedDurations[0]);
     console.log(`[loadEngineDuration] ✅ 엔진 duration: ${duration}초 (${currentModel})`);
     return duration;
@@ -523,9 +524,9 @@ function loadEngineDuration() {
 async function generateVideo(imageUrl, motionPrompt, sceneNumber, formData) {
   // 🔥 동적으로 duration 로드
   const duration = loadEngineDuration();
-  
+
   console.log(`[generateVideo] 씬 ${sceneNumber} - imageUrl: ${imageUrl.substring(0, 60)}..., duration: ${duration}초`);
-  
+
   const response = await fetch(`${API_BASE}/api/image-to-video`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -758,7 +759,7 @@ async function processStoryboardAsync(body, username, sessionId) {
             sceneNum,
             prompt: scene.image_prompt?.prompt
           });
-          const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username);
+          const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username, body.projectId);
           console.log(`[storyboard-init] 🖼️ 씬 ${sceneNum} 이미지 생성 완료: ${imageUrl}`);
           images.push({
             sceneNumber: sceneNum,
@@ -850,9 +851,9 @@ async function processStoryboardAsync(body, username, sessionId) {
 
     // 🔥 v4.1: 완료 (이미지 세트 모드)
     const compositingInfo = analyzeCompositingInfo(body, compositingScenes);
-    
+
     const totalImages = styles.reduce((sum, s) => sum + s.images.length, 0);
-    
+
     const metadata = {
       promptFile: promptFile,
       promptFileName: promptFileName,

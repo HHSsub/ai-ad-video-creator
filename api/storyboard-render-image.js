@@ -1,7 +1,8 @@
-// api/storyboard-render-image.js - 🔥 동적 엔진 지원 버전 (2025-11-24 수정)
+// api/storyboard-render-image.js - 🔥 동적 엔진 지원 버전 + S3 업로드 (2025-12-25 수정)
 
 import { safeCallFreepik, getApiKeyStatus } from '../src/utils/apiHelpers.js';
 import { getTextToImageUrl, getTextToImageStatusUrl } from '../utils/engineConfigLoader.js';
+import { uploadImageToS3 } from '../server/utils/s3-uploader.js';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const POLLING_TIMEOUT = 120000; // 2 minutes
@@ -9,17 +10,17 @@ const POLLING_INTERVAL = 3000;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// 🔥 동적 엔진 이미지 생성 태스크 상태 폴링 (엔진 독립적)
-async function pollTaskStatus(taskId, conceptId = 0) {
+// 🔥 동적 엔진 이미지 생성 태스크 상태 폴링 (엔진 독립적 + S3 업로드)
+async function pollTaskStatus(taskId, conceptId = 0, projectId = null, sceneNumber = null) {
   const startTime = Date.now();
-  
+
   while (Date.now() - startTime < POLLING_TIMEOUT) {
     try {
       console.log(`[pollTaskStatus] 태스크 ${taskId.substring(0, 8)} 상태 확인 중... (컨셉: ${conceptId})`);
- 
+
       // 🔥 동적 URL 생성 - engines.json의 현재 엔진 사용
       const url = getTextToImageStatusUrl(taskId);
-      
+
       const result = await safeCallFreepik(url, {
         method: 'GET',
         headers: {
@@ -38,9 +39,25 @@ async function pollTaskStatus(taskId, conceptId = 0) {
         // ✅ 완료
         if (status === 'COMPLETED') {
           if (taskData.generated && Array.isArray(taskData.generated) && taskData.generated.length > 0) {
-            const imageUrl = taskData.generated[0];
-            console.log(`[pollTaskStatus] ✅ 완료 - 이미지 URL: ${imageUrl.substring(0, 80)}...`);
-            return { imageUrl, status: 'COMPLETED', raw: taskData };
+            const freepikUrl = taskData.generated[0];
+            console.log(`[pollTaskStatus] ✅ 완료 - Freepik URL: ${freepikUrl.substring(0, 80)}...`);
+
+            // 🔥 S3 업로드 (projectId가 있을 때만)
+            let finalImageUrl = freepikUrl;
+            if (projectId && conceptId && sceneNumber) {
+              try {
+                console.log(`[pollTaskStatus] 🚀 S3 업로드 시작: project=${projectId}, concept=${conceptId}, scene=${sceneNumber}`);
+                finalImageUrl = await uploadImageToS3(freepikUrl, projectId, conceptId, sceneNumber);
+                console.log(`[pollTaskStatus] ✅ S3 업로드 완료: ${finalImageUrl}`);
+              } catch (s3Error) {
+                console.error(`[pollTaskStatus] ⚠️ S3 업로드 실패, Freepik URL 사용:`, s3Error.message);
+                // S3 업로드 실패 시 Freepik URL 그대로 사용 (fallback)
+              }
+            } else {
+              console.warn(`[pollTaskStatus] ⚠️ S3 업로드 스킵 (projectId=${projectId}, conceptId=${conceptId}, sceneNumber=${sceneNumber})`);
+            }
+
+            return { imageUrl: finalImageUrl, status: 'COMPLETED', raw: taskData };
           } else {
             throw new Error('COMPLETED 상태이지만 generated 배열이 비어있습니다');
           }
@@ -68,13 +85,13 @@ async function pollTaskStatus(taskId, conceptId = 0) {
       if (Date.now() - startTime >= POLLING_TIMEOUT) {
         throw new Error(`이미지 생성 태스크 타임아웃 (${POLLING_TIMEOUT}ms 초과)`);
       }
-      
+
       console.error(`[pollTaskStatus] 폴링 에러 (컨셉: ${conceptId}):`, error);
-      
+
       if (error.message.includes('FAILED') || error.message.includes('ERROR')) {
         throw error;
       }
-      
+
       await sleep(POLLING_INTERVAL);
     }
   }
@@ -83,10 +100,10 @@ async function pollTaskStatus(taskId, conceptId = 0) {
 }
 
 
-// 🔥 동적 엔진 이미지 생성 함수 (키 풀 활용 + 엔진 독립적)
-async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0) {
+// 🔥 동적 엔진 이미지 생성 함수 (키 풀 활용 + 엔진 독립적 + S3 업로드)
+async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0, projectId = null, sceneNumber = null) {
   try {
-    console.log(`[generateImageWithDynamicEngine] 시작 (컨셉: ${conceptId}):`, {
+    console.log(`[generateImageWithDynamicEngine] 시작 (컨셉: ${conceptId}, 프로젝트: ${projectId}, 씬: ${sceneNumber}):`, {
       prompt: imagePrompt.prompt.substring(0, 100),
       aspect_ratio: imagePrompt.aspect_ratio,
       guidance_scale: imagePrompt.guidance_scale,
@@ -95,9 +112,9 @@ async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0) {
 
     // 🔥 동적 URL 생성 - engines.json의 현재 textToImage 엔진 사용
     const createUrl = getTextToImageUrl();
-    
+
     console.log(`[generateImageWithDynamicEngine] 사용 중인 엔진 URL: ${createUrl}`);
-    
+
     const createResult = await safeCallFreepik(createUrl, {
       method: 'POST',
       headers: {
@@ -116,8 +133,8 @@ async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0) {
     const taskId = createResult.data.task_id;
     console.log(`[generateImageWithDynamicEngine] 태스크 생성 성공 (컨셉: ${conceptId}): ${taskId}`);
 
-    // 🔥 태스크 상태 폴링
-    const pollResult = await pollTaskStatus(taskId, conceptId);
+    // 🔥 태스크 상태 폴링 (projectId, sceneNumber 전달)
+    const pollResult = await pollTaskStatus(taskId, conceptId, projectId, sceneNumber);
 
     console.log(`[generateImageWithDynamicEngine] 최종 성공 (컨셉: ${conceptId}):`, {
       imageUrl: pollResult.imageUrl.substring(0, 80),
@@ -168,11 +185,12 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    let { imagePrompt, sceneNumber, conceptId, prompt } = req.body || {};
+    let { imagePrompt, sceneNumber, conceptId, prompt, projectId } = req.body || {};
 
     console.log('[storyboard-render-image] 요청 수신:', {
       sceneNumber,
       conceptId,
+      projectId,
       hasImagePrompt: !!imagePrompt,
       legacyPrompt: !!prompt,
       promptPreview: (imagePrompt?.prompt || prompt || '').substring(0, 200)
@@ -197,18 +215,18 @@ export default async function handler(req, res) {
     if (imagePrompt) {
       const normalizedPrompt = {
         prompt: imagePrompt.prompt || imagePrompt.image_prompt?.prompt,
-        aspect_ratio: imagePrompt.aspect_ratio || 
-                     imagePrompt.image?.size || 
-                     imagePrompt.size || 
-                     'widescreen_16_9',
-        guidance_scale: imagePrompt.guidance_scale || 
-                       imagePrompt.image_prompt?.guidance_scale || 
-                       2.5,
-        seed: imagePrompt.seed || 
-              imagePrompt.image_prompt?.seed || 
-              Math.floor(Math.random() * 1000000)
+        aspect_ratio: imagePrompt.aspect_ratio ||
+          imagePrompt.image?.size ||
+          imagePrompt.size ||
+          'widescreen_16_9',
+        guidance_scale: imagePrompt.guidance_scale ||
+          imagePrompt.image_prompt?.guidance_scale ||
+          2.5,
+        seed: imagePrompt.seed ||
+          imagePrompt.image_prompt?.seed ||
+          Math.floor(Math.random() * 1000000)
       };
-      
+
       imagePrompt = normalizedPrompt;
     }
 
@@ -237,8 +255,8 @@ export default async function handler(req, res) {
     console.log(`[storyboard-render-image] 컨셉 ${conceptId}에 대한 동적 엔진 키 풀 활용 시작`);
 
     try {
-      // 🔥 동적 엔진으로 이미지 생성
-      const result = await generateImageWithDynamicEngine(imagePrompt, conceptId || 0);
+      // 🔥 동적 엔진으로 이미지 생성 (projectId, sceneNumber 전달)
+      const result = await generateImageWithDynamicEngine(imagePrompt, conceptId || 0, projectId, sceneNumber);
 
       const processingTime = Date.now() - startTime;
 
@@ -307,9 +325,9 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[storyboard-render-image] 전체 오류:', error);
-    
+
     const fallbackUrl = generateFallbackImage(req.body?.sceneNumber, req.body?.conceptId);
-    
+
     return res.status(500).json({
       success: false,
       url: fallbackUrl,
