@@ -71,7 +71,44 @@ ai-ad-video-creator/
 
 ---
 
-## 3. EC2 Public IP 변경 시 체크리스트
+## 3. API 경로 규칙 (절대 누락 금지)
+
+### ✅ 올바른 API 경로
+
+```javascript
+// ✅ 프론트엔드에서 백엔드 API 호출 시 반드시 /nexxii/ prefix 포함
+fetch(`${API_BASE}/nexxii/api/projects/${projectId}/members`, { ... });
+fetch(`${API_BASE}/nexxii/api/storyboard-init`, { ... });
+fetch(`${API_BASE}/nexxii/api/apply-bgm`, { ... });
+```
+
+### ❌ 잘못된 API 경로
+
+```javascript
+// ❌ /nexxii/ prefix 누락 - CloudFront에서 HTML 에러 응답
+fetch(`${API_BASE}/api/projects/${projectId}/members`, { ... });
+```
+
+**왜 필요한가?**
+- nginx에서 `/nexxii/` 경로로 라우팅 설정됨
+- CloudFront도 `/nexxii/` 경로 기준으로 캐싱
+- prefix 누락 시 404 또는 HTML 에러 응답
+
+**에러 증상**:
+- `Unexpected token '<'` (HTML 응답을 JSON으로 파싱 시도)
+- `<!DOCTYPE html>` 에러 메시지
+- CloudFront HTML 에러 페이지 반환
+
+**검증 방법**:
+```bash
+# 프론트엔드 코드에서 API 호출 검색
+grep -r "fetch.*api/" src/
+# 모든 결과에 /nexxii/ prefix 있는지 확인
+```
+
+---
+
+## 4. EC2 Public IP 변경 시 체크리스트
 
 EC2 인스턴스를 재시작하거나 IP가 변경되면:
 

@@ -86,6 +86,26 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-25 16:45 - 작업 E-4, E-5 구현: BGM 적용 및 다운로드
+- **파일**: `src/components/Step4.jsx`
+- **구현 내용**:
+  - E-4: BGM 선택 및 적용 기능 (기존 `api/apply-bgm.js` 활용)
+    - BGM state 추가 (showBGMSelector, availableMoods, selectedMood, applyingBGM, finalVideoWithBGM)
+    - useEffect에 mood 목록 로드 로직 추가
+    - handleConfirmAndComplete 수정 (BGM 선택 UI 표시)
+    - handleApplyBGM, handleSkipBGM 함수 추가
+    - BGM 선택 모달 UI 추가
+  - E-5: 최종 영상 다운로드 기능
+    - handleDownloadFinalVideo 함수 추가
+    - 다운로드 UI 모달 추가
+- **주의**: 모든 API 호출에 `/nexxii/` prefix 포함
+
+### 2025-12-25 16:39 - 버그 수정: API 경로 /nexxii/ prefix 누락
+- **파일**: `src/components/InviteMemberModal.jsx`, `CRITICAL_CONFIG.md`
+- **문제**: 멤버 초대 API 호출 시 `/nexxii/` prefix 누락으로 HTML 에러 응답
+- **수정**: `/api/projects/...` → `/nexxii/api/projects/...`
+- **영구 지침 추가**: CRITICAL_CONFIG.md에 "API 경로 규칙" 섹션 추가
+
 ### 2025-12-25 16:30 - 작업 G 구현: 조기 멤버 초대 (G-1, G-2)
 - **파일**: `src/components/ModeSelector.jsx`, `src/App.jsx`, `src/components/InviteMemberModal.jsx` (신규)
 - **구현 내용**:
