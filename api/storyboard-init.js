@@ -445,7 +445,7 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, proj
       const result = await response.json();
       console.log(`[generateImage] 응답:`, JSON.stringify(result));
 
-      const imageUrl = result.url || result.imageUrl;
+      const imageUrl = result.url; // API returns S3 URL in 'url' field
 
       // 🔥 fallback 이미지 체크 - 재시도
       if (result.fallback === true || !imageUrl || imageUrl.includes('via.placeholder.com')) {

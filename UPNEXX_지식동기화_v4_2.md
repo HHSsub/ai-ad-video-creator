@@ -86,6 +86,16 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-25 23:46 - Import 누락 수정 및 절대 규칙 문서화
+- **파일**: `api/storyboard-render-image.js`, `CRITICAL_CONFIG.md`
+- **수정 내용**:
+  - `getTextToImageStatusUrl` import 누락 수정 (Line 4)
+  - CRITICAL_CONFIG.md에 절대 규칙 2개 추가:
+    1. API/엔진 관련 수정 시 공식 문서 필수 확인
+    2. Import 문 누락 절대 금지 (평소 코드 수정 혹은 함수 사용 전 반드시 import 확인)
+- **원인**: `engineConfigLoader.js`에 정의된 함수를 사용하는데 import 누락
+- **교훈**: 모든 함수 호출 전 import 문 전수 조사 필수
+
 ### 2025-12-25 16:58 - Step4 정리: 미사용 BGM 코드 제거
 - **파일**: `src/components/Step4.jsx`
 - **제거 내용**:
