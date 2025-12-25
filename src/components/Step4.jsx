@@ -671,90 +671,93 @@ const Step4 = ({
             </button>
 
             {permissions.confirm && (
-              <button
-                onClick={handleConfirmAndComplete}
-                disabled={loading}
-                className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-              >
-                ✅ 컨펌 완료
-              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400">
+                  영상 변환: {sortedImages.filter(img => img.videoUrl).length}/{sortedImages.length}개
+                </span>
+                <button
+                  onClick={handleConfirmAndComplete}
+                  disabled={sortedImages.filter(img => img.videoUrl).length === 0}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
+                  title={sortedImages.filter(img => img.videoUrl).length === 0 ? '최소 1개 씬을 영상으로 변환해주세요' : ''}
+                >
+                  ✅ 컨펌 완료
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
-    </div>
 
-      {/* 🔥 추가: 멤버 초대 모달 */ }
-  {
-    showInviteModal && (
-      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-        <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
-          <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
+      {/* 🔥 추가: 멤버 초대 모달 */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
+            <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
 
-          {inviteError && (
-            <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
-              {inviteError}
+            {inviteError && (
+              <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
+                {inviteError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  사용자명 (계정 ID)
+                </label>
+                <input
+                  type="text"
+                  value={inviteUsername}
+                  onChange={(e) => setInviteUsername(e.target.value)}
+                  placeholder="예: guest, test1"
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                  disabled={inviteLoading}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  시스템에 등록된 사용자만 초대할 수 있습니다.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  역할 선택
+                </label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                  disabled={inviteLoading}
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                사용자명 (계정 ID)
-              </label>
-              <input
-                type="text"
-                value={inviteUsername}
-                onChange={(e) => setInviteUsername(e.target.value)}
-                placeholder="예: guest, test1"
-                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                disabled={inviteLoading}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                시스템에 등록된 사용자만 초대할 수 있습니다.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                역할 선택
-              </label>
-              <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleCloseInviteModal}
+                className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
                 disabled={inviteLoading}
               >
-                {ROLE_OPTIONS.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
+                취소
+              </button>
+              <button
+                onClick={handleInviteMember}
+                disabled={inviteLoading || !inviteUsername.trim()}
+                className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+              >
+                {inviteLoading ? '초대 중...' : '초대하기'}
+              </button>
             </div>
           </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={handleCloseInviteModal}
-              className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
-              disabled={inviteLoading}
-            >
-              취소
-            </button>
-            <button
-              onClick={handleInviteMember}
-              disabled={inviteLoading || !inviteUsername.trim()}
-              className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-            >
-              {inviteLoading ? '초대 중...' : '초대하기'}
-            </button>
-          </div>
         </div>
-      </div>
-    )
-  }
-    </div >
+      )}
+    </div>
   );
 };
 
