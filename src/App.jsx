@@ -504,6 +504,7 @@ function App() {
               project={currentProject}
               onSelectMode={handleSelectMode}
               onBack={handleBackToProjects}
+              onInviteMember={() => setShowInviteModal(true)}
             />
           )}
 
@@ -642,6 +643,16 @@ function App() {
             )}
           </div>
         </div>
+      )}
+
+      {/* 🔥 G-2: 멤버 초대 모달 */}
+      {currentProject && (
+        <InviteMemberModal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          projectId={currentProject.id}
+          currentUser={user?.username || ''}
+        />
       )}
     </div>
   );
