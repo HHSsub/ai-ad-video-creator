@@ -609,7 +609,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           url: formData.imageUpload.url
         } : null,
         sessionId: sessionId,
-        personSelection: selectedPerson // 🔥 인물 선택 (URL)
+        personSelection: formData.personSelection // 🔥 인물 선택 (URL, Step1에서 전달받음)
       };
 
       let initResponse;
@@ -799,51 +799,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             </div>
           )}
 
-          {/* 🔥 Person Selection UI */}
-          {personConfigVisible && persons.length > 0 && (
-            <div className="mb-6 bg-gray-900/40 rounded-xl p-6 border border-gray-700">
-              <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                👤 인물 선택 <span className="text-xs font-normal text-gray-400 bg-gray-800 px-2 py-0.5 rounded-full">Optional</span>
-              </h3>
-              <p className="text-sm text-gray-400 mb-4">
-                영상에 합성할 인물을 선택하세요. 선택하지 않으면 인물 합성이 적용되지 않습니다.
-              </p>
 
-              <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
-                {/* None Option */}
-                <div
-                  onClick={() => setSelectedPerson('')}
-                  className={`flex-shrink-0 w-24 h-32 rounded-lg border-2 cursor-pointer flex items-center justify-center transition-all ${selectedPerson === ''
-                      ? 'border-blue-500 bg-blue-900/20'
-                      : 'border-gray-700 bg-gray-800 hover:border-gray-500'
-                    }`}
-                >
-                  <span className="text-sm text-gray-400 font-bold">선택 안함</span>
-                </div>
-
-                {persons.map(person => (
-                  <div
-                    key={person.key}
-                    onClick={() => setSelectedPerson(person.url)}
-                    className={`relative flex-shrink-0 w-24 h-32 rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${selectedPerson === person.url
-                        ? 'border-blue-500 ring-2 ring-blue-500/30'
-                        : 'border-gray-700 hover:border-gray-500'
-                      }`}
-                  >
-                    <img src={person.url} alt={person.name} className="w-full h-full object-cover" />
-                    <div className="absolute inset-x-0 bottom-0 bg-black/60 p-1 text-center">
-                      <span className="text-[10px] text-white truncate block">{person.name}</span>
-                    </div>
-                    {selectedPerson === person.url && (
-                      <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="flex items-center justify-between pt-6 border-t border-gray-700">
             <button

@@ -13,6 +13,35 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
     }));
   }, [setFormData]);
 
+  // 🔥 [M] Person Selection 기능
+  const [persons, setPersons] = useState([]);
+  const [personConfigVisible, setPersonConfigVisible] = useState(false);
+
+  useEffect(() => {
+    const loadPersonConfig = async () => {
+      try {
+        const configRes = await fetch('/nexxii/api/admin-field-config');
+        const configData = await configRes.json();
+
+        // configData.config가 없으면 빈 객체 처리
+        const config = configData.config || {};
+
+        if (configData.success && config.personSelection?.visible) {
+          setPersonConfigVisible(true);
+
+          const personsRes = await fetch('/nexxii/api/persons');
+          const personsData = await personsRes.json();
+          if (personsData.success) {
+            setPersons(personsData.persons || []);
+          }
+        }
+      } catch (error) {
+        console.error('Person config load error:', error);
+      }
+    };
+    loadPersonConfig();
+  }, []);
+
   // 필수 옵션값 (fieldConfig.js와 정확히 일치)
   const VIDEO_LENGTHS = ['10초', '20초', '30초'];
   const ASPECT_RATIOS = [
@@ -231,6 +260,54 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
           </div>
         </div>
 
+        {/* 🔥 Person Selection UI */}
+        {personConfigVisible && persons.length > 0 && (
+          <div className="form-section">
+            <label className="section-label">
+              6. 인물 선택 (선택)
+            </label>
+            <div className="bg-gray-900/40 rounded-xl p-6 border border-gray-700">
+              <p className="text-sm text-gray-400 mb-4">
+                영상에 합성할 인물을 선택하세요. 선택하지 않으면 인물 합성이 적용되지 않습니다.
+              </p>
+
+              <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                {/* None Option */}
+                <div
+                  onClick={() => handleChange('personSelection', '')}
+                  className={`flex-shrink-0 w-24 h-32 rounded-lg border-2 cursor-pointer flex items-center justify-center transition-all ${!formData.personSelection
+                    ? 'border-blue-500 bg-blue-900/20'
+                    : 'border-gray-700 bg-gray-800 hover:border-gray-500'
+                    }`}
+                >
+                  <span className="text-sm text-gray-400 font-bold">선택 안함</span>
+                </div>
+
+                {persons.map(person => (
+                  <div
+                    key={person.key}
+                    onClick={() => handleChange('personSelection', person.url)}
+                    className={`relative flex-shrink-0 w-24 h-32 rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${formData.personSelection === person.url
+                      ? 'border-blue-500 ring-2 ring-blue-500/30'
+                      : 'border-gray-700 hover:border-gray-500'
+                      }`}
+                  >
+                    <img src={person.url} alt={person.name} className="w-full h-full object-cover" />
+                    <div className="absolute inset-x-0 bottom-0 bg-black/60 p-1 text-center">
+                      <span className="text-[10px] text-white truncate block">{person.name}</span>
+                    </div>
+                    {formData.personSelection === person.url && (
+                      <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 필수 옵션 요약 */}
         <div className="summary-box">
           <h3>📋 선택한 옵션</h3>
@@ -272,7 +349,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
           </button>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

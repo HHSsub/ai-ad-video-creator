@@ -16,6 +16,31 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
   const [editingPlaceholder, setEditingPlaceholder] = useState(null);
   const [tempPlaceholder, setTempPlaceholder] = useState('');
 
+  // 🔥 [M] Person Selection 기능
+  const [persons, setPersons] = useState([]);
+  const [personConfigVisible, setPersonConfigVisible] = useState(false);
+
+  useEffect(() => {
+    const loadPersonConfig = async () => {
+      try {
+        const configRes = await fetch('/nexxii/api/admin-field-config');
+        const configData = await configRes.json();
+        const config = configData.config || {};
+        if (configData.success && config.personSelection?.visible) {
+          setPersonConfigVisible(true);
+          const personsRes = await fetch('/nexxii/api/persons');
+          const personsData = await personsRes.json();
+          if (personsData.success) {
+            setPersons(personsData.persons || []);
+          }
+        }
+      } catch (error) {
+        console.error('Person config load error:', error);
+      }
+    };
+    loadPersonConfig();
+  }, []);
+
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
@@ -42,7 +67,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
     try {
       const user = localStorage.getItem('user');
       const username = user ? JSON.parse(user).username : 'guest';
-      
+
       const response = await fetch('/nexxii/api/admin-field-config/field-config', {
         method: 'POST',
         headers: {
@@ -51,7 +76,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
         },
         body: JSON.stringify(newSettings)
       });
-  
+
       const data = await response.json();
       if (!data.success) {
         console.error('서버 저장 실패:', data.error);
@@ -67,7 +92,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
     try {
       const user = localStorage.getItem('user');
       const username = user ? JSON.parse(user).username : 'guest';
-      
+
       const response = await fetch('/nexxii/api/admin-field-config/field-config', {
         method: 'POST',
         headers: {
@@ -76,7 +101,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
         },
         body: JSON.stringify(newConfig)
       });
-  
+
       const data = await response.json();
       if (!data.success) {
         console.error('서버 저장 실패:', data.error);
@@ -104,7 +129,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    
+
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
@@ -121,7 +146,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    
+
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
@@ -138,7 +163,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
       }
     };
     setAdminSettings(newSettings);
-    
+
     if (isAdmin) {
       saveAdminSettingsToServer(newSettings);
     } else {
@@ -153,7 +178,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    
+
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
@@ -173,13 +198,13 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
       }
     };
     setFieldConfig(newConfig);
-    
+
     if (isAdmin) {
       saveFieldConfigToServer(newConfig);
     } else {
       saveFieldConfig(newConfig);
     }
-    
+
     setEditingPlaceholder(null);
     setTempPlaceholder('');
   };
@@ -187,7 +212,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
   const getImageUploadConfig = () => {
     const purpose = formData.videoPurpose;
     const imageFieldSettings = adminSettings.imageUpload || {};
-    
+
     if (imageFieldSettings.label || imageFieldSettings.description) {
       return {
         label: imageFieldSettings.label || fieldConfig.imageUpload?.label || '이미지 업로드',
@@ -197,7 +222,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
 
     const descriptions = fieldConfig.imageUpload?.descriptions || {};
     const baseLabel = fieldConfig.imageUpload?.label || '이미지 업로드';
-    
+
     return {
       label: baseLabel,
       description: descriptions[purpose] || descriptions.default || '이미지를 업로드해주세요'
@@ -213,13 +238,13 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
       }
     };
     setAdminSettings(newSettings);
-    
+
     if (isAdmin) {
       await saveAdminSettingsToServer(newSettings);
     } else {
       saveAdminSettings(newSettings);
     }
-    
+
     setEditingImageLabel(false);
     setTempImageLabel('');
   };
@@ -233,17 +258,17 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
       }
     };
     setAdminSettings(newSettings);
-    
+
     if (isAdmin) {
       await saveAdminSettingsToServer(newSettings);
     } else {
       saveAdminSettings(newSettings);
     }
-    
+
     setEditingImageDesc(false);
     setTempImageDesc('');
   };
-    
+
   const validateForm = () => {
     const newErrors = {};
     const visibleFields = Object.values(fieldConfig).filter(field => field.visible);
@@ -334,7 +359,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
           </>
         )}
       </div>
-      
+
       <div className="relative">
         <input
           type="text"
@@ -345,7 +370,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
         />
         <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-600/8 via-purple-600/8 to-cyan-600/8 opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
       </div>
-      
+
       {editingPlaceholder === field.key && (
         <div className="mt-6 p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-700/40 rounded-2xl shadow-xl shadow-black/20">
           <div className="flex items-center gap-4">
@@ -375,7 +400,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
           </div>
         </div>
       )}
-      
+
       {errors[field.key] && (
         <p className="mt-3 text-sm text-red-300 flex items-center gap-2 bg-red-900/20 px-4 py-2 rounded-xl border border-red-500/30">
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -453,7 +478,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
           </>
         )}
       </div>
-      
+
       <div className="relative">
         <textarea
           value={formData[field.key] || ''}
@@ -464,7 +489,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
         />
         <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-600/8 via-purple-600/8 to-cyan-600/8 opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
       </div>
-      
+
       {editingPlaceholder === field.key && (
         <div className="mt-6 p-6 bg-gray-900/60 backdrop-blur-xl border border-gray-700/40 rounded-2xl shadow-xl shadow-black/20">
           <div className="flex items-center gap-4">
@@ -494,7 +519,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
           </div>
         </div>
       )}
-      
+
       {errors[field.key] && (
         <p className="mt-3 text-sm text-red-300 flex items-center gap-2 bg-red-900/20 px-4 py-2 rounded-xl border border-red-500/30">
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -563,7 +588,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
           </>
         )}
       </div>
-      
+
       <div className="relative">
         <select
           value={formData[field.key] || ''}
@@ -584,7 +609,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
         </div>
         <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-600/8 via-purple-600/8 to-cyan-600/8 opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
       </div>
-      
+
       {errors[field.key] && (
         <p className="mt-3 text-sm text-red-300 flex items-center gap-2 bg-red-900/20 px-4 py-2 rounded-xl border border-red-500/30">
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -622,7 +647,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
                   setEditingImageLabel(false);
                   setTempImageLabel('');
                 }}
-className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
+                className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/40 rounded-xl transition-all duration-200 backdrop-blur-sm"
               >
                 취소
               </button>
@@ -714,7 +739,7 @@ className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 ho
               }
             }}
           />
-          
+
           <label
             htmlFor={field.key}
             className="relative block cursor-pointer group/label"
@@ -765,7 +790,7 @@ className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 ho
             <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-cyan-600/10 opacity-0 group-hover/label:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
           </label>
         </div>
-        
+
         {errors[field.key] && (
           <p className="mt-4 text-sm text-red-300 flex items-center gap-2 bg-red-900/20 px-4 py-2 rounded-xl border border-red-500/30">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -783,20 +808,20 @@ className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 ho
 
   return (
     <>
-      <RealtimeConfigSync 
+      <RealtimeConfigSync
         onConfigUpdate={handleConfigUpdate}
         onAdminUpdate={handleAdminUpdate}
       />
-      
+
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black relative overflow-hidden">
         <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-gradient-to-br from-blue-600/15 via-purple-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-gradient-to-tl from-cyan-600/15 via-blue-600/10 to-transparent rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute top-1/2 left-0 w-[400px] h-[400px] bg-gradient-to-r from-emerald-600/10 to-transparent rounded-full blur-3xl"></div>
-        
+
         <div className="relative z-10 max-w-4xl mx-auto p-8">
           <div className="bg-gray-900/30 backdrop-blur-2xl rounded-[2rem] shadow-2xl border border-gray-700/30 p-12 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-cyan-600/5 rounded-[2rem]"></div>
-            
+
             <div className="relative z-10">
               <div className="flex items-start justify-between mb-12">
                 <div className="max-w-2xl">
@@ -840,11 +865,59 @@ className="text-gray-300 hover:text-gray-200 text-sm px-4 py-2 bg-gray-600/20 ho
                       return null;
                   }
                 })}
-                
+
                 {visibleFields.filter(field => field.type === 'image').map(field => {
                   return renderImageField(field);
                 })}
               </div>
+
+              {/* 🔥 Person Selection UI */}
+              {personConfigVisible && persons.length > 0 && (
+                <div className="group mb-8">
+                  <label className="text-lg font-semibold text-white tracking-wide mb-1 block">
+                    6. 인물 선택 (선택)
+                  </label>
+                  <div className="bg-gray-900/40 rounded-xl p-6 border border-gray-700">
+                    <p className="text-sm text-gray-400 mb-4">
+                      영상에 합성할 인물을 선택하세요. 선택하지 않으면 인물 합성이 적용되지 않습니다.
+                    </p>
+
+                    <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                      {/* None Option */}
+                      <div
+                        onClick={() => setFormData(prev => ({ ...prev, personSelection: '' }))}
+                        className={`flex-shrink-0 w-24 h-32 rounded-lg border-2 cursor-pointer flex items-center justify-center transition-all ${!formData.personSelection
+                          ? 'border-blue-500 bg-blue-900/20'
+                          : 'border-gray-700 bg-gray-800 hover:border-gray-500'
+                          }`}
+                      >
+                        <span className="text-sm text-gray-400 font-bold">선택 안함</span>
+                      </div>
+
+                      {persons.map(person => (
+                        <div
+                          key={person.key}
+                          onClick={() => setFormData(prev => ({ ...prev, personSelection: person.url }))}
+                          className={`relative flex-shrink-0 w-24 h-32 rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${formData.personSelection === person.url
+                            ? 'border-blue-500 ring-2 ring-blue-500/30'
+                            : 'border-gray-700 hover:border-gray-500'
+                            }`}
+                        >
+                          <img src={person.url} alt={person.name} className="w-full h-full object-cover" />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 p-1 text-center">
+                            <span className="text-[10px] text-white truncate block">{person.name}</span>
+                          </div>
+                          {formData.personSelection === person.url && (
+                            <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end mt-16">
                 {/* ✅ 이전 버튼 추가 */}
@@ -900,7 +973,7 @@ Step1.propTypes = {
   formData: PropTypes.object.isRequired,
   setFormData: PropTypes.func.isRequired,
   user: PropTypes.object,
-  onPrev: PropTypes.func, 
+  onPrev: PropTypes.func,
   onNext: PropTypes.func.isRequired
 };
 
