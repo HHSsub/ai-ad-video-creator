@@ -629,7 +629,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         },
         body: JSON.stringify({
           manualGeminiResponse: geminiResponse,
-          formData: formData,
+          formData: {
+            ...formData,
+            projectId: currentProject?.id || null // 🔥 projectId 추가
+          },
           sessionId: sessionId
         })
       });
