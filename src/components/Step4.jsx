@@ -1,5 +1,4 @@
-﻿[ec2 - user@ip - 172 - 31 - 27 - 142 ai - ad - video - creator]$ cat src / components / Step4.jsx
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
