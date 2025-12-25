@@ -32,6 +32,7 @@ const Step4 = ({
   const [localComments, setLocalComments] = useState({});
   const [newComment, setNewComment] = useState({});
   const [regeneratingScenes, setRegeneratingScenes] = useState({});
+  const [convertingScenes, setConvertingScenes] = useState({}); // 🔥 E-1: 씬별 영상 변환 상태
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -175,11 +176,11 @@ const Step4 = ({
         scene.prompt = editedPrompt;
         scene.videoUrl = null;
         scene.status = 'image_done';
-        
+
         if (!modifiedScenes.includes(sceneNumber)) {
           setModifiedScenes(prev => [...prev, sceneNumber]);
         }
-        
+
         log(`씬 ${sceneNumber} 이미지 재생성 완료: ${newImageUrl}`);
       } else {
         throw new Error(result.message || result.error || '이미지 재생성 실패');
@@ -242,7 +243,7 @@ const Step4 = ({
 
       // 2단계: 전체 영상 합성
       log('영상 합성 시작...');
-      
+
       // 🔥 수정: videos → segments 키로 변경
       const segments = sortedImages
         .filter(img => img.videoUrl)
@@ -250,13 +251,13 @@ const Step4 = ({
           sceneNumber: img.sceneNumber,
           videoUrl: img.videoUrl
         }));
-      
+
       if (segments.length === 0) {
         throw new Error('합성할 영상 클립이 없습니다.');
       }
-      
+
       log(`합성할 클립 개수: ${segments.length}`);
-      
+
       const compileResponse = await fetch(`${API_BASE}/nexxii/api/compile-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -273,12 +274,12 @@ const Step4 = ({
 
       if (compileResult.success && compileResult.compiledVideoUrl) {
         log(`영상 합성 완료: ${compileResult.compiledVideoUrl}`);
-        
+
         if (finalVideo) {
           finalVideo.videoUrl = compileResult.compiledVideoUrl;
           finalVideo.metadata = compileResult.metadata;
         }
-        
+
         setModifiedScenes([]);
         log('Step3으로 이동합니다.');
         onComplete();
@@ -411,7 +412,7 @@ const Step4 = ({
               </div>
             </div>
             {permissions.invite && (
-              <button 
+              <button
                 onClick={handleOpenInviteModal}
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm"
               >
@@ -434,9 +435,9 @@ const Step4 = ({
             <div className="mb-8 bg-gray-900/50 rounded-xl p-4 border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-3">📹 현재 최종 영상</h3>
               <div className="aspect-video bg-black rounded-lg overflow-hidden max-w-2xl">
-                <video 
-                  src={getVideoSrc(finalVideo.videoUrl)} 
-                  className="w-full h-full" 
+                <video
+                  src={getVideoSrc(finalVideo.videoUrl)}
+                  className="w-full h-full"
                   controls
                   onError={(e) => {
                     console.error('[Step4] 최종 영상 로드 실패:', finalVideo.videoUrl);
@@ -457,9 +458,8 @@ const Step4 = ({
                 return (
                   <div
                     key={img.sceneNumber}
-                    className={`bg-gray-900/50 rounded-xl p-6 border ${
-                      isModified ? 'border-yellow-600' : 'border-gray-700'
-                    }`}
+                    className={`bg-gray-900/50 rounded-xl p-6 border ${isModified ? 'border-yellow-600' : 'border-gray-700'
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-lg font-semibold text-white">
@@ -471,11 +471,10 @@ const Step4 = ({
                             수정됨
                           </span>
                         )}
-                        <span className={`px-2 py-1 text-xs rounded ${
-                          img.status === 'video_done' 
-                            ? 'bg-green-900/50 text-green-300' 
+                        <span className={`px-2 py-1 text-xs rounded ${img.status === 'video_done'
+                            ? 'bg-green-900/50 text-green-300'
                             : 'bg-gray-700 text-gray-300'
-                        }`}>
+                          }`}>
                           {img.status === 'video_done' ? '영상 완료' : img.status || '대기중'}
                         </span>
                       </div>
@@ -649,7 +648,7 @@ const Step4 = ({
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
             <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
-            
+
             {inviteError && (
               <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
                 {inviteError}
