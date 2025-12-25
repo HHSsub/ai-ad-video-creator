@@ -3,13 +3,14 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  base: '/nexxii/',
   server: {
     host: '0.0.0.0',
     port: 5173,
-    hmr: { 
-      host: '13.222.179.138', 
-      port: 5173, 
-      protocol: 'ws' 
+    hmr: {
+      host: '13.222.179.138',
+      port: 5173,
+      protocol: 'ws'
     },
     proxy: {
       '/api': {
@@ -27,12 +28,12 @@ export default defineConfig({
           proxy.on('error', (err, req, res) => {
             console.log('❌ [proxy error]', err.message);
             if (!res.headersSent) {
-              res.writeHead(500, { 
+              res.writeHead(500, {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
               });
-              res.end(JSON.stringify({ 
-                error: 'Backend server unavailable', 
+              res.end(JSON.stringify({
+                error: 'Backend server unavailable',
                 message: err.message,
                 timestamp: new Date().toISOString(),
                 suggestion: 'Backend 서버가 응답하지 않습니다. 서버 상태를 확인해주세요.'
