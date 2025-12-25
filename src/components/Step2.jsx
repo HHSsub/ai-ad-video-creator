@@ -1,6 +1,7 @@
 // src/components/Step2.jsx - 완전한 전체 코드 (생략 없음)
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import ManualPromptModal from './ManualPromptModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -103,6 +104,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   const [error, setError] = useState('');
   const [debugInfo, setDebugInfo] = useState(null);
   const [styles, setStyles] = useState([]);
+  const [showManualModal, setShowManualModal] = useState(false);
 
   const isBusy = isLoading;
   const progressManager = new ProgressManager();
@@ -615,6 +617,38 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     }
   };
 
+  const handleManualSubmit = async (geminiResponse) => {
+    try {
+      const sessionId = `session_${Date.now()}_${user?.username || 'anonymous'}`;
+
+      const response = await fetch(`${API_BASE}/api/storyboard-manual-inject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          manualGeminiResponse: geminiResponse,
+          formData: formData,
+          sessionId: sessionId
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setShowManualModal(false);
+        // 기존 폴링 로직 재사용
+        await pollAndGenerateImages(sessionId);
+      } else {
+        setError(data.error || '수동 입력 처리 실패');
+      }
+    } catch (error) {
+      console.error('[handleManualSubmit] 오류:', error);
+      setError(error.message);
+    }
+  };
+
   const getButtonText = () => {
     const imageInfo = getUnifiedImageData(formData);
     return imageInfo.hasImage
@@ -754,6 +788,25 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           </div>
         </div>
       </div>
+
+      {/* Admin 전용 수동 프롬프트 입력 버튼 */}
+      {user?.username === 'admin' && !isBusy && (
+        <button
+          onClick={() => setShowManualModal(true)}
+          className="fixed bottom-6 right-6 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-lg z-50 flex items-center gap-2"
+        >
+          <span>🔧</span>
+          <span>수동 프롬프트 입력</span>
+        </button>
+      )}
+
+      {/* 수동 프롬프트 모달 */}
+      <ManualPromptModal
+        isOpen={showManualModal}
+        onClose={() => setShowManualModal(false)}
+        onSubmit={handleManualSubmit}
+        formData={formData}
+      />
     </div>
   );
 };

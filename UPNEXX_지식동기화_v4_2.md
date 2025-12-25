@@ -84,7 +84,19 @@
 
 ---
 
+
 ## 📝 작업 히스토리 (최신순)
+
+### 2025-12-26 01:04 - 수동 프롬프트 입력 기능 구현
+- **목적**: Admin이 외부에서 직접 Gemini 응답을 생성하여 시스템에 입력
+- **핵심 원칙**: 기존 자동 플로우와 완전히 동일 (특별한 검증 없음)
+- **구현 파일**:
+  1. `api/generate-prompt.js` (신규): Step1 입력값 → 최종 Gemini 프롬프트 생성
+  2. `ManualPromptModal.jsx` (수정): 2개 영역 (프롬프트 표시 + 응답 입력)
+  3. `api/storyboard-manual-inject.js` (신규 예정): 수동 응답 → 기존 이미지 생성 로직 재사용
+  4. Step2.jsx (수정 예정): Admin 전용 버튼 추가
+- **검증**: 기존 `parseUnifiedConceptJSON()` 재사용
+- **상태**: 🟡 진행중
 
 ### 2025-12-25 23:46 - Import 누락 수정 및 절대 규칙 문서화
 - **파일**: `api/storyboard-render-image.js`, `CRITICAL_CONFIG.md`
