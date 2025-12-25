@@ -153,7 +153,10 @@ const Step4 = ({
       // 🔥 수정: API 요청 형식을 storyboard-render-image.js에 맞게 조정
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
         body: JSON.stringify({
           imagePrompt: {
             prompt: editedPrompt,
@@ -162,7 +165,8 @@ const Step4 = ({
             seed: Math.floor(Math.random() * 1000000)
           },
           sceneNumber: sceneNumber,
-          conceptId: selectedConceptId
+          conceptId: selectedConceptId,
+          projectId: currentProject?.id || null // 🔥 projectId 추가
         })
       });
 
