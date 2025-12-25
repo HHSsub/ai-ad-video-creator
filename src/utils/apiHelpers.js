@@ -269,25 +269,11 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
       // 🔥 사용 가능한 키 선택 (이미 사용한 키 제외)
       keyIndex = null;
 
-      // 사용하지 않은 키 중 블록되지 않은 키 찾기
+      // 사용하지 않은 키 찾기
       for (let i = 0; i < totalKeys; i++) {
         if (!usedKeys.has(i)) {
-          const keyStatus = apiKeyManager.getKeyStatus('freepik', i);
-          if (!keyStatus.blocked) {
-            keyIndex = i;
-            break;
-          }
-        }
-      }
-
-      // 모든 키가 블록되었으면 사용하지 않은 키 중 아무거나
-      if (keyIndex === null) {
-        for (let i = 0; i < totalKeys; i++) {
-          if (!usedKeys.has(i)) {
-            keyIndex = i;
-            console.log(`[${label}] 모든 키가 블록됨, 키 ${i} 사용 시도`);
-            break;
-          }
+          keyIndex = i;
+          break;
         }
       }
 
@@ -298,7 +284,7 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
       }
 
       usedKeys.add(keyIndex);
-      const apiKey = apiKeyManager.getKey('freepik', keyIndex);
+      const { key: apiKey } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
       console.log(`[${label}] 시도 ${attempt + 1}/${maxTotalAttempts} (컨셉: ${conceptId}, 키: ${keyIndex}, 사용된 키: ${usedKeys.size - 1}/${totalKeys})`);
 
       const response = await withTimeout(
