@@ -421,14 +421,15 @@ app.post('/api/prompts/save-response', async (req, res) => {
   }
 });
 
-app.get('/api/prompts/responses/:promptKey', async (req, res) => {
+app.get('/api/prompts/responses/:engineId/:promptType', async (req, res) => {
   try {
-    const { promptKey } = req.params;
+    const { engineId, promptType } = req.params;
+    const promptKey = `${engineId}_${promptType}`;
 
     // 🔥 엔진 기반 경로로 변경
-    const { getGeminiResponsesDir, generateEngineId } = await import('./src/utils/enginePromptHelper.js');
+    const { getGeminiResponsesDir } = await import('./src/utils/enginePromptHelper.js');
 
-    const mode = promptKey.includes('manual') ? 'manual' : 'auto';
+    const mode = promptType.includes('manual') ? 'manual' : 'auto';
     const responsesPath = getGeminiResponsesDir(mode);
 
     if (!fs.existsSync(responsesPath)) {
@@ -438,6 +439,8 @@ app.get('/api/prompts/responses/:promptKey', async (req, res) => {
       });
     }
 
+    // 파일명 형식: {promptKey}_storyboard_{step}_{timestamp}.json 또는 {promptKey}_test_{timestamp}.json
+    // promptKey에 이미 engineId가 포함되어 있으므로 이를 접두사로 사용
     const files = fs.readdirSync(responsesPath)
       .filter(file => file.startsWith(`${promptKey}_`) && file.endsWith('.json'))
       .sort((a, b) => {
@@ -514,15 +517,17 @@ app.post('/api/prompts/test', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const { promptKey, formData, promptContent } = req.body;
+    const { promptKey, formData, promptContent, engineId, promptType } = req.body;
 
-    console.log('[prompts/test] 테스트 요청:', { promptKey });
+    const effectivePromptKey = promptKey || (engineId && promptType ? `${engineId}_${promptType}` : null);
 
-    if (!promptKey || !promptContent || !formData) {
+    console.log('[prompts/test] 테스트 요청:', { promptKey: effectivePromptKey });
+
+    if (!effectivePromptKey || !promptContent || !formData) {
       return res.status(400).json({
         success: false,
         message: '필수 데이터가 누락되었습니다.',
-        error: 'promptKey, formData, promptContent가 필요합니다.'
+        error: 'promptKey(또는 engineId+promptType), formData, promptContent가 필요합니다.'
       });
     }
 
@@ -586,7 +591,7 @@ app.post('/api/prompts/test', async (req, res) => {
     // 응답 저장
     const { getGeminiResponsesDir } = await import('../src/utils/enginePromptHelper.js');
 
-    const mode = promptKey.includes('manual') ? 'manual' : 'auto';
+    const mode = effectivePromptKey.includes('manual') ? 'manual' : 'auto';
     const responsesPath = getGeminiResponsesDir(mode);
 
     if (!fs.existsSync(responsesPath)) {
@@ -598,7 +603,7 @@ app.post('/api/prompts/test', async (req, res) => {
     const filePath = path.join(responsesPath, fileName);
 
     const responseData = {
-      promptKey,
+      promptKey: effectivePromptKey,
       formData: formData,
       response: geminiResponse,
       timestamp: new Date().toISOString(),

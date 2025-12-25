@@ -13,6 +13,14 @@ export default defineConfig({
       protocol: 'ws'
     },
     proxy: {
+      '/nexxii/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/nexxii/, ''),
+        timeout: 300000,
+        proxyTimeout: 300000
+      },
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
