@@ -277,7 +277,16 @@ export async function safeCallGemini(prompt, options = {}) {
 
 
         if (isRetryableError(error) && modelAttempt < maxRetries - 1) {
-          const delay = exponentialBackoffDelay(modelAttempt);
+          let delay = exponentialBackoffDelay(modelAttempt);
+
+          // 🔥 429 Retry-After 메시지 파싱 (Google Gemini)
+          const retryAfterMatch = error.message.match(/Please retry in ([0-9.]+)s/);
+          if (retryAfterMatch && retryAfterMatch[1]) {
+            const waitSeconds = parseFloat(retryAfterMatch[1]);
+            delay = Math.ceil(waitSeconds * 1000) + 2000; // 2초 여유 추가
+            console.log(`[${label}] 🛑 Rate Limit 감지: ${waitSeconds}초 대기 요청됨 -> ${delay}ms 대기 설정`);
+          }
+
           console.log(`[${label}] ⏳ ${delay}ms (${(delay / 1000).toFixed(1)}초) 후 재시도... (모델: ${currentModel}, 남은 시도: ${maxRetries - modelAttempt - 1}회)`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;

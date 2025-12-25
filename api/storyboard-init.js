@@ -929,8 +929,8 @@ async function processStoryboardAsync(body, username, sessionId) {
     const audioEditingGuide = parseAudioEditingGuide(fullOutput);
 
     const metadata = {
-      promptFile: promptFile,
-      promptFileName: promptFileName,
+      promptFile: promptFilePath,
+      promptFileName: path.basename(promptFilePath),
       mode: mode || 'auto',
       videoPurpose,
       videoLength,

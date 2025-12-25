@@ -111,6 +111,20 @@
     - `runtime-field-config.json`: 기능 활성화 플래그 제어
 - **상태**: 🟢 완료 (사용자 승인 대기)
 
+### 2025-12-26 06:17 - 인물 아카이브 S3 경로 검증 및 수정 (CRITICAL)
+- **문제**: 인물 이미지 업로드 후 검은 배경 발생 (404)
+- **원인**: CloudFront Path Pattern(`/nexxii-storage/*`)과 S3 폴더 구조 불일치
+  - CDN은 `/nexxii-storage/` 경로만 S3 미디어 버킷으로 라우팅함
+  - 코드는 S3 루트의 `persons/`에 업로드하려고 시도 → 경로 불일치 발생
+- **해결**:
+  - S3 파일 위치: `nexxii-storage/persons/`로 이동
+  - `api/persons.js`:
+    - `listS3Files` 경로: `nexxii-storage/persons/`
+    - `Upload` 키: `nexxii-storage/persons/`
+    - `DELETE` 키: `nexxii-storage/persons/`
+    - **URL 생성**: `https://upnexx.ai/nexxii-storage/persons/...` (중복 prefix 방지)
+- **교훈**: **인프라 설정(CloudFront Behavior)과 코드상 S3 경로Key는 반드시 일치해야 함**
+
 ### 2025-12-26 02:42 - 마이그레이션 중복 실행 수정
 - **문제**: 프롬프트 관리 접속할 때마다 마이그레이션 실행
 - **원인**: `migrateFromLegacy()` 함수에 실행 플래그 없음
