@@ -27,7 +27,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // 에러 제거
     if (errors[field]) {
       setErrors(prev => {
@@ -59,6 +59,17 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        handleChange('imageUpload', event.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = () => {
@@ -164,6 +175,62 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
           </div>
         </div>
 
+        {/* 5. 이미지 업로드 */}
+        <div className="form-section">
+          <label className="section-label">
+            5. 이미지 업로드 (선택)
+          </label>
+          <div className="relative group/upload">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              id="manual-image-upload"
+              onChange={handleImageUpload}
+            />
+
+            <label
+              htmlFor="manual-image-upload"
+              className="relative block cursor-pointer group/label"
+            >
+              <div className="border-2 border-dashed border-gray-600/50 rounded-xl p-8 text-center bg-gray-900/30 hover:border-gray-500/70 hover:bg-gray-800/40 transition-all duration-300">
+                <div className="space-y-4">
+                  {formData.imageUpload ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-center w-32 h-32 mx-auto bg-gray-800/60 rounded-lg overflow-hidden border border-gray-600/40">
+                        <img
+                          src={formData.imageUpload}
+                          alt="업로드된 이미지"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleChange('imageUpload', '');
+                        }}
+                        className="text-red-400 text-sm hover:underline"
+                      >
+                        이미지 제거
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="mx-auto w-12 h-12 text-gray-500">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      </div>
+                      <div className="text-blue-400 font-medium">이미지 선택</div>
+                      <p className="text-xs text-gray-500">제품/로고 이미지 (JPG, PNG)</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
         {/* 필수 옵션 요약 */}
         <div className="summary-box">
           <h3>📋 선택한 옵션</h3>
@@ -195,9 +262,9 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
           >
             ← 이전 단계
           </button>
-          
+
           {/* 기존 다음 버튼 */}
-          <button 
+          <button
             className="btn-submit px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg transition-all duration-200 font-medium"
             onClick={handleSubmit}
           >
@@ -213,7 +280,7 @@ Step1Manual.propTypes = {
   formData: PropTypes.object.isRequired,
   setFormData: PropTypes.func.isRequired,
   user: PropTypes.object.isRequired,
-    onPrev: PropTypes.func,  
+  onPrev: PropTypes.func,
   onNext: PropTypes.func.isRequired
 };
 
