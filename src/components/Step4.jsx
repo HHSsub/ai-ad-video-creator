@@ -507,7 +507,7 @@ const Step4 = ({
                               onError={(e) => {
                                 console.error(`[Step4] 씬 ${img.sceneNumber} 이미지 로드 실패:`, img.imageUrl);
                                 e.target.style.display = 'none';
-                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-500 text-sm"> 이미지 로드 실패</div>';
+                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-500 text-sm">이미지 로드 실패</div>';
                               }}
                             />
                           ) : (
@@ -516,6 +516,42 @@ const Step4 = ({
                             </div>
                           )}
                         </div>
+
+                        {/* 🎵 씬별 BGM/SFX 정보 */}
+                        {storyboard?.metadata?.audioEditingGuide && (
+                          <div className="bg-gray-800/50 rounded-lg p-3 mb-2 text-xs space-y-2">
+                            {storyboard.metadata.audioEditingGuide.sfx &&
+                              storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' &&
+                              storyboard.metadata.audioEditingGuide.sfx.includes(`S#${img.sceneNumber}`) && (
+                                <div>
+                                  <div className="font-semibold text-green-400 mb-1">🔊 SFX</div>
+                                  <div className="text-gray-300 leading-relaxed">
+                                    {storyboard.metadata.audioEditingGuide.sfx
+                                      .split('\n')
+                                      .filter(line => line.includes(`S#${img.sceneNumber}`))
+                                      .join(' ')
+                                      .trim()}
+                                  </div>
+                                </div>
+                              )}
+
+                            {storyboard.metadata.audioEditingGuide.editing &&
+                              storyboard.metadata.audioEditingGuide.editing !== '정보 없음' &&
+                              storyboard.metadata.audioEditingGuide.editing.includes(`S#${img.sceneNumber}`) && (
+                                <div>
+                                  <div className="font-semibold text-purple-400 mb-1">✂️ Editing</div>
+                                  <div className="text-gray-300 leading-relaxed">
+                                    {storyboard.metadata.audioEditingGuide.editing
+                                      .split('→')
+                                      .filter(part => part.includes(`S#${img.sceneNumber}`))
+                                      .join(' ')
+                                      .trim()}
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        )}
+
                         {img.videoUrl && (
                           <video
                             src={getVideoSrc(img.videoUrl)}
