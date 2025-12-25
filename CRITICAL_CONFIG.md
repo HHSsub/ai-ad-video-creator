@@ -1,0 +1,151 @@
+# 🚨 절대 변경 금지 설정 (CRITICAL CONFIG)
+
+## ⚠️ 이 파일의 설정들은 절대 변경하지 마세요!
+
+---
+
+## 1. vite.config.js
+
+### 필수 설정 (절대 삭제 금지)
+
+```javascript
+export default defineConfig({
+  plugins: [react()],
+  base: '/nexxii/',  // ⚠️ 절대 삭제 금지! nginx 경로와 일치해야 함
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    hmr: {
+      host: '52.87.89.0',  // ⚠️ 현재 EC2 Public IP (변경 시 업데이트 필요)
+      port: 5173,
+      protocol: 'ws'
+    },
+    // ... 나머지 설정
+  }
+});
+```
+
+**왜 필요한가?**
+- `base: '/nexxii/'`: nginx에서 `/nexxii/` 경로로 서빙하므로 필수
+- `hmr.host`: HMR(Hot Module Replacement) 웹소켓 연결을 위한 EC2 Public IP
+
+**에러 증상**:
+- `base` 누락 시: `Failed to load module script: Expected JavaScript but got HTML` (MIME type 에러)
+- `hmr.host` 잘못된 IP: 개발 서버 HMR 작동 안 함
+
+---
+
+## 2. Import 경로 규칙
+
+### ✅ 올바른 경로
+
+```javascript
+// api/ 폴더에서 src/utils 접근
+import { safeCallFreepik } from '../src/utils/apiHelpers.js';
+import { getTextToImageUrl } from '../src/utils/engineConfigLoader.js';
+
+// api/ 폴더에서 server/utils 접근
+import { uploadImageToS3 } from '../server/utils/s3-uploader.js';
+```
+
+### ❌ 잘못된 경로
+
+```javascript
+// ❌ utils는 존재하지 않음 (src/utils 또는 server/utils만 존재)
+import { getTextToImageUrl } from '../utils/engineConfigLoader.js';
+```
+
+**프로젝트 구조**:
+```
+ai-ad-video-creator/
+├── api/                    # API 라우트
+├── server/
+│   └── utils/             # 서버 전용 유틸 (s3-uploader.js 등)
+├── src/
+│   └── utils/             # 클라이언트/공용 유틸 (apiHelpers.js 등)
+```
+
+**에러 증상**:
+- `Cannot find module '/home/ec2-user/projects/ai-ad-video-creator/utils/...'`
+- 서버 크래시 (502 Bad Gateway)
+
+---
+
+## 3. EC2 Public IP 변경 시 체크리스트
+
+EC2 인스턴스를 재시작하거나 IP가 변경되면:
+
+1. **vite.config.js** 업데이트:
+   ```javascript
+   hmr: {
+     host: '새로운.IP.주소',  // 여기 업데이트
+   }
+   ```
+
+2. **재빌드**:
+   ```bash
+   npm run build
+   pm2 restart all
+   ```
+
+---
+
+## 4. nginx 설정 (참고용)
+
+```nginx
+location /nexxii/ {
+    alias /home/ec2-user/projects/ai-ad-video-creator/dist/;
+    try_files $uri $uri/ /nexxii/index.html;
+    
+    types {
+        application/javascript js;
+        text/css css;
+        text/html html;
+    }
+}
+
+location /nexxii/api/ {
+    proxy_pass http://localhost:3000/api/;
+    # ... 프록시 설정
+}
+```
+
+**중요**: `location /nexxii/`와 `base: '/nexxii/'`는 반드시 일치해야 함!
+
+---
+
+## 5. 빠른 문제 해결
+
+### MIME type 에러 발생 시
+```bash
+# 1. vite.config.js에 base: '/nexxii/' 있는지 확인
+cat vite.config.js | grep "base:"
+
+# 2. 재빌드
+npm run build
+
+# 3. nginx 재시작
+sudo systemctl reload nginx
+```
+
+### 502 Bad Gateway 발생 시
+```bash
+# 1. pm2 상태 확인
+pm2 status
+
+# 2. 에러 로그 확인
+pm2 logs api-server --lines 50
+
+# 3. import 경로 에러 확인 (utils vs src/utils)
+# 4. pm2 재시작
+pm2 restart all
+```
+
+---
+
+## 📝 변경 이력
+
+- **2025-12-25**: 초기 작성
+  - EC2 IP: 52.87.89.0
+  - base: '/nexxii/'
+  - import 경로 규칙 정립
