@@ -86,6 +86,35 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-25 16:30 - 작업 G 구현: 조기 멤버 초대 (G-1, G-2)
+- **파일**: `src/components/ModeSelector.jsx`, `src/App.jsx`, `src/components/InviteMemberModal.jsx` (신규)
+- **구현 내용**:
+  - G-1: 모드 선택 화면에 "프로젝트 목록" 버튼 추가
+  - G-1: 모드 선택 화면에 "멤버 초대" 버튼 추가
+  - G-2: 재사용 가능한 `InviteMemberModal` 컴포넌트 생성
+  - App.jsx에 초대 모달 state 및 handler 추가
+
+### 2025-12-25 16:19 - 버그 수정: getApiKeyStatus import 누락
+- **파일**: `api/storyboard-render-image.js`
+- **문제**: `getApiKeyStatus is not defined` 에러로 이미지 생성 실패
+- **수정**: import 문에 `getApiKeyStatus` 추가
+- **교훈**: 함수 사용 시 반드시 import 확인 필요
+
+### 2025-12-25 16:11 - CRITICAL_CONFIG.md 생성
+- **파일**: `CRITICAL_CONFIG.md` (신규)
+- **내용**: vite.config.js 필수 설정, import 경로 규칙, 문제 해결 가이드
+- **목적**: 반복되는 설정 오류 방지
+
+### 2025-12-25 16:10 - 버그 수정: engineConfigLoader import 경로 오류
+- **파일**: `api/storyboard-render-image.js`
+- **문제**: `../utils/` 경로로 인한 서버 크래시 (502 Bad Gateway)
+- **수정**: `../src/utils/engineConfigLoader.js`로 경로 수정
+
+### 2025-12-25 16:07 - vite.config.js 수정
+- **파일**: `vite.config.js`
+- **수정**: `base: '/nexxii/'` 추가, `hmr.host: '52.87.89.0'` 업데이트
+- **문제**: MIME type 에러 해결
+
 ### 2025-12-25 15:56 - 작업 E 구현: Step4 영상 변환 워크플로우
 - **파일**: `api/convert-single-scene.js` (신규), `src/components/Step4.jsx`
 - **구현 내용**:

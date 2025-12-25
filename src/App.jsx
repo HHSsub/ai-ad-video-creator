@@ -8,6 +8,7 @@ import Step3 from './components/Step3';
 import Step4 from './components/Step4';
 import ProjectDashboard from './components/ProjectDashboard';
 import ModeSelector from './components/ModeSelector';
+import InviteMemberModal from './components/InviteMemberModal';
 import Step1Manual from './components/Step1Manual';
 import Step1Auto from './components/Step1Auto';
 
@@ -15,6 +16,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [currentView, setCurrentView] = useState('projects');
   const [step, setStep] = useState(1);
+  const [showInviteModal, setShowInviteModal] = useState(false); // 🔥 G: 멤버 초대 모달
   const [formData, setFormData] = useState({
     mode: 'auto',
     userdescription: '',
