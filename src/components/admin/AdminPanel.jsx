@@ -4,22 +4,24 @@ import UserManagement from './UserManagement';
 
 const AdminPanel = () => {
   // ===== 상태 관리 =====
-  const [activeMainTab, setActiveMainTab] = useState('engines');
+  const [activeMainTab, setActiveMainTab] = useState('prompts'); // prompts, engines, storage, users
 
-  // 저장소 관리 상태
-  const [storageInfo, setStorageInfo] = useState(null);
-  const [currentPath, setCurrentPath] = useState('.');
-  const [directoryContents, setDirectoryContents] = useState([]);
-  const [storageLoading, setStorageLoading] = useState(false);
+  // 프롬프트 관리 (12개 엔진 조합 매트릭스)
+  const [selectedImageEngine, setSelectedImageEngine] = useState('seedream-v4');
+  const [selectedVideoEngine, setSelectedVideoEngine] = useState('hailuo-2.3-standard');
+  const [selectedPromptType, setSelectedPromptType] = useState('manual'); // auto_product, auto_service, manual
+  const [allPrompts, setAllPrompts] = useState({}); // { 'engineId': { 'manual': '...', ... } }
+  const [currentPrompt, setCurrentPrompt] = useState('');
 
-  // 프롬프트 관리 상태
-  const [prompts, setPrompts] = useState({});
+  // 기존 히스토리/디자인 상태 (그대로 유지)
+  const [prompts, setPrompts] = useState({}); // 구버전 호환용 (필요시 제거 예정이나 지금은 유지)
   const [activePromptTab, setActivePromptTab] = useState('');
   const [versions, setVersions] = useState([]);
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [geminiResponses, setGeminiResponses] = useState([]);
   const [selectedResponse, setSelectedResponse] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [promptLoading, setPromptLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,19 +46,39 @@ const AdminPanel = () => {
   const [updatingEngine, setUpdatingEngine] = useState(false);
   const [selectedEngineType, setSelectedEngineType] = useState('textToImage');
 
+  // 저장소 관리 상태
+  const [storageInfo, setStorageInfo] = useState(null);
+  const [currentPath, setCurrentPath] = useState('.');
+  const [directoryContents, setDirectoryContents] = useState([]);
+  const [storageLoading, setStorageLoading] = useState(false);
+
   const versionsPerPage = 10;
 
-  // ===== 엔진 정보 로드 =====
+  // ===== 초기 로드 =====
   useEffect(() => {
     loadEngineInfo();
-  }, []);
-
-  // ===== 프롬프트 로드 =====
-  useEffect(() => {
-    if (activeMainTab === 'prompts') {
-      loadPrompts();
+    loadAllPrompts();
+    if (activeMainTab === 'storage') {
+      browseDirectory('.');
+      loadStorageInfo();
     }
   }, [activeMainTab]);
+
+  // ===== 엔진 조합/타입 변경 시 프롬프트 및 히스토리 로드 =====
+  useEffect(() => {
+    const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
+    const promptKey = selectedPromptType;
+
+    if (allPrompts[engineId] && allPrompts[engineId][promptKey]) {
+      setCurrentPrompt(allPrompts[engineId][promptKey]);
+    } else {
+      setCurrentPrompt('');
+    }
+
+    // 🔥 엔진 조합이 바뀌면 히스토리도 새로 로드
+    loadVersions(engineId, promptKey);
+    loadGeminiResponses(engineId, promptKey);
+  }, [selectedImageEngine, selectedVideoEngine, selectedPromptType, allPrompts]);
 
   useEffect(() => {
     if (Object.keys(prompts).length > 0 && !activePromptTab) {
@@ -168,55 +190,64 @@ const AdminPanel = () => {
     return promptKey;
   };
 
-  const loadPrompts = async () => {
-    setLoading(true);
+  const loadAllPrompts = async () => {
+    setPromptLoading(true);
     try {
-      const response = await fetch('/nexxii/api/prompts/get');
+      const response = await fetch('/nexxii/api/prompts/all');
       const data = await response.json();
 
       if (data.success) {
-        setPrompts(data.prompts);
-        console.log('[AdminPanel] ✅ 프롬프트 로드:', Object.keys(data.prompts));
+        setAllPrompts(data.prompts);
+        console.log('[AdminPanel] ✅ 모든 프롬프트 로드 완료');
       } else {
-        showMessage('error', '프롬프트 로드에 실패했습니다.');
+        showMessage('error', '프롬프트 로드 실패');
       }
     } catch (error) {
-      showMessage('error', '서버 연결에 실패했습니다.');
+      console.error('[AdminPanel] 프롬프트 로드 오류:', error);
+      showMessage('error', '서버 연결 실패');
     } finally {
-      setLoading(false);
+      setPromptLoading(false);
     }
   };
 
-  const loadVersions = async () => {
+  const loadVersions = async (engineId, promptType) => {
     try {
-      const response = await fetch('/nexxii/api/prompts/versions');
+      const id = engineId || `${selectedImageEngine}_${selectedVideoEngine}`;
+      const type = promptType || selectedPromptType;
+
+      const response = await fetch(`/nexxii/api/prompts/versions?engineId=${id}&promptType=${type}`);
       const data = await response.json();
 
       if (data.success) {
         let allVersions = data.versions || [];
 
-        const currentVersions = Object.keys(prompts).map(key => ({
-          id: `current_${key}`,
-          filename: `[현재] ${getPromptDisplayName(key)}`,
-          promptKey: key,
+        // 현재 편집 중인 내용도 [현재] 항목으로 리스트 상단에 표시 (기존 디자인 유지)
+        const currentVersions = [{
+          id: `current_${type}`,
+          filename: `[현재] ${getPromptDisplayName(type)}`,
+          promptKey: type,
           timestamp: new Date().toISOString(),
-          preview: prompts[key]?.substring(0, 150) + '...',
+          preview: currentPrompt?.substring(0, 150) + '...',
           isCurrent: true,
           versionFile: null
-        }));
+        }];
 
         setVersions([...currentVersions, ...allVersions]);
       } else {
-        showMessage('error', '버전 목록 로드에 실패했습니다.');
+        setVersions([]);
       }
     } catch (error) {
-      showMessage('error', '서버 연결에 실패했습니다.');
+      console.error('버전 로드 실패:', error);
+      setVersions([]);
     }
   };
 
-  const loadGeminiResponses = async (promptKey) => {
+  const loadGeminiResponses = async (engineId, promptType) => {
     try {
-      const response = await fetch(`/nexxii/api/prompts/responses/${promptKey}`);
+      const id = engineId || `${selectedImageEngine}_${selectedVideoEngine}`;
+      const type = promptType || selectedPromptType;
+
+      const response = await fetch(`/nexxii/api/prompts/responses/${id}/${type}`);
       const data = await response.json();
 
       if (data.success) {
@@ -230,27 +261,29 @@ const AdminPanel = () => {
     }
   };
 
-  const savePrompt = async (filename) => {
+  const savePrompt = async () => {
     setSaving(true);
     try {
+      const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
+
       const response = await fetch('/nexxii/api/prompts/update', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          filename,
-          content: prompts[filename]
-        }),
+          engineId,
+          promptType: selectedPromptType,
+          content: currentPrompt
+        })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        showMessage('success', '프롬프트가 성공적으로 저장되었습니다.');
-        loadVersions();
+        showMessage('success', '✅ 프롬프트 저장 완료 (버전 자동 생성됨)');
+        loadAllPrompts();
+        loadVersions(engineId, selectedPromptType);
       } else {
-        showMessage('error', data.message || '저장에 실패했습니다.');
+        showMessage('error', data.message || '저장 실패');
       }
     } catch (error) {
       showMessage('error', '서버 연결에 실패했습니다.');
@@ -260,25 +293,20 @@ const AdminPanel = () => {
   };
 
   const restoreVersion = async (version) => {
-    if (!version.versionFile) {
-      showMessage('error', '복원할 버전 파일이 없습니다.');
-      return;
-    }
-
+    if (!version.versionFile) return;
     if (!confirm(`이 버전으로 되돌리시겠습니까?\n${version.filename}`)) return;
 
     try {
-      const promptKey = getPromptKeyFromVersion(version);
+      const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
 
       const response = await fetch('/nexxii/api/prompts/restore', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           versionId: version.id,
           versionFile: version.versionFile,
-          promptKey: promptKey
+          engineId,
+          promptType: selectedPromptType
         }),
       });
 
@@ -286,9 +314,8 @@ const AdminPanel = () => {
 
       if (data.success) {
         showMessage('success', '성공적으로 복원되었습니다.');
-        setActivePromptTab(promptKey);
-        loadPrompts();
-        loadVersions();
+        loadAllPrompts();
+        loadVersions(engineId, selectedPromptType);
       } else {
         showMessage('error', data.message || '복원에 실패했습니다.');
       }
@@ -297,22 +324,22 @@ const AdminPanel = () => {
     }
   };
 
-  const testPrompt = async (promptKey) => {
+  const testPrompt = async () => {
     setTestMode(true);
     setMessage({ type: '', text: '' });
 
     try {
       showMessage('info', '⏳ 프롬프트 테스트 진행 중...');
+      const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
 
       const response = await fetch('/nexxii/api/prompts/test', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          promptKey,
+          engineId,
+          promptType: selectedPromptType,
           formData: testFormData,
-          promptContent: prompts[promptKey]
+          promptContent: currentPrompt
         })
       });
 
@@ -343,18 +370,6 @@ const AdminPanel = () => {
     }
   };
 
-  const viewResponseDetail = async (fileName) => {
-    try {
-      const response = await fetch(`/nexxii/api/prompts/response-detail/${fileName}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setSelectedResponse(data.data);
-      }
-    } catch (error) {
-      showMessage('error', '응답 상세 정보 로드에 실패했습니다.');
-    }
-  };
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
@@ -364,20 +379,100 @@ const AdminPanel = () => {
     }
   };
 
-  const handlePromptChange = (filename, value) => {
-    setPrompts(prev => ({
-      ...prev,
-      [filename]: value
-    }));
-  };
 
   const formatDateTime = (dateString) => {
     return new Date(dateString).toLocaleString('ko-KR');
   };
 
+  const handlePromptChange = (value) => {
+    setCurrentPrompt(value);
+
+    // allPrompts 객체도 업데이트하여 탭 전환 시 내용 유지
+    const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
+    setAllPrompts(prev => ({
+      ...prev,
+      [engineId]: {
+        ...(prev[engineId] || {}),
+        [selectedPromptType]: value
+      }
+    }));
+  };
+
+  // ===== 저장소 관리 함수 =====
+  const loadStorageInfo = async () => {
+    setStorageLoading(true);
+    try {
+      const response = await fetch('/nexxii/api/storage/info');
+      const data = await response.json();
+      if (data.success) setStorageInfo(data);
+    } catch (error) {
+      console.error('저장소 정보 로드 실패:', error);
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const browseDirectory = async (path) => {
+    setStorageLoading(true);
+    try {
+      const response = await fetch(`/nexxii/api/storage/browse?path=${encodeURIComponent(path)}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setCurrentPath(data.currentPath);
+        setDirectoryContents(data.contents);
+      } else {
+        showMessage('error', data.error || '디렉토리 조회 실패');
+      }
+    } catch (error) {
+      console.error('디렉토리 조회 오류:', error);
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const deleteItem = async (itemPath) => {
+    if (!confirm(`정말 삭제하시겠습니까?\n\n${itemPath}`)) return;
+
+    try {
+      const response = await fetch('/nexxii/api/storage/browse', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: itemPath })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        showMessage('success', '✅ 삭제 완료');
+        browseDirectory(currentPath);
+      } else {
+        showMessage('error', data.error || '삭제 실패');
+      }
+    } catch (error) {
+      console.error('삭제 오류:', error);
+    }
+  };
+
   const getCurrentPageVersions = () => {
     const startIndex = (currentPage - 1) * versionsPerPage;
     return versions.slice(startIndex, startIndex + versionsPerPage);
+  };
+
+  const viewResponseDetail = async (fileName) => {
+    try {
+      const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
+      const response = await fetch(`/nexxii/api/prompts/responses/detail/${engineId}/${selectedPromptType}/${fileName}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setSelectedResponse(data.detail);
+      } else {
+        showMessage('error', '상세 내용을 가져오는데 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('응답 상세 로드 실패:', error);
+      showMessage('error', '서버 연결 실패');
+    }
   };
 
   const totalPages = Math.ceil(versions.length / versionsPerPage);
@@ -396,171 +491,292 @@ const AdminPanel = () => {
       <div className="max-w-full mx-auto py-6 px-4">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-white">관리자 패널</h1>
-          <p className="text-gray-400">시스템 엔진 및 프롬프트를 관리합니다</p>
+          <p className="text-gray-400">시스템 엔진, 프롬프트, 저장소 및 사용자를 관리합니다</p>
         </div>
 
-        {/* 메인 탭 */}
+        {/* 메인 탭 네비게이션 */}
         <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setActiveMainTab('engines')}
-            className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeMainTab === 'engines'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-          >
-            🎨 엔진 관리
-          </button>
-          <button
-            onClick={() => setActiveMainTab('prompts')}
-            className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeMainTab === 'prompts'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-          >
-            📝 프롬프트 관리
-          </button>
-          <button
-            onClick={() => setActiveMainTab('storage')}
-            className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeMainTab === 'storage'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-          >
-            💾 저장소 관리
-          </button>
-          <button
-            onClick={() => setActiveMainTab('users')}
-            className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeMainTab === 'users'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-          >
-            👥 사용자 관리
-          </button>
+          {[
+            { id: 'prompts', label: '📝 프롬프트 관리' },
+            { id: 'engines', label: '🎨 엔진 관리' },
+            { id: 'storage', label: '💾 저장소 관리' },
+            { id: 'users', label: '👥 사용자 관리' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveMainTab(tab.id)}
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeMainTab === tab.id
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
+        {/* 전역 메시지 표시 */}
         {message.text && (
-          <div className={`mb-6 p-4 rounded-lg whitespace-pre-wrap ${message.type === 'success'
+          <div className={`mb-6 p-4 rounded-lg whitespace-pre-wrap flex justify-between items-center ${message.type === 'success'
             ? 'bg-green-900/30 text-green-300 border border-green-800'
             : message.type === 'info'
               ? 'bg-blue-900/30 text-blue-300 border border-blue-800'
               : 'bg-red-900/30 text-red-300 border border-red-800'
             }`}>
-            {message.text}
+            <span>{message.text}</span>
+            <button onClick={() => setMessage({ type: '', text: '' })} className="text-current opacity-50 hover:opacity-100">✕</button>
           </div>
         )}
 
-        {/* ===== 엔진 관리 탭 ===== */}
-        {activeMainTab === 'engines' && currentEngines && availableEngines && (
+        {/* 1. 프롬프트 관리 탭 */}
+        {activeMainTab === 'prompts' && (
           <div className="space-y-6">
-            {/* 현재 엔진 정보 */}
+            {/* 엔진 선택 매트릭스 */}
             <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 p-6">
-              <h2 className="text-xl font-bold text-white mb-4">🎯 현재 사용 중인 엔진</h2>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-                  <h3 className="text-lg font-semibold text-blue-400 mb-2">🖼️ 이미지 생성</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">모델:</span>
-                      <span className="text-white font-medium">{currentEngines.textToImage.displayName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">ID:</span>
-                      <span className="text-gray-300 font-mono text-xs">{currentEngines.textToImage.model}</span>
-                    </div>
-                    <div className="text-gray-400 text-xs mt-2">{currentEngines.textToImage.description}</div>
-                    <div className="text-gray-500 text-xs mt-2">
-                      업데이트: {formatDateTime(currentEngines.textToImage.updatedAt)}
-                      <br />by {currentEngines.textToImage.updatedBy}
-                    </div>
+              <h2 className="text-xl font-bold text-white mb-4">🎯 엔진 조합 선택 (12가지 매트릭스)</h2>
+              <div className="grid grid-cols-2 gap-8">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-400 mb-3 uppercase tracking-wider">이미지 생성 엔진</h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {['seedream-v4', 'mystic', 'hyperflux'].map(id => (
+                      <button
+                        key={id}
+                        onClick={() => setSelectedImageEngine(id)}
+                        className={`px-4 py-3 rounded-lg text-left transition-all ${selectedImageEngine === id
+                          ? 'bg-blue-600 text-white ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-800'
+                          : 'bg-gray-900/50 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
+                          }`}
+                      >
+                        <div className="font-medium text-sm">
+                          {id === 'seedream-v4' ? 'Seedream v4' : id === 'mystic' ? 'Mystic AI' : 'HyperFlux'}
+                        </div>
+                        <div className="text-[10px] opacity-60 font-mono mt-0.5">{id}</div>
+                      </button>
+                    ))}
                   </div>
                 </div>
-
-                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-                  <h3 className="text-lg font-semibold text-purple-400 mb-2">🎬 영상 생성</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">모델:</span>
-                      <span className="text-white font-medium">{currentEngines.imageToVideo.displayName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">ID:</span>
-                      <span className="text-gray-300 font-mono text-xs">{currentEngines.imageToVideo.model}</span>
-                    </div>
-                    <div className="text-gray-400 text-xs mt-2">{currentEngines.imageToVideo.description}</div>
-                    <div className="text-gray-500 text-xs mt-2">
-                      업데이트: {formatDateTime(currentEngines.imageToVideo.updatedAt)}
-                      <br />by {currentEngines.imageToVideo.updatedBy}
-                    </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-purple-400 mb-3 uppercase tracking-wider">영상 생성 엔진</h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {['kling-v2-1-pro', 'kling-v2-1-std', 'kling-v2-1-master', 'hailuo-2.3-standard'].map(id => (
+                      <button
+                        key={id}
+                        onClick={() => setSelectedVideoEngine(id)}
+                        className={`px-4 py-3 rounded-lg text-left transition-all ${selectedVideoEngine === id
+                          ? 'bg-purple-600 text-white ring-2 ring-purple-400 ring-offset-2 ring-offset-gray-800'
+                          : 'bg-gray-900/50 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
+                          }`}
+                      >
+                        <div className="font-medium text-sm">
+                          {id.includes('kling') ? `Kling v2.1 (${id.split('-').pop()})` : 'Hailuo 2.3 (MiniMax)'}
+                        </div>
+                        <div className="text-[10px] opacity-60 font-mono mt-0.5">{id}</div>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* 엔진 변경 */}
-            <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 p-6">
-              <h2 className="text-xl font-bold text-white mb-4">🔄 엔진 변경</h2>
-
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setSelectedEngineType('textToImage')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedEngineType === 'textToImage'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                >
-                  🖼️ 이미지 생성 엔진
-                </button>
-                <button
-                  onClick={() => setSelectedEngineType('imageToVideo')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedEngineType === 'imageToVideo'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                >
-                  🎬 영상 생성 엔진
-                </button>
+            {/* 메인 편집 영역 (3단 구성) */}
+            <div className="grid grid-cols-12 gap-6">
+              {/* 좌측: 버전 히스토리 */}
+              <div className="col-span-3">
+                <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 sticky top-20">
+                  <div className="px-4 py-3 border-b border-gray-700 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">버전 히스토리</h3>
+                      <p className="text-[10px] text-gray-500">자동 저장된 이력</p>
+                    </div>
+                    <button onClick={() => loadVersions()} className="text-gray-500 hover:text-white">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    </button>
+                  </div>
+                  <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    {versions.map(v => (
+                      <div
+                        key={v.id}
+                        onClick={() => setSelectedVersion(v)}
+                        className={`p-2.5 rounded-lg border cursor-pointer transition-all ${selectedVersion?.id === v.id
+                          ? 'bg-blue-600/20 border-blue-500 shadow-inner'
+                          : v.isCurrent ? 'bg-green-900/10 border-green-800/50 hover:bg-green-900/20' : 'bg-gray-900/30 border-gray-800 hover:bg-gray-800'
+                          }`}
+                      >
+                        <div className="flex justify-between items-center mb-1">
+                          <span className={`text-[11px] font-bold ${v.isCurrent ? 'text-green-400' : 'text-gray-300'}`}>
+                            {v.isCurrent ? '⚡ CURRENT' : v.filename.split('_').pop().replace('.txt', '')}
+                          </span>
+                          {!v.isCurrent && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); restoreVersion(v); }}
+                              className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100"
+                            >복원</button>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-gray-500">{formatDateTime(v.timestamp)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {totalPages > 1 && (
+                    <div className="p-3 border-t border-gray-700 flex justify-center gap-2">
+                      <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} className="text-xs text-gray-400">Prev</button>
+                      <span className="text-xs text-gray-600">{currentPage}/{totalPages}</span>
+                      <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} className="text-xs text-gray-400">Next</button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* 중앙: 프롬프트 편집기 */}
+              <div className="col-span-6">
+                <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 overflow-hidden">
+                  <div className="bg-gray-900/50 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+                    <div className="flex gap-1 bg-gray-950 p-1 rounded-lg border border-gray-800">
+                      {['auto_product', 'auto_service', 'manual'].map(type => (
+                        <button
+                          key={type}
+                          onClick={() => setSelectedPromptType(type)}
+                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${selectedPromptType === type
+                            ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-900'}`}
+                        >
+                          {type.split('_').pop().toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={testPrompt}
+                        disabled={testMode}
+                        className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50"
+                      >
+                        {testMode ? 'TESTING...' : '🚀 TEST'}
+                      </button>
+                      <button
+                        onClick={savePrompt}
+                        disabled={saving}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50"
+                      >
+                        {saving ? 'SAVING...' : '💾 SAVE'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-0 relative">
+                    <textarea
+                      value={currentPrompt}
+                      onChange={(e) => handlePromptChange(e.target.value)}
+                      className="w-full h-[65vh] p-6 bg-[#0E0E10] text-gray-300 font-mono text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                      placeholder="프롬프트 내용을 입력하세요..."
+                      spellCheck="false"
+                    />
+                    <div className="absolute top-2 right-4 text-[10px] font-mono text-gray-700 select-none">
+                      {currentPrompt?.length || 0} chars
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 우측: Gemini 응답 로그 */}
+              <div className="col-span-3">
+                <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 sticky top-20">
+                  <div className="px-4 py-3 border-b border-gray-700">
+                    <h3 className="text-sm font-bold text-white">Gemini 응답 로그</h3>
+                    <p className="text-[10px] text-gray-500">최근 생성 결과</p>
+                  </div>
+                  <div className="p-2 space-y-2 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                    {geminiResponses.length === 0 ? (
+                      <div className="py-12 text-center text-gray-600 text-xs">응답 내역이 없습니다.</div>
+                    ) : (
+                      geminiResponses.map(res => (
+                        <div
+                          key={res.fileName}
+                          onClick={() => viewResponseDetail(res.fileName)}
+                          className="p-3 bg-gray-900/50 border border-gray-800 rounded-lg hover:border-gray-600 cursor-pointer group transition-all"
+                        >
+                          <div className="flex justify-between items-start mb-1.5">
+                            <span className="text-[10px] font-bold text-blue-400 bg-blue-900/20 px-1.5 py-0.5 rounded">
+                              {res.step?.replace('storyboard_', '').toUpperCase() || 'RESULT'}
+                            </span>
+                            <span className="text-[9px] text-gray-600">{formatDateTime(res.timestamp)}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 line-clamp-3 leading-relaxed">
+                            {res.preview}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. 엔진 관리 탭 */}
+        {activeMainTab === 'engines' && currentEngines && availableEngines && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
+                <h3 className="text-blue-400 font-bold mb-4 flex items-center gap-2">🖼️ 현재 이미지 엔진</h3>
+                <div className="bg-gray-950 p-4 rounded-xl border border-gray-800">
+                  <div className="text-2xl font-bold text-white mb-1">{currentEngines.textToImage.displayName}</div>
+                  <div className="text-xs font-mono text-gray-500 mb-4">{currentEngines.textToImage.model}</div>
+                  <p className="text-sm text-gray-400 mb-4 leading-relaxed">{currentEngines.textToImage.description}</p>
+                  <div className="text-[10px] text-gray-600">최종 업데이트: {formatDateTime(currentEngines.textToImage.updatedAt)} by {currentEngines.textToImage.updatedBy}</div>
+                </div>
+              </div>
+              <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
+                <h3 className="text-purple-400 font-bold mb-4 flex items-center gap-2">🎬 현재 영상 엔진</h3>
+                <div className="bg-gray-950 p-4 rounded-xl border border-gray-800">
+                  <div className="text-2xl font-bold text-white mb-1">{currentEngines.imageToVideo.displayName}</div>
+                  <div className="text-xs font-mono text-gray-500 mb-4">{currentEngines.imageToVideo.model}</div>
+                  <p className="text-sm text-gray-400 mb-4 leading-relaxed">{currentEngines.imageToVideo.description}</p>
+                  <div className="text-[10px] text-gray-600">최종 업데이트: {formatDateTime(currentEngines.imageToVideo.updatedAt)} by {currentEngines.imageToVideo.updatedBy}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800/90 rounded-lg p-8 border border-gray-700 shadow-xl">
+              <div className="flex justify-between items-end mb-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2 underline decoration-blue-500 decoration-4 underline-offset-8">🔄 엔진 대교체</h2>
+                  <p className="text-gray-500 text-sm">시스템에 즉시 반영되며 서버가 재시작됩니다.</p>
+                </div>
+                <div className="flex bg-gray-900 border border-gray-700 p-1 rounded-xl">
+                  {['textToImage', 'imageToVideo'].map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setSelectedEngineType(type)}
+                      className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${selectedEngineType === type ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                    >
+                      {type === 'textToImage' ? 'IMAGE ENGINES' : 'VIDEO ENGINES'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-6">
                 {availableEngines[selectedEngineType].map(engine => {
                   const isCurrent = currentEngines[selectedEngineType].model === engine.model;
-
                   return (
-                    <div
-                      key={engine.id}
-                      className={`bg-gray-900/50 rounded-lg p-4 border transition-all ${isCurrent
-                        ? 'border-green-600 bg-green-900/20'
-                        : 'border-gray-700 hover:border-gray-600'
-                        }`}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-white font-semibold">{engine.displayName}</h3>
-                        {isCurrent && (
-                          <span className="px-2 py-1 text-xs bg-green-600 text-white rounded">현재</span>
-                        )}
+                    <div key={engine.id} className={`p-6 rounded-2xl border transition-all ${isCurrent ? 'bg-blue-600/10 border-blue-500 shadow-2xl scale-[1.02]' : 'bg-gray-900/40 border-gray-800 border-dashed hover:border-gray-500'}`}>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-xl shadow-inner">{selectedEngineType === 'textToImage' ? '📷' : '📽️'}</div>
+                        {isCurrent && <span className="text-[10px] font-black tracking-widest bg-blue-600 text-white px-2 py-1 rounded-full animate-pulse">ACTIVE</span>}
                       </div>
-
-                      <p className="text-gray-400 text-xs mb-3">{engine.description}</p>
-
-                      <div className="text-xs text-gray-500 space-y-1 mb-3">
-                        <div>모델 ID: <span className="font-mono">{engine.model}</span></div>
-                        {engine.maxResolution && <div>최대 해상도: {engine.maxResolution}</div>}
-                        {engine.supportedDurations && (
-                          <div>지원 길이: {engine.supportedDurations.join(', ')}초</div>
-                        )}
-                        {engine.costPerImage && <div>비용: ${engine.costPerImage}/image</div>}
-                        {engine.costPerVideo && <div>비용: ${engine.costPerVideo}/video</div>}
-                      </div>
-
+                      <h4 className="text-lg font-black text-white mb-1">{engine.displayName}</h4>
+                      <p className="text-xs text-gray-500 mb-4 min-h-[3em]">{engine.description}</p>
+                      <ul className="text-[10px] space-y-1.5 mb-6 text-gray-500 font-mono">
+                        <li className="flex justify-between border-b border-gray-800 pb-1"><span>ID</span><span className="text-gray-300">{engine.model}</span></li>
+                        <li className="flex justify-between border-b border-gray-800 pb-1"><span>RES</span><span className="text-gray-300">{engine.maxResolution}</span></li>
+                        <li className="flex justify-between"><span>COST</span><span className="text-blue-400">${engine.costPerImage || engine.costPerVideo}</span></li>
+                      </ul>
                       {!isCurrent && (
                         <button
                           onClick={() => handleUpdateEngine(selectedEngineType, engine.id)}
                           disabled={updatingEngine}
-                          className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                          className="w-full py-3 bg-white text-black font-black rounded-xl hover:bg-blue-400 hover:text-white transition-all transform active:scale-95 text-xs"
                         >
-                          {updatingEngine ? '변경 중...' : '이 엔진으로 변경'}
+                          CHANGE ENGINE
                         </button>
                       )}
                     </div>
@@ -568,286 +784,126 @@ const AdminPanel = () => {
                 })}
               </div>
             </div>
+          </div>
+        )}
 
-            {/* 엔진 변경 히스토리 */}
-            {engineHistory.length > 0 && (
-              <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700 p-6">
-                <h2 className="text-xl font-bold text-white mb-4">📜 변경 히스토리</h2>
-
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {engineHistory.slice(0, 20).map((entry, index) => (
-                    <div
-                      key={index}
-                      className="bg-gray-900/50 rounded-lg p-3 border border-gray-700 text-sm"
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-400">
-                          {entry.engineType === 'textToImage' ? '🖼️ 이미지' : '🎬 영상'} 엔진 변경
-                        </span>
-                        <span className="text-gray-500 text-xs">{formatDateTime(entry.timestamp)}</span>
+        {/* 3. 저장소 관리 탭 */}
+        {activeMainTab === 'storage' && (
+          <div className="space-y-6">
+            {storageInfo && (
+              <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
+                <h2 className="text-xl font-black text-white mb-6 flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center text-sm italic">S</span>
+                  Server Disk Infrastructure
+                </h2>
+                <div className="grid grid-cols-4 gap-4 mb-8">
+                  {[
+                    { label: 'Total Capacity', value: storageInfo.disk.total, color: 'text-white' },
+                    { label: 'Currently Used', value: storageInfo.disk.used, color: 'text-orange-500' },
+                    { label: 'Free Space', value: storageInfo.disk.available, color: 'text-green-400' },
+                    { label: 'Usage Percent', value: storageInfo.disk.usePercent, color: 'text-blue-500' }
+                  ].map(stat => (
+                    <div key={stat.label} className="bg-gray-950 p-5 rounded-2xl border border-gray-800 shadow-inner">
+                      <div className="text-[10px] font-black text-gray-600 uppercase mb-1">{stat.label}</div>
+                      <div className={`text-2xl font-black ${stat.color} font-mono`}>{stat.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-gray-500 mb-3 px-2">Critical Directories</div>
+                  {storageInfo.directories.map(dir => (
+                    <div key={dir.name} className="flex justify-between items-center p-3.5 bg-gray-900 shadow-inner rounded-xl border border-gray-800 hover:border-gray-600 transition-all">
+                      <div className="flex items-center gap-3">
+                        <span className="text-blue-500">ROOT/</span>
+                        <span className="text-gray-200 font-bold">{dir.name}</span>
                       </div>
-                      <div className="text-gray-300">
-                        <span className="text-red-400">{entry.previousEngine}</span>
-                        {' → '}
-                        <span className="text-green-400">{entry.newEngine}</span>
-                      </div>
-                      <div className="text-gray-500 text-xs mt-1">by {entry.updatedBy}</div>
+                      <span className="font-mono text-sm text-gray-400 bg-black px-3 py-1 rounded-md">{dir.sizeFormatted}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* ===== 프롬프트 관리 탭 ===== */}
-        {activeMainTab === 'prompts' && Object.keys(prompts).length > 0 && (
-          <div className="grid grid-cols-12 gap-6">
-            {/* 버전 히스토리 */}
-            <div className="col-span-3">
-              <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700">
-                <div className="px-4 py-3 border-b border-gray-700">
-                  <h3 className="text-lg font-medium text-white">버전 히스토리</h3>
-                  <p className="text-sm text-gray-400">프롬프트 수정 이력</p>
+            <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl overflow-hidden">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 font-black">/PATH:</span>
+                  <span className="bg-gray-950 px-4 py-2 rounded-lg font-mono text-sm text-green-400 border border-gray-800">{currentPath}</span>
                 </div>
-
-                <div className="p-4">
-                  {versions.length === 0 ? (
-                    <p className="text-gray-500 text-center py-8">버전 히스토리가 없습니다.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {getCurrentPageVersions().map((version) => (
-                        <div
-                          key={version.id}
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors relative group
-                            ${version.isCurrent
-                              ? 'border-green-600 bg-green-900/20'
-                              : selectedVersion?.id === version.id
-                                ? 'border-blue-600 bg-blue-900/20'
-                                : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'}`}
-                          onClick={() => setSelectedVersion(version)}
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <span className={`text-sm font-medium line-clamp-1
-                              ${version.isCurrent ? 'text-green-400 font-bold' : 'text-gray-200'}`}>
-                              {version.filename}
-                            </span>
-                            {version.versionFile && !version.isCurrent && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  restoreVersion(version);
-                                }}
-                                className="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                되돌리기
-                              </button>
-                            )}
-                            {version.isCurrent && (
-                              <span className="ml-2 px-2 py-1 text-xs bg-green-600 text-white rounded">
-                                현재
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {formatDateTime(version.timestamp)}
-                          </p>
-                          {version.preview && (
-                            <p className="text-xs text-gray-400 mt-1 line-clamp-2">
-                              {version.preview}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {totalPages > 1 && (
-                    <div className="mt-4 flex justify-center space-x-2">
-                      <button
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 text-sm border border-gray-700 rounded disabled:opacity-50 text-gray-300 hover:bg-gray-800"
-                      >
-                        이전
-                      </button>
-                      <span className="px-3 py-1 text-sm text-gray-400">
-                        {currentPage} / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 text-sm border border-gray-700 rounded disabled:opacity-50 text-gray-300 hover:bg-gray-800"
-                      >
-                        다음
-                      </button>
-                    </div>
-                  )}
-                </div>
+                {currentPath !== '.' && (
+                  <button onClick={() => browseDirectory(currentPath.split('/').slice(0, -1).join('/') || '.')} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs font-black">⬆ UP</button>
+                )}
               </div>
-            </div>
-
-            {/* 프롬프트 편집기 */}
-            <div className="col-span-6">
-              <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700">
-                <div className="px-4 py-3 border-b border-gray-700">
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {Object.keys(prompts).map((key) => (
-                      <button
-                        key={key}
-                        onClick={() => setActivePromptTab(key)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activePromptTab === key
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          }`}
-                      >
-                        {getPromptDisplayName(key)}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-white">{getPromptDisplayName(activePromptTab)}</h3>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => testPrompt(activePromptTab)}
-                        disabled={testMode}
-                        className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2"
-                      >
-                        {testMode ? (
-                          <>
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                            </svg>
-                            테스트 중...
-                          </>
-                        ) : '프롬프트 테스트'}
-                      </button>
-                      <button
-                        onClick={() => savePrompt(activePromptTab)}
-                        disabled={saving}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 disabled:opacity-50"
-                      >
-                        {saving ? '저장 중...' : '저장'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <textarea
-                    value={prompts[activePromptTab] || ''}
-                    onChange={(e) => handlePromptChange(activePromptTab, e.target.value)}
-                    className="w-full h-96 p-4 bg-gray-900 border border-gray-700 rounded-lg font-mono text-sm text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-4"
-                    placeholder="프롬프트 내용을 입력하세요..."
-                  />
-
-                  <div className="mt-4 flex items-center text-sm text-gray-500">
-                    <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    저장하면 서버의 파일이 즉시 업데이트되며 버전이 자동으로 백업됩니다.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Gemini 응답 */}
-            <div className="col-span-3">
-              <div className="bg-gray-800/90 rounded-lg shadow-xl border border-gray-700">
-                <div className="px-4 py-3 border-b border-gray-700">
-                  <h3 className="text-lg font-medium text-white">Gemini 응답</h3>
-                  <p className="text-sm text-gray-400">
-                    {selectedVersion ? selectedVersion.filename : '버전을 선택하세요'}
-                  </p>
-                </div>
-
-                <div className="p-4">
-                  {!selectedVersion ? (
-                    <p className="text-gray-500 text-center py-8">좌측에서 버전을 선택하세요.</p>
-                  ) : geminiResponses.length === 0 ? (
-                    <p className="text-gray-500 text-center py-8">
-                      해당 프롬프트의 응답 히스토리가 없습니다.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {geminiResponses.map((response) => (
-                        <div
-                          key={response.fileName}
-                          className="p-3 rounded-lg border border-gray-700 hover:border-gray-600 cursor-pointer bg-gray-900/50"
-                          onClick={() => viewResponseDetail(response.fileName)}
-                        >
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs font-medium text-green-400">
-                              {response.step?.toUpperCase() || 'RESPONSE'}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {formatDateTime(response.timestamp)}
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-400 line-clamp-3">
-                            {response.preview}
-                          </div>
+              <div className="grid grid-cols-1 gap-1">
+                {directoryContents.length === 0 ? <div className="p-12 text-center text-gray-600 italic">No files found.</div> :
+                  directoryContents.map(item => (
+                    <div key={item.path} className="flex justify-between items-center p-3 hover:bg-gray-700/50 rounded-xl group transition-all">
+                      <div className="flex items-center gap-4 cursor-pointer" onClick={() => item.isDirectory && browseDirectory(item.path)}>
+                        <span className="text-2xl filter drop-shadow-md">{item.isDirectory ? '📁' : '📄'}</span>
+                        <div>
+                          <div className="text-sm font-bold text-gray-200 group-hover:text-blue-400">{item.name}</div>
+                          <div className="text-[10px] text-gray-600">{!item.isDirectory && `${(item.size / 1024).toFixed(1)} KB • `}{formatDateTime(item.modified)}</div>
                         </div>
-                      ))}
+                      </div>
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {item.isDirectory ? (
+                          <button onClick={() => browseDirectory(item.path)} className="p-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-[10px] font-black">OPEN</button>
+                        ) : (
+                          <button className="p-2 bg-gray-700/50 text-gray-500 rounded-lg text-[10px] font-black cursor-not-allowed">VIEW</button>
+                        )}
+                        {item.deletable && (
+                          <button onClick={() => deleteItem(item.path)} className="p-2 bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white rounded-lg text-[10px] font-black">PURGE</button>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
+                  ))
+                }
               </div>
             </div>
           </div>
         )}
 
-        {/* 응답 상세보기 모달 */}
-        {selectedResponse && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden border border-gray-700">
-              <div className="px-6 py-4 border-b border-gray-700">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-white">
-                    Gemini 응답 상세보기
-                  </h3>
-                  <button
-                    onClick={() => setSelectedResponse(null)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+        {/* 4. 사용자 관리 탭 */}
+        {activeMainTab === 'users' && (
+          <UserManagement />
+        )}
+      </div>
 
-              <div className="p-6 overflow-y-auto max-h-[75vh]">
-                <div className="mb-6">
-                  <h4 className="font-medium text-white mb-2 flex items-center">
-                    <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded mr-2">1</span>
-                    입력 데이터
-                  </h4>
-                  <pre className="bg-gray-900 p-4 rounded-lg text-sm overflow-x-auto text-gray-300">
+      {/* 응답 상세보기 모달 (공통) */}
+      {selectedResponse && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] px-4">
+          <div className="bg-[#121214] rounded-3xl shadow-2xl max-w-5xl w-full border border-gray-700/50 overflow-hidden scale-in">
+            <div className="px-8 py-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/40">
+              <div>
+                <h3 className="text-xl font-black text-white">GEMINI INTELLIGENCE LOG</h3>
+                <p className="text-xs text-blue-500 font-mono mt-1">Generated: {formatDateTime(selectedResponse.timestamp)}</p>
+              </div>
+              <button onClick={() => setSelectedResponse(null)} className="w-10 h-10 rounded-full bg-gray-800 hover:bg-red-600 text-white flex items-center justify-center transition-all">✕</button>
+            </div>
+            <div className="p-8 grid grid-cols-2 gap-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              <div className="space-y-4">
+                <h4 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em]">Input Parameters</h4>
+                <div className="bg-gray-950 rounded-2xl p-6 border border-gray-800 shadow-inner overflow-hidden">
+                  <pre className="text-[12px] font-mono text-blue-300 leading-relaxed overflow-x-auto whitespace-pre-wrap">
                     {JSON.stringify(selectedResponse.formData || selectedResponse.input || {}, null, 2)}
                   </pre>
                 </div>
-
-                <div className="mb-6">
-                  <h4 className="font-medium text-white mb-2 flex items-center">
-                    <span className="bg-green-600 text-white text-xs px-2 py-1 rounded mr-2">2</span>
-                    응답
-                  </h4>
-                  <div className="bg-gray-900 p-4 rounded-lg">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-300">
-                      {selectedResponse.response || selectedResponse.rawResponse || '(응답 데이터 없음)'}
-                    </pre>
+              </div>
+              <div className="space-y-4">
+                <h4 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em]">Generated Output</h4>
+                <div className="bg-gray-950 rounded-2xl p-6 border border-gray-800 shadow-inner overflow-hidden">
+                  <div className="text-[13px] font-serif italic text-gray-400 leading-loose whitespace-pre-wrap selection:bg-blue-600/50">
+                    {selectedResponse.response || selectedResponse.rawResponse || '(No response data)'}
                   </div>
-                </div>
-
-                <div className="mt-4 text-xs text-gray-500 text-center">
-                  생성 시간: {formatDateTime(selectedResponse.timestamp || new Date())}
                 </div>
               </div>
             </div>
+            <div className="px-8 py-4 border-t border-gray-800 bg-gray-950 flex justify-center">
+              <button onClick={() => setSelectedResponse(null)} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs transition-all shadow-lg shadow-blue-900/30">CLOSE INSPECTOR</button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
