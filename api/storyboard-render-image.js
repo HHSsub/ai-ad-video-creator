@@ -252,11 +252,31 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log('[storyboard-render-image] 요청 본문:', {
+      imagePrompt: req.body.imagePrompt ? '존재' : '없음',
+      projectId: req.body.projectId,
+      sceneNumber: req.body.sceneNumber,
+      conceptId: req.body.conceptId
+    });
+
+    // 🔥 projectId와 sceneNumber 추출
+    // 이미 req.body에서 추출된 변수들을 사용하므로 재선언 대신 기존 변수 사용
+    // const projectId = req.body.projectId || null; // 이미 선언됨
+    // const sceneNumber = req.body.sceneNumber || null; // 이미 선언됨
+    // const conceptId = req.body.conceptId || 0; // 이미 선언됨
+
+    console.log('[storyboard-render-image] 🔥 S3 업로드 파라미터:', { projectId, sceneNumber, conceptId });
+
     console.log(`[storyboard-render-image] 컨셉 ${conceptId}에 대한 동적 엔진 키 풀 활용 시작`);
 
     try {
-      // 🔥 동적 엔진으로 이미지 생성 (projectId, sceneNumber 전달)
-      const result = await generateImageWithDynamicEngine(imagePrompt, conceptId || 0, projectId, sceneNumber);
+      // 🔥 동적 엔진으로 이미지 생성 (S3 업로드 포함)
+      const result = await generateImageWithDynamicEngine(
+        imagePrompt, // 이미 정규화된 imagePrompt 사용
+        conceptId || 0,
+        projectId,  // 🔥 S3 업로드를 위해 전달
+        sceneNumber // 🔥 S3 업로드를 위해 전달
+      );
 
       const processingTime = Date.now() - startTime;
 

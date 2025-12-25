@@ -58,6 +58,11 @@ const PORT = process.env.PORT || 3000;
 // 세션 시작
 app.post('/api/session/start', (req, res) => {
   try {
+    // 🔥 body가 없으면 에러
+    if (!req.body) {
+      return res.status(400).json({ success: false, error: 'Request body is required' });
+    }
+
     const { sessionId, formData, timestamp } = req.body;
     const username = req.headers['x-username'] || 'anonymous';
 
@@ -407,10 +412,10 @@ app.post('/api/prompts/save-response', async (req, res) => {
 app.get('/api/prompts/responses/:promptKey', async (req, res) => {
   try {
     const { promptKey } = req.params;
-    
+
     // 🔥 엔진 기반 경로로 변경
     const { getGeminiResponsesDir, generateEngineId } = await import('./src/utils/enginePromptHelper.js');
-    
+
     const mode = promptKey.includes('manual') ? 'manual' : 'auto';
     const responsesPath = getGeminiResponsesDir(mode);
 
@@ -568,7 +573,7 @@ app.post('/api/prompts/test', async (req, res) => {
 
     // 응답 저장
     const { getGeminiResponsesDir } = await import('../src/utils/enginePromptHelper.js');
-    
+
     const mode = promptKey.includes('manual') ? 'manual' : 'auto';
     const responsesPath = getGeminiResponsesDir(mode);
 
@@ -633,16 +638,16 @@ app.use('/api/nanobanana-compose', nanobanaCompose); // 수정됨: /api/ 추가
 app.get('/api/engines', (req, res) => {
   try {
     const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
-    
+
     if (!fs.existsSync(enginesPath)) {
       return res.status(404).json({
         success: false,
         error: '엔진 설정 파일을 찾을 수 없습니다.'
       });
     }
-    
+
     const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf-8'));
-    
+
     res.json({
       success: true,
       currentEngine: enginesData.currentEngine,
@@ -662,50 +667,50 @@ app.post('/api/engines', (req, res) => {
   try {
     const { engineType, newEngineId, autoRestart } = req.body;
     const username = req.headers['x-username'] || 'anonymous';
-    
+
     console.log(`[POST /api/engines] 엔진 변경 요청:`, { engineType, newEngineId, username });
-    
+
     if (!engineType || !newEngineId) {
       return res.status(400).json({
         success: false,
         error: 'engineType과 newEngineId가 필요합니다.'
       });
     }
-    
+
     if (!['textToImage', 'imageToVideo'].includes(engineType)) {
       return res.status(400).json({
         success: false,
         error: '유효하지 않은 engineType입니다.'
       });
     }
-    
+
     const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
-    
+
     if (!fs.existsSync(enginesPath)) {
       return res.status(404).json({
         success: false,
         error: '엔진 설정 파일을 찾을 수 없습니다.'
       });
     }
-    
+
     const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf-8'));
-    
+
     // 새 엔진 정보 찾기
     const newEngine = enginesData.availableEngines[engineType].find(
       e => e.id === newEngineId
     );
-    
+
     if (!newEngine) {
       return res.status(404).json({
         success: false,
         error: '요청한 엔진을 찾을 수 없습니다.'
       });
     }
-    
+
     // 이전 엔진 정보 저장
     const previousEngine = enginesData.currentEngine[engineType];
     const previousEngineId = previousEngine.model;
-    
+
     // 엔진 변경
     enginesData.currentEngine[engineType] = {
       provider: newEngine.provider,
@@ -718,12 +723,12 @@ app.post('/api/engines', (req, res) => {
       updatedAt: new Date().toISOString(),
       updatedBy: username
     };
-    
+
     // 히스토리 추가
     if (!enginesData.engineHistory) {
       enginesData.engineHistory = [];
     }
-    
+
     enginesData.engineHistory.unshift({
       timestamp: new Date().toISOString(),
       changeType: 'update',
@@ -732,20 +737,20 @@ app.post('/api/engines', (req, res) => {
       newEngine: newEngineId,
       updatedBy: username
     });
-    
+
     // 히스토리 최대 100개 유지
     if (enginesData.engineHistory.length > 100) {
       enginesData.engineHistory = enginesData.engineHistory.slice(0, 100);
     }
-    
+
     // 파일 저장
     fs.writeFileSync(enginesPath, JSON.stringify(enginesData, null, 2), 'utf-8');
-    
+
     console.log(`[POST /api/engines] ✅ 엔진 변경 완료: ${previousEngineId} → ${newEngineId}`);
-    
+
     // PM2 재시작 (옵션)
     let restartResult = { success: false, message: '수동으로 재시작하세요.' };
-    
+
     if (autoRestart) {
       try {
         const { exec } = require('child_process');
@@ -761,7 +766,7 @@ app.post('/api/engines', (req, res) => {
         console.error('[PM2 재시작 실패]:', error);
       }
     }
-    
+
     res.json({
       success: true,
       message: '엔진이 성공적으로 변경되었습니다.',
@@ -770,7 +775,7 @@ app.post('/api/engines', (req, res) => {
       engineType: engineType,
       restartResult: restartResult
     });
-    
+
   } catch (error) {
     console.error('[POST /api/engines] 오류:', error);
     res.status(500).json({
@@ -850,14 +855,14 @@ server.on('connection', (socket) => {
   socket.setKeepAlive(true, 1000);
 });
 
-['SIGINT','SIGTERM'].forEach(sig=>{
-  process.once(sig, ()=>{
+['SIGINT', 'SIGTERM'].forEach(sig => {
+  process.once(sig, () => {
     console.log(`[${sig}] 수신 → 서버 종료 중...`);
-    server.close(()=>{
+    server.close(() => {
       console.log('✅ 서버 정상 종료');
       process.exit(0);
     });
-    setTimeout(()=>process.exit(1),5000).unref();
+    setTimeout(() => process.exit(1), 5000).unref();
   });
 });
 

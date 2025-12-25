@@ -86,6 +86,17 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-25 15:47 - 버그 수정: S3 업로드 미실행, 세션 에러
+- **파일**: `api/storyboard-render-image.js`, `server/index.js`
+- **문제**:
+  1. S3 업로드 코드가 실행되지 않음 (projectId, sceneNumber 미전달)
+  2. Session start 에러: `Cannot destructure property 'sessionId' of 'req.body'`
+- **수정 내용**:
+  - `storyboard-render-image.js`: `generateImageWithDynamicEngine()` 호출 시 projectId, sceneNumber 전달 추가
+  - `server/index.js`: session start 엔드포인트에 req.body 검증 추가
+- **결과**: S3 업로드 정상 작동 예상
+- **상태**: 코드 수정 완료, EC2 배포 필요
+
 ### 2025-12-25 15:16 - Freepik API 재시도 로직 개선 + 프로젝트 삭제 UI 추가
 - **파일**: `src/utils/apiHelpers.js`, `src/components/ProjectDashboard.jsx`, `server/routes/projects.js`
 - **수정 내용**:
