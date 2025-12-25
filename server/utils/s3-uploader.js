@@ -1,4 +1,4 @@
-import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import fetch from 'node-fetch';
 import fs from 'fs';
@@ -119,4 +119,62 @@ export async function deleteFromS3(s3Url) {
         console.error(`[S3] ❌ 삭제 실패:`, error.message);
         throw error;
     }
+}
+
+/**
+ * S3 폴더 내 파일 목록 조회
+ * @param {string} prefix - 폴더 경로 (예: 'persons/')
+ * @returns {Promise<Array<{key: string, url: string, lastModified: Date}>>}
+ */
+export async function listS3Files(prefix) {
+    console.log(`[S3] 목록 조회: ${prefix}`);
+    try {
+        const command = new ListObjectsV2Command({
+            Bucket: BUCKET_NAME,
+            Prefix: prefix
+        });
+
+        const response = await s3Client.send(command);
+        const contents = response.Contents || [];
+
+        return contents.map(item => ({
+            key: item.Key,
+            url: `${CDN_BASE_URL}/${item.Key}`,
+            lastModified: item.LastModified,
+            size: item.Size
+        }));
+    } catch (error) {
+        console.error(`[S3] ❌ 목록 조회 실패:`, error.message);
+        throw error;
+    }
+}
+
+/**
+         * 버퍼 데이터 S3 업로드
+         * @param {Buffer} buffer - 파일 데이터
+         * @param {string} projectId - 프로젝트 ID
+         * @param {string} filename - 저장할 파일명
+         * @param {string} contentType - MIME 타입 (기본: image/jpeg)
+         * @returns {Promise<string>} S3 URL
+         */
+export async function uploadBufferToS3(buffer, projectId, filename, contentType = 'image/jpeg') {
+    const s3Key = `projects/${projectId}/images/${filename}`;
+
+    const upload = new Upload({
+        client: s3Client,
+        params: {
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            Body: buffer,
+            ContentType: contentType,
+            CacheControl: 'public, max-age=31536000',
+        },
+    });
+
+    await upload.done();
+
+    const cdnUrl = `${CDN_BASE_URL}/${s3Key}`;
+    console.log(`[S3] ✅ 버퍼 업로드 완료: ${cdnUrl}`);
+
+    return cdnUrl;
 }

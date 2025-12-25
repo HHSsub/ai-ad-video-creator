@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import UserManagement from './UserManagement';
+import PersonManagement from './PersonManagement';
 
 const AdminPanel = ({ currentUser }) => {
   // ===== 상태 관리 =====
@@ -116,6 +117,14 @@ const AdminPanel = ({ currentUser }) => {
         setCurrentEngines(data.currentEngine);
         setAvailableEngines(data.availableEngines);
         setEngineHistory(data.engineHistory || []);
+
+        // 🔥 현재 활성화된 엔진으로 프롬프트 매트릭스 선택 동기화
+        if (data.currentEngine.textToImage?.model && data.currentEngine.imageToVideo?.model) {
+          // ID와 Model이 동일하다고 가정 (또는 engines.json 구조상 호환)
+          setSelectedImageEngine(data.currentEngine.textToImage.model);
+          setSelectedVideoEngine(data.currentEngine.imageToVideo.model);
+        }
+
         console.log('[AdminPanel] ✅ 엔진 정보 로드 성공');
       } else {
         showMessage('error', '엔진 정보 로드 실패');
@@ -499,6 +508,7 @@ const AdminPanel = ({ currentUser }) => {
           {[
             { id: 'prompts', label: '📝 프롬프트 관리' },
             { id: 'engines', label: '🎨 엔진 관리' },
+            { id: 'persons', label: '👤 인물 관리' },
             { id: 'storage', label: '💾 저장소 관리' },
             { id: 'users', label: '👥 사용자 관리' }
           ].map(tab => (
@@ -820,7 +830,10 @@ const AdminPanel = ({ currentUser }) => {
           </div>
         )}
 
-        {/* 3. 저장소 관리 탭 */}
+        {/* 3. 인물 관리 탭 */}
+        {activeMainTab === 'persons' && <PersonManagement />}
+
+        {/* 4. 저장소 관리 탭 */}
         {activeMainTab === 'storage' && (
           <div className="space-y-6">
             {storageInfo && (

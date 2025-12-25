@@ -465,10 +465,10 @@ function calculateProgress(phase, stepProgress = 0) {
 // ============================================================
 // 자동화 함수
 // ============================================================
-async function generateImage(imagePrompt, sceneNumber, conceptId, username, projectId, maxRetries = 3) {
+async function generateImage(imagePrompt, sceneNumber, conceptId, username, projectId, personUrl, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId}, 프로젝트: ${projectId})`);
+      console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId}, 프로젝트: ${projectId}, 인물: ${personUrl ? '있음' : '없음'})`);
 
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
@@ -480,7 +480,8 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, proj
           imagePrompt,
           sceneNumber,
           conceptId,
-          projectId  // 🔥 추가: S3 업로드를 위한 projectId
+          projectId,  // 🔥 추가: S3 업로드를 위한 projectId
+          personUrl   // 🔥 추가: 인물 합성용 URL
         })
       });
 
@@ -822,7 +823,14 @@ async function processStoryboardAsync(body, username, sessionId) {
             sceneNum,
             prompt: scene.image_prompt?.prompt
           });
-          const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username, body.projectId);
+          const imageUrl = await generateImage(
+            imagePrompt,
+            sceneNum,
+            conceptIdx + 1,
+            username,
+            body.projectId,
+            body.personSelection // 🔥 인물 합성 정보 전달
+          );
           console.log(`[storyboard-init] 🖼️ 씬 ${sceneNum} 이미지 생성 완료: ${imageUrl}`);
           images.push({
             sceneNumber: sceneNum,

@@ -3,7 +3,7 @@ import { safeCallGemini, getApiKeyStatus } from '../src/utils/apiHelpers.js';
 
 
 // 🔥 Gemini를 이용한 이미지 합성 함수 - 2025년 최신 API 사용
-async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositingInfo) {
+export async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositingInfo) {
   const startTime = Date.now();
   let lastError = null;
 
@@ -28,13 +28,13 @@ async function safeComposeWithGemini(baseImageUrl, overlayImageData, compositing
     }
 
     // 🔥 합성 필요성 분석
-    const needsProductImage = compositingInfo.videoPurpose === 'product' || 
-                              compositingInfo.videoPurpose === 'conversion' ||
-                              compositingInfo.compositingContext?.includes('PRODUCT');
+    const needsProductImage = compositingInfo.videoPurpose === 'product' ||
+      compositingInfo.videoPurpose === 'conversion' ||
+      compositingInfo.compositingContext?.includes('PRODUCT');
 
-    const needsBrandLogo = compositingInfo.videoPurpose === 'service' || 
-                           compositingInfo.videoPurpose === 'brand' ||
-                           compositingInfo.compositingContext?.includes('LOGO');
+    const needsBrandLogo = compositingInfo.videoPurpose === 'service' ||
+      compositingInfo.videoPurpose === 'brand' ||
+      compositingInfo.compositingContext?.includes('LOGO');
 
     console.log('[safeComposeWithGemini] 합성 분석:', {
       needsProductImage,
@@ -81,7 +81,7 @@ Final Polish: Apply a unified, professional color grade over the entire image. T
 
     // 🔥 Gemini 2.5 API 호출 - 최신 이미지 합성 기능 사용
     console.log('[safeComposeWithGemini] Gemini 2.5 Flash Image Preview 호출 시작');
-    
+
     const result = await safeCallGemini(compositingPrompt, {
       label: 'nanobanana-image-compositing',
       maxRetries: 3,
@@ -92,7 +92,8 @@ Final Polish: Apply a unified, professional color grade over the entire image. T
           type: 'base_scene'
         },
         {
-          data: overlayImageData,
+          // 🔥 URL/Data 자동 분기
+          [overlayImageData.startsWith('http') ? 'url' : 'data']: overlayImageData,
           type: needsProductImage ? 'product_image' : 'brand_logo'
         }
       ],
@@ -106,13 +107,15 @@ Final Polish: Apply a unified, professional color grade over the entire image. T
       }
     });
 
-    if (result && result.success && result.imageUrl) {
+    // 🔥 이미지 데이터 확인 (Base64 or URL)
+    if (result && result.success && (result.imageData || result.imageUrl)) {
       const processingTime = Date.now() - startTime;
       console.log(`[safeComposeWithGemini] ✅ 합성 성공: ${processingTime}ms`);
-      
+
       return {
         success: true,
-        composedImageUrl: result.imageUrl,
+        // composedImageUrl: result.imageUrl, // 기존방식 (URL)
+        composedImageData: result.imageData, // 🔥 Base64 데이터 반환
         metadata: {
           originalBaseUrl: baseImageUrl,
           compositingContext: compositingInfo.compositingContext,
@@ -139,9 +142,9 @@ Final Polish: Apply a unified, professional color grade over the entire image. T
     lastError = error;
     console.error('[safeComposeWithGemini] 합성 프로세스 오류:', error.message);
     const processingTime = Date.now() - startTime;
-    
+
     console.warn(`[safeComposeWithGemini] ⚠️ 합성 실패, 원본 이미지 사용: ${error.message}`);
-    
+
     return {
       success: true,
       composedImageUrl: baseImageUrl, // 🔥 실패 시 원본 이미지 반환
@@ -172,11 +175,11 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
-  
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
+
   if (req.method !== 'POST') {
     return res.status(405).json({
       success: false,
@@ -255,7 +258,7 @@ export default async function handler(req, res) {
 
     // 🔥 Gemini 2.5 합성 실행
     console.log(`[nanobanana-compose] [${requestId}] Gemini 2.5 합성 시작: ${compositingInfo.compositingContext}`);
-    
+
     const result = await safeComposeWithGemini(
       baseImageUrl,
       overlayImageData,
@@ -308,7 +311,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error(`[nanobanana-compose] [${requestId}] ❌ 핸들러 오류:`, error);
     const totalProcessingTime = Date.now() - startTime;
-    
+
     return res.status(200).json({
       success: true,
       compositingSuccess: false,

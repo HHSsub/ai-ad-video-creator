@@ -2,7 +2,8 @@
 
 import { safeCallFreepik, getApiKeyStatus } from '../src/utils/apiHelpers.js';
 import { getTextToImageUrl, getTextToImageStatusUrl } from '../src/utils/engineConfigLoader.js';
-import { uploadImageToS3 } from '../server/utils/s3-uploader.js';
+import { uploadImageToS3, uploadBufferToS3 } from '../server/utils/s3-uploader.js';
+import { safeComposeWithGemini } from './nanobanana-compose.js';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const POLLING_TIMEOUT = 120000; // 2 minutes
@@ -185,7 +186,7 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    let { imagePrompt, sceneNumber, conceptId, prompt, projectId } = req.body || {};
+    let { imagePrompt, sceneNumber, conceptId, prompt, projectId, personUrl } = req.body || {};
 
     console.log('[storyboard-render-image] 요청 수신:', {
       sceneNumber,
@@ -271,12 +272,52 @@ export default async function handler(req, res) {
 
     try {
       // 🔥 동적 엔진으로 이미지 생성 (S3 업로드 포함)
-      const result = await generateImageWithDynamicEngine(
+      let result = await generateImageWithDynamicEngine(
         imagePrompt, // 이미 정규화된 imagePrompt 사용
         conceptId || 0,
         projectId,  // 🔥 S3 업로드를 위해 전달
         sceneNumber // 🔥 S3 업로드를 위해 전달
       );
+
+      // 🔥 [M] 인물 합성 로직 (Person Archive)
+      if (personUrl && projectId && sceneNumber && result.imageUrl) {
+        // 키워드 감지 (사람 관련)
+        const personKeywords = /man|woman|person|girl|boy|model|character|protagonist|worker|student|teacher|doctor|nurse|driver/i;
+        const currentPrompt = imagePrompt.prompt || '';
+
+        if (personKeywords.test(currentPrompt)) {
+          console.log(`[storyboard-render-image] 👤 인물 합성 조건 충족 (씬 ${sceneNumber})`);
+          console.log(`[storyboard-render-image] 🔹 Base: ${result.imageUrl}`);
+          console.log(`[storyboard-render-image] 🔹 Person: ${personUrl}`);
+
+          try {
+            const compositingInfo = {
+              videoPurpose: 'person_integration',
+              compositingContext: 'INTEGRATE_PERSON_INTO_SCENE',
+              sceneDescription: currentPrompt
+            };
+
+            const compResult = await safeComposeWithGemini(result.imageUrl, personUrl, compositingInfo);
+
+            if (compResult.success && compResult.composedImageData) {
+              // Base64 -> Buffer
+              const buffer = Buffer.from(compResult.composedImageData, 'base64');
+
+              // S3 업로드
+              const filename = `comp_concept_${conceptId}_scene_${sceneNumber}_${Date.now()}.jpg`;
+              const compUrl = await uploadBufferToS3(buffer, projectId, filename);
+
+              console.log(`[storyboard-render-image] ✅ 인물 합성 및 업로드 완료: ${compUrl}`);
+
+              // 결과 URL 교체
+              result.imageUrl = compUrl;
+              result.metadata = { ...result.metadata, substitutedPerson: true, originalUrl: result.imageUrl };
+            }
+          } catch (compError) {
+            console.error(`[storyboard-render-image] ⚠️ 인물 합성 실패 (무시됨):`, compError.message);
+          }
+        }
+      }
 
       const processingTime = Date.now() - startTime;
 

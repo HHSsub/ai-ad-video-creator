@@ -40,6 +40,7 @@ import adminFieldConfig from '../api/admin-field-config.js';
 // 🔥 추가된 단 1줄 — 절대 수정 없음
 import projectsRouter from './routes/projects.js';
 import authRouter from './routes/auth.js';
+import personsRouter from '../api/persons.js';
 
 // ✅ 엔진 관리 API 추가 (Express Router 버전)
 import enginesGet from '../api/engines-get.js';
@@ -247,6 +248,7 @@ app.use('/api/admin-config', adminConfig);
 app.use('/api/users', usersApi); // 수정됨: /api/ 추가
 app.use('/api/admin-field-config', adminFieldConfig); // 수정됨: /api/ 추가
 app.use('/api/auth', authRouter);
+app.use('/api/persons', personsRouter);
 
 // ✅ 엔진 관리 API 라우팅 추가 - 🔥 수정: /get, /update 제거
 app.use('/api/engines', enginesGet);

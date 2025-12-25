@@ -149,12 +149,66 @@ export async function safeCallGemini(prompt, options = {}) {
         const geminiModel = genAI.getGenerativeModel({ model: currentModel });
 
         console.log(`[${label}] 📡 API 호출 시작 (모델: ${currentModel}, 키: ${keyIndex})`);
-        // 🔥 타임아웃과 함께 API 호출
-        const apiCall = Array.isArray(prompt)
-          ? geminiModel.generateContent({ contents: prompt })
-          : geminiModel.generateContent(prompt);
 
-        const result = await withTimeout(apiCall, timeout);
+        // 🔥 이미지 입력 처리 (Nanobanana 등에서 전달됨)
+        let requestContent = prompt;
+        if (options.images && Array.isArray(options.images) && options.images.length > 0) {
+          const imageParts = [];
+
+          for (const img of options.images) {
+            if (img.data) {
+              // Base64 데이터가 있는 경우
+              imageParts.push({
+                inlineData: {
+                  data: img.data,
+                  mimeType: img.mimeType || 'image/jpeg'
+                }
+              });
+            } else if (img.url) {
+              // URL이 있는 경우 -> 다운로드 후 Base64 변환
+              try {
+                console.log(`[${label}] 📥 이미지 다운로드: ${img.url.substring(0, 50)}...`);
+                const imgRes = await fetch(img.url);
+                const arrayBuffer = await imgRes.arrayBuffer();
+                const base64 = Buffer.from(arrayBuffer).toString('base64');
+                const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+
+                imageParts.push({
+                  inlineData: {
+                    data: base64,
+                    mimeType: contentType
+                  }
+                });
+              } catch (err) {
+                console.warn(`[${label}] ⚠️ 이미지 다운로드 실패 (무시됨): ${img.url}`, err);
+              }
+            }
+          }
+
+          if (imageParts.length > 0) {
+            // 프롬프트가 문자열이면 배열로 변환하여 이미지와 결합
+            if (typeof prompt === 'string') {
+              requestContent = [prompt, ...imageParts];
+            } else if (Array.isArray(prompt)) {
+              requestContent = [...prompt, ...imageParts];
+            }
+            console.log(`[${label}] 🖼️ 멀티모달 요청 준비 완료 (이미지 ${imageParts.length}장)`);
+          }
+        }
+
+        // 🔥 타임아웃과 함께 API 호출
+        const apiCall = Array.isArray(requestContent)
+          ? geminiModel.generateContent({ contents: [{ role: 'user', parts: requestContent.map(p => typeof p === 'string' ? { text: p } : p) }] })
+          // Note: generateContent accepts array of parts directly if it's just parts, but 'contents' structure is safer for chat-like. 
+          // SDK overload: generateContent(string | Array<string | Part>)
+          // If requestContent is array of mixed string/Parts, pass it directly.
+          : geminiModel.generateContent(requestContent);
+
+        // Correct SDK usage correction:
+        // generateContent([ "text", { inlineData: ... } ]) works.
+        const finalApiCall = geminiModel.generateContent(requestContent);
+
+        const result = await withTimeout(finalApiCall, timeout);
 
         if (!result?.response) {
           throw new Error('Gemini API에서 응답을 받지 못했습니다.');
