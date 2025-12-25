@@ -193,6 +193,85 @@ const Step4 = ({
     }
   };
 
+  // 🔥 E-1: 씬별 영상 변환
+  const handleConvertSingleScene = async (sceneNumber) => {
+    if (!permissions.regenerate) {
+      setError('영상 변환 권한이 없습니다.');
+      return;
+    }
+
+    const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
+    if (!scene || !scene.imageUrl) {
+      setError(`씬 ${sceneNumber}: 이미지가 없습니다.`);
+      return;
+    }
+
+    setConvertingScenes(prev => ({ ...prev, [sceneNumber]: true }));
+    setError(null);
+    log(`씬 ${sceneNumber} 영상 변환 시작...`);
+
+    try {
+      const response = await fetch(`${API_BASE}/nexxii/api/convert-single-scene`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: scene.imageUrl,
+          sceneNumber: sceneNumber,
+          projectId: currentProject?.id,
+          conceptId: selectedConceptId,
+          duration: 3
+        })
+      });
+
+      const result = await response.json();
+      console.log(`[Step4] 씬 ${sceneNumber} 영상 변환 응답:`, result);
+
+      if (result.success && result.videoUrl) {
+        scene.videoUrl = result.videoUrl;
+        scene.status = 'video_done';
+        log(`씬 ${sceneNumber} 영상 변환 완료: ${result.videoUrl}`);
+      } else {
+        throw new Error(result.error || '영상 변환 실패');
+      }
+    } catch (err) {
+      setError(`씬 ${sceneNumber} 변환 오류: ${err.message}`);
+      log(`씬 ${sceneNumber} 변환 오류: ${err.message}`);
+    } finally {
+      setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
+    }
+  };
+
+  // 🔥 E-2: 일괄 영상 변환
+  const handleConvertAllScenes = async () => {
+    if (!permissions.regenerate) {
+      setError('영상 변환 권한이 없습니다.');
+      return;
+    }
+
+    const scenesToConvert = sortedImages.filter(img => img.imageUrl && !img.videoUrl);
+
+    if (scenesToConvert.length === 0) {
+      setError('변환할 씬이 없습니다. (모든 씬이 이미 영상으로 변환되었습니다)');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    log(`${scenesToConvert.length}개 씬 일괄 변환 시작...`);
+
+    try {
+      for (const scene of scenesToConvert) {
+        await handleConvertSingleScene(scene.sceneNumber);
+      }
+      log('일괄 변환 완료');
+    } catch (err) {
+      setError(`일괄 변환 오류: ${err.message}`);
+      log(`일괄 변환 오류: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRegenerateAllVideos = async () => {
     if (!permissions.regenerate) {
       setError('영상 재생성 권한이 없습니다.');
@@ -209,83 +288,13 @@ const Step4 = ({
     log('수정된 씬들의 영상 재생성 시작...');
 
     try {
-      // 1단계: 수정된 씬들의 이미지 → 영상 변환
+      // 수정된 씬들만 재변환
       for (const sceneNumber of modifiedScenes) {
-        const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
-        if (!scene || !scene.imageUrl) {
-          log(`씬 ${sceneNumber} 스킵: 이미지 없음`);
-          continue;
-        }
-
-        log(`씬 ${sceneNumber} 영상 변환 중...`);
-
-        const response = await fetch(`${API_BASE}/nexxii/api/image-to-video`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageUrl: scene.imageUrl,
-            prompt: scene.motionPrompt?.prompt || 'smooth camera movement',
-            duration: 2
-          })
-        });
-
-        const result = await response.json();
-        console.log(`[Step4] 씬 ${sceneNumber} 영상 변환 응답:`, result);
-
-        if (result.success && result.videoUrl) {
-          scene.videoUrl = result.videoUrl;
-          scene.status = 'video_done';
-          log(`씬 ${sceneNumber} 영상 변환 완료: ${result.videoUrl}`);
-        } else {
-          log(`씬 ${sceneNumber} 영상 변환 실패: ${result.message || result.error}`);
-        }
+        await handleConvertSingleScene(sceneNumber);
       }
 
-      // 2단계: 전체 영상 합성
-      log('영상 합성 시작...');
-
-      // 🔥 수정: videos → segments 키로 변경
-      const segments = sortedImages
-        .filter(img => img.videoUrl)
-        .map(img => ({
-          sceneNumber: img.sceneNumber,
-          videoUrl: img.videoUrl
-        }));
-
-      if (segments.length === 0) {
-        throw new Error('합성할 영상 클립이 없습니다.');
-      }
-
-      log(`합성할 클립 개수: ${segments.length}`);
-
-      const compileResponse = await fetch(`${API_BASE}/nexxii/api/compile-videos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          segments: segments,
-          videoLength: formData?.videoLength || '10초',
-          formData: formData,
-          jsonMode: true
-        })
-      });
-
-      const compileResult = await compileResponse.json();
-      console.log('[Step4] 영상 합성 응답:', compileResult);
-
-      if (compileResult.success && compileResult.compiledVideoUrl) {
-        log(`영상 합성 완료: ${compileResult.compiledVideoUrl}`);
-
-        if (finalVideo) {
-          finalVideo.videoUrl = compileResult.compiledVideoUrl;
-          finalVideo.metadata = compileResult.metadata;
-        }
-
-        setModifiedScenes([]);
-        log('Step3으로 이동합니다.');
-        onComplete();
-      } else {
-        throw new Error(compileResult.error || compileResult.message || '영상 합성 실패');
-      }
+      setModifiedScenes([]);
+      log('영상 재생성 완료');
     } catch (err) {
       setError(`영상 재생성 오류: ${err.message}`);
       log(`영상 재생성 오류: ${err.message}`);
@@ -294,13 +303,20 @@ const Step4 = ({
     }
   };
 
+  // 🔥 E-3: 컨펌 완료 (1개 이상 영상 필요)
   const handleConfirmAndComplete = () => {
     if (!permissions.confirm) {
       setError('영상 컨펌 권한이 없습니다.');
       return;
     }
 
-    log('영상 컨펌 완료. Step3으로 이동합니다.');
+    const videoSceneCount = sortedImages.filter(img => img.videoUrl).length;
+    if (videoSceneCount === 0) {
+      setError('최소 1개 씬을 영상으로 변환해주세요.');
+      return;
+    }
+
+    log(`영상 컨펌 완료 (${videoSceneCount}개 씬). Step3으로 이동합니다.`);
     onComplete();
   };
 
@@ -472,8 +488,8 @@ const Step4 = ({
                           </span>
                         )}
                         <span className={`px-2 py-1 text-xs rounded ${img.status === 'video_done'
-                            ? 'bg-green-900/50 text-green-300'
-                            : 'bg-gray-700 text-gray-300'
+                          ? 'bg-green-900/50 text-green-300'
+                          : 'bg-gray-700 text-gray-300'
                           }`}>
                           {img.status === 'video_done' ? '영상 완료' : img.status || '대기중'}
                         </span>
@@ -537,17 +553,30 @@ const Step4 = ({
                             className="w-full h-24 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm resize-none focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                             placeholder="이미지 프롬프트..."
                           />
-                        </div>
+                          <div className="space-y-3">
+                            {permissions.editPrompt && (
+                              <button
+                                onClick={() => handleRegenerateImage(img.sceneNumber)}
+                                disabled={isRegenerating}
+                                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm"
+                              >
+                                {isRegenerating ? '이미지 생성 중...' : '🔄 이미지 재생성'}
+                              </button>
+                            )}
 
-                        {permissions.regenerate && (
-                          <button
-                            onClick={() => handleRegenerateImage(img.sceneNumber)}
-                            disabled={isRegenerating || loading}
-                            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isRegenerating ? '재생성 중...' : '🔄 이미지 재생성'}
-                          </button>
-                        )}
+                            {/* 🔥 E-1: 씬별 영상 변환 버튼 */}
+                            {permissions.regenerate && img.imageUrl && (
+                              <button
+                                onClick={() => handleConvertSingleScene(img.sceneNumber)}
+                                disabled={convertingScenes[img.sceneNumber]}
+                                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm"
+                              >
+                                {convertingScenes[img.sceneNumber] ? '영상 변환 중...' :
+                                  img.videoUrl ? '🎬 영상 재변환' : '🎬 영상 변환'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="md:col-span-1">
@@ -609,109 +638,123 @@ const Step4 = ({
             </div>
           </details>
 
-          <div className="flex justify-between pt-6 border-t border-gray-700">
+          {/* 🔥 E-2: 일괄 영상 변환 버튼 */}
+          <div className="mb-6 flex gap-3">
+            {permissions.regenerate && (
+              <button
+                onClick={handleConvertAllScenes}
+                disabled={loading || sortedImages.filter(img => img.imageUrl && !img.videoUrl).length === 0}
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
+              >
+                {loading ? '변환 중...' : `🎬 모든 씬 영상 변환 (${sortedImages.filter(img => img.imageUrl && !img.videoUrl).length}개)`}
+              </button>
+            )}
+
+            {modifiedScenes.length > 0 && permissions.regenerate && (
+              <button
+                onClick={handleRegenerateAllVideos}
+                disabled={loading}
+                className="px-6 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
+              >
+                {loading ? '재생성 중...' : `🔄 수정된 씬 재생성 (${modifiedScenes.length}개)`}
+              </button>
+            )}
+          </div>
+
+          {/* 🔥 E-3: 컨펌 완료 버튼 (1개 이상 영상 필요) */}
+          <div className="flex justify-between items-center pt-6 border-t border-gray-700">
             <button
               onClick={onPrev}
               className="px-6 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors"
-              disabled={loading}
             >
-              ← Step3으로 돌아가기
+              ← 이전 단계
             </button>
 
-            <div className="flex gap-3">
-              {permissions.regenerate && modifiedScenes.length > 0 && (
-                <button
-                  onClick={handleRegenerateAllVideos}
-                  disabled={loading}
-                  className="px-6 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-                >
-                  {loading ? '처리 중...' : `🎬 수정된 ${modifiedScenes.length}개 씬 영상 재생성`}
-                </button>
-              )}
-
-              {permissions.confirm && (
-                <button
-                  onClick={handleConfirmAndComplete}
-                  disabled={loading}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-                >
-                  ✅ 컨펌 완료
-                </button>
-              )}
-            </div>
+            {permissions.confirm && (
+              <button
+                onClick={handleConfirmAndComplete}
+                disabled={loading}
+                className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+              >
+                ✅ 컨펌 완료
+              </button>
+            )}
           </div>
         </div>
       </div>
+    </div>
 
-      {/* 🔥 추가: 멤버 초대 모달 */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
-            <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
+      {/* 🔥 추가: 멤버 초대 모달 */ }
+  {
+    showInviteModal && (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
+          <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
 
-            {inviteError && (
-              <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
-                {inviteError}
-              </div>
-            )}
+          {inviteError && (
+            <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
+              {inviteError}
+            </div>
+          )}
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  사용자명 (계정 ID)
-                </label>
-                <input
-                  type="text"
-                  value={inviteUsername}
-                  onChange={(e) => setInviteUsername(e.target.value)}
-                  placeholder="예: guest, test1"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                  disabled={inviteLoading}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  시스템에 등록된 사용자만 초대할 수 있습니다.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  역할 선택
-                </label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                  disabled={inviteLoading}
-                >
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                사용자명 (계정 ID)
+              </label>
+              <input
+                type="text"
+                value={inviteUsername}
+                onChange={(e) => setInviteUsername(e.target.value)}
+                placeholder="예: guest, test1"
+                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                disabled={inviteLoading}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                시스템에 등록된 사용자만 초대할 수 있습니다.
+              </p>
             </div>
 
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleCloseInviteModal}
-                className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                역할 선택
+              </label>
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
                 disabled={inviteLoading}
               >
-                취소
-              </button>
-              <button
-                onClick={handleInviteMember}
-                disabled={inviteLoading || !inviteUsername.trim()}
-                className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-              >
-                {inviteLoading ? '초대 중...' : '초대하기'}
-              </button>
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={handleCloseInviteModal}
+              className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+              disabled={inviteLoading}
+            >
+              취소
+            </button>
+            <button
+              onClick={handleInviteMember}
+              disabled={inviteLoading || !inviteUsername.trim()}
+              className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+            >
+              {inviteLoading ? '초대 중...' : '초대하기'}
+            </button>
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+    )
+  }
+    </div >
   );
 };
 
