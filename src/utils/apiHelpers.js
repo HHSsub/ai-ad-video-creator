@@ -267,36 +267,45 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
 
     try {
       // 🔥 사용 가능한 키 선택 (이미 사용한 키 제외)
-      let selectedKey = null;
-      let retryCount = 0;
+      keyIndex = null;
 
-      while (retryCount < totalKeys) {
-        const { key: apiKey, index } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
-
-        // 🔥 이미 사용한 키면 다음 키 시도
-        if (usedKeys.has(index)) {
-          retryCount++;
-          continue;
+      // 사용하지 않은 키 중 블록되지 않은 키 찾기
+      for (let i = 0; i < totalKeys; i++) {
+        if (!usedKeys.has(i)) {
+          const keyStatus = apiKeyManager.getKeyStatus('freepik', i);
+          if (!keyStatus.blocked) {
+            keyIndex = i;
+            break;
+          }
         }
+      }
 
-        selectedKey = { key: apiKey, index };
-        break;
+      // 모든 키가 블록되었으면 사용하지 않은 키 중 아무거나
+      if (keyIndex === null) {
+        for (let i = 0; i < totalKeys; i++) {
+          if (!usedKeys.has(i)) {
+            keyIndex = i;
+            console.log(`[${label}] 모든 키가 블록됨, 키 ${i} 사용 시도`);
+            break;
+          }
+        }
       }
 
       // 모든 키를 사용했으면 종료
-      if (!selectedKey) {
-        console.error(`[${label}] ❌ 모든 Freepik 키 사용 완료 (${usedKeys.size}/${totalKeys})`);
+      if (keyIndex === null) {
+        console.log(`[${label}] ❌ 모든 Freepik 키 사용 완료 (${usedKeys.size}/${totalKeys})`);
         break;
       }
 
-      keyIndex = selectedKey.index;
-      console.log(`[${label}] 시도 ${attempt + 1}/${maxTotalAttempts} (컨셉: ${conceptId}, 키: ${keyIndex}, 사용된 키: ${usedKeys.size}/${totalKeys})`);
+      usedKeys.add(keyIndex);
+      const apiKey = apiKeyManager.getKey('freepik', keyIndex);
+      console.log(`[${label}] 시도 ${attempt + 1}/${maxTotalAttempts} (컨셉: ${conceptId}, 키: ${keyIndex}, 사용된 키: ${usedKeys.size - 1}/${totalKeys})`);
 
       const response = await withTimeout(
         fetch(url, {
           ...options,
           headers: {
-            'X-Freepik-API-Key': selectedKey.key,
+            'X-Freepik-API-Key': apiKey,
             'Content-Type': 'application/json',
             ...options.headers
           }
