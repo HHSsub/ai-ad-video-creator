@@ -30,7 +30,7 @@ export default function InviteMemberModal({ isOpen, onClose, projectId, currentU
         setSuccess(false);
 
         try {
-            const response = await fetch(`${API_BASE}/api/projects/${projectId}/members`, {
+            const response = await fetch(`${API_BASE}/nexxii/api/projects/${projectId}/members`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
