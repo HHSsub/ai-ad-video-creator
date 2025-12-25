@@ -459,7 +459,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             if (currentProject?.id) {
               log('💾 프로젝트에 저장 중...');
               try {
-                const saveResponse = await fetch(`${API_BASE}/nexxii/api/projects/${currentProject.id}`, {
+                const saveResponse = await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
                   method: 'PATCH',
                   headers: {
                     'Content-Type': 'application/json',

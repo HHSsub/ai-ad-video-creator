@@ -36,7 +36,7 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
 
         const loadMoods = async () => {
             try {
-                const response = await fetch(`${API_BASE}/nexxii/api/apply-bgm`);
+                const response = await fetch(`${API_BASE}/api/apply-bgm`);
                 const result = await response.json();
                 if (result.success && result.moods) {
                     setAvailableMoods(result.moods);
@@ -70,7 +70,7 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
 
             log(`BGM 적용 시작 (mood: ${selectedMood}, video: ${videoUrl})`);
 
-            const response = await fetch(`${API_BASE}/nexxii/api/apply-bgm`, {
+            const response = await fetch(`${API_BASE}/api/apply-bgm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

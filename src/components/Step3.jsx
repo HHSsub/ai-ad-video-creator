@@ -52,7 +52,7 @@ const Step3 = ({
     // 🔥 G-3: 프로젝트에 저장
     if (currentProject?.id) {
       try {
-        const response = await fetch(`${API_BASE}/nexxii/api/projects/${currentProject.id}`, {
+        const response = await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ const Step3 = ({
     // 🔥 G-3: Step4로 이동 전 저장
     if (currentProject?.id) {
       try {
-        await fetch(`${API_BASE}/nexxii/api/projects/${currentProject.id}`, {
+        await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',

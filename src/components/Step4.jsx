@@ -151,7 +151,7 @@ const Step4 = ({
 
     try {
       // 🔥 수정: API 요청 형식을 storyboard-render-image.js에 맞게 조정
-      const response = await fetch(`${API_BASE}/nexxii/api/storyboard-render-image`, {
+      const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -211,7 +211,7 @@ const Step4 = ({
     log(`씬 ${sceneNumber} 영상 변환 시작...`);
 
     try {
-      const response = await fetch(`${API_BASE}/nexxii/api/convert-single-scene`, {
+      const response = await fetch(`${API_BASE}/api/convert-single-scene`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -349,7 +349,7 @@ const Step4 = ({
     setInviteError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/nexxii/api/projects/${currentProject?.id}/members`, {
+      const response = await fetch(`${API_BASE}/api/projects/${currentProject?.id}/members`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
