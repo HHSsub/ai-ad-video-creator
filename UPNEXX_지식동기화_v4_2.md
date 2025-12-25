@@ -87,6 +87,33 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-26 01:56 - 라우트 등록 순서 수정
+- **문제**: 멤버 초대 API 호출 시 오류 발생
+- **원인**: 라우트 등록 순서 문제 (projects 라우터가 다른 라우트보다 늦게 등록됨)
+- **해결**: `server/index.js`에서 projects 및 auth 라우터를 최우선 등록
+- **수정 내용**:
+  ```javascript
+  // 🔥 프로젝트 및 인증 라우터 (최우선 등록)
+  app.use('/api/projects', projectsRouter);
+  app.use('/api/auth', authRouter);
+  ```
+- **상태**: 🟢 완료 (사용자 승인 대기)
+
+### 2025-12-26 01:52 - 싱글 씬 변환 라우트 수정 + BGM/SFX UI 표시
+- **싱글 씬 영상 변환 오류 수정**:
+  - 문제: `convert-single-scene` API 라우트 미등록 → HTML 응답 반환
+  - 수정: `server/index.js`에 `convertSingleScene` import 및 라우트 등록
+  - 경로: `/api/convert-single-scene`
+- **Audio & Editing Guide UI 구현**:
+  - `Step3.jsx`에 BGM/SFX/Editing Pace 정보 표시 섹션 추가
+  - Big Idea 아래에 배치 (카피라이트처럼)
+  - `storyboard.metadata.audioEditingGuide` 데이터 사용
+  - 색상 구분: BGM (파란색), SFX (초록색), Editing Pace (보라색)
+- **수정 파일**:
+  - `server/index.js`: convert-single-scene 라우트 추가
+  - `src/components/Step3.jsx`: Audio & Editing Guide 섹션 추가
+- **상태**: 🟢 완료 (사용자 승인 대기)
+
 ### 2025-12-26 01:38 - Section 3 파싱 + 진행률 로직 수정
 - **Section 3 (Audio & Editing Guide) 파싱 추가**:
   - `parseAudioEditingGuide()` 함수 구현 (BGM, SFX, Editing Pace 추출)

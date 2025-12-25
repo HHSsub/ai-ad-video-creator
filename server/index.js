@@ -27,6 +27,7 @@ import imageToVideo from '../api/image-to-video.js';
 import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 import compileVideos from '../api/compile-videos.js';
+import convertSingleScene from '../api/convert-single-scene.js'; // 싱글 씨인 변환
 import debug from '../api/debug.js';
 import applyBgm from '../api/apply-bgm.js';
 import loadMoodList from '../api/load-mood-list.js';
@@ -625,12 +626,17 @@ app.post('/api/prompts/test', async (req, res) => {
   }
 });
 
+// 🔥 프로젝트 및 인증 라우터 (최우선 등록)
 app.use('/api/projects', projectsRouter);
+app.use('/api/auth', authRouter);
+
+// 나머지 API 라우트
 app.use('/api/storyboard-init', storyboardInit); // 수정됨: /api/ 추가
 app.use('/api/generate-prompt', generatePrompt); // 🔥 수동 프롬프트 생성
 app.use('/api/storyboard-manual-inject', storyboardManualInject); // 🔥 수동 프롬프트 처리
 app.use('/api/storyboard-render-image', storyboardRenderImage); // 수정됨: /api/ 추가
 app.use('/api/image-to-video', imageToVideo); // 수정됨: /api/ 추가
+app.use('/api/convert-single-scene', convertSingleScene); // 🔥 싱글 씬 변환
 app.use('/api/generate-video', generateVideo); // 수정됨: /api/ 추가
 app.use('/api/video-status', videoStatus);
 app.use('/api/compile-videos', compileVideos); // 수정됨: /api/ 추가

@@ -251,6 +251,40 @@ const Step3 = ({
                 </div>
               )}
 
+              {/* 🎵 Audio & Editing Guide */}
+              {storyboard?.metadata?.audioEditingGuide && (
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+                  <h4 className="text-sm font-semibold text-white mb-3">🎵 Audio & Editing Guide</h4>
+
+                  {storyboard.metadata.audioEditingGuide.bgm && storyboard.metadata.audioEditingGuide.bgm !== '정보 없음' && (
+                    <div className="mb-3">
+                      <div className="text-xs font-semibold text-blue-400 mb-1">BGM</div>
+                      <div className="text-xs text-gray-300 leading-relaxed">
+                        {storyboard.metadata.audioEditingGuide.bgm}
+                      </div>
+                    </div>
+                  )}
+
+                  {storyboard.metadata.audioEditingGuide.sfx && storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' && (
+                    <div className="mb-3">
+                      <div className="text-xs font-semibold text-green-400 mb-1">SFX</div>
+                      <div className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">
+                        {storyboard.metadata.audioEditingGuide.sfx}
+                      </div>
+                    </div>
+                  )}
+
+                  {storyboard.metadata.audioEditingGuide.editing && storyboard.metadata.audioEditingGuide.editing !== '정보 없음' && (
+                    <div>
+                      <div className="text-xs font-semibold text-purple-400 mb-1">Editing Pace</div>
+                      <div className="text-xs text-gray-300 leading-relaxed">
+                        {storyboard.metadata.audioEditingGuide.editing}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <button
                   onClick={handleGoToEdit}
