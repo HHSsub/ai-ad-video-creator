@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import UserManagement from './UserManagement';
 
-const AdminPanel = () => {
+const AdminPanel = ({ currentUser }) => {
   // ===== 상태 관리 =====
   const [activeMainTab, setActiveMainTab] = useState('prompts'); // prompts, engines, storage, users
 
@@ -44,7 +44,7 @@ const AdminPanel = () => {
   const [engineHistory, setEngineHistory] = useState([]);
   const [loadingEngines, setLoadingEngines] = useState(false);
   const [updatingEngine, setUpdatingEngine] = useState(false);
-  const [selectedEngineType, setSelectedEngineType] = useState('textToImage');
+  // selectedEngineType 제거 (더 이상 탭 방식 아님)
 
   // 저장소 관리 상태
   const [storageInfo, setStorageInfo] = useState(null);
@@ -714,8 +714,9 @@ const AdminPanel = () => {
         {/* 2. 엔진 관리 탭 */}
         {activeMainTab === 'engines' && currentEngines && availableEngines && (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
+            {/* 현재 엔진 정보 */}
+            <div className="flex gap-4">
+              <div className="flex-1 bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
                 <h3 className="text-blue-400 font-bold mb-4 flex items-center gap-2">🖼️ 현재 이미지 엔진</h3>
                 <div className="bg-gray-950 p-4 rounded-xl border border-gray-800">
                   <div className="text-2xl font-bold text-white mb-1">{currentEngines.textToImage.displayName}</div>
@@ -724,7 +725,7 @@ const AdminPanel = () => {
                   <div className="text-[10px] text-gray-600">최종 업데이트: {formatDateTime(currentEngines.textToImage.updatedAt)} by {currentEngines.textToImage.updatedBy}</div>
                 </div>
               </div>
-              <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
+              <div className="flex-1 bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
                 <h3 className="text-purple-400 font-bold mb-4 flex items-center gap-2">🎬 현재 영상 엔진</h3>
                 <div className="bg-gray-950 p-4 rounded-xl border border-gray-800">
                   <div className="text-2xl font-bold text-white mb-1">{currentEngines.imageToVideo.displayName}</div>
@@ -735,53 +736,85 @@ const AdminPanel = () => {
               </div>
             </div>
 
+            {/* 엔진 대교체 (좌우 분할 레이아웃) */}
             <div className="bg-gray-800/90 rounded-lg p-8 border border-gray-700 shadow-xl">
-              <div className="flex justify-between items-end mb-8">
-                <div>
-                  <h2 className="text-2xl font-bold text-white mb-2 underline decoration-blue-500 decoration-4 underline-offset-8">🔄 엔진 대교체</h2>
-                  <p className="text-gray-500 text-sm">시스템에 즉시 반영되며 서버가 재시작됩니다.</p>
-                </div>
-                <div className="flex bg-gray-900 border border-gray-700 p-1 rounded-xl">
-                  {['textToImage', 'imageToVideo'].map(type => (
-                    <button
-                      key={type}
-                      onClick={() => setSelectedEngineType(type)}
-                      className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${selectedEngineType === type ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
-                    >
-                      {type === 'textToImage' ? 'IMAGE ENGINES' : 'VIDEO ENGINES'}
-                    </button>
-                  ))}
-                </div>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white mb-2 underline decoration-blue-500 decoration-4 underline-offset-8">🔄 엔진 대교체</h2>
+                <p className="text-gray-500 text-sm">원하는 엔진을 선택하여 즉시 시스템 전체 엔진을 교체합니다.</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-6">
-                {availableEngines[selectedEngineType].map(engine => {
-                  const isCurrent = currentEngines[selectedEngineType].model === engine.model;
-                  return (
-                    <div key={engine.id} className={`p-6 rounded-2xl border transition-all ${isCurrent ? 'bg-blue-600/10 border-blue-500 shadow-2xl scale-[1.02]' : 'bg-gray-900/40 border-gray-800 border-dashed hover:border-gray-500'}`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-xl shadow-inner">{selectedEngineType === 'textToImage' ? '📷' : '📽️'}</div>
-                        {isCurrent && <span className="text-[10px] font-black tracking-widest bg-blue-600 text-white px-2 py-1 rounded-full animate-pulse">ACTIVE</span>}
-                      </div>
-                      <h4 className="text-lg font-black text-white mb-1">{engine.displayName}</h4>
-                      <p className="text-xs text-gray-500 mb-4 min-h-[3em]">{engine.description}</p>
-                      <ul className="text-[10px] space-y-1.5 mb-6 text-gray-500 font-mono">
-                        <li className="flex justify-between border-b border-gray-800 pb-1"><span>ID</span><span className="text-gray-300">{engine.model}</span></li>
-                        <li className="flex justify-between border-b border-gray-800 pb-1"><span>RES</span><span className="text-gray-300">{engine.maxResolution}</span></li>
-                        <li className="flex justify-between"><span>COST</span><span className="text-blue-400">${engine.costPerImage || engine.costPerVideo}</span></li>
-                      </ul>
-                      {!isCurrent && (
-                        <button
-                          onClick={() => handleUpdateEngine(selectedEngineType, engine.id)}
-                          disabled={updatingEngine}
-                          className="w-full py-3 bg-white text-black font-black rounded-xl hover:bg-blue-400 hover:text-white transition-all transform active:scale-95 text-xs"
-                        >
-                          CHANGE ENGINE
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="grid grid-cols-2 gap-8">
+                {/* 이미지 엔진 목록 */}
+                <div>
+                  <h3 className="text-lg font-black text-blue-400 mb-4 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <span>🖼️ IMAGE ENGINES</span>
+                  </h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    {availableEngines['textToImage'].map(engine => {
+                      const isCurrent = currentEngines['textToImage'].model === engine.model;
+                      return (
+                        <div key={engine.id} className={`p-5 rounded-2xl border transition-all ${isCurrent
+                          ? 'bg-blue-900/20 border-blue-500 shadow-lg'
+                          : 'bg-gray-900/40 border-gray-700 hover:border-gray-500'
+                          }`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="text-lg font-bold text-white">{engine.displayName}</h4>
+                            {isCurrent && <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full">ACTIVE</span>}
+                          </div>
+                          <p className="text-xs text-gray-400 mb-4 line-clamp-2">{engine.description}</p>
+                          <div className="flex justify-between items-center mt-auto">
+                            <span className="font-mono text-[10px] text-gray-600">{engine.model}</span>
+                            {!isCurrent && (
+                              <button
+                                onClick={() => handleUpdateEngine('textToImage', engine.id)}
+                                disabled={updatingEngine}
+                                className="px-4 py-2 bg-gray-100 hover:bg-blue-500 hover:text-white text-black text-xs font-bold rounded-lg transition-colors"
+                              >
+                                {updatingEngine ? 'Changing...' : '이 엔진 사용'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 영상 엔진 목록 */}
+                <div>
+                  <h3 className="text-lg font-black text-purple-400 mb-4 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <span>🎬 VIDEO ENGINES</span>
+                  </h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    {availableEngines['imageToVideo'].map(engine => {
+                      const isCurrent = currentEngines['imageToVideo'].model === engine.model;
+                      return (
+                        <div key={engine.id} className={`p-5 rounded-2xl border transition-all ${isCurrent
+                          ? 'bg-purple-900/20 border-purple-500 shadow-lg'
+                          : 'bg-gray-900/40 border-gray-700 hover:border-gray-500'
+                          }`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="text-lg font-bold text-white">{engine.displayName}</h4>
+                            {isCurrent && <span className="px-2 py-0.5 bg-purple-600 text-white text-[10px] font-bold rounded-full">ACTIVE</span>}
+                          </div>
+                          <p className="text-xs text-gray-400 mb-4 line-clamp-2">{engine.description}</p>
+                          <div className="flex justify-between items-center mt-auto">
+                            <span className="font-mono text-[10px] text-gray-600">{engine.model}</span>
+                            {!isCurrent && (
+                              <button
+                                onClick={() => handleUpdateEngine('imageToVideo', engine.id)}
+                                disabled={updatingEngine}
+                                className="px-4 py-2 bg-gray-100 hover:bg-purple-500 hover:text-white text-black text-xs font-bold rounded-lg transition-colors"
+                              >
+                                {updatingEngine ? 'Changing...' : '이 엔진 사용'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -865,7 +898,7 @@ const AdminPanel = () => {
 
         {/* 4. 사용자 관리 탭 */}
         {activeMainTab === 'users' && (
-          <UserManagement />
+          <UserManagement currentUser={currentUser} />
         )}
       </div>
 
@@ -908,6 +941,11 @@ const AdminPanel = () => {
   );
 };
 
-AdminPanel.propTypes = {};
+AdminPanel.propTypes = {
+  currentUser: PropTypes.shape({
+    username: PropTypes.string.isRequired,
+    role: PropTypes.string
+  })
+};
 
 export default AdminPanel;

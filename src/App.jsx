@@ -347,7 +347,7 @@ function App() {
             </div>
           </div>
         </nav>
-        <AdminPanel />
+        <AdminPanel currentUser={user} />
       </div>
     );
   }
