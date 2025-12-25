@@ -429,7 +429,7 @@ app.get('/api/prompts/responses/:engineId/:promptType', async (req, res) => {
     const promptKey = `${engineId}_${promptType}`;
 
     // 🔥 엔진 기반 경로로 변경
-    const { getGeminiResponsesDir } = await import('./src/utils/enginePromptHelper.js');
+    const { getGeminiResponsesDir } = await import('../src/utils/enginePromptHelper.js');
 
     const mode = promptType.includes('manual') ? 'manual' : 'auto';
     const responsesPath = getGeminiResponsesDir(mode);
