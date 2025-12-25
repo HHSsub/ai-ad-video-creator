@@ -1,7 +1,7 @@
 // api/storyboard-render-image.js - 🔥 동적 엔진 지원 버전 + S3 업로드 (2025-12-25 수정)
 
 import { safeCallFreepik, getApiKeyStatus } from '../src/utils/apiHelpers.js';
-import { getTextToImageUrl } from '../src/utils/engineConfigLoader.js';
+import { getTextToImageUrl, getTextToImageStatusUrl } from '../src/utils/engineConfigLoader.js';
 import { uploadImageToS3 } from '../server/utils/s3-uploader.js';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
