@@ -656,8 +656,6 @@ app.use('/api/video-status', videoStatus);
 app.use('/api/compile-videos', compileVideos); // 수정됨: /api/ 추가
 app.use('/api/debug', debug); // 수정됨: /api/ 추가
 app.use('/api/apply-bgm', applyBgm); // 수정됨: /api/ 추가
-app.use('/api/load-mood-list', loadMoodList); // 수정됨: /api/ 추가
-app.use('/api/load-bgm-list', loadBgmList); // 수정됨: /api/ 추가
 app.use('/api/bgm-stream', bgmStream); // 수정됨: /api/ 추가
 app.use('/api/nanobanana-compose', nanobanaCompose); // 수정됨: /api/ 추가
 

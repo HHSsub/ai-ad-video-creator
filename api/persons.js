@@ -14,12 +14,29 @@ const s3Client = new S3Client({ region: 'ap-northeast-2' });
 // 목록 조회
 router.get('/', async (req, res) => {
     try {
-        const files = await listS3Files('persons/');
-        // 인물 이름은 파일명에서 추출 (예: persons/man.jpg -> man)
-        const persons = files.map(file => ({
-            ...file,
-            name: file.key.replace('persons/', '').split('.')[0]
-        }));
+        // 🔥 변경된 S3 구조 반영: nexxii-storage/persons/
+        const files = await listS3Files('nexxii-storage/persons/');
+
+        const persons = files.map(file => {
+            // 키에서 이름 추출 (예: nexxii-storage/persons/man.jpg -> man)
+            const name = file.key.replace('nexxii-storage/persons/', '').split('.')[0];
+
+            // 🔥 URL 중복 방지: Base URL에 이미 경로가 포함되어 있으므로, 
+            // Key에서 'nexxii-storage/' 부분이 중복되지 않도록 처리하거나
+            // 단순히 도메인 + 키 조합으로 재구성
+            // CDN_BASE_URL = 'https://upnexx.ai/nexxii-storage'
+            // Key = 'nexxii-storage/persons/man.jpg'
+            // file.url (from utils) = 'https://upnexx.ai/nexxii-storage/nexxii-storage/persons/man.jpg' (잘못됨)
+
+            const fixedUrl = `https://upnexx.ai/${file.key}`;
+
+            return {
+                ...file,
+                name,
+                url: fixedUrl
+            };
+        });
+
         res.json({ success: true, persons });
     } catch (error) {
         console.error('[Persons] Create Error:', error);
@@ -35,7 +52,8 @@ router.post('/', upload.single('image'), async (req, res) => {
         }
 
         const filename = Buffer.from(req.file.originalname, 'latin1').toString('utf8'); // 한글 깨짐 방지
-        const s3Key = `persons/${filename}`;
+        // 🔥 업로드 경로도 변경
+        const s3Key = `nexxii-storage/persons/${filename}`;
 
         console.log(`[Persons] Uploading: ${filename} to ${s3Key}`);
 
