@@ -48,6 +48,10 @@ import enginesUpdate from '../api/engines-update.js';
 import promptsGetHandler from '../api/prompts-get.js';
 import promptsUpdateHandler from '../api/prompts-update.js';
 
+// 🔥 수동 프롬프트 입력 API
+import generatePrompt from '../api/generate-prompt.js';
+import storyboardManualInject from '../api/storyboard-manual-inject.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -623,6 +627,8 @@ app.post('/api/prompts/test', async (req, res) => {
 
 app.use('/api/projects', projectsRouter);
 app.use('/api/storyboard-init', storyboardInit); // 수정됨: /api/ 추가
+app.use('/api/generate-prompt', generatePrompt); // 🔥 수동 프롬프트 생성
+app.use('/api/storyboard-manual-inject', storyboardManualInject); // 🔥 수동 프롬프트 처리
 app.use('/api/storyboard-render-image', storyboardRenderImage); // 수정됨: /api/ 추가
 app.use('/api/image-to-video', imageToVideo); // 수정됨: /api/ 추가
 app.use('/api/generate-video', generateVideo); // 수정됨: /api/ 추가
