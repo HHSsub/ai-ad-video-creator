@@ -23,7 +23,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
   useEffect(() => {
     const loadPersonConfig = async () => {
       try {
-        const configRes = await fetch('/nexxii/api/admin-field-config');
+        const configRes = await fetch('/nexxii/api/admin-field-config/field-config');
         const configData = await configRes.json();
         const config = configData.config || {};
         if (configData.success && config.personSelection?.visible) {

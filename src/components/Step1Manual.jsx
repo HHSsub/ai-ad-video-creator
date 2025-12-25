@@ -20,7 +20,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   useEffect(() => {
     const loadPersonConfig = async () => {
       try {
-        const configRes = await fetch('/nexxii/api/admin-field-config');
+        const configRes = await fetch('/nexxii/api/admin-field-config/field-config');
         const configData = await configRes.json();
 
         // configData.config가 없으면 빈 객체 처리
