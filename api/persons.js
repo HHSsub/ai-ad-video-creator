@@ -82,7 +82,8 @@ router.post('/', upload.single('image'), async (req, res) => {
 router.delete('/:filename', async (req, res) => {
     try {
         const filename = req.params.filename;
-        const s3Key = `persons/${filename}`;
+        // 🔥 경로 수정: nexxii-storage/persons/
+        const s3Key = `nexxii-storage/persons/${filename}`;
 
         // deleteFromS3 expects full URL or needs adaptation, wait.
         // s3-uploader.js deleteFromS3 takes s3Url and replaces CDN_BASE_URL.
