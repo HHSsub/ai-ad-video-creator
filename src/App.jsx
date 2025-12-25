@@ -11,6 +11,7 @@ import ModeSelector from './components/ModeSelector';
 import InviteMemberModal from './components/InviteMemberModal';
 import Step1Manual from './components/Step1Manual';
 import Step1Auto from './components/Step1Auto';
+import Step5 from './components/Step5';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -604,14 +605,31 @@ function App() {
                 setCurrentView('step3');
               }}
               onComplete={() => {
-                // 편집 완료 후 Step3으로 복귀 (수정된 영상 표시)
-                console.log('Step4 완료 → Step3 복귀');
-                setStep(3);
-                setCurrentView('step3');
+                // 🔥 Step4 완료 → Step5 (BGM 적용)로 이동
+                console.log('Step4 완료 → Step5 (BGM 적용)');
+                setStep(5);
+                setCurrentView('step5');
               }}
               user={user}
               currentProject={currentProject}
               userRole={userRole}
+            />
+          )}
+
+          {currentView === 'step5' && (
+            <Step5
+              storyboard={storyboard}
+              selectedConceptId={selectedConceptId}
+              onPrev={() => {
+                setStep(4);
+                setCurrentView('step4');
+              }}
+              onComplete={() => {
+                console.log('Step5 완료 → Step3 복귀');
+                setStep(3);
+                setCurrentView('step3');
+              }}
+              currentProject={currentProject}
             />
           )}
         </div>

@@ -86,7 +86,28 @@
 
 ## 📝 작업 히스토리 (최신순)
 
-### 2025-12-25 16:45 - 작업 E-4, E-5 구현: BGM 적용 및 다운로드
+### 2025-12-25 16:58 - Step4 정리: 미사용 BGM 코드 제거
+- **파일**: `src/components/Step4.jsx`
+- **제거 내용**:
+  - BGM state 변수 5개 제거 (showBGMSelector, availableMoods, selectedMood, applyingBGM, finalVideoWithBGM)
+  - BGM 선택 모달 UI 제거
+  - 최종 영상 다운로드 모달 UI 제거
+- **이유**: BGM 기능은 Step5로 이동했으므로 Step4에서 불필요한 코드 제거
+
+### 2025-12-25 16:56 - 작업 E-4, E-5 구현: Step5 별도 분리
+- **파일**: `src/components/Step5.jsx` (신규), `src/App.jsx`
+- **구현 내용**:
+  - Step4 수정 실패 반복으로 **Step5 별도 컴포넌트 생성**
+  - Step5: BGM 선택 및 적용 전용 화면
+    - Mood 목록 로드
+    - BGM 적용 (api/apply-bgm.js 활용)
+    - 최종 영상 다운로드
+    - BGM 없이 완료 옵션
+  - App.jsx: Step4 onComplete → Step5로 이동
+  - Step5 onComplete → Step3로 복귀
+- **장점**: 기존 Step4 코드 수정 없이 기능 추가
+
+### 2025-12-25 16:45 - 작업 E-4, E-5 구현 시도 (실패)
 - **파일**: `src/components/Step4.jsx`
 - **구현 내용**:
   - E-4: BGM 선택 및 적용 기능 (기존 `api/apply-bgm.js` 활용)

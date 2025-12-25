@@ -1,3 +1,4 @@
+﻿[ec2 - user@ip - 172 - 31 - 27 - 142 ai - ad - video - creator]$ cat src / components / Step4.jsx
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
@@ -37,13 +38,6 @@ const Step4 = ({
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
   const [modifiedScenes, setModifiedScenes] = useState([]);
-
-  // 🔥 E-4: BGM 선택 및 적용 상태
-  const [showBGMSelector, setShowBGMSelector] = useState(false);
-  const [availableMoods, setAvailableMoods] = useState([]);
-  const [selectedMood, setSelectedMood] = useState('');
-  const [applyingBGM, setApplyingBGM] = useState(false);
-  const [finalVideoWithBGM, setFinalVideoWithBGM] = useState(null);
 
   // 🔥 추가: 멤버 초대 모달 상태
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -514,7 +508,7 @@ const Step4 = ({
                               onError={(e) => {
                                 console.error(`[Step4] 씬 ${img.sceneNumber} 이미지 로드 실패:`, img.imageUrl);
                                 e.target.style.display = 'none';
-                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-500 text-sm">이미지 로드 실패</div>';
+                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-500 text-sm"> 이미지 로드 실패</div>';
                               }}
                             />
                           ) : (
@@ -765,86 +759,7 @@ const Step4 = ({
         </div>
       )}
 
-      {/* 🔥 E-4: BGM 선택 모달 */}
-      {showBGMSelector && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-8 w-full max-w-md border border-gray-700">
-            <h3 className="text-2xl font-bold text-white mb-4">🎵 배경음악 선택</h3>
-            <p className="text-gray-400 mb-6">최종 영상에 적용할 BGM의 분위기를 선택하세요</p>
 
-            {error && (
-              <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-400 mb-2">
-                분위기 (Mood)
-              </label>
-              <select
-                value={selectedMood}
-                onChange={(e) => setSelectedMood(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-purple-500 focus:outline-none"
-                disabled={applyingBGM}
-              >
-                {availableMoods.map(mood => (
-                  <option key={mood} value={mood}>{mood}</option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-2">
-                선택한 분위기에 맞는 BGM이 랜덤으로 적용됩니다
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleSkipBGM}
-                disabled={applyingBGM}
-                className="flex-1 px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
-              >
-                BGM 없이 완료
-              </button>
-              <button
-                onClick={handleApplyBGM}
-                disabled={applyingBGM || !selectedMood}
-                className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
-              >
-                {applyingBGM ? 'BGM 적용 중...' : 'BGM 적용'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🔥 E-5: 최종 영상 다운로드 UI */}
-      {finalVideoWithBGM && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-8 w-full max-w-2xl border border-gray-700">
-            <h3 className="text-2xl font-bold text-white mb-4">✅ 최종 영상 완성!</h3>
-            <div className="aspect-video bg-black rounded-lg overflow-hidden mb-4">
-              <video src={getVideoSrc(finalVideoWithBGM)} controls className="w-full h-full" />
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleDownloadFinalVideo}
-                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
-              >
-                📥 다운로드
-              </button>
-              <button
-                onClick={() => {
-                  setFinalVideoWithBGM(null);
-                  onComplete();
-                }}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-medium"
-              >
-                ✅ 완료
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
