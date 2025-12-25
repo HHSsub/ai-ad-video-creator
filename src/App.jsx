@@ -271,20 +271,12 @@ function App() {
                     메인
                   </button>
                   {user.role === 'admin' && (
-                    <>
-                      <button
-                        onClick={() => setCurrentView('admin')}
-                        className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
-                      >
-                        프롬프트관리
-                      </button>
-                      <button
-                        onClick={() => setCurrentView('users')}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600/20 border border-blue-500/50 rounded-lg"
-                      >
-                        사용자관리
-                      </button>
-                    </>
+                    <button
+                      onClick={() => setCurrentView('admin')}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600/20 border border-blue-500/50 rounded-lg"
+                    >
+                      관리자
+                    </button>
                   )}
                 </div>
               </div>
@@ -332,20 +324,12 @@ function App() {
                     메인
                   </button>
                   {user.role === 'admin' && (
-                    <>
-                      <button
-                        onClick={() => setCurrentView('admin')}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600/20 border border-blue-500/50 rounded-lg"
-                      >
-                        프롬프트관리
-                      </button>
-                      <button
-                        onClick={() => setCurrentView('users')}
-                        className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
-                      >
-                        사용자관리
-                      </button>
-                    </>
+                    <button
+                      onClick={() => setCurrentView('admin')}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600/20 border border-blue-500/50 rounded-lg"
+                    >
+                      관리자
+                    </button>
                   )}
                 </div>
               </div>

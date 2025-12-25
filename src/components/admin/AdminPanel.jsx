@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import UserManagement from './UserManagement'; // 🔥 사용자 관리 컴포넌트
 
 const API_BASE = '/nexxii';
 
@@ -268,8 +269,8 @@ const AdminPanel = () => {
           <button
             onClick={() => setActiveSubTab('prompts')}
             className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeSubTab === 'prompts'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
           >
             📝 프롬프트 관리
@@ -277,8 +278,8 @@ const AdminPanel = () => {
           <button
             onClick={() => setActiveSubTab('engines')}
             className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeSubTab === 'engines'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
           >
             🎨 엔진 관리
@@ -286,21 +287,30 @@ const AdminPanel = () => {
           <button
             onClick={() => setActiveSubTab('storage')}
             className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeSubTab === 'storage'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
           >
             💾 저장소 관리
+          </button>
+          <button
+            onClick={() => setActiveSubTab('users')}
+            className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${activeSubTab === 'users'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+          >
+            👥 사용자 관리
           </button>
         </div>
 
         {/* 메시지 */}
         {message.text && (
           <div className={`mb-6 p-4 rounded-lg whitespace-pre-wrap ${message.type === 'success'
-              ? 'bg-green-900/30 text-green-300 border border-green-800'
-              : message.type === 'info'
-                ? 'bg-blue-900/30 text-blue-300 border border-blue-800'
-                : 'bg-red-900/30 text-red-300 border border-red-800'
+            ? 'bg-green-900/30 text-green-300 border border-green-800'
+            : message.type === 'info'
+              ? 'bg-blue-900/30 text-blue-300 border border-blue-800'
+              : 'bg-red-900/30 text-red-300 border border-red-800'
             }`}>
             {message.text}
           </div>
@@ -323,8 +333,8 @@ const AdminPanel = () => {
                         key={engine}
                         onClick={() => setSelectedImageEngine(engine)}
                         className={`w-full px-4 py-3 rounded-lg text-left transition-colors ${selectedImageEngine === engine
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                       >
                         {engine === 'seedream-v4' && 'Seedream v4'}
@@ -344,8 +354,8 @@ const AdminPanel = () => {
                         key={engine}
                         onClick={() => setSelectedVideoEngine(engine)}
                         className={`w-full px-4 py-3 rounded-lg text-left transition-colors ${selectedVideoEngine === engine
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                       >
                         {engine === 'kling-v2-1-pro' && 'Kling v2.1 Pro'}
@@ -374,8 +384,8 @@ const AdminPanel = () => {
                 <button
                   onClick={() => setSelectedPromptType('auto_product')}
                   className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${selectedPromptType === 'auto_product'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
                   🛍️ Auto - Product
@@ -383,8 +393,8 @@ const AdminPanel = () => {
                 <button
                   onClick={() => setSelectedPromptType('auto_service')}
                   className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${selectedPromptType === 'auto_service'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
                   🎨 Auto - Service
@@ -392,8 +402,8 @@ const AdminPanel = () => {
                 <button
                   onClick={() => setSelectedPromptType('manual')}
                   className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${selectedPromptType === 'manual'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
                   🎯 Manual
@@ -487,8 +497,8 @@ const AdminPanel = () => {
                 <button
                   onClick={() => setSelectedEngineType('textToImage')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedEngineType === 'textToImage'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
                   🖼️ 이미지 생성 엔진
@@ -496,8 +506,8 @@ const AdminPanel = () => {
                 <button
                   onClick={() => setSelectedEngineType('imageToVideo')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedEngineType === 'imageToVideo'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
                   🎬 영상 생성 엔진
@@ -512,8 +522,8 @@ const AdminPanel = () => {
                     <div
                       key={engine.id}
                       className={`bg-gray-900/50 rounded-lg p-4 border transition-all ${isCurrent
-                          ? 'border-green-600 bg-green-900/20'
-                          : 'border-gray-700 hover:border-gray-600'
+                        ? 'border-green-600 bg-green-900/20'
+                        : 'border-gray-700 hover:border-gray-600'
                         }`}
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -682,6 +692,11 @@ const AdminPanel = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ===== 사용자 관리 탭 ===== */}
+        {activeSubTab === 'users' && (
+          <UserManagement />
         )}
       </div>
     </div>
