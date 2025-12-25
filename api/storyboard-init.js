@@ -3,7 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../src/utils/sessionStore.js';
-import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js'; \nimport { getPromptFilePath, getGeminiResponsesDir } from '../src/utils/enginePromptHelper.js';
+import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
+import { getPromptFilePath, getGeminiResponsesDir } from '../src/utils/enginePromptHelper.js';
 
 
 export const config = {
