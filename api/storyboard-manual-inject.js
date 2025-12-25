@@ -4,6 +4,59 @@ import sessionStore from '../src/utils/sessionStore.js';
 import path from 'path';
 import fs from 'fs';
 
+/**
+ * Section 3 (Audio & Editing Guide) 파싱
+ * BGM, SFX, Editing Pace 정보 추출
+ */
+function parseAudioEditingGuide(text) {
+    try {
+        // Section 3 찾기
+        const section3Pattern = /🎵\s*Section\s*3[.:]?\s*Audio\s*&\s*Editing\s*Guide/i;
+        const section3Match = text.match(section3Pattern);
+
+        if (!section3Match) {
+            console.log('[parseAudioEditingGuide] Section 3을 찾을 수 없음');
+            return null;
+        }
+
+        const section3StartIdx = section3Match.index;
+        // Section 4 또는 문서 끝까지
+        const section4Pattern = /✍️\s*Section\s*4/i;
+        const section4Match = text.substring(section3StartIdx).match(section4Pattern);
+        const section3EndIdx = section4Match
+            ? section3StartIdx + section4Match.index
+            : text.length;
+
+        const section3Text = text.substring(section3StartIdx, section3EndIdx);
+
+        // BGM 추출
+        const bgmMatch = section3Text.match(/BGM:\s*(.+?)(?=\n\n|SFX:|Editing|$)/s);
+        const bgm = bgmMatch ? bgmMatch[1].trim().replace(/\n/g, ' ') : '';
+
+        // SFX 추출 (여러 줄 가능)
+        const sfxMatch = section3Text.match(/SFX:\s*(.+?)(?=\n\n|Editing|$)/s);
+        const sfx = sfxMatch ? sfxMatch[1].trim() : '';
+
+        // Editing Pace 추출
+        const editingMatch = section3Text.match(/Editing\s*(?:Pace)?:\s*(.+?)(?=\n\n|$)/s);
+        const editing = editingMatch ? editingMatch[1].trim().replace(/\n/g, ' ') : '';
+
+        const result = {
+            bgm: bgm || '정보 없음',
+            sfx: sfx || '정보 없음',
+            editing: editing || '정보 없음',
+            rawSection3: section3Text.substring(0, 500) // 디버깅용
+        };
+
+        console.log('[parseAudioEditingGuide] ✅ 파싱 성공:', result);
+        return result;
+
+    } catch (error) {
+        console.error('[parseAudioEditingGuide] ❌ 오류:', error);
+        return null;
+    }
+}
+
 export const config = {
     maxDuration: 9000,
 };
@@ -34,10 +87,8 @@ function getSceneCount(videoLength) {
 
 function calculateProgress(phase, stepProgress = 0) {
     const phases = {
-        GEMINI: { start: 0, weight: 15 },
-        IMAGE: { start: 15, weight: 25 },
-        VIDEO: { start: 40, weight: 40 },
-        COMPOSE: { start: 80, weight: 20 }
+        GEMINI: { start: 0, weight: 20 },   // 0-20%
+        IMAGE: { start: 20, weight: 80 }    // 20-100%
     };
     const phaseInfo = phases[phase];
     if (!phaseInfo) return 0;
@@ -120,17 +171,24 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
             }
         });
 
-        const sceneCountPerConcept = getSceneCount(videoLength);
         const styles = [];
 
         for (let conceptIdx = 0; conceptIdx < mcJson.concepts.length; conceptIdx++) {
             const concept = mcJson.concepts[conceptIdx];
             const images = [];
 
-            for (let sceneNum = 1; sceneNum <= sceneCountPerConcept; sceneNum++) {
+            // 실제 파싱된 씬 개수 동적 감지 (manual 모드 대응)
+            const sceneKeys = Object.keys(concept).filter(key => key.startsWith('scene_'));
+            const actualSceneCount = sceneKeys.length;
+            console.log(`[manual-inject] 컨셉 ${conceptIdx + 1}: ${actualSceneCount}개 씬 감지`);
+
+            for (let sceneNum = 1; sceneNum <= actualSceneCount; sceneNum++) {
                 const sceneKey = `scene_${sceneNum}`;
                 const scene = concept[sceneKey];
-                if (!scene) continue;
+                if (!scene) {
+                    console.warn(`[manual-inject] ⚠️ ${sceneKey} 누락 - 건너뜀`);
+                    continue;
+                }
 
                 try {
                     const imagePrompt = {
@@ -152,12 +210,12 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
                         status: 'image_done'
                     });
 
-                    const progress = ((conceptIdx * sceneCountPerConcept + sceneNum) / (mcJson.concepts.length * sceneCountPerConcept)) * 100;
+                    const progress = ((conceptIdx * actualSceneCount + sceneNum) / (mcJson.concepts.length * actualSceneCount)) * 100;
                     await updateSession(sessionId, {
                         progress: {
                             phase: 'IMAGE',
                             percentage: calculateProgress('IMAGE', progress),
-                            currentStep: `이미지 ${sceneNum}/${sceneCountPerConcept} 생성 완료 (컨셉 ${conceptIdx + 1})`
+                            currentStep: `이미지 ${sceneNum}/${actualSceneCount} 생성 완료 (컨셉 ${conceptIdx + 1})`
                         }
                     });
                 } catch (error) {
@@ -185,24 +243,27 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
         await updateSession(sessionId, {
             progress: {
                 phase: 'IMAGE',
-                percentage: 95,
+                percentage: 100,
                 currentStep: `모든 이미지 생성 완료 (${styles.length}개 컨셉)`
             }
         });
 
         const totalImages = styles.reduce((sum, s) => sum + s.images.length, 0);
 
+        // Section 3 (Audio & Editing Guide) 파싱
+        const audioEditingGuide = parseAudioEditingGuide(formData.originalGeminiResponse || '');
+
         const metadata = {
             mode: mode || 'auto',
             videoPurpose,
             videoLength,
-            sceneCountPerConcept,
             aspectRatio: mapAspectRatio(aspectRatio || aspectRatioCode),
             generatedAt: new Date().toISOString(),
             processingTimeMs: Date.now() - startTime,
             totalConcepts: styles.length,
             totalImages: totalImages,
-            workflowMode: 'manual_injection'
+            workflowMode: 'manual_injection',
+            audioEditingGuide: audioEditingGuide // Section 3 정보 추가
         };
 
         const finalStoryboard = {
@@ -261,6 +322,9 @@ export default async function handler(req, res) {
                 error: '필수 파라미터 누락 (manualGeminiResponse, formData, sessionId)'
             });
         }
+
+        // formData에 원본 Gemini 응답 저장 (Section 3 파싱용)
+        formData.originalGeminiResponse = manualGeminiResponse;
 
         // 기존 parseUnifiedConceptJSON 재사용
         const mcJson = parseUnifiedConceptJSON(manualGeminiResponse, formData.mode);

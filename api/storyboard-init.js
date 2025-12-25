@@ -6,6 +6,53 @@ import sessionStore from '../src/utils/sessionStore.js';
 import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
 import { getPromptFilePath, getGeminiResponsesDir } from '../src/utils/enginePromptHelper.js';
 
+/**
+ * Section 3 (Audio & Editing Guide) 파싱
+ * BGM, SFX, Editing Pace 정보 추출
+ */
+function parseAudioEditingGuide(text) {
+  try {
+    const section3Pattern = /🎵\s*Section\s*3[.:]?\s*Audio\s*&\s*Editing\s*Guide/i;
+    const section3Match = text.match(section3Pattern);
+
+    if (!section3Match) {
+      console.log('[parseAudioEditingGuide] Section 3을 찾을 수 없음');
+      return null;
+    }
+
+    const section3StartIdx = section3Match.index;
+    const section4Pattern = /✍️\s*Section\s*4/i;
+    const section4Match = text.substring(section3StartIdx).match(section4Pattern);
+    const section3EndIdx = section4Match
+      ? section3StartIdx + section4Match.index
+      : text.length;
+
+    const section3Text = text.substring(section3StartIdx, section3EndIdx);
+
+    const bgmMatch = section3Text.match(/BGM:\s*(.+?)(?=\n\n|SFX:|Editing|$)/s);
+    const bgm = bgmMatch ? bgmMatch[1].trim().replace(/\n/g, ' ') : '';
+
+    const sfxMatch = section3Text.match(/SFX:\s*(.+?)(?=\n\n|Editing|$)/s);
+    const sfx = sfxMatch ? sfxMatch[1].trim() : '';
+
+    const editingMatch = section3Text.match(/Editing\s*(?:Pace)?:\s*(.+?)(?=\n\n|$)/s);
+    const editing = editingMatch ? editingMatch[1].trim().replace(/\n/g, ' ') : '';
+
+    const result = {
+      bgm: bgm || '정보 없음',
+      sfx: sfx || '정보 없음',
+      editing: editing || '정보 없음'
+    };
+
+    console.log('[parseAudioEditingGuide] ✅ 파싱 성공:', result);
+    return result;
+
+  } catch (error) {
+    console.error('[parseAudioEditingGuide] ❌ 오류:', error);
+    return null;
+  }
+}
+
 
 export const config = {
   maxDuration: 9000,
@@ -407,10 +454,8 @@ async function updateSession(sessionId, updateData) {
 
 function calculateProgress(phase, stepProgress = 0) {
   const phases = {
-    GEMINI: { start: 0, weight: 15 },
-    IMAGE: { start: 15, weight: 25 },
-    VIDEO: { start: 40, weight: 40 },
-    COMPOSE: { start: 80, weight: 20 }
+    GEMINI: { start: 0, weight: 20 },   // 0-20%
+    IMAGE: { start: 20, weight: 80 }    // 20-100%
   };
   const phaseInfo = phases[phase];
   if (!phaseInfo) return 0;
@@ -696,13 +741,25 @@ async function processStoryboardAsync(body, username, sessionId) {
       promptTemplate = promptTemplate.replace(placeholder, value);
     }
 
+    // Gemini 호출 시작 (1%)
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
-        percentage: calculateProgress('GEMINI', 10),
+        percentage: 1,
         currentStep: 'Gemini 모델에 프롬프트 전송 중...'
       }
     });
+
+    // 천천히 진행률 증가 (1% -> 10%)
+    setTimeout(() => {
+      updateSession(sessionId, {
+        progress: {
+          phase: 'GEMINI',
+          percentage: 10,
+          currentStep: 'Gemini 응답 대기 중...'
+        }
+      });
+    }, 500);
 
     const geminiResponse = await safeCallGemini(promptTemplate, {
       label: 'UNIFIED-storyboard-init',
@@ -711,10 +768,12 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
 
     const fullOutput = geminiResponse.text;
+
+    // Gemini 완료 (20%)
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
-        percentage: calculateProgress('GEMINI', 100),
+        percentage: 20,
         currentStep: '스토리보드 데이터 파싱 완료'
       }
     });
@@ -838,11 +897,11 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     }
 
-    // 🔥 v4.1: 이미지 생성 완료 (95%까지)
+    // 🔥 v4.1: 이미지 생성 완료 (100%)
     await updateSession(sessionId, {
       progress: {
         phase: 'IMAGE',
-        percentage: 95,
+        percentage: 100,
         currentStep: `모든 이미지 생성 완료 (${styles.length}개 컨셉)`
       }
     });
@@ -857,6 +916,9 @@ async function processStoryboardAsync(body, username, sessionId) {
     const compositingInfo = analyzeCompositingInfo(body, compositingScenes);
 
     const totalImages = styles.reduce((sum, s) => sum + s.images.length, 0);
+
+    // Section 3 (Audio & Editing Guide) 파싱
+    const audioEditingGuide = parseAudioEditingGuide(fullOutput);
 
     const metadata = {
       promptFile: promptFile,
@@ -875,7 +937,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       compositingScenes: compositingScenes.length,
       hasImageUpload: !!(imageUpload && imageUpload.url),
       compositingInfo: compositingInfo,
-      workflowMode: 'image_only'  // 🔥 v4.1: 이미지만 생성
+      workflowMode: 'image_only',  // 🔥 v4.1: 이미지만 생성
+      audioEditingGuide: audioEditingGuide  // Section 3 정보 추가
     };
 
     incrementUsageCount(username);

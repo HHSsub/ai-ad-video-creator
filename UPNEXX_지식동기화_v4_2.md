@@ -87,6 +87,25 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-26 01:38 - Section 3 파싱 + 진행률 로직 수정
+- **Section 3 (Audio & Editing Guide) 파싱 추가**:
+  - `parseAudioEditingGuide()` 함수 구현 (BGM, SFX, Editing Pace 추출)
+  - **자동 모드**: `storyboard-init.js`에서 `fullOutput` 파싱
+  - **수동 모드**: `storyboard-manual-inject.js`에서 `manualGeminiResponse` 파싱
+  - `metadata.audioEditingGuide`에 저장 → Step4에서 표시 예정
+- **수동 모드 씬 개수 유동성 처리**:
+  - 기존: `getSceneCount()` 고정값 사용 → 씬 누락 발생
+  - 수정: `Object.keys(concept).filter(key => key.startsWith('scene_'))` 동적 감지
+  - 프롬프트에 따라 4개, 8개, 12개 등 유동적 처리 가능
+- **진행률 계산 로직 전면 수정**:
+  - 기존: GEMINI 0-15%, IMAGE 15-40%, VIDEO 40-80%, COMPOSE 80-100%
+  - 신규: **GEMINI 0-20%, IMAGE 20-100%** (이미지 생성 완료 = 100%)
+  - Gemini 초반 진행률: 1% → 10% → 20% (천천히 증가)
+- **수정 파일**:
+  - `api/storyboard-init.js`: Section 3 파싱, 진행률 수정
+  - `api/storyboard-manual-inject.js`: Section 3 파싱, 씬 개수 동적 감지, 진행률 수정
+- **상태**: 🟢 완료 (사용자 승인 대기)
+
 ### 2025-12-26 01:04 - 수동 프롬프트 입력 기능 구현
 - **목적**: Admin이 외부에서 직접 Gemini 응답을 생성하여 시스템에 입력
 - **핵심 원칙**: 기존 자동 플로우와 완전히 동일 (특별한 검증 없음)
