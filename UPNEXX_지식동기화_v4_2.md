@@ -86,26 +86,29 @@
 
 ## 📝 작업 히스토리 (최신순)
 
-### 2025-12-25 14:27 - 작업 I, K 완료: S3 미디어 영속화 구현
-- **파일**: `server/utils/s3-uploader.js` (신규), `api/storyboard-render-image.js`, `api/storyboard-init.js`, `api/compile-videos.js`
+### 2025-12-25 15:16 - Freepik API 재시도 로직 개선 + 프로젝트 삭제 UI 추가
+- **파일**: `src/utils/apiHelpers.js`, `src/components/ProjectDashboard.jsx`, `server/routes/projects.js`
+- **수정 내용**:
+  - **Freepik API 429 에러 처리 개선**:
+    - 키 1개 실패 시 즉시 다른 키로 전환 (기존: 같은 키로 3회 재시도)
+    - `usedKeys` Set으로 이미 시도한 키 추적
+    - 429 에러 발생 시 해당 키를 `usedKeys`에 추가하고 딜레이 없이 다음 키 시도
+    - 최대 시도 횟수: `totalKeys * maxRetries` (최대 10회)
+  - **프로젝트 삭제 UI 추가**:
+    - `ProjectDashboard.jsx`: 프로젝트 카드에 삭제 버튼 추가 (휴지통 아이콘)
+    - `handleDeleteProject()`: 확인 다이얼로그 → DELETE API 호출
+    - `projects.js`: S3 파일 자동 삭제 로직 추가 (finalVideos, styles 이미지)
+- **결과**: Freepik API 키 풀 활용도 극대화, 프로젝트 삭제 시 S3 정리 자동화
+- **상태**: 코드 수정 완료, EC2 배포 대기
+
+### 2025-12-25 14:27 - 작업 I, J, K 완료: S3 미디어 영속화 구현
+- **파일**: `server/utils/s3-uploader.js` (신규), `scripts/migrate-media-to-s3.js` (신규), `api/storyboard-render-image.js`, `api/storyboard-init.js`, `api/compile-videos.js`
 - **수정 내용**:
   - **작업 I**: S3 업로더 유틸리티 생성
-    - `uploadImageToS3()`: 외부 URL 다운로드 → S3 업로드 → CloudFront URL 반환
-    - `uploadVideoToS3()`: 로컬 파일 → S3 업로드 → CloudFront URL 반환
-    - `deleteFromS3()`: S3 파일 삭제
-    - AWS SDK v3 사용, IAM Role 기반 인증
+  - **작업 J**: 기존 미디어 마이그레이션 스크립트
   - **작업 K-1**: Freepik 이미지 S3 업로드
-    - `pollTaskStatus()`: projectId, sceneNumber 파라미터 추가
-    - Freepik URL 수신 후 즉시 S3 업로드
-    - S3 업로드 실패 시 Freepik URL fallback
   - **작업 K-2**: 최종 영상 S3 업로드
-    - 로컬 저장 (`public/videos/compiled/`) 제거
-    - S3 업로드 우선, 실패 시 로컬 저장 fallback
-    - CloudFront URL 반환
   - **작업 K-3**: projectId 전달 경로 구현
-    - `generateImage()` 함수: projectId 파라미터 추가
-    - `storyboard-init.js`: body.projectId 전달
-    - `storyboard-render-image.js`: req.body.projectId 수신
 - **결과**: 모든 미디어 파일(이미지, 영상)이 S3에 영구 저장되며 CloudFront CDN을 통해 제공됨
 - **상태**: 코드 수정 완료, EC2 배포 및 테스트 대기
 

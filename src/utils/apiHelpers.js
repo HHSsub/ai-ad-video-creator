@@ -23,14 +23,14 @@ function exponentialBackoffDelay(attempt, baseDelay = BASE_DELAY) {
 function isRetryableError(error, statusCode) {
   const retryableStatus = [429, 500, 502, 503, 504];
   const retryableMessages = [
-    'rate limit', 'quota', 'overload', 'timeout', 
+    'rate limit', 'quota', 'overload', 'timeout',
     'network', 'fetch', 'econnreset', 'ecancelled',
     'too many requests', 'exceeded your current quota',
     'socket hang up', 'connect timeout'
   ];
-  
+
   if (retryableStatus.includes(statusCode)) return true;
-  
+
   const errorMessage = (error?.message || '').toLowerCase();
   return retryableMessages.some(msg => errorMessage.includes(msg));
 }
@@ -97,7 +97,7 @@ export async function safeCallGemini(prompt, options = {}) {
 
   // 🔥 단계별 모델 선택 (외부 지정 모델 우선)
   let selectedModel, fallbackModels;
-  
+
   if (model) {
     // 외부에서 모델명을 직접 지정한 경우 (이미지 합성 등)
     selectedModel = model;
@@ -112,7 +112,7 @@ export async function safeCallGemini(prompt, options = {}) {
     fallbackModels = [getFallbackTextModel(), 'gemini-2.5-flash'];
     console.log(`[${label}] 📝 텍스트 생성 모드: ${selectedModel}`);
   }
-  
+
   const allModels = [selectedModel, ...fallbackModels.filter(m => m !== selectedModel)];
   console.log(`[${label}] 🚀 Gemini API 호출 시작`);
   console.log(`[${label}] 📝 프롬프트 타입: ${Array.isArray(prompt) ? '배열' : '문자열'}`);
@@ -127,7 +127,7 @@ export async function safeCallGemini(prompt, options = {}) {
 
   for (const currentModel of allModels) {
     console.log(`[${label}] 🎯 모델 시도: ${currentModel}`);
-    
+
     for (let modelAttempt = 0; modelAttempt < maxRetries; modelAttempt++) {
       totalAttempts++;
       let selectedKeyIndex = null;
@@ -137,43 +137,43 @@ export async function safeCallGemini(prompt, options = {}) {
         // 🔥 최적의 API 키 선택
         const { key: apiKey, index: keyIndex } = apiKeyManager.selectBestGeminiKey();
         selectedKeyIndex = keyIndex;
-        
+
         console.log(`[${label}] 🔑 시도 ${totalAttempts} (모델: ${currentModel}, 키: ${keyIndex})`);
-        
+
         // 🔥 동시 요청 부하 분산을 위한 스마트 딜레이
         const keyBasedDelay = (keyIndex * 200) + Math.random() * 800 + 300;
         await new Promise(resolve => setTimeout(resolve, keyBasedDelay));
-        
+
         // Gemini API 클라이언트 생성 및 호출 (타임아웃 적용)
         const genAI = new GoogleGenerativeAI(apiKey);
         const geminiModel = genAI.getGenerativeModel({ model: currentModel });
 
         console.log(`[${label}] 📡 API 호출 시작 (모델: ${currentModel}, 키: ${keyIndex})`);
         // 🔥 타임아웃과 함께 API 호출
-        const apiCall = Array.isArray(prompt) 
+        const apiCall = Array.isArray(prompt)
           ? geminiModel.generateContent({ contents: prompt })
           : geminiModel.generateContent(prompt);
-        
+
         const result = await withTimeout(apiCall, timeout);
-        
+
         if (!result?.response) {
           throw new Error('Gemini API에서 응답을 받지 못했습니다.');
         }
-        
+
         // 응답 처리 (이미지 포함 가능)
         const responseText = result.response.text();
         const processingTime = Date.now() - requestStartTime;
-        
+
         // 성공 로깅 (모델명 포함)
         console.log(`[${label}] ✅ 성공 (모델: ${currentModel}, 키: ${keyIndex}, 시간: ${processingTime}ms, 응답: ${responseText?.length || 0}자)`);
-        console.log(`[${label}] ⏰ API 응답 시간: ${(processingTime/1000).toFixed(2)}초`);
+        console.log(`[${label}] ⏰ API 응답 시간: ${(processingTime / 1000).toFixed(2)}초`);
         console.log(`[${label}] 📊 응답 크기: ${(responseText?.length || 0)} chars`);
-        
+
         // 키 사용 성공 기록
         if (selectedKeyIndex !== null) {
           apiKeyManager.markKeySuccess('gemini', selectedKeyIndex);
         }
-        
+
         // 응답에 메타데이터 포함
         const responseWithMeta = {
           text: responseText,
@@ -187,13 +187,13 @@ export async function safeCallGemini(prompt, options = {}) {
         // 이미지 생성 응답인 경우 candidates 정보도 포함
         if (result.response.candidates && result.response.candidates.length > 0) {
           responseWithMeta.candidates = result.response.candidates;
-          
+
           // 이미지 데이터 추출 시도
           const candidate = result.response.candidates[0];
           if (candidate?.content?.parts) {
             for (const part of candidate.content.parts) {
               if (part.inlineData && part.inlineData.data) {
-                console.log(`[${label}] 🖼️ 이미지 응답 감지 (${Math.round(part.inlineData.data.length/1024)}KB)`);
+                console.log(`[${label}] 🖼️ 이미지 응답 감지 (${Math.round(part.inlineData.data.length / 1024)}KB)`);
                 responseWithMeta.imageData = part.inlineData.data;
                 responseWithMeta.mimeType = part.inlineData.mimeType;
                 break;
@@ -203,16 +203,16 @@ export async function safeCallGemini(prompt, options = {}) {
         }
 
         return responseWithMeta;
-        
+
       } catch (error) {
         const processingTime = Date.now() - requestStartTime;
         lastError = error;
-        
+
         // 키 에러 기록
         if (selectedKeyIndex !== null) {
           apiKeyManager.markKeyError('gemini', selectedKeyIndex, error.message);
         }
-        
+
         console.error(`[${label}] 시도 ${totalAttempts} 실패 (모델: ${currentModel}, 키: ${selectedKeyIndex}, ${processingTime}ms):`, error.message);
         console.error(`[${label}] ❌ 에러 상세:`, {
           message: error.message,
@@ -221,10 +221,10 @@ export async function safeCallGemini(prompt, options = {}) {
           type: error.constructor.name
         });
 
-        
+
         if (isRetryableError(error) && modelAttempt < maxRetries - 1) {
           const delay = exponentialBackoffDelay(modelAttempt);
-          console.log(`[${label}] ⏳ ${delay}ms (${(delay/1000).toFixed(1)}초) 후 재시도... (모델: ${currentModel}, 남은 시도: ${maxRetries - modelAttempt - 1}회)`);
+          console.log(`[${label}] ⏳ ${delay}ms (${(delay / 1000).toFixed(1)}초) 후 재시도... (모델: ${currentModel}, 남은 시도: ${maxRetries - modelAttempt - 1}회)`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -232,12 +232,12 @@ export async function safeCallGemini(prompt, options = {}) {
       }
     }
   }
-  
+
   const totalTime = Date.now() - startTime;
   console.error(`[${label}] ❌ 모든 모델 시도 실패 (총 시간: ${totalTime}ms, 시도: ${totalAttempts}회)`);
   console.error(`[${label}] 💥 최종 에러:`, {
     message: lastError?.message,
-    totalTime: `${(totalTime/1000).toFixed(2)}초`,
+    totalTime: `${(totalTime / 1000).toFixed(2)}초`,
     attempts: totalAttempts,
     models: allModels.join(', ')
   });
@@ -245,7 +245,7 @@ export async function safeCallGemini(prompt, options = {}) {
 }
 
 /**
- * 🔥 안전한 Freepik API 호출 (개선된 재시도 로직)
+ * 🔥 안전한 Freepik API 호출 (개선된 재시도 로직 - 429 에러 시 즉시 다른 키 사용)
  */
 export async function safeCallFreepik(url, options = {}, conceptId = 0) {
   const {
@@ -255,39 +255,76 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
   } = options;
 
   let lastError;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  const usedKeys = new Set(); // 🔥 이미 시도한 키 추적
+  const totalKeys = apiKeyManager.getUsageStats().freepik.totalKeys;
+
+  // 🔥 모든 키를 시도할 때까지 반복 (최대 totalKeys * maxRetries)
+  const maxTotalAttempts = Math.min(totalKeys * maxRetries, 10); // 최대 10회
+
+  for (let attempt = 0; attempt < maxTotalAttempts; attempt++) {
     let keyIndex = null;
-    let requestStartTime = Date.now(); // 중복 선언 방지, 각 시도마다 let으로 할당
-    
+    let requestStartTime = Date.now();
+
     try {
-      // 🔥 컨셉별 키 선택 (부하 분산)
-      const { key: apiKey, index } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
-      keyIndex = index;
-      
-      console.log(`[${label}] 시도 ${attempt + 1}/${maxRetries} (컨셉: ${conceptId}, 키: ${keyIndex})`);
-      
+      // 🔥 사용 가능한 키 선택 (이미 사용한 키 제외)
+      let selectedKey = null;
+      let retryCount = 0;
+
+      while (retryCount < totalKeys) {
+        const { key: apiKey, index } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
+
+        // 🔥 이미 사용한 키면 다음 키 시도
+        if (usedKeys.has(index)) {
+          retryCount++;
+          continue;
+        }
+
+        selectedKey = { key: apiKey, index };
+        break;
+      }
+
+      // 모든 키를 사용했으면 종료
+      if (!selectedKey) {
+        console.error(`[${label}] ❌ 모든 Freepik 키 사용 완료 (${usedKeys.size}/${totalKeys})`);
+        break;
+      }
+
+      keyIndex = selectedKey.index;
+      console.log(`[${label}] 시도 ${attempt + 1}/${maxTotalAttempts} (컨셉: ${conceptId}, 키: ${keyIndex}, 사용된 키: ${usedKeys.size}/${totalKeys})`);
+
       const response = await withTimeout(
         fetch(url, {
           ...options,
           headers: {
-            'X-Freepik-API-Key': apiKey,
+            'X-Freepik-API-Key': selectedKey.key,
             'Content-Type': 'application/json',
             ...options.headers
           }
         }),
         timeout
       );
-      
+
       const processingTime = Date.now() - requestStartTime;
-      
+
       if (!response.ok) {
         const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
         error.status = response.status;
-        
+
         apiKeyManager.markKeyError('freepik', keyIndex, error.message);
-        
-        if (isRetryableError(error, response.status) && attempt < maxRetries - 1) {
+
+        // 🔥 429 에러면 이 키를 사용 완료로 표시하고 즉시 다른 키 시도
+        if (response.status === 429) {
+          usedKeys.add(keyIndex);
+          console.log(`[${label}] 🚫 키 ${keyIndex} Rate Limit → 다른 키로 즉시 전환 (${usedKeys.size}/${totalKeys} 사용됨)`);
+
+          // 즉시 다음 시도 (딜레이 없음)
+          if (attempt < maxTotalAttempts - 1 && usedKeys.size < totalKeys) {
+            continue;
+          }
+        }
+
+        // 기타 재시도 가능한 에러
+        if (isRetryableError(error, response.status) && attempt < maxTotalAttempts - 1) {
           const delay = exponentialBackoffDelay(attempt, BASE_DELAY * (conceptId + 1));
           console.log(`[${label}] ${delay}ms 후 재시도... (키: ${keyIndex})`);
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -295,31 +332,38 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
         }
         throw error;
       }
-      
+
       const data = await response.json();
       apiKeyManager.markKeySuccess('freepik', keyIndex);
-      
+
       console.log(`[${label}] ✅ 성공 (컨셉: ${conceptId}, 키: ${keyIndex}, 시간: ${processingTime}ms)`);
-      
+
       return data;
-      
+
     } catch (error) {
       lastError = error;
       if (keyIndex !== null) {
         apiKeyManager.markKeyError('freepik', keyIndex, error.message);
       }
       console.error(`[${label}] 시도 ${attempt + 1} 실패 (컨셉: ${conceptId}):`, error.message);
-      
-      if (attempt < maxRetries - 1 && isRetryableError(error, error.status)) {
+
+      // 🔥 429 에러가 아닌 경우에만 일반 재시도 로직
+      if (error.status !== 429 && attempt < maxTotalAttempts - 1 && isRetryableError(error, error.status)) {
         const delay = exponentialBackoffDelay(attempt, BASE_DELAY * (conceptId + 1));
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
+
+      // 429 에러면 이미 usedKeys에 추가되었으므로 다음 키로 즉시 진행
+      if (error.status === 429 && usedKeys.size < totalKeys) {
+        continue;
+      }
+
       break;
     }
   }
-  
-  throw lastError || new Error(`${label} 최대 재시도 초과 (컨셉: ${conceptId})`);
+
+  throw lastError || new Error(`${label} 최대 재시도 초과 (컨셉: ${conceptId}, 사용된 키: ${usedKeys.size}/${totalKeys})`);
 }
 
 /**
@@ -341,8 +385,8 @@ export function getApiKeyStatus() {
  */
 export function getAvailableKeyCount(service) {
   const stats = getApiKeyStatus();
-  return service === 'gemini' ? 
-    stats?.gemini?.availableKeys || 0: 
+  return service === 'gemini' ?
+    stats?.gemini?.availableKeys || 0 :
     stats?.freepik?.availableKeys || 0;
 }
 
