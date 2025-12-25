@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../src/utils/sessionStore.js';
-import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
+import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js'; \nimport { getPromptFilePath, getGeminiResponsesDir } from '../src/utils/enginePromptHelper.js';
 
 
 export const config = {
@@ -27,11 +27,8 @@ const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 // 원본 함수들
 // ============================================================
 
-const PROMPT_FILE_MAPPING = {
-  'product': 'new_product_prompt_1120.txt',
-  'service': 'new_service_prompt_1120.txt',
-  'manual': 'new_manual_prompt_1120.txt'
-};
+// ❌ 레거시 프롬프트 매핑 제거 - enginePromptHelper 사용
+// 레거시 파일은 public/*.txt에 백업용으로 유지
 
 function getSceneCount(videoLength) {
   const lengthStr = String(videoLength).replace(/[^0-9]/g, '');
@@ -665,10 +662,15 @@ async function processStoryboardAsync(body, username, sessionId) {
 
 
     // PHASE 1: Gemini (0-15%)
-    const promptFile = getPromptFile(videoPurpose, mode);
-    const promptFileName = PROMPT_FILE_MAPPING[promptFile];
-    const promptFilePath = path.join(process.cwd(), 'public', promptFileName);
-    if (!fs.existsSync(promptFilePath)) throw new Error(`프롬프트 파일을 찾을 수 없습니다: ${promptFileName}`);
+    // 🔥 엔진별 프롬프트 파일 경로 (enginePromptHelper 사용)
+    const promptFilePath = getPromptFilePath(
+      mode === 'manual' ? 'manual' : 'auto',
+      videoPurpose
+    );
+    if (!fs.existsSync(promptFilePath)) {
+      throw new Error(`프롬프트 파일을 찾을 수 없습니다: ${promptFilePath}`);
+    }
+    console.log(`[storyboard-init] 📄 프롬프트 로드: ${promptFilePath}`);
 
     let promptTemplate = fs.readFileSync(promptFilePath, 'utf-8');
     const promptVariables = {
@@ -716,7 +718,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       }
     });
 
-    saveGeminiResponse(promptFile, 'unified', body, fullOutput);
+    // 🔥 응답 저장 (엔진별 폴더에 저장)
+    saveGeminiResponse(mode, 'unified', body, fullOutput);
     const sceneCountPerConcept = getSceneCount(videoLength);
     const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
