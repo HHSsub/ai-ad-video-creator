@@ -422,20 +422,12 @@ function App() {
 
             <div className="flex items-center gap-4">
               {user.role === 'admin' && (
-                <>
-                  <button
-                    onClick={() => setCurrentView('admin')}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-                  >
-                    프롬프트관리
-                  </button>
-                  <button
-                    onClick={() => setCurrentView('users')}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-                  >
-                    사용자관리
-                  </button>
-                </>
+                <button
+                  onClick={() => setCurrentView('admin')}
+                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  관리자
+                </button>
               )}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-400">
