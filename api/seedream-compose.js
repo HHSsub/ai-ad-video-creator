@@ -97,13 +97,16 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         }
 
         // 3. API 요청
-        const url = 'https://api.freepik.com/v1/ai/text-to-image/seedream-v4-edit';
+        // 🔥 수정: v4-edit -> v4 (Generation)으로 변경 (Composition 목적)
+        // Edit 엔드포인트는 Mask가 없으면 400 오류 가능성이 높음.
+        // Composition은 'Generation with References'로 처리하는 것이 안전함.
+        const url = 'https://api.freepik.com/v1/ai/text-to-image/seedream';
 
         const payload = {
             prompt: prompt,
-            reference_images: references,
+            reference_images: references, // Base + Overlay 모두 참조로 전달
             num_images: 1,
-            image: { url: baseImageUrl }, // Edit 모드에서는 '편집 대상' 원본이 필요할 수 있음. Base를 메인으로 설정.
+            // image: { url: baseImageUrl }, // Img2Img 대신 순수 Reference 기반 생성 시도
             guidance_scale: 2.5,
             num_inference_steps: 20
         };
