@@ -167,7 +167,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   useEffect(() => {
     const loadPersonConfig = async () => {
       try {
-        const configRes = await fetch(`${API_BASE}/api/admin-field-config`);
+        const configRes = await fetch(`${API_BASE}/api/admin-field-config/field-config`);
         const configData = await configRes.json();
 
         if (configData.success && configData.config?.personSelection?.visible) {
