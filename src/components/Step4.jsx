@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
 
 const ROLE_PERMISSIONS = {
   viewer: { view: true, comment: false, editPrompt: false, regenerate: false, confirm: false, invite: false },
@@ -66,7 +66,7 @@ const Step4 = ({
     if (!imageUrl) return null;
     if (imageUrl.startsWith('http')) return imageUrl;
     if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
-      return `${API_BASE}${imageUrl}`;
+      return imageUrl;
     }
     return imageUrl;
   };
@@ -76,7 +76,7 @@ const Step4 = ({
     if (!videoUrl) return null;
     if (videoUrl.startsWith('http')) return videoUrl;
     if (videoUrl.startsWith('/') && !videoUrl.startsWith('//')) {
-      return `${API_BASE}${videoUrl}`;
+      return videoUrl; // 이미 절대 경로(또는 /nexxii 포함)라면 그대로 반환
     }
     return videoUrl;
   };
@@ -151,6 +151,7 @@ const Step4 = ({
 
     try {
       // 🔥 수정: API 요청 형식을 storyboard-render-image.js에 맞게 조정
+      // 🔥 수정: API 요청 형식을 storyboard-render-image.js에 맞게 조정 (경로 수정)
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
         headers: {

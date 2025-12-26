@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
 
 const Step3 = ({
   storyboard,
@@ -32,7 +32,7 @@ const Step3 = ({
     if (!imageUrl) return '/placeholder.png';
     if (imageUrl.startsWith('http')) return imageUrl;
     if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
-      return `${API_BASE}${imageUrl}`;
+      return imageUrl;
     }
     return imageUrl;
   };

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import ManualPromptModal from './ManualPromptModal';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
 
 const SpinnerOverlay = ({ title, percent, lines }) => (
   <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[9999]">
