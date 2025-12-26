@@ -176,6 +176,7 @@ const Step4 = ({
       console.log(`[Step4] 씬 ${sceneNumber} 이미지 재생성 응답:`, result);
 
       // 🔥 수정: 응답 필드명 확인 (url 또는 imageUrl)
+      // 🔥 수정: 응답 필드명 확인 (url 또는 imageUrl)
       if (result.success && (result.url || result.imageUrl)) {
         const newImageUrl = result.url || result.imageUrl;
         scene.imageUrl = newImageUrl;
@@ -188,6 +189,27 @@ const Step4 = ({
         }
 
         log(`씬 ${sceneNumber} 이미지 재생성 완료: ${newImageUrl}`);
+
+        // 🔥 중요: 변경된 스토리보드를 프로젝트에 저장 (영구 반영)
+        try {
+          // storyboard 객체는 참조로 수정되었으므로 그대로 사용
+          await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-username': user?.username || 'anonymous'
+            },
+            body: JSON.stringify({
+              storyboard: storyboard, // 참조된 전체 스토리보드 저장
+              formData: formData
+            })
+          });
+          log('프로젝트 데이터 저장 완료 (URL 갱신)');
+        } catch (saveErr) {
+          console.error('프로젝트 저장 실패:', saveErr);
+          log('⚠️ 프로젝트 저장 실패 (새로고침 시 유실될 수 있음)');
+        }
+
       } else {
         throw new Error(result.message || result.error || '이미지 재생성 실패');
       }
