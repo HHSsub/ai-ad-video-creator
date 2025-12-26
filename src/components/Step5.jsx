@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+// 🔥 API_BASE를 /nexxii로 강제 (프로덕션/로컬 모두 호환)
+const API_BASE = '/nexxii';
 
 const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProject }) => {
     const [availableMoods, setAvailableMoods] = useState([]);
