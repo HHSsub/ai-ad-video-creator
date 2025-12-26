@@ -16,6 +16,8 @@ const Step3 = ({
   const [selectedId, setSelectedId] = useState(selectedConceptId || null);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
+  // 🔥 추가: 이미지 개별 로딩 상태
+  const [imageLoadStates, setImageLoadStates] = useState({});
 
   // 🔥 v4.1: styles 데이터 소스로 변경
   const styles = storyboard?.styles || [];
@@ -35,6 +37,10 @@ const Step3 = ({
       return imageUrl;
     }
     return imageUrl;
+  };
+
+  const handleImageLoad = (uniqueKey) => {
+    setImageLoadStates(prev => ({ ...prev, [uniqueKey]: true }));
   };
 
   useEffect(() => {
@@ -174,24 +180,36 @@ const Step3 = ({
                     {style.concept_name || style.conceptName || `컨셉 ${idx + 1}`}
                   </h4>
 
-                  {/* 🔥 v4.1: 이미지 그리드 표시 */}
+                  {/* 🔥 v4.1: 이미지 그리드 표시 (개별 로딩 적용) */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
-                    {(style.images || []).slice(0, 4).map((img, imgIdx) => (
-                      <div key={imgIdx} className="relative">
-                        <img
-                          src={getImageSrc(img.imageUrl || img.url)}
-                          alt={`Scene ${img.sceneNumber}`}
-                          className="w-full aspect-square object-cover rounded-lg border border-gray-600"
-                          onError={(e) => {
-                            e.target.src = '/placeholder.png';
-                          }}
-                          loading="lazy"
-                        />
-                        <span className="absolute top-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded">
-                          #{img.sceneNumber}
-                        </span>
-                      </div>
-                    ))}
+                    {(style.images || []).slice(0, 4).map((img, imgIdx) => {
+                      const uniqueKey = `thumb-${style.conceptId || style.id}-${imgIdx}`;
+                      return (
+                        <div key={imgIdx} className="relative aspect-square">
+                          {/* 로딩 스켈레톤 */}
+                          {!imageLoadStates[uniqueKey] && (
+                            <div className="absolute inset-0 bg-gray-800 animate-pulse rounded-lg z-10 flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin"></div>
+                            </div>
+                          )}
+                          <img
+                            src={getImageSrc(img.imageUrl || img.url)}
+                            alt={`Scene ${img.sceneNumber}`}
+                            className={`w-full h-full object-cover rounded-lg border border-gray-600 transition-opacity duration-300 ${imageLoadStates[uniqueKey] ? 'opacity-100' : 'opacity-0'
+                              }`}
+                            onLoad={() => handleImageLoad(uniqueKey)}
+                            onError={(e) => {
+                              e.target.src = '/placeholder.png';
+                              handleImageLoad(uniqueKey); // 에러나도 로딩 완료 처리
+                            }}
+                            loading="lazy"
+                          />
+                          <span className="absolute top-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded z-20">
+                            #{img.sceneNumber}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="text-xs text-gray-400 mb-2">
@@ -220,28 +238,40 @@ const Step3 = ({
                 ✅ 선택된 이미지 세트: {selectedStyle.concept_name || selectedStyle.conceptName}
               </h3>
 
-              {/* 이미지 전체 미리보기 */}
+              {/* 이미지 전체 미리보기 (개별 로딩 적용) */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
-                {(selectedStyle.images || []).map((img, idx) => (
-                  <div key={idx} className="relative">
-                    <img
-                      src={getImageSrc(img.imageUrl || img.url)}
-                      alt={`Scene ${img.sceneNumber}`}
-                      className="w-full aspect-video object-cover rounded-lg border border-gray-600"
-                      onError={(e) => {
-                        e.target.src = '/placeholder.png';
-                      }}
-                    />
-                    <span className="absolute top-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-                      씬 #{img.sceneNumber}
-                    </span>
-                    {img.title && (
-                      <div className="mt-1 text-xs text-gray-400 truncate">
-                        {img.title}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {(selectedStyle.images || []).map((img, idx) => {
+                  const uniqueKey = `preview-${selectedStyle.conceptId || selectedStyle.id}-${idx}`;
+                  return (
+                    <div key={idx} className="relative aspect-video">
+                      {/* 로딩 스켈레톤 */}
+                      {!imageLoadStates[uniqueKey] && (
+                        <div className="absolute inset-0 bg-gray-800 animate-pulse rounded-lg z-10 flex items-center justify-center">
+                          <span className="text-xs text-gray-500">로딩 중...</span>
+                        </div>
+                      )}
+                      <img
+                        src={getImageSrc(img.imageUrl || img.url)}
+                        alt={`Scene ${img.sceneNumber}`}
+                        className={`w-full h-full object-cover rounded-lg border border-gray-600 transition-opacity duration-300 ${imageLoadStates[uniqueKey] ? 'opacity-100' : 'opacity-0'
+                          }`}
+                        onLoad={() => handleImageLoad(uniqueKey)}
+                        onError={(e) => {
+                          e.target.src = '/placeholder.png';
+                          handleImageLoad(uniqueKey);
+                        }}
+                      />
+                      <span className="absolute top-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded z-20">
+                        씬 #{img.sceneNumber}
+                      </span>
+                      {img.title && (
+                        <div className="mt-1 text-xs text-gray-400 truncate">
+                          {img.title}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {selectedStyle.big_idea && (
