@@ -357,10 +357,21 @@ export default async function handler(req, res) {
       }
 
       // 🔥 [M] 인물 합성 로직 (Person Archive)
+      // DEBUG: 인물 합성 진입 조건 확인
+      console.log(`[storyboard-render-image] 👤 인물 합성 체크:`, {
+        promptFragment: (imagePrompt.prompt || '').substring(0, 30),
+        hasPersonUrl: !!personUrl,
+        personUrlPreview: personUrl ? personUrl.substring(0, 20) + '...' : 'NONE',
+        projectId,
+        sceneNumber
+      });
+
       if (personUrl && projectId && sceneNumber && result.imageUrl) {
-        // 키워드 감지 (사람 관련 - 확장됨)
-        const personKeywords = /man|woman|person|girl|boy|model|character|protagonist|worker|student|teacher|doctor|nurse|driver|lady|gentleman|child|kid|baby|teenager|adult|human|couple|family|friends|group|crowd|audience/i;
+        // 키워드 감지 (사람 관련 - 복수형 및 대소문자 정교화)
+        // 'girls', 'boys' 등 복수형 명시 및 단어 경계(\b) 적용으로 정확도 향상
+        const personKeywords = /\b(man|men|woman|women|person|people|girl|girls|boy|boys|model|models|character|characters|protagonist|worker|workers|student|students|teacher|teachers|doctor|doctors|nurse|nurses|driver|drivers|lady|ladies|gentleman|gentlemen|child|children|kid|kids|baby|babies|teen|teens|teenager|teenagers|adult|adults|human|humans|couple|couples|family|families|friend|friends|group|crowd|audience)\b/i;
         const currentPrompt = imagePrompt.prompt || '';
+
 
         if (personKeywords.test(currentPrompt)) {
           console.log(`[storyboard-render-image] 👤 인물 합성 조건 충족 (씬 ${sceneNumber})`);

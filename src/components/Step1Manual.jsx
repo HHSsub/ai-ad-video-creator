@@ -16,9 +16,11 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   // 🔥 [M] Person Selection 기능
   const [persons, setPersons] = useState([]);
   const [personConfigVisible, setPersonConfigVisible] = useState(false);
+  // 🔥 Manual Mode 동적 설정 state
+  const [manualConfig, setManualConfig] = useState({ imageUpload: { visible: true } });
 
   useEffect(() => {
-    const loadPersonConfig = async () => {
+    const loadConfig = async () => {
       try {
         const configRes = await fetch('/nexxii/api/admin-field-config/field-config');
         const configData = await configRes.json();
@@ -26,20 +28,27 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
         // configData.config가 없으면 빈 객체 처리
         const config = configData.config || {};
 
-        if (configData.success && config.personSelection?.visible) {
-          setPersonConfigVisible(true);
+        if (configData.success) {
+          // 1. Person Selection Config
+          if (config.personSelection?.visible) {
+            setPersonConfigVisible(true);
+            const personsRes = await fetch('/nexxii/api/persons');
+            const personsData = await personsRes.json();
+            if (personsData.success) {
+              setPersons(personsData.persons || []);
+            }
+          }
 
-          const personsRes = await fetch('/nexxii/api/persons');
-          const personsData = await personsRes.json();
-          if (personsData.success) {
-            setPersons(personsData.persons || []);
+          // 2. Manual Mode Config (이미지 업로드 숨김 등)
+          if (config.manualMode) {
+            setManualConfig(prev => ({ ...prev, ...config.manualMode }));
           }
         }
       } catch (error) {
-        console.error('Person config load error:', error);
+        console.error('Config load error:', error);
       }
     };
-    loadPersonConfig();
+    loadConfig();
   }, []);
 
   // 필수 옵션값 (fieldConfig.js와 정확히 일치)
@@ -205,60 +214,63 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
         </div>
 
         {/* 5. 이미지 업로드 */}
-        <div className="form-section">
-          <label className="section-label">
-            5. 이미지 업로드 (선택)
-          </label>
-          <div className="relative group/upload">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              id="manual-image-upload"
-              onChange={handleImageUpload}
-            />
-
-            <label
-              htmlFor="manual-image-upload"
-              className="relative block cursor-pointer group/label"
-            >
-              <div className="border-2 border-dashed border-gray-600/50 rounded-xl p-8 text-center bg-gray-900/30 hover:border-gray-500/70 hover:bg-gray-800/40 transition-all duration-300">
-                <div className="space-y-4">
-                  {formData.imageUpload ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-center w-32 h-32 mx-auto bg-gray-800/60 rounded-lg overflow-hidden border border-gray-600/40">
-                        <img
-                          src={formData.imageUpload}
-                          alt="업로드된 이미지"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleChange('imageUpload', '');
-                        }}
-                        className="text-red-400 text-sm hover:underline"
-                      >
-                        이미지 제거
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="mx-auto w-12 h-12 text-gray-500">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      </div>
-                      <div className="text-blue-400 font-medium">이미지 선택</div>
-                      <p className="text-xs text-gray-500">제품/로고 이미지 (JPG, PNG)</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+        {/* 5. 이미지 업로드 (설정에 따라 숨김 가능) */}
+        {manualConfig?.imageUpload?.visible !== false && (
+          <div className="form-section">
+            <label className="section-label">
+              5. 이미지 업로드 (선택)
             </label>
+            <div className="relative group/upload">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                id="manual-image-upload"
+                onChange={handleImageUpload}
+              />
+
+              <label
+                htmlFor="manual-image-upload"
+                className="relative block cursor-pointer group/label"
+              >
+                <div className="border-2 border-dashed border-gray-600/50 rounded-xl p-8 text-center bg-gray-900/30 hover:border-gray-500/70 hover:bg-gray-800/40 transition-all duration-300">
+                  <div className="space-y-4">
+                    {formData.imageUpload ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-center w-32 h-32 mx-auto bg-gray-800/60 rounded-lg overflow-hidden border border-gray-600/40">
+                          <img
+                            src={formData.imageUpload}
+                            alt="업로드된 이미지"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleChange('imageUpload', '');
+                          }}
+                          className="text-red-400 text-sm hover:underline"
+                        >
+                          이미지 제거
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="mx-auto w-12 h-12 text-gray-500">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        </div>
+                        <div className="text-blue-400 font-medium">이미지 선택</div>
+                        <p className="text-xs text-gray-500">제품/로고 이미지 (JPG, PNG)</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </label>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 🔥 Person Selection UI */}
         {personConfigVisible && persons.length > 0 && (
