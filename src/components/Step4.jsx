@@ -582,17 +582,24 @@ const Step4 = ({
 
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-1">
-                            🔧 이미지 프롬프트
-                            {!permissions.editPrompt && (
-                              <span className="ml-2 text-xs text-gray-500">(읽기 전용)</span>
-                            )}
+                            🔒 기존 프롬프트
+                          </label>
+                          <textarea
+                            value={img.prompt || ''}
+                            readOnly
+                            disabled
+                            className="w-full h-20 p-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 text-sm resize-none mb-3"
+                          />
+
+                          <label className="block text-sm font-medium text-gray-400 mb-1">
+                            ✏️ 프롬프트 수정
                           </label>
                           <textarea
                             value={getEditedPrompt(img.sceneNumber, 'prompt', img.prompt || '')}
                             onChange={(e) => handlePromptChange(img.sceneNumber, 'prompt', e.target.value)}
                             disabled={!permissions.editPrompt || isRegenerating}
-                            className="w-full h-24 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm resize-none focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            placeholder="이미지 프롬프트..."
+                            className="w-full h-24 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm resize-none focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed mb-2"
+                            placeholder="수정할 프롬프트를 입력하세요..."
                           />
                           <div className="space-y-3">
                             {permissions.editPrompt && (
@@ -601,7 +608,7 @@ const Step4 = ({
                                 disabled={isRegenerating}
                                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm"
                               >
-                                {isRegenerating ? '이미지 생성 중...' : '🔄 이미지 재생성'}
+                                {isRegenerating ? '이미지 생성 중...' : '🔄 이미지 재생성 (새로운 변형)'}
                               </button>
                             )}
 
