@@ -16,8 +16,8 @@ async function pollSeedreamStatus(taskId) {
         try {
             // console.log(`[Seedream] 태스크 ${taskId} 상태 확인 중...`);
 
-            // Freepik 표준 상태 확인 URL
-            const url = `https://api.freepik.com/v1/ai/text-to-image/${taskId}`;
+            // Freepik 표준 상태 확인 URL (v4는 모델명 포함 필수)
+            const url = `https://api.freepik.com/v1/ai/text-to-image/seedream-v4/${taskId}`;
 
             const result = await safeCallFreepik(url, {
                 method: 'GET',

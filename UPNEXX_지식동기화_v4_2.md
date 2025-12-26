@@ -96,6 +96,12 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-26 18:35 - 인물 합성 Polling 404 오류 수정 (Task Z)
+- **문제**: 인물 합성(`seedream-compose`) 시 Freepik API 태스크 생성은 성공하지만, 상태 확인(Polling) 중 404 오류가 발생하여 합성에 실패함.
+- **원인**: `api/seedream-compose.js`에서 사용하는 상태 조회 URL이 `seedream-v4` 모델에 맞는 경로(`/v1/ai/text-to-image/seedream-v4/{id}`)가 아닌 일반 경로(`/v1/ai/text-to-image/{id}`)로 하드코딩되어 있었음.
+- **해결**: Polling URL을 올바른 경로로 수정.
+- **상태**: 🟢 완료
+
 ### 2025-12-26 18:25 - Step 1 데이터 자동 저장 구현 (Task Y)
 - **문제**: Step 1에서 선택한 인물 정보(`personSelection`) 등 설정값이 Step 2로 넘어갈 때 백엔드에 저장되지 않음. 사용자가 프로젝트를 나갔다 오거나 새로고침 후 Step 2에서 작업을 재개하면 이전 설정이 초기화되어 인물 합성이 실패함.
 - **해결**:
