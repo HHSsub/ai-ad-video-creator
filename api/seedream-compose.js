@@ -89,8 +89,9 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             });
         }
 
-        // 3. API 요청 (Generation Endpoint 유지)
-        const url = 'https://api.freepik.com/v1/ai/text-to-image/seedream';
+        // 3. API 요청 (Generation Endpoint 유지: v4)
+        // 🔥 수정: 'seedream' (404) -> 'seedream-v4' (Valid)
+        const url = 'https://api.freepik.com/v1/ai/text-to-image/seedream-v4';
 
         const payload = {
             prompt: prompt,
@@ -118,9 +119,12 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         }
 
         const taskId = result.data.task_id;
-        console.log(`[Seedream] 태스크 생성 성공: ${taskId}, 폴링 시작...`);
+        console.log(`[Seedream] 태스크 생성 성공: ${taskId}, 3초 대기 후 폴링 시작...`);
 
         // 4. 비동기 폴링 -> 동기 결과 반환
+        // 🔥 중요: 태스크 생성 직후 바로 조회하면 404가 뜰 수 있으므로 잠시 대기
+        await sleep(3000);
+
         const finalImageUrl = await pollSeedreamStatus(taskId);
 
         return {
