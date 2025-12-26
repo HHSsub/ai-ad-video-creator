@@ -1,7 +1,8 @@
 ﻿import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
+// 🔥 API_BASE를 /nexxii로 강제 (프로덕션/로컬 모두 호환)
+const API_BASE = '/nexxii';
 
 const ROLE_PERMISSIONS = {
   viewer: { view: true, comment: false, editPrompt: false, regenerate: false, confirm: false, invite: false },
