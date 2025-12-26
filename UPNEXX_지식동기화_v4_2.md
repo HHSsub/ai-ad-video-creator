@@ -80,6 +80,8 @@
 | **O** | BGM 적용 오류 수정 (Remote URL) | `api/apply-bgm.js` | Remote URL(http) 입력 시 로컬 파일 체크 우회<br>FFmpeg 스트리밍 처리 적용 | ✅ 완료 | ✅ 승인 |
 | **P** | 합성 로직 분리 (Product vs Person) | `api/storyboard-render-image.js` | 제품(Step1)과 인물(Archive) 합성 로직 완전 분리<br>제품: [PRODUCT] 마커 감지 -> Seedream (Product Ref)<br>인물: 인물 키워드 감지 -> Seedream (Person Ref) | ✅ 완료 | ✅ 승인 |
 | **Q** | 제품 이미지 전달 로직 복구 | `api/storyboard-init.js` | `generateImage` 함수에 `productImageUrl` 전달 누락 수정<br>Step 1 업로드 이미지가 렌더러로 정상 전달되도록 조치 | ✅ 완료 | ✅ 승인 |
+| **R** | API 파라미터 최적화 | `api/storyboard-render-image.js` | **[CRITICAL]** Seedream v4 `aspect_ratio` 400 에러 해결 (Internal `portrait_9_16` -> API `social_story_9_16` 매핑 어댑터 적용) | ✅ 완료 | ✅ 승인 |
+| **S** | 합성 파라미터 안정화 | `api/seedream-compose.js` | `seedream-compose.js` 기본 `aspect_ratio`를 `widescreen_16_9`로 고정하여 호출 안정성 확보 | ✅ 완료 | ✅ 승인 |
 
 **작업 상태 범례**:
 - 🔴 미작업
@@ -91,6 +93,14 @@
 
 
 ## 📝 작업 히스토리 (최신순)
+
+### 2025-12-26 17:35 - API 파라미터 완전 정합성 확보 (Task R, S)
+- **배경**: Freepik Seedream v4 API 호출 시 `HTTP 400 Bad Request` 지속 발생 (`aspect_ratio` 파라미터 값 불일치).
+- **원인**: 내부 코드(`portrait_9_16`)와 실제 API Spec(`social_story_9_16`) 간의 불일치. 기존 추측성 수정으로 해결되지 않음.
+- **조치**:
+  1.  **Strict Adapter 구현**: `api/storyboard-render-image.js`에 `mapToFreepikParams` 도입. `portrait_9_16`을 `social_story_9_16`으로 정확히 변환.
+  2.  **합성 파라미터 고정**: `api/seedream-compose.js`에서 합성 시 `widescreen_16_9`를 기본값으로 명시하여 에러 방지.
+  3.  **정책 강화**: API 파라미터 추론 금지 원칙 재확인 및 문서화.
 
 ### 2025-12-26 17:10 - 합성 로직 분리 및 엔진 마이그레이션 완료 (Task N, O, P, Q)
 - **배경**: NanoBanana 엔진 노후화 및 인물 합성 기능 추가 과정에서 기존 제품 합성 로직이 일부 손상됨.

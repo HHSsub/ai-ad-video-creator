@@ -99,14 +99,40 @@ async function pollTaskStatus(taskId, conceptId = 0, projectId = null, sceneNumb
 }
 
 
+// 🔥 Freepik AR 매핑 헬퍼
+// 🔥 Freepik API Adapter (Internal -> API Spec)
+// 문서를 통해 확인된 정확한 파라미터 매핑 수행
+function mapToFreepikParams(internalParams) {
+  const arMap = {
+    // 내부 코드 -> Freepik Seedream v4 Enum
+    'portrait_9_16': 'social_story_9_16',
+    // Widescreen/Square는 Pass-through (widescreen_16_9, square_1_1)
+  };
+
+  // aspect_ratio 키를 제거하고 image_size로 변환
+  const { aspect_ratio, ...rest } = internalParams;
+
+  const mappedParams = {
+    ...rest,
+    // API uses 'image_size', Internal uses 'aspect_ratio'
+    // 매핑된 값이 있으면 사용, 없으면 원본 사용 (default: widescreen_16_9)
+    aspect_ratio: arMap[aspect_ratio] || aspect_ratio || 'widescreen_16_9'
+  };
+
+  return mappedParams;
+}
+
 // 🔥 동적 엔진 이미지 생성 함수 (키 풀 활용 + 엔진 독립적 + S3 업로드)
 async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0, projectId = null, sceneNumber = null) {
   try {
+    // API 스펙에 맞는 파라미터 변환 (Adapter Pattern)
+    const finalPrompt = mapToFreepikParams(imagePrompt);
+
     console.log(`[generateImageWithDynamicEngine] 시작 (컨셉: ${conceptId}, 프로젝트: ${projectId}, 씬: ${sceneNumber}):`, {
-      prompt: imagePrompt.prompt.substring(0, 100),
-      aspect_ratio: imagePrompt.aspect_ratio,
-      guidance_scale: imagePrompt.guidance_scale,
-      seed: imagePrompt.seed
+      prompt: finalPrompt.prompt.substring(0, 100),
+      aspect_ratio: finalPrompt.aspect_ratio, // 매핑된 값 로깅
+      guidance_scale: finalPrompt.guidance_scale,
+      seed: finalPrompt.seed
     });
 
     // 🔥 동적 URL 생성 - engines.json의 현재 textToImage 엔진 사용
@@ -120,7 +146,7 @@ async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0, projec
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify(imagePrompt)
+      body: JSON.stringify(finalPrompt) // 매핑된 프롬프트 전송
     }, conceptId, `image-create-concept-${conceptId}`);
 
     console.log(`[generateImageWithDynamicEngine] 태스크 생성 응답:`, createResult);

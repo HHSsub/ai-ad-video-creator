@@ -99,7 +99,9 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             num_images: 1,
             image: { url: baseImageUrl }, // Base 이미지를 Input(Img2Img)으로 설정하여 배경/구도 유지
             guidance_scale: 2.5,
-            num_inference_steps: 20
+            num_inference_steps: 20,
+            // 🔥 매핑된 AR 추가 (Generation Endpoint 필수값일 수 있음)
+            aspect_ratio: 'widescreen_16_9'
         };
 
         console.log('[Seedream] 요청 Payload: Img2Img (Base) + Reference (Person)');
