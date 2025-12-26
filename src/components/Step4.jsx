@@ -46,6 +46,10 @@ const Step4 = ({
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState(null);
 
+  // 🔥 추가: 이미지 프리로딩을 위한 상태
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
   const styles = storyboard?.styles || [];
@@ -81,6 +85,47 @@ const Step4 = ({
     }
     return videoUrl;
   };
+
+  // 🔥 이미지 프리로딩 로직 (사용자 요청: 0~100% 로딩 후 한 번에 보여주기)
+  useEffect(() => {
+    if (images.length === 0) {
+      setImagesLoaded(true);
+      return;
+    }
+
+    let loadedCount = 0;
+    const totalImages = images.length;
+    const imageUrls = images.map(img => getImageSrc(img.imageUrl)).filter(Boolean);
+
+    if (imageUrls.length === 0) {
+      setImagesLoaded(true);
+      return;
+    }
+
+    log(`이미지 프리로딩 시작: ${imageUrls.length}개`);
+
+    imageUrls.forEach(url => {
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        loadedCount++;
+        const progress = Math.round((loadedCount / totalImages) * 100);
+        setLoadingProgress(progress);
+        if (loadedCount === totalImages) {
+          setTimeout(() => setImagesLoaded(true), 500); // 100% 후 살짝 대기
+        }
+      };
+      img.onerror = () => {
+        // 실패해도 진행은 시켜야 함 (깨진 이미지로라도)
+        loadedCount++;
+        const progress = Math.round((loadedCount / totalImages) * 100);
+        setLoadingProgress(progress);
+        if (loadedCount === totalImages) {
+          setTimeout(() => setImagesLoaded(true), 500);
+        }
+      };
+    });
+  }, [selectedConceptId, images]); // images 변경 시 재로딩
 
   useEffect(() => {
     log(`Step4 로드 - 컨셉 ID: ${selectedConceptId}, 역할: ${userRole}`);
@@ -394,55 +439,6 @@ const Step4 = ({
           createdAt: new Date().toISOString()
         }
       ];
-
-      // 🔥 추가: 이미지 프리로딩을 위한 상태
-      const [imagesLoaded, setImagesLoaded] = useState(false);
-      const [loadingProgress, setLoadingProgress] = useState(0);
-
-      // ... (기존 useEffect 뒤에 추가)
-
-      // 🔥 이미지 프리로딩 로직 (사용자 요청: 0~100% 로딩 후 한 번에 보여주기)
-      useEffect(() => {
-        if (images.length === 0) {
-          setImagesLoaded(true);
-          return;
-        }
-
-        let loadedCount = 0;
-        const totalImages = images.length;
-        const imageUrls = images.map(img => getImageSrc(img.imageUrl)).filter(Boolean);
-
-        if (imageUrls.length === 0) {
-          setImagesLoaded(true);
-          return;
-        }
-
-        log(`이미지 프리로딩 시작: ${imageUrls.length}개`);
-
-        imageUrls.forEach(url => {
-          const img = new Image();
-          img.src = url;
-          img.onload = () => {
-            loadedCount++;
-            const progress = Math.round((loadedCount / totalImages) * 100);
-            setLoadingProgress(progress);
-            if (loadedCount === totalImages) {
-              setTimeout(() => setImagesLoaded(true), 500); // 100% 후 살짝 대기
-            }
-          };
-          img.onerror = () => {
-            // 실패해도 진행은 시켜야 함 (깨진 이미지로라도)
-            loadedCount++;
-            const progress = Math.round((loadedCount / totalImages) * 100);
-            setLoadingProgress(progress);
-            if (loadedCount === totalImages) {
-              setTimeout(() => setImagesLoaded(true), 500);
-            }
-          };
-        });
-      }, [selectedConceptId, images]); // images 변경 시 재로딩
-
-      // ...
 
       // 3. 프로젝트 저장 (영구 반영)
       await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
