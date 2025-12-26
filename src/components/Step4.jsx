@@ -520,25 +520,7 @@ const Step4 = ({
     }
   };
 
-  // 🔥 렌더링: 프리로딩 중이면 로딩 오버레이 표시
-  if (!imagesLoaded) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
-        <div className="w-64">
-          <div className="flex justify-between text-gray-400 text-sm mb-2">
-            <span>리소스 로딩 중...</span>
-            <span>{loadingProgress}%</span>
-          </div>
-          <div className="w-full bg-gray-800 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${loadingProgress}%` }}
-            ></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   if (!selectedStyle) {
     return (
