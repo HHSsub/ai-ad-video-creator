@@ -282,10 +282,15 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                     <path d="M10 9L15 12L10 15V9Z" fill="currentColor" />
                   </svg>
                 </div>
-                <div className="card-menu">
+                <div
+                  className="card-menu"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <button
+                    type="button"
                     className="btn-delete"
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       handleDeleteProject(project.id, project.name);
                     }}

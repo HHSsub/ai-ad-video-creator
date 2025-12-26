@@ -82,6 +82,8 @@
 | **Q** | 제품 이미지 전달 로직 복구 | `api/storyboard-init.js` | `generateImage` 함수에 `productImageUrl` 전달 누락 수정<br>Step 1 업로드 이미지가 렌더러로 정상 전달되도록 조치 | ✅ 완료 | ✅ 승인 |
 | **R** | API 파라미터 최적화 | `api/storyboard-render-image.js` | **[CRITICAL]** Seedream v4 `aspect_ratio` 400 에러 해결 (Internal `portrait_9_16` -> API `social_story_9_16` 매핑 어댑터 적용) | ✅ 완료 | ✅ 승인 |
 | **S** | 합성 파라미터 안정화 | `api/seedream-compose.js` | `seedream-compose.js` 기본 `aspect_ratio`를 `widescreen_16_9`로 고정하여 호출 안정성 확보 | ✅ 완료 | ✅ 승인 |
+| T | Manual Mode 필드 동적 구성 | `config/runtime-field-config.json`<br>`src/components/Step1Manual.jsx` | `config/runtime-field-config.json`에 `manualMode` 섹션 추가 및 `Step1Manual.jsx` 연동 (이미지 업로드 숨김) | 🟢 완료 | ⬜ 대기 |
+| U | 인물 합성 키워드 수정 | `api/storyboard-render-image.js` | `api/storyboard-render-image.js` 정규식 개선 (`girls`, `boys` 등 복수형 및 `\b` 경계 추가) | 🟢 완료 | ⬜ 대기 |
 
 **작업 상태 범례**:
 - 🔴 미작업
@@ -93,6 +95,41 @@
 
 
 ## 📝 작업 히스토리 (최신순)
+
+### 2025-12-26 18:15 - Manual Injection 인물 합성 데이터 누락 수정 (Task X)
+- **문제**: Manual Mode에서 수동 프롬프트 입력(`manual-inject`) 시, 사용자가 선택한 인물(`personSelection`)이 있어도 합성이 되지 않음.
+- **원인**: `api/storyboard-manual-inject.js`에서 `formData`를 받지만, 정작 이미지 생성 함수(`generateImage`)를 호출할 때 `personSelection` 값을 전달하지 않아 `personUrl`이 누락됨.
+- **해결**:
+  - `processManualStoryboard` 함수에서 `formData.personSelection` 추출.
+  - `generateImage` 함수 시그니처에 `personUrl` 파라미터 추가 및 `api/storyboard-render-image` 호출 시 Body에 포함.
+- **상태**: 🟢 완료
+
+### 2025-12-26 18:05 - 프로젝트 삭제 버그 수정 및 Manual Mode Admin UI (Task V, W)
+- **프로젝트 삭제 네비게이션 수정 (Task V)**:
+  - **문제**: 프로젝트 삭제 버튼 클릭 시, 삭제 후 프로젝트 상세(Step3/4)로 이동하는 문제 발생.
+  - **원인**: 삭제 버튼의 클릭 이벤트가 부모 카드(`div.project-card`)로 전파(`propagation`)되어 `onSelectProject`가 실행됨.
+  - **해결**: `ProjectDashboard.jsx`의 삭제 버튼 핸들러에 `e.stopPropagation()` 및 `e.preventDefault()` 추가, `div.card-menu`에도 전파 방지 추가.
+- **Manual Mode Admin UI 구현 (Task W)**:
+  - **요구사항**: Auto Mode처럼 Admin이 UI에서 직접 필드(이미지 업로드)를 숨기거나 복구할 수 있어야 함.
+  - **구현**:
+    - `Step1Manual.jsx`: `loadFieldConfig`, `saveFieldConfig` 연동.
+    - **Hide UI**: Image Upload 섹션 헤더에 Admin 전용 "숨기기" 버튼 추가.
+    - **Restore UI**: 페이지 상단에 숨겨진 항목이 있을 경우 "복구" 버튼 패널 표시.
+    - **Data Flow**: `config/runtime-field-config.json`의 `manualMode` 섹션을 읽고 쓰도록 로직 구현.
+- **상태**: 🟢 완료 (사용자 확인 대기)
+
+### 2025-12-26 17:55 - Manual Mode 설정 및 인물 합성 수정 (Task T, U)
+- **Manual Mode 필드 설정 (Task T)**:
+  - **목표**: Manual Mode에서 이미지 업로드 등 특정 필드를 동적으로 숨길 수 있어야 함.
+  - **구현**:
+    - `config/runtime-field-config.json`: `manualMode` 섹션 추가 (`imageUpload.visible: false`).
+    - `Step1Manual.jsx`: `manualConfig` 로드 로직 추가 및 이미지 업로드 UI 조건부 렌더링 적용.
+    - **핵심 정책 준수**: `.gitignore`된 설정 파일은 반드시 사용자에게 원본(`cat`)을 요청하여 받은 후 수정본을 제공해야 함 (추측 수정 절대 금지).
+- **인물 합성 키워드 감지 개선 (Task U)**:
+  - **문제**: "Two joyful Korean girls"와 같이 복수형 키워드 사용 시 인물 합성이 트리거되지 않음.
+  - **원인**: 기존 정규식(`/girl/i`)이 복수형이나 문맥에 따라 누락될 가능성 확인.
+  - **해결**: `api/storyboard-render-image.js` 정규식 대폭 강화 (`\b(girl|girls|boy|boys|...)\b` 등 복수형 명시 및 단어 경계 적용).
+- **상태**: 🟢 완료 (JSON 전달 및 사용자 적용 대기)
 
 ### 2025-12-26 17:35 - API 파라미터 완전 정합성 확보 (Task R, S)
 - **배경**: Freepik Seedream v4 API 호출 시 `HTTP 400 Bad Request` 지속 발생 (`aspect_ratio` 파라미터 값 불일치).

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './Step1Manual.css';
+import { loadFieldConfig, saveFieldConfig } from '../utils/fieldConfig';
 
 const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   const [errors, setErrors] = useState({});
+  const isAdmin = user?.role === 'admin';
 
   // ✅ Manual mode 설정
   useEffect(() => {
@@ -22,27 +24,21 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const configRes = await fetch('/nexxii/api/admin-field-config/field-config');
-        const configData = await configRes.json();
+        const fullConfig = await loadFieldConfig();
 
-        // configData.config가 없으면 빈 객체 처리
-        const config = configData.config || {};
-
-        if (configData.success) {
-          // 1. Person Selection Config
-          if (config.personSelection?.visible) {
-            setPersonConfigVisible(true);
-            const personsRes = await fetch('/nexxii/api/persons');
-            const personsData = await personsRes.json();
-            if (personsData.success) {
-              setPersons(personsData.persons || []);
-            }
+        // 1. Person Selection Config
+        if (fullConfig.personSelection?.visible) {
+          setPersonConfigVisible(true);
+          const personsRes = await fetch('/nexxii/api/persons');
+          const personsData = await personsRes.json();
+          if (personsData.success) {
+            setPersons(personsData.persons || []);
           }
+        }
 
-          // 2. Manual Mode Config (이미지 업로드 숨김 등)
-          if (config.manualMode) {
-            setManualConfig(prev => ({ ...prev, ...config.manualMode }));
-          }
+        // 2. Manual Mode Config
+        if (fullConfig.manualMode) {
+          setManualConfig(fullConfig.manualMode);
         }
       } catch (error) {
         console.error('Config load error:', error);
@@ -50,6 +46,46 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
     };
     loadConfig();
   }, []);
+
+  const handleManualHideField = async (key) => {
+    try {
+      const currentConfig = await loadFieldConfig();
+      const newConfig = {
+        ...currentConfig,
+        manualMode: {
+          ...currentConfig.manualMode,
+          [key]: {
+            ...currentConfig.manualMode?.[key],
+            visible: false
+          }
+        }
+      };
+      await saveFieldConfig(newConfig);
+      setManualConfig(newConfig.manualMode);
+    } catch (e) {
+      console.error('Hide field error:', e);
+    }
+  };
+
+  const handleManualRestoreField = async (key) => {
+    try {
+      const currentConfig = await loadFieldConfig();
+      const newConfig = {
+        ...currentConfig,
+        manualMode: {
+          ...currentConfig.manualMode,
+          [key]: {
+            ...currentConfig.manualMode?.[key],
+            visible: true
+          }
+        }
+      };
+      await saveFieldConfig(newConfig);
+      setManualConfig(newConfig.manualMode);
+    } catch (e) {
+      console.error('Restore field error:', e);
+    }
+  };
 
   // 필수 옵션값 (fieldConfig.js와 정확히 일치)
   const VIDEO_LENGTHS = ['10초', '20초', '30초'];
@@ -119,11 +155,28 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
     onNext();
   };
 
+  const isImageUploadVisible = manualConfig?.imageUpload?.visible !== false;
+
   return (
     <div className="step1-manual">
       <div className="manual-header">
         <h1>Manual Mode - 세밀한 설정</h1>
         <p>필수 옵션을 선택하고, 원하는 영상을 자유롭게 설명해주세요</p>
+
+        {/* 🔥 Admin 전용: 숨겨진 항목 복구 UI */}
+        {isAdmin && !isImageUploadVisible && (
+          <div className="mt-4 text-sm bg-gray-800/40 backdrop-blur-xl rounded-2xl p-4 border border-gray-700/40 shadow-xl inline-block">
+            <span className="text-gray-300 block mb-2 font-semibold">숨겨진 항목:</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleManualRestoreField('imageUpload')}
+                className="text-blue-300 hover:text-blue-200 underline underline-offset-2 text-sm px-3 py-2 bg-blue-600/15 hover:bg-blue-600/25 rounded-xl transition-all duration-200 border border-blue-500/30"
+              >
+                이미지 업로드 (복구)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="manual-form">
@@ -213,13 +266,23 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
           </div>
         </div>
 
-        {/* 5. 이미지 업로드 */}
         {/* 5. 이미지 업로드 (설정에 따라 숨김 가능) */}
-        {manualConfig?.imageUpload?.visible !== false && (
+        {isImageUploadVisible && (
           <div className="form-section">
-            <label className="section-label">
-              5. 이미지 업로드 (선택)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="section-label mb-0">
+                5. 이미지 업로드 (선택)
+              </label>
+              {isAdmin && (
+                <button
+                  onClick={() => handleManualHideField('imageUpload')}
+                  className="text-red-300 hover:text-red-200 text-xs px-3 py-1.5 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 rounded-lg transition-all duration-200 backdrop-blur-sm"
+                >
+                  숨기기
+                </button>
+              )}
+            </div>
+
             <div className="relative group/upload">
               <input
                 type="file"

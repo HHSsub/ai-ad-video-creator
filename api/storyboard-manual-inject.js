@@ -110,7 +110,7 @@ async function updateSession(sessionId, updateData) {
     }
 }
 
-async function generateImage(imagePrompt, sceneNumber, conceptId, username, projectId, maxRetries = 3) {
+async function generateImage(imagePrompt, sceneNumber, conceptId, username, projectId, maxRetries = 3, personUrl = null) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries}`);
@@ -125,7 +125,8 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, proj
                     imagePrompt,
                     sceneNumber,
                     conceptId,
-                    projectId
+                    projectId,
+                    personUrl
                 })
             });
 
@@ -161,7 +162,7 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
     const startTime = Date.now();
 
     try {
-        const { videoPurpose, videoLength, aspectRatio, aspectRatioCode, mode } = formData;
+        const { videoPurpose, videoLength, aspectRatio, aspectRatioCode, mode, personSelection } = formData;
 
         await updateSession(sessionId, {
             progress: {
@@ -196,7 +197,7 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
                         aspect_ratio: mapAspectRatio(scene.image_prompt?.aspect_ratio || aspectRatioCode || 'widescreen_16_9')
                     };
 
-                    const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username, formData.projectId);
+                    const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username, formData.projectId, 3, personSelection);
                     console.log(`[manual-inject] 🖼️ 씬 ${sceneNum} 이미지 생성 완료`);
 
                     images.push({
