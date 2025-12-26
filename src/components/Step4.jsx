@@ -46,9 +46,7 @@ const Step4 = ({
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState(null);
 
-  // 🔥 추가: 이미지 프리로딩을 위한 상태
-  const [imagesLoaded, setImagesLoaded] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [imageLoadStates, setImageLoadStates] = useState({});
 
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
@@ -86,51 +84,14 @@ const Step4 = ({
     return videoUrl;
   };
 
-  // 🔥 이미지 프리로딩 로직 (사용자 요청: 0~100% 로딩 후 한 번에 보여주기)
-  useEffect(() => {
-    if (images.length === 0) {
-      setImagesLoaded(true);
-      return;
-    }
-
-    let loadedCount = 0;
-    const totalImages = images.length;
-    const imageUrls = images.map(img => getImageSrc(img.imageUrl)).filter(Boolean);
-
-    if (imageUrls.length === 0) {
-      setImagesLoaded(true);
-      return;
-    }
-
-    log(`이미지 프리로딩 시작: ${imageUrls.length}개`);
-
-    imageUrls.forEach(url => {
-      const img = new Image();
-      img.src = url;
-      img.onload = () => {
-        loadedCount++;
-        const progress = Math.round((loadedCount / totalImages) * 100);
-        setLoadingProgress(progress);
-        if (loadedCount === totalImages) {
-          setTimeout(() => setImagesLoaded(true), 500); // 100% 후 살짝 대기
-        }
-      };
-      img.onerror = () => {
-        // 실패해도 진행은 시켜야 함 (깨진 이미지로라도)
-        loadedCount++;
-        const progress = Math.round((loadedCount / totalImages) * 100);
-        setLoadingProgress(progress);
-        if (loadedCount === totalImages) {
-          setTimeout(() => setImagesLoaded(true), 500);
-        }
-      };
-    });
-  }, [selectedConceptId, images]); // images 변경 시 재로딩
-
   useEffect(() => {
     log(`Step4 로드 - 컨셉 ID: ${selectedConceptId}, 역할: ${userRole}`);
     log(`씬 개수: ${images.length}, 권한: ${JSON.stringify(permissions)}`);
   }, [selectedConceptId, userRole, images.length]);
+
+  const handleImageLoad = (sceneNumber) => {
+    setImageLoadStates(prev => ({ ...prev, [sceneNumber]: true }));
+  };
 
   const handlePromptChange = (sceneNumber, field, value) => {
     if (!permissions.editPrompt) {
@@ -303,6 +264,26 @@ const Step4 = ({
         scene.videoUrl = result.videoUrl;
         scene.status = 'video_done';
         log(`씬 ${sceneNumber} 영상 변환 완료: ${result.videoUrl}`);
+
+        // 🔥 중요: 영상 변환 즉시 프로젝트 저장 (새로고침 시 방지)
+        try {
+          await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-username': user?.username || 'anonymous'
+            },
+            body: JSON.stringify({
+              storyboard: storyboard, // 참조된 전체 스토리보드 저장
+              formData: formData
+            })
+          });
+          log('프로젝트 영상 데이터 저장 완료');
+        } catch (saveErr) {
+          console.error('프로젝트 저장 실패:', saveErr);
+          log('⚠️ 프로젝트 저장 실패 (새로고침 시 유실될 수 있음)');
+        }
+
       } else {
         throw new Error(result.error || '영상 변환 실패');
       }
@@ -336,7 +317,21 @@ const Step4 = ({
       for (const scene of scenesToConvert) {
         await handleConvertSingleScene(scene.sceneNumber);
       }
-      log('일괄 변환 완료');
+
+      // 🔥 일괄 변환 후 최종 저장
+      await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          storyboard: storyboard,
+          formData: formData
+        })
+      });
+
+      log('일괄 변환 완료 및 저장됨');
     } catch (err) {
       setError(`일괄 변환 오류: ${err.message}`);
       log(`일괄 변환 오류: ${err.message}`);
@@ -664,12 +659,22 @@ const Step4 = ({
 
                     <div className="grid md:grid-cols-3 gap-6">
                       <div className="md:col-span-1">
-                        <div className="aspect-square bg-black rounded-lg overflow-hidden mb-2">
+                        <div className="aspect-square bg-black rounded-lg overflow-hidden mb-2 relative group">
+                          {/* 🔥 로딩 스켈레톤 (이미지 로드 전 표시) */}
+                          {!imageLoadStates[img.sceneNumber] && img.imageUrl && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800 animate-pulse z-10">
+                              <div className="w-8 h-8 border-4 border-gray-600 border-t-blue-500 rounded-full animate-spin mb-2"></div>
+                              <span className="text-gray-400 text-xs">이미지 로딩 중...</span>
+                            </div>
+                          )}
+
                           {img.imageUrl ? (
                             <img
                               src={getImageSrc(img.imageUrl)}
                               alt={`Scene ${img.sceneNumber}`}
-                              className="w-full h-full object-cover"
+                              className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoadStates[img.sceneNumber] ? 'opacity-100' : 'opacity-0'
+                                }`}
+                              onLoad={() => handleImageLoad(img.sceneNumber)}
                               onError={(e) => {
                                 console.error(`[Step4] 씬 ${img.sceneNumber} 이미지 로드 실패:`, img.imageUrl);
                                 e.target.style.display = 'none';
