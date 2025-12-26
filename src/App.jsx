@@ -242,6 +242,31 @@ function App() {
     setStep(1);
   };
 
+  const saveProjectData = async (dataToSave) => {
+    if (!currentProject?.id) return;
+    try {
+      console.log('[App] 💾 프로젝트 데이터 자동 저장 시도...', dataToSave);
+      const response = await fetch(`/nexxii/api/projects/${currentProject.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          formData: dataToSave,
+          updatedAt: new Date().toISOString()
+        })
+      });
+      if (!response.ok) {
+        console.error('[App] ❌ 프로젝트 데이터 저장 실패:', response.status);
+      } else {
+        console.log('[App] ✅ 프로젝트 데이터 자동 저장 완료');
+      }
+    } catch (e) {
+      console.error('[App] ❌ 프로젝트 데이터 저장 오류:', e);
+    }
+  };
+
   if (!user) {
     return <Login onLogin={handleLogin} />;
   }
@@ -494,6 +519,7 @@ function App() {
               onNext={() => {
                 console.log('Step1Auto 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
+                saveProjectData(formData); // 🔥 자동 저장 추가
                 setStep(2);
                 setCurrentView('step2');
               }}
@@ -510,6 +536,7 @@ function App() {
                 console.log('Step1Manual 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
                 console.log('🔥 사용자 설명:', formData.userdescription);
+                saveProjectData(formData); // 🔥 자동 저장 추가
                 setStep(2);
                 setCurrentView('step2');
               }}

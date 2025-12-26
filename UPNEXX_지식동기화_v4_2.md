@@ -96,6 +96,13 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2025-12-26 18:25 - Step 1 데이터 자동 저장 구현 (Task Y)
+- **문제**: Step 1에서 선택한 인물 정보(`personSelection`) 등 설정값이 Step 2로 넘어갈 때 백엔드에 저장되지 않음. 사용자가 프로젝트를 나갔다 오거나 새로고침 후 Step 2에서 작업을 재개하면 이전 설정이 초기화되어 인물 합성이 실패함.
+- **해결**:
+  - `App.jsx`에 `saveProjectData` 함수 추가 체크.
+  - `Step1Manual` 및 `Step1Auto` 완료 시(`onNext`) `saveProjectData(formData)`를 호출하여 변경된 설정을 즉시 DB에 저장하도록 수정.
+- **상태**: 🟢 완료
+
 ### 2025-12-26 18:15 - Manual Injection 인물 합성 데이터 누락 수정 (Task X)
 - **문제**: Manual Mode에서 수동 프롬프트 입력(`manual-inject`) 시, 사용자가 선택한 인물(`personSelection`)이 있어도 합성이 되지 않음.
 - **원인**: `api/storyboard-manual-inject.js`에서 `formData`를 받지만, 정작 이미지 생성 함수(`generateImage`)를 호출할 때 `personSelection` 값을 전달하지 않아 `personUrl`이 누락됨.
