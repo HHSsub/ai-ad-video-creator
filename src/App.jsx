@@ -580,9 +580,12 @@ function App() {
                 setStep(3);
                 setCurrentView('step3');
               }}
-              onComplete={() => {
+              onComplete={(updatedStoryboard) => {
                 // 🔥 Step4 완료 → Step5 (BGM 적용)로 이동
                 console.log('Step4 완료 → Step5 (BGM 적용)');
+                if (updatedStoryboard) {
+                  setStoryboard(updatedStoryboard);
+                }
                 setStep(5);
                 setCurrentView('step5');
               }}

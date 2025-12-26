@@ -331,21 +331,143 @@ const Step4 = ({
     }
   };
 
-  // 🔥 E-3: 컨펌 완료 (1개 이상 영상 필요)
-  const handleConfirmAndComplete = () => {
+  // 🔥 E-3: 컨펌 완료 (영상 합치기 및 저장)
+  const handleConfirmAndComplete = async () => {
     if (!permissions.confirm) {
       setError('영상 컨펌 권한이 없습니다.');
       return;
     }
 
-    const videoSceneCount = sortedImages.filter(img => img.videoUrl).length;
-    if (videoSceneCount === 0) {
+    const videoScenes = sortedImages.filter(img => img.videoUrl);
+    if (videoScenes.length === 0) {
       setError('최소 1개 씬을 영상으로 변환해주세요.');
       return;
     }
 
-    log(`영상 컨펌 완료 (${videoSceneCount}개 씬). Step3으로 이동합니다.`);
-    onComplete();
+    setLoading(true);
+    setError(null);
+    log('최종 영상 합치기(Compile) 시작...');
+
+    try {
+      // 1. 영상 합치기 요청
+      // 씬당 3초라고 가정하고 총 길이 계산 (또는 duration 필드 사용)
+      const totalDuration = videoScenes.length * 3;
+
+      const compileResponse = await fetch(`${API_BASE}/api/compile-videos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          projectId: currentProject?.id,
+          concept: selectedConceptId,
+          segments: videoScenes.map(img => ({
+            videoUrl: img.videoUrl,
+            sceneNumber: img.sceneNumber
+          })),
+          jsonMode: true,
+          mode: 'manual', // 🔥 Manual 모드: 제공된 세그먼트만 사용
+          videoLength: totalDuration, // 총 길이 전달 (3초 * 개수)
+          formData: formData
+        })
+      });
+
+      const compileResult = await compileResponse.json();
+      console.log('[Step4] 영상 합치기 결과:', compileResult);
+
+      if (!compileResult.success || !compileResult.compiledVideoUrl) {
+        throw new Error(compileResult.error || '영상 합치기 실패');
+      }
+
+      const finalVideoUrl = compileResult.compiledVideoUrl;
+      log(`영상 합치기 성공: ${finalVideoUrl}`);
+
+      // 2. 스토리보드에 finalVideo 업데이트
+      // 기존 finalVideos 배열에서 현재 컨셉 제거 후 새로 추가
+      const otherFinalVideos = (storyboard.finalVideos || []).filter(v => v.conceptId !== selectedConceptId);
+      storyboard.finalVideos = [
+        ...otherFinalVideos,
+        {
+          conceptId: selectedConceptId,
+          videoUrl: finalVideoUrl,
+          createdAt: new Date().toISOString()
+        }
+      ];
+
+      // 🔥 추가: 이미지 프리로딩을 위한 상태
+      const [imagesLoaded, setImagesLoaded] = useState(false);
+      const [loadingProgress, setLoadingProgress] = useState(0);
+
+      // ... (기존 useEffect 뒤에 추가)
+
+      // 🔥 이미지 프리로딩 로직 (사용자 요청: 0~100% 로딩 후 한 번에 보여주기)
+      useEffect(() => {
+        if (images.length === 0) {
+          setImagesLoaded(true);
+          return;
+        }
+
+        let loadedCount = 0;
+        const totalImages = images.length;
+        const imageUrls = images.map(img => getImageSrc(img.imageUrl)).filter(Boolean);
+
+        if (imageUrls.length === 0) {
+          setImagesLoaded(true);
+          return;
+        }
+
+        log(`이미지 프리로딩 시작: ${imageUrls.length}개`);
+
+        imageUrls.forEach(url => {
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            loadedCount++;
+            const progress = Math.round((loadedCount / totalImages) * 100);
+            setLoadingProgress(progress);
+            if (loadedCount === totalImages) {
+              setTimeout(() => setImagesLoaded(true), 500); // 100% 후 살짝 대기
+            }
+          };
+          img.onerror = () => {
+            // 실패해도 진행은 시켜야 함 (깨진 이미지로라도)
+            loadedCount++;
+            const progress = Math.round((loadedCount / totalImages) * 100);
+            setLoadingProgress(progress);
+            if (loadedCount === totalImages) {
+              setTimeout(() => setImagesLoaded(true), 500);
+            }
+          };
+        });
+      }, [selectedConceptId, images]); // images 변경 시 재로딩
+
+      // ...
+
+      // 3. 프로젝트 저장 (영구 반영)
+      await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          storyboard: storyboard, // 업데이트된 스토리보드 저장
+          formData: formData
+        })
+      });
+
+      log('프로젝트 최종 저장 완료. Step5로 이동합니다.');
+      // 🔥 수정: 변경된 storyboard를 상위 컴포넌트로 전달
+      onComplete(storyboard);
+
+    } catch (err) {
+      console.error('컨펌 처리 중 오류:', err);
+      setError(`컨펌 처리 실패: ${err.message}`);
+      log(`컨펌 처리 실패: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 🔥 추가: 멤버 초대 핸들러
@@ -406,6 +528,26 @@ const Step4 = ({
       setInviteLoading(false);
     }
   };
+
+  // 🔥 렌더링: 프리로딩 중이면 로딩 오버레이 표시
+  if (!imagesLoaded) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
+        <div className="w-64">
+          <div className="flex justify-between text-gray-400 text-sm mb-2">
+            <span>리소스 로딩 중...</span>
+            <span>{loadingProgress}%</span>
+          </div>
+          <div className="w-full bg-gray-800 rounded-full h-2">
+            <div
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${loadingProgress}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!selectedStyle) {
     return (
@@ -756,80 +898,78 @@ const Step4 = ({
                 </button>
               </div>
             )}
+
+            {/* 🔥 추가: 멤버 초대 모달 */}
+            {showInviteModal && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
+                  <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
+
+                  {inviteError && (
+                    <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
+                      {inviteError}
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        사용자명 (계정 ID)
+                      </label>
+                      <input
+                        type="text"
+                        value={inviteUsername}
+                        onChange={(e) => setInviteUsername(e.target.value)}
+                        placeholder="예: guest, test1"
+                        className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        disabled={inviteLoading}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        시스템에 등록된 사용자만 초대할 수 있습니다.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        역할 선택
+                      </label>
+                      <select
+                        value={inviteRole}
+                        onChange={(e) => setInviteRole(e.target.value)}
+                        className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        disabled={inviteLoading}
+                      >
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role.value} value={role.value}>
+                            {role.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={handleCloseInviteModal}
+                      className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+                      disabled={inviteLoading}
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleInviteMember}
+                      disabled={inviteLoading || !inviteUsername.trim()}
+                      className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+                    >
+                      {inviteLoading ? '초대 중...' : '초대하기'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* 🔥 추가: 멤버 초대 모달 */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
-            <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
-
-            {inviteError && (
-              <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
-                {inviteError}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  사용자명 (계정 ID)
-                </label>
-                <input
-                  type="text"
-                  value={inviteUsername}
-                  onChange={(e) => setInviteUsername(e.target.value)}
-                  placeholder="예: guest, test1"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                  disabled={inviteLoading}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  시스템에 등록된 사용자만 초대할 수 있습니다.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  역할 선택
-                </label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                  disabled={inviteLoading}
-                >
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleCloseInviteModal}
-                className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
-                disabled={inviteLoading}
-              >
-                취소
-              </button>
-              <button
-                onClick={handleInviteMember}
-                disabled={inviteLoading || !inviteUsername.trim()}
-                className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-              >
-                {inviteLoading ? '초대 중...' : '초대하기'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
     </div>
   );
 };
