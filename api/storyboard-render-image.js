@@ -1,9 +1,7 @@
-// api/storyboard-render-image.js - 🔥 동적 엔진 지원 버전 + S3 업로드 (2025-12-25 수정)
-
 import { safeCallFreepik, getApiKeyStatus } from '../src/utils/apiHelpers.js';
 import { getTextToImageUrl, getTextToImageStatusUrl } from '../src/utils/engineConfigLoader.js';
 import { uploadImageToS3, uploadBufferToS3 } from '../server/utils/s3-uploader.js';
-import { safeComposeWithGemini } from './nanobanana-compose.js';
+import { safeComposeWithSeedream } from './seedream-compose.js';
 
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const POLLING_TIMEOUT = 120000; // 2 minutes
@@ -297,7 +295,7 @@ export default async function handler(req, res) {
               sceneDescription: currentPrompt
             };
 
-            const compResult = await safeComposeWithGemini(result.imageUrl, personUrl, compositingInfo);
+            const compResult = await safeComposeWithSeedream(result.imageUrl, personUrl, compositingInfo);
 
             if (compResult.success && compResult.composedImageData) {
               // Base64 -> Buffer
