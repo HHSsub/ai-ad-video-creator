@@ -71,47 +71,37 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             : "High quality photo, ultra realistic, seamless composition, 8k";
 
         // 2. 입력 이미지 구성 (reference_images)
-        // Freepik 문서에 따르면 reference_images는 [{ image: { url: ... } }] 형태일 수 있음.
-        // 사용자 요청 스펙: reference_images[]: Base64 또는 URL (최대 5개)
-        // 실제 API 스펙에 맞춰 조정: { image: { url: ... } } 또는 { image: { base64: ... } }
+        // 🔥 수정: '인물 합성'을 위해 Base 이미지는 Input으로, 인물 이미지는 Reference로 분리
+        // Base Image -> Input Image (Main Canvas)
+        // Person Image -> Reference Image (Content/Style Guide)
 
         const references = [];
 
-        // Base Image
-        references.push({
-            image: { url: baseImageUrl }
-        });
-
-        // Overlay Image (URL or Base64 check)
+        // Overlay Image (Person) -> Reference로 추가
         if (overlayImageData.startsWith('http')) {
             references.push({
                 image: { url: overlayImageData }
             });
         } else {
-            // Base64인 경우 헤더 제거 (data:image/png;base64, 부분 제거 필요할 수 있음)
-            // Freepik은 보통 pure base64를 원함.
             const base64Clean = overlayImageData.replace(/^data:image\/\w+;base64,/, "");
             references.push({
                 image: { base64: base64Clean }
             });
         }
 
-        // 3. API 요청
-        // 🔥 수정: v4-edit -> v4 (Generation)으로 변경 (Composition 목적)
-        // Edit 엔드포인트는 Mask가 없으면 400 오류 가능성이 높음.
-        // Composition은 'Generation with References'로 처리하는 것이 안전함.
+        // 3. API 요청 (Generation Endpoint 유지)
         const url = 'https://api.freepik.com/v1/ai/text-to-image/seedream';
 
         const payload = {
             prompt: prompt,
-            reference_images: references, // Base + Overlay 모두 참조로 전달
+            reference_images: references, // 인물 이미지만 참조
             num_images: 1,
-            // image: { url: baseImageUrl }, // Img2Img 대신 순수 Reference 기반 생성 시도
+            image: { url: baseImageUrl }, // Base 이미지를 Input(Img2Img)으로 설정하여 배경/구도 유지
             guidance_scale: 2.5,
             num_inference_steps: 20
         };
 
-        console.log('[Seedream] 요청 Payload 구성 중...');
+        console.log('[Seedream] 요청 Payload: Img2Img (Base) + Reference (Person)');
 
         const result = await safeCallFreepik(url, {
             method: 'POST',

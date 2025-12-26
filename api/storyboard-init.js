@@ -465,10 +465,10 @@ function calculateProgress(phase, stepProgress = 0) {
 // ============================================================
 // 자동화 함수
 // ============================================================
-async function generateImage(imagePrompt, sceneNumber, conceptId, username, projectId, personUrl, maxRetries = 3) {
+async function generateImage(imagePrompt, sceneNumber, conceptId, username, projectId, personUrl, productImageUrl, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId}, 프로젝트: ${projectId}, 인물: ${personUrl ? '있음' : '없음'})`);
+      console.log(`[generateImage] 씬 ${sceneNumber} 시도 ${attempt}/${maxRetries} (컨셉: ${conceptId}, 프로젝트: ${projectId}, 인물: ${personUrl ? '있음' : '없음'}, 제품: ${productImageUrl ? '있음' : '없음'})`);
 
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
@@ -481,7 +481,8 @@ async function generateImage(imagePrompt, sceneNumber, conceptId, username, proj
           sceneNumber,
           conceptId,
           projectId,  // 🔥 추가: S3 업로드를 위한 projectId
-          personUrl   // 🔥 추가: 인물 합성용 URL
+          personUrl,   // 🔥 추가: 인물 합성용 URL
+          productImageUrl // 🔥 추가: 제품/로고 합성용 URL
         })
       });
 
@@ -829,7 +830,8 @@ async function processStoryboardAsync(body, username, sessionId) {
             conceptIdx + 1,
             username,
             body.projectId,
-            body.personSelection // 🔥 인물 합성 정보 전달
+            body.personSelection, // 🔥 인물 합성 정보 전달
+            imageUpload && imageUpload.url ? imageUpload.url : null // 🔥 제품 이미지 URL 전달
           );
           console.log(`[storyboard-init] 🖼️ 씬 ${sceneNum} 이미지 생성 완료: ${imageUrl}`);
           images.push({

@@ -277,10 +277,63 @@ export default async function handler(req, res) {
         sceneNumber // 🔥 S3 업로드를 위해 전달
       );
 
+      // 🔥 [M] 제품/로고 합성 로직 (Step 1 Upload)
+      if (req.body.productImageUrl && projectId && sceneNumber && result.imageUrl) {
+        // 프롬프트 내 제품/로고 합성 마커 확인
+        // Gemini 프롬프트 생성 시 [PRODUCT COMPOSITING SCENE] 또는 [LOGO] 등이 포함됨
+        const productMarkers = /\[PRODUCT.*?\]|\[LOGO.*?\]|product compositing|brand logo/i;
+        const currentPrompt = imagePrompt.prompt || '';
+
+        // 마커가 있거나, videoPurpose가 명확히 제품 중심인 경우 (User request)
+        // 하지만 모든 씬에 바르는 건 위험하므로 마커 기준이 안전함.
+        if (productMarkers.test(currentPrompt)) {
+          console.log(`[storyboard-render-image] 📦 제품/로고 합성 조건 충족 (씬 ${sceneNumber})`);
+          console.log(`[storyboard-render-image] 🔹 Base: ${result.imageUrl}`);
+          console.log(`[storyboard-render-image] 🔹 Product: ${req.body.productImageUrl}`);
+
+          try {
+            const compositingInfo = {
+              videoPurpose: 'product_placement',
+              compositingContext: 'INTEGRATE_PRODUCT_INTO_SCENE',
+              sceneDescription: currentPrompt.replace(/\[.*?\]/g, '').trim() // 태그 제거한 설명
+            };
+
+            const compResult = await safeComposeWithSeedream(result.imageUrl, req.body.productImageUrl, compositingInfo);
+
+            if (compResult.success && compResult.composedImageData) {
+              const buffer = Buffer.from(compResult.composedImageData, 'base64');
+              const filename = `comp_product_concept_${conceptId}_scene_${sceneNumber}_${Date.now()}.jpg`;
+              const compUrl = await uploadBufferToS3(buffer, projectId, filename);
+
+              console.log(`[storyboard-render-image] ✅ 제품 합성 및 업로드 완료: ${compUrl}`);
+
+              result.imageUrl = compUrl;
+              result.metadata = { ...result.metadata, substitutedProduct: true, originalUrl: result.metadata?.originalUrl || result.imageUrl };
+            } else if (compResult.success && compResult.imageUrl) {
+              // Seedream이 URL을 반환한 경우 (일반적으로 여기 걸림)
+              // URL -> S3 업로드 (위 pollTaskStatus에서 이미 처리했으면 좋겠지만, 
+              // seedream-compose는 URL만 반환하고 S3 업로드는 poll 내부에서 안 함(외부 모듈임).
+              // safeComposeWithSeedream의 반환값: { success: true, imageUrl: ... } (v4-edit/generation)
+
+              // URL을 다운로드하여 S3에 저장해야 함 (또는 URL 그대로 사용)
+              // 일관성을 위해 S3 업로드 권장.
+              console.log(`[storyboard-render-image] ✅ 제품 합성 완료 (URL): ${compResult.imageUrl}`);
+              const finalCompUrl = await uploadImageToS3(compResult.imageUrl, projectId, conceptId, sceneNumber);
+              console.log(`[storyboard-render-image] 🚀 S3 업로드 완료: ${finalCompUrl}`);
+
+              result.imageUrl = finalCompUrl;
+              result.metadata = { ...result.metadata, substitutedProduct: true, originalUrl: result.metadata?.originalUrl || result.imageUrl };
+            }
+          } catch (compError) {
+            console.error(`[storyboard-render-image] ⚠️ 제품 합성 실패 (무시됨):`, compError.message);
+          }
+        }
+      }
+
       // 🔥 [M] 인물 합성 로직 (Person Archive)
       if (personUrl && projectId && sceneNumber && result.imageUrl) {
-        // 키워드 감지 (사람 관련)
-        const personKeywords = /man|woman|person|girl|boy|model|character|protagonist|worker|student|teacher|doctor|nurse|driver/i;
+        // 키워드 감지 (사람 관련 - 확장됨)
+        const personKeywords = /man|woman|person|girl|boy|model|character|protagonist|worker|student|teacher|doctor|nurse|driver|lady|gentleman|child|kid|baby|teenager|adult|human|couple|family|friends|group|crowd|audience/i;
         const currentPrompt = imagePrompt.prompt || '';
 
         if (personKeywords.test(currentPrompt)) {
