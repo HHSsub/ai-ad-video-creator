@@ -30,8 +30,8 @@ export async function uploadImageToS3(imageUrl, projectId, conceptId, sceneNumbe
 
         console.log(`[S3] 다운로드 완료: ${(buffer.byteLength / 1024).toFixed(2)} KB`);
 
-        // 2. S3 키 생성
-        const s3Key = `projects/${projectId}/images/concept_${conceptId}_scene_${sceneNumber}.jpg`;
+        // 2. S3 키 생성 (nexxii-storage 접두어 필수)
+        const s3Key = `nexxii-storage/projects/${projectId}/images/concept_${conceptId}_scene_${sceneNumber}.jpg`;
 
         // 3. S3 업로드
         const upload = new Upload({
@@ -48,7 +48,8 @@ export async function uploadImageToS3(imageUrl, projectId, conceptId, sceneNumbe
         await upload.done();
 
         // 4. CloudFront URL 반환
-        const cdnUrl = `${CDN_BASE_URL}/${s3Key}`;
+        // CDN_BASE_URL에 nexxii-storage가 포함되어 있으므로, 키에서 중복되지 않도록 처리하거나 절대 경로 사용
+        const cdnUrl = `https://upnexx.ai/${s3Key}`;
         console.log(`[S3] ✅ 업로드 완료: ${cdnUrl}`);
 
         return cdnUrl;
@@ -73,7 +74,7 @@ export async function uploadVideoToS3(videoPath, projectId, conceptId, filename)
         const buffer = fs.readFileSync(videoPath);
         console.log(`[S3] 파일 읽기 완료: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
 
-        const s3Key = `projects/${projectId}/videos/${filename}.mp4`;
+        const s3Key = `nexxii-storage/projects/${projectId}/videos/${filename}.mp4`;
 
         const upload = new Upload({
             client: s3Client,
@@ -88,7 +89,7 @@ export async function uploadVideoToS3(videoPath, projectId, conceptId, filename)
 
         await upload.done();
 
-        const cdnUrl = `${CDN_BASE_URL}/${s3Key}`;
+        const cdnUrl = `https://upnexx.ai/${s3Key}`;
         console.log(`[S3] ✅ 비디오 업로드 완료: ${cdnUrl}`);
 
         return cdnUrl;
@@ -139,7 +140,7 @@ export async function listS3Files(prefix) {
 
         return contents.map(item => ({
             key: item.Key,
-            url: `${CDN_BASE_URL}/${item.Key}`,
+            url: `https://upnexx.ai/${item.Key}`,
             lastModified: item.LastModified,
             size: item.Size
         }));
@@ -158,7 +159,7 @@ export async function listS3Files(prefix) {
          * @returns {Promise<string>} S3 URL
          */
 export async function uploadBufferToS3(buffer, projectId, filename, contentType = 'image/jpeg') {
-    const s3Key = `projects/${projectId}/images/${filename}`;
+    const s3Key = `nexxii-storage/projects/${projectId}/images/${filename}`;
 
     const upload = new Upload({
         client: s3Client,
@@ -173,7 +174,7 @@ export async function uploadBufferToS3(buffer, projectId, filename, contentType 
 
     await upload.done();
 
-    const cdnUrl = `${CDN_BASE_URL}/${s3Key}`;
+    const cdnUrl = `https://upnexx.ai/${s3Key}`;
     console.log(`[S3] ✅ 버퍼 업로드 완료: ${cdnUrl}`);
 
     return cdnUrl;
