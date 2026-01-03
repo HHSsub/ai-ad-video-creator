@@ -930,7 +930,18 @@ const AdminPanel = ({ currentUser }) => {
                         {item.isDirectory ? (
                           <button onClick={() => browseDirectory(item.path)} className="p-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-[10px] font-black">OPEN</button>
                         ) : (
-                          <button className="p-2 bg-gray-700/50 text-gray-500 rounded-lg text-[10px] font-black cursor-not-allowed" title="S3 객체는 미리보기 불가">VIEW</button>
+                          <button
+                            onClick={() => {
+                              // CloudFront URL Construction
+                              // Pattern: https://upnexx.ai/nexxii-storage/{Key}
+                              const cdnUrl = `https://upnexx.ai/nexxii-storage/${item.path}`;
+                              window.open(cdnUrl, '_blank');
+                            }}
+                            className="p-2 bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white rounded-lg text-[10px] font-black"
+                            title="Download/Open via CloudFront"
+                          >
+                            DOWNLOAD
+                          </button>
                         )}
                         {item.deletable && (
                           <button onClick={() => deleteItem(item.path)} className="p-2 bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white rounded-lg text-[10px] font-black">DELETE</button>

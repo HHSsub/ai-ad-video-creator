@@ -156,11 +156,14 @@ pm2 logs ai-ad-video-creator --lines 50
 
 **오류가 있다면:**
 ```bash
-# 상세 에러 로그 확인
+# 로그 확인 (생략 가능)
 pm2 logs --err
 
-# 서버 재시작 시도
-pm2 restart all
+# ⚠️ 만약 화면이 안 바뀌면? (캐시 문제)
+# 1. 브라우저 강력 새로고침 (Ctrl + F5)
+# 2. CloudFront Invalidation (무효화) 실행
+#    - 경로: /*
+
 ```
 
 ### 8단계: 로그인 테스트
