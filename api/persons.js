@@ -17,17 +17,24 @@ router.get('/', async (req, res) => {
         // 🔥 변경된 S3 구조 반영: nexxii-storage/persons/
         const files = await listS3Files('nexxii-storage/persons/');
 
-        const persons = files.map(file => {
+        // 🔥 S3 폴더 객체 및 이미지 아닌 파일 필터링
+        const validFiles = files.filter(file => {
+            // 1. 자기 자신(폴더 접두사) 제외
+            if (file.key === 'nexxii-storage/persons/') return false;
+            // 2. 폴더 객체(/로 끝나는 것) 제외
+            if (file.key.endsWith('/')) return false;
+            // 3. 크기가 0인 객체 제외
+            if (file.size === 0) return false;
+            // 4. 이미지 확장자만 허용
+            const ext = file.key.split('.').pop().toLowerCase();
+            return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+        });
+
+        const persons = validFiles.map(file => {
             // 키에서 이름 추출 (예: nexxii-storage/persons/man.jpg -> man)
             const name = file.key.replace('nexxii-storage/persons/', '').split('.')[0];
 
-            // 🔥 URL 중복 방지: Base URL에 이미 경로가 포함되어 있으므로, 
-            // Key에서 'nexxii-storage/' 부분이 중복되지 않도록 처리하거나
-            // 단순히 도메인 + 키 조합으로 재구성
-            // CDN_BASE_URL = 'https://upnexx.ai/nexxii-storage'
-            // Key = 'nexxii-storage/persons/man.jpg'
-            // file.url (from utils) = 'https://upnexx.ai/nexxii-storage/nexxii-storage/persons/man.jpg' (잘못됨)
-
+            // 🔥 URL 중복 방지 로직 적용
             const fixedUrl = `https://upnexx.ai/${file.key}`;
 
             return {

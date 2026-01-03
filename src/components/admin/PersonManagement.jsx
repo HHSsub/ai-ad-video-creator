@@ -113,8 +113,8 @@ const PersonManagement = () => {
                         onClick={handleUpload}
                         disabled={!selectedFile || uploading}
                         className={`px-6 py-2 rounded-lg font-bold text-sm transition-all ${!selectedFile || uploading
-                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
+                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
                             }`}
                     >
                         {uploading ? '업로드 중...' : '업로드'}
@@ -137,6 +137,9 @@ const PersonManagement = () => {
                                         src={person.url}
                                         alt={person.name}
                                         className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                        onError={(e) => {
+                                            e.target.closest('.group').style.display = 'none';
+                                        }}
                                     />
                                 </div>
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
