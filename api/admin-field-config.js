@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const router = express.Router();
-const CONFIG_FILE = path.join(process.cwd(), 'config', 'field-settings.json');
+const CONFIG_FILE = path.join(process.cwd(), 'config', 'runtime-field-config.json');
 
 router.get('/field-config', (req, res) => {
   try {
@@ -22,7 +22,7 @@ router.post('/field-config', (req, res) => {
     const username = req.headers['x-username'];
     const usersFile = path.join(process.cwd(), 'config', 'users.json');
     const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-    
+
     if (!users[username] || users[username].role !== 'admin') {
       return res.status(403).json({ success: false, error: '관리자 권한 필요' });
     }
@@ -33,7 +33,7 @@ router.post('/field-config', (req, res) => {
     }
 
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(req.body, null, 2));
-    
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
