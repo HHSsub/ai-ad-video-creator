@@ -3,6 +3,8 @@ import multer from 'multer';
 import { listS3Files, deleteFromS3 } from '../server/utils/s3-uploader.js';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
+import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -14,6 +16,15 @@ const s3Client = new S3Client({ region: 'ap-northeast-2' });
 // 목록 조회
 router.get('/', async (req, res) => {
     try {
+        // 1. 메타데이터 캐시 확인
+        const metadataPath = path.resolve(process.cwd(), 'config/persons-metadata.json');
+        if (fs.existsSync(metadataPath)) {
+            const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+            // 성공 시 바로 반환
+            return res.json({ success: true, persons: metadata, source: 'cache' });
+        }
+
+        // 2. 캐시 없으면 S3 리스팅 (기존 로직)
         // 🔥 변경된 S3 구조 반영: nexxii-storage/persons/
         const files = await listS3Files('nexxii-storage/persons/');
 
@@ -33,18 +44,19 @@ router.get('/', async (req, res) => {
         const persons = validFiles.map(file => {
             // 키에서 이름 추출 (예: nexxii-storage/persons/man.jpg -> man)
             const name = file.key.replace('nexxii-storage/persons/', '').split('.')[0];
-
-            // 🔥 URL 중복 방지 로직 적용
             const fixedUrl = `https://upnexx.ai/${file.key}`;
 
             return {
                 ...file,
                 name,
-                url: fixedUrl
+                url: fixedUrl,
+                age: 'Unknown',
+                gender: 'Unknown',
+                nationality: 'Unknown'
             };
         });
 
-        res.json({ success: true, persons });
+        res.json({ success: true, persons, source: 's3' });
     } catch (error) {
         console.error('[Persons] Create Error:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch persons' });

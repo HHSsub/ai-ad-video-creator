@@ -46,6 +46,19 @@ const Step4 = ({
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState(null);
 
+  // 🔥 인물 합성 관련 상태
+  const [showPersonModal, setShowPersonModal] = useState(false);
+  const [targetSceneNumber, setTargetSceneNumber] = useState(null);
+  const [featurePeople, setFeaturePeople] = useState([]);
+  const [filteredPeople, setFilteredPeople] = useState([]);
+  const [personFilters, setPersonFilters] = useState({
+    age: [],
+    gender: [],
+    nationality: []
+  });
+  const [selectedPerson, setSelectedPerson] = useState(null);
+  const [synthesisLoading, setSynthesisLoading] = useState(false);
+
   const [imageLoadStates, setImageLoadStates] = useState({});
 
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
@@ -520,6 +533,125 @@ const Step4 = ({
     }
   };
 
+  // 🔥 인물 목록 불러오기
+  const fetchFeaturePeople = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/persons`);
+      const data = await res.json();
+      if (data.success) {
+        setFeaturePeople(data.persons);
+        setFilteredPeople(data.persons); // 초기엔 전체 표시
+      }
+    } catch (err) {
+      console.error('인물 목록 로드 실패:', err);
+    }
+  };
+
+  // 🔥 모달 열기
+  const handleOpenPersonModal = (sceneNumber) => {
+    setTargetSceneNumber(sceneNumber);
+    setShowPersonModal(true);
+    if (featurePeople.length === 0) {
+      fetchFeaturePeople();
+    }
+  };
+
+  // 🔥 필터 변경 처리
+  const handleFilterChange = (category, value) => {
+    setPersonFilters(prev => {
+      const newFilters = { ...prev };
+      if (newFilters[category].includes(value)) {
+        newFilters[category] = newFilters[category].filter(item => item !== value);
+      } else {
+        newFilters[category] = [...newFilters[category], value];
+      }
+      return newFilters;
+    });
+  };
+
+  // 🔥 필터 적용 (Effect)
+  useEffect(() => {
+    if (featurePeople.length === 0) return;
+
+    let result = featurePeople;
+
+    if (personFilters.age.length > 0) {
+      result = result.filter(p => personFilters.age.includes(p.age));
+    }
+    if (personFilters.gender.length > 0) {
+      result = result.filter(p => personFilters.gender.includes(p.gender));
+    }
+    if (personFilters.nationality.length > 0) {
+      result = result.filter(p => personFilters.nationality.includes(p.nationality));
+    }
+
+    setFilteredPeople(result);
+  }, [personFilters, featurePeople]);
+
+  // 🔥 합성 실행
+  const handleSynthesizePerson = async () => {
+    if (!selectedPerson || !targetSceneNumber) return;
+
+    const scene = sortedImages.find(img => img.sceneNumber === targetSceneNumber);
+    if (!scene) return;
+
+    setSynthesisLoading(true);
+    log(`씬 ${targetSceneNumber} 인물 합성 시작 (${selectedPerson.name})...`);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/synthesis-person`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sceneImage: scene.imageUrl || '',
+          personImage: selectedPerson.url,
+          personMetadata: selectedPerson,
+          sceneContext: scene.prompt || scene.copy,
+          projectId: currentProject?.id
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // 성공 시 이미지 교체
+        scene.imageUrl = result.imageUrl;
+        scene.videoUrl = null; // 영상 초기화
+        scene.status = 'image_synthesized';
+
+        if (!modifiedScenes.includes(targetSceneNumber)) {
+          setModifiedScenes(prev => [...prev, targetSceneNumber]);
+        }
+
+        log(`씬 ${targetSceneNumber} 인물 합성 완료`);
+        setShowPersonModal(false);
+        setSelectedPerson(null);
+
+        // 프로젝트 저장
+        await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
+          body: JSON.stringify({ storyboard, formData })
+        });
+
+      } else {
+        throw new Error(result.error || '합성 실패');
+      }
+    } catch (err) {
+      log(`합성 오류: ${err.message}`);
+      alert(`합성 실패: ${err.message}`);
+    } finally {
+      setSynthesisLoading(false);
+    }
+  };
+
+  // 🔥 필터 옵션 추출 (Unique Values)
+  const uniqueAges = [...new Set(featurePeople.map(p => p.age))].filter(Boolean).sort();
+  const uniqueGenders = [...new Set(featurePeople.map(p => p.gender))].filter(Boolean).sort();
+  const uniqueNationalities = [...new Set(featurePeople.map(p => p.nationality))].filter(Boolean).sort();
+
 
 
   if (!selectedStyle) {
@@ -760,6 +892,17 @@ const Step4 = ({
                               </button>
                             )}
 
+                            {/* 🔥 인물 합성 버튼 추가 */}
+                            {permissions.editPrompt && (
+                              <button
+                                onClick={() => handleOpenPersonModal(img.sceneNumber)}
+                                disabled={loading || isRegenerating}
+                                className="w-full px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+                              >
+                                <span>👤</span> 인물 합성 (Seedream)
+                              </button>
+                            )}
+
                             {/* 🔥 E-1: 씬별 영상 변환 버튼 */}
                             {permissions.regenerate && img.imageUrl && (
                               <button
@@ -945,6 +1088,141 @@ const Step4 = ({
                       className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
                     >
                       {inviteLoading ? '초대 중...' : '초대하기'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 🔥 필터 모달 */}
+            {showPersonModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div className="bg-gray-800 rounded-2xl w-full max-w-5xl h-[80vh] flex flex-col border border-gray-700 shadow-2xl">
+                  <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-900/50 rounded-t-2xl">
+                    <h3 className="text-xl font-bold text-white">👤 인물 선택 (Seedream 합성)</h3>
+                    <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white">✕</button>
+                  </div>
+
+                  <div className="flex flex-1 overflow-hidden">
+                    {/* 왼쪽 필터 사이드바 */}
+                    <div className="w-64 bg-gray-900/50 border-r border-gray-700 p-6 overflow-y-auto">
+                      <h4 className="font-semibold text-gray-300 mb-4">필터</h4>
+
+                      {/* 연령대 */}
+                      <div className="mb-6">
+                        <label className="text-sm text-gray-400 mb-2 block font-medium">연령</label>
+                        <div className="space-y-2">
+                          {uniqueAges.map(age => (
+                            <label key={age} className="flex items-center space-x-2 cursor-pointer group">
+                              <input
+                                type="checkbox"
+                                checked={personFilters.age.includes(age)}
+                                onChange={() => handleFilterChange('age', age)}
+                                className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                              />
+                              <span className="text-gray-300 text-sm group-hover:text-white transition-colors">{age}대</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 성별 */}
+                      <div className="mb-6">
+                        <label className="text-sm text-gray-400 mb-2 block font-medium">성별</label>
+                        <div className="space-y-2">
+                          {uniqueGenders.map(gender => (
+                            <label key={gender} className="flex items-center space-x-2 cursor-pointer group">
+                              <input
+                                type="checkbox"
+                                checked={personFilters.gender.includes(gender)}
+                                onChange={() => handleFilterChange('gender', gender)}
+                                className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                              />
+                              <span className="text-gray-300 text-sm group-hover:text-white transition-colors">{gender}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 국적 */}
+                      <div className="mb-6">
+                        <label className="text-sm text-gray-400 mb-2 block font-medium">국적</label>
+                        <div className="space-y-2">
+                          {uniqueNationalities.map(nat => (
+                            <label key={nat} className="flex items-center space-x-2 cursor-pointer group">
+                              <input
+                                type="checkbox"
+                                checked={personFilters.nationality.includes(nat)}
+                                onChange={() => handleFilterChange('nationality', nat)}
+                                className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
+                              />
+                              <span className="text-gray-300 text-sm group-hover:text-white transition-colors">{nat}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 오른쪽 그리드 */}
+                    <div className="flex-1 p-6 overflow-y-auto bg-gray-800">
+                      <div className="mb-4 text-gray-400 text-sm">
+                        검색 결과: {filteredPeople.length}명
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {filteredPeople.map(person => (
+                          <div
+                            key={person.key || person.url}
+                            onClick={() => setSelectedPerson(person)}
+                            className={`relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-200 ${selectedPerson?.url === person.url
+                                ? 'border-blue-500 ring-2 ring-blue-500/50 shadow-lg scale-105'
+                                : 'border-transparent hover:border-gray-500'
+                              }`}
+                          >
+                            <div className="aspect-[3/4] bg-gray-900">
+                              <img src={person.url} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                              <p className="text-white font-bold text-sm truncate">{person.name}</p>
+                              <p className="text-gray-300 text-xs truncate">{person.age} / {person.gender}</p>
+                            </div>
+                            {selectedPerson?.url === person.url && (
+                              <div className="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full shadow-lg">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {filteredPeople.length === 0 && (
+                        <div className="h-full flex items-center justify-center text-gray-500">
+                          <p>조건에 맞는 인물이 없습니다.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-6 border-t border-gray-700 bg-gray-900/50 rounded-b-2xl flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowPersonModal(false)}
+                      className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleSynthesizePerson}
+                      disabled={!selectedPerson || synthesisLoading}
+                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold transition-all"
+                    >
+                      {synthesisLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          합성 중...
+                        </>
+                      ) : (
+                        '선택한 인물로 합성 시작'
+                      )}
                     </button>
                   </div>
                 </div>

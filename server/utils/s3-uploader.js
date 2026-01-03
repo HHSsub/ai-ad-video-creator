@@ -158,6 +158,7 @@ export async function listS3Files(prefix) {
          * @param {string} contentType - MIME 타입 (기본: image/jpeg)
          * @returns {Promise<string>} S3 URL
          */
+// ... existing code ...
 export async function uploadBufferToS3(buffer, projectId, filename, contentType = 'image/jpeg') {
     const s3Key = `nexxii-storage/projects/${projectId}/images/${filename}`;
 
@@ -178,4 +179,41 @@ export async function uploadBufferToS3(buffer, projectId, filename, contentType 
     console.log(`[S3] ✅ 버퍼 업로드 완료: ${cdnUrl}`);
 
     return cdnUrl;
+}
+
+/**
+ * Base64 문자열 S3 업로드
+ * @param {string} base64Data - Base64 인코딩된 이미지 데이터
+ * @param {string} s3Key - S3 저장 키 (경로 포함)
+ * @returns {Promise<{url: string, key: string}>}
+ */
+export async function uploadBase64ToS3(base64Data, s3Key) {
+    try {
+        const buffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+
+        // ContentType 추론 (기본값 png)
+        let contentType = 'image/png';
+        if (base64Data.startsWith('data:image/jpeg')) contentType = 'image/jpeg';
+        if (base64Data.startsWith('data:image/webp')) contentType = 'image/webp';
+
+        const upload = new Upload({
+            client: s3Client,
+            params: {
+                Bucket: BUCKET_NAME,
+                Key: s3Key,
+                Body: buffer,
+                ContentType: contentType,
+                CacheControl: 'public, max-age=31536000',
+            },
+        });
+
+        await upload.done();
+        const url = `https://upnexx.ai/${s3Key}`;
+        console.log(`[S3] ✅ Base64 업로드 완료: ${url}`);
+        return { url, key: s3Key };
+
+    } catch (error) {
+        console.error(`[S3] ❌ Base64 업로드 실패:`, error.message);
+        throw error;
+    }
 }

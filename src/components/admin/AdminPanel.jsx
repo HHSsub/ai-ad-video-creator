@@ -942,7 +942,7 @@ const AdminPanel = ({ currentUser }) => {
                             className="p-2 bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white rounded-lg text-[10px] font-black"
                             title="Download/Open via CloudFront"
                           >
-                            DOWNLOAD
+                            VIEW
                           </button>
                         )}
                         {item.deletable && (
