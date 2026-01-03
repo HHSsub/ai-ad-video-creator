@@ -6,6 +6,8 @@ const PersonManagement = () => {
     const [uploading, setUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
 
+    const [syncing, setSyncing] = useState(false);
+
     useEffect(() => {
         loadPersons();
     }, []);
@@ -28,6 +30,31 @@ const PersonManagement = () => {
     const handleFileSelect = (e) => {
         if (e.target.files && e.target.files[0]) {
             setSelectedFile(e.target.files[0]);
+        }
+    };
+
+    const handleDriveSync = async () => {
+        if (!confirm('Google Drive에서 인물 이미지를 동기화하시겠습니까?\n(기존 메타데이터가 갱신됩니다)')) return;
+
+        setSyncing(true);
+        try {
+            const response = await fetch('/nexxii/api/drive-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                alert(`동기화 완료!\n총 ${data.count}개의 인물 정보를 갱신했습니다.`);
+                loadPersons();
+            } else {
+                throw new Error(data.error || '동기화 실패');
+            }
+        } catch (error) {
+            console.error('Drive Sync Error:', error);
+            alert(`동기화 중 오류가 발생했습니다: ${error.message}`);
+        } finally {
+            setSyncing(false);
         }
     };
 
@@ -87,15 +114,32 @@ const PersonManagement = () => {
     return (
         <div className="space-y-6">
             <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
-                <h3 className="text-xl font-bold text-white mb-4">👤 인물 아카이브 관리</h3>
-                <p className="text-gray-400 mb-6 text-sm">
-                    영상 합성에 사용할 인물 이미지를 관리합니다. 업로드된 이미지는 [Scene 2] 인물 선택 옵션에서 노출됩니다.
-                </p>
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-white mb-1">👤 인물 아카이브 관리</h3>
+                        <p className="text-gray-400 text-sm">
+                            영상 합성에 사용할 인물 이미지를 관리합니다. 구글 드라이브와 동기화하여 최신화할 수 있습니다.
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleDriveSync}
+                        disabled={syncing}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all border ${syncing
+                                ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-not-allowed'
+                                : 'bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:border-green-400'
+                            }`}
+                    >
+                        <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {syncing ? '동기화 중...' : 'Google Drive 동기화'}
+                    </button>
+                </div>
 
                 {/* Upload Area */}
                 <div className="flex items-end gap-4 mb-8 bg-gray-900/50 p-4 rounded-xl border border-gray-800">
                     <div className="flex-1">
-                        <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">새 인물 추가</label>
+                        <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">새 인물 추가 (개별 업로드)</label>
                         <input
                             id="person-upload-input"
                             type="file"
