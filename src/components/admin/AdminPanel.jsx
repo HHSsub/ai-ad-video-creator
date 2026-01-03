@@ -933,8 +933,10 @@ const AdminPanel = ({ currentUser }) => {
                           <button
                             onClick={() => {
                               // CloudFront URL Construction
-                              // Pattern: https://upnexx.ai/nexxii-storage/{Key}
-                              const cdnUrl = `https://upnexx.ai/nexxii-storage/${item.path}`;
+                              // item.path is the specific S3 Key (e.g., "nexxii-storage/projects/...")
+                              // We just need to append it to the domain.
+                              const cdnUrl = `https://upnexx.ai/${item.path}`;
+                              console.log('[S3 Download] Opening URL:', cdnUrl);
                               window.open(cdnUrl, '_blank');
                             }}
                             className="p-2 bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white rounded-lg text-[10px] font-black"

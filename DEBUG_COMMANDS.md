@@ -1,35 +1,27 @@
-# 디버깅 명령어
+# 디버깅 가이드 (S3 다운로드 문제)
 
-## 1. 사용자 목록 확인
+## 1. 브라우저 콘솔 확인
+다운로드 버튼을 클릭했을 때 생성된 URL을 확인하려면:
+1. **F12** 키를 눌러 개발자 도구를 엽니다.
+2. **Console (콘솔)** 탭을 클릭합니다.
+3. [DOWNLOAD] 버튼을 클릭합니다.
+4. 아래와 같은 메시지를 찾습니다:
+   > `[S3 Download] Opening URL: https://upnexx.ai/nexxii-storage/...`
+
+이 URL이 올바른지 확인하십시오. (`nexxii-storage`가 두 번 반복되면 안 됩니다!)
+
+## 2. CloudFront 직접 테스트
+터미널에서 아래 명령어로 파일 접근이 되는지 확인합니다.
+
 ```bash
-cat config/users.json
+# 예시 URL (콘솔에서 복사한 것)
+curl -I "https://upnexx.ai/nexxii-storage/projects/..."
+
+# 정상 응답 코드: 200 OK
+# 에러 응답 코드: 403 Forbidden, 404 Not Found
 ```
 
-## 2. 프로젝트 멤버 확인
-```bash
-cat config/project-members.json
-```
-
-## 3. 프로젝트 목록 확인
-```bash
-cat config/projects.json
-```
-
-## 4. 서버 로그 실시간 확인
-```bash
-pm2 logs api-server --lines 50
-```
-
-## 5. API 테스트 (멤버 초대)
-```bash
-# 프로젝트 ID와 사용자명을 실제 값으로 변경
-curl -X POST http://localhost:3000/api/projects/PROJECT_ID/members \
-  -H "Content-Type: application/json" \
-  -H "x-username: admin" \
-  -d '{"username": "test1", "role": "viewer"}'
-```
-
-## 6. 라우트 등록 확인
-```bash
-grep -n "app.use" server/index.js | grep -E "(projects|auth)"
-```
+## 3. 리다이렉트 원인
+만약 `studio.upnexx.ai`로 강제 이동된다면, CloudFront가 403/404 에러 발생 시 커스텀 에러 페이지로 리다이렉트 시키도록 설정되어 있을 확률이 높습니다.
+- **403 Forbidden**: 권한 없음 (OAI/OAC 설정 문제 또는 파일 없음)
+- **404 Not Found**: 파일 경로가 틀림 (URL 생성 로직 문제)
