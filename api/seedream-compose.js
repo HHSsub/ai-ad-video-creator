@@ -91,7 +91,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
 
         // 3. API 요청 (Generation Endpoint 유지: v4)
         // 🔥 수정: 'seedream' (404) -> 'seedream-v4' (Valid)
-        const url = 'https://api.freepik.com/v1/ai/text-to-image/seedream-v4';
+        const url = getTextToImageUrl();
 
         const payload = {
             prompt: prompt,

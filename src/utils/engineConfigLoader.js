@@ -119,6 +119,14 @@ export function getImageToVideoStatusUrl(taskId) {
 }
 
 /**
+ * Freepik Resources URL 생성 (Proxy용)
+ */
+export function getFreepikResourcesUrl() {
+  const baseUrl = getFreepikApiBase();
+  return `${baseUrl}/resources`;
+}
+
+/**
  * 엔진 정보 로깅
  */
 export function logEngineInfo() {
@@ -140,5 +148,6 @@ export default {
   getTextToImageStatusUrl,
   getImageToVideoUrl,
   getImageToVideoStatusUrl,
+  getFreepikResourcesUrl,
   logEngineInfo
 };

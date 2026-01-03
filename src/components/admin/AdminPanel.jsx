@@ -49,7 +49,7 @@ const AdminPanel = ({ currentUser }) => {
 
   // 저장소 관리 상태
   const [storageInfo, setStorageInfo] = useState(null);
-  const [currentPath, setCurrentPath] = useState('.');
+  const [currentPath, setCurrentPath] = useState('');
   const [directoryContents, setDirectoryContents] = useState([]);
   const [storageLoading, setStorageLoading] = useState(false);
 
@@ -60,7 +60,7 @@ const AdminPanel = ({ currentUser }) => {
     loadEngineInfo();
     loadAllPrompts();
     if (activeMainTab === 'storage') {
-      browseDirectory('.');
+      browseDirectory('');
       loadStorageInfo();
     }
   }, [activeMainTab]);
@@ -838,34 +838,55 @@ const AdminPanel = ({ currentUser }) => {
           <div className="space-y-6">
             {storageInfo && (
               <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl">
-                <h2 className="text-xl font-black text-white mb-6 flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center text-sm italic">S</span>
-                  Server Disk Infrastructure
-                </h2>
+                <div className="flex justify-between items-start mb-6">
+                  <h2 className="text-xl font-black text-white flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center text-sm italic">S3</span>
+                    AWS Cloud Storage
+                  </h2>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase">Provider</span>
+                    <div className="text-sm font-bold text-blue-400">{storageInfo.provider}</div>
+                    <div className="text-[10px] font-mono text-gray-600">{storageInfo.bucketName}</div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-4 gap-4 mb-8">
                   {[
-                    { label: 'Total Capacity', value: storageInfo.disk.total, color: 'text-white' },
-                    { label: 'Currently Used', value: storageInfo.disk.used, color: 'text-orange-500' },
-                    { label: 'Free Space', value: storageInfo.disk.available, color: 'text-green-400' },
-                    { label: 'Usage Percent', value: storageInfo.disk.usePercent, color: 'text-blue-500' }
+                    // S3 Usage
+                    { label: 'Total Used Storage', value: storageInfo.usage.totalBytesFormatted, sub: `${storageInfo.usage.objectCount} objects`, color: 'text-white' },
+                    // Cost
+                    { label: 'Est. Cost (Current)', value: `$${storageInfo.cost.currentMonth}`, sub: 'Month-to-Date', color: 'text-orange-500' },
+                    { label: 'Est. Cost (Projected)', value: `$${storageInfo.cost.projectedMonth}`, sub: 'End of Month', color: 'text-pink-500' },
+                    { label: 'Pricing Tier', value: 'Standard', sub: 'ap-northeast-2', color: 'text-blue-500' }
                   ].map(stat => (
                     <div key={stat.label} className="bg-gray-950 p-5 rounded-2xl border border-gray-800 shadow-inner">
                       <div className="text-[10px] font-black text-gray-600 uppercase mb-1">{stat.label}</div>
-                      <div className={`text-2xl font-black ${stat.color} font-mono`}>{stat.value}</div>
+                      <div className={`text-2xl font-black ${stat.color} font-mono tracking-tight`}>{stat.value}</div>
+                      <div className="text-[10px] font-medium text-gray-500 mt-1">{stat.sub}</div>
                     </div>
                   ))}
                 </div>
+
                 <div className="space-y-2">
-                  <div className="text-xs font-bold text-gray-500 mb-3 px-2">Critical Directories</div>
-                  {storageInfo.directories.map(dir => (
+                  <div className="text-xs font-bold text-gray-500 mb-3 px-2">Key Directories</div>
+                  {storageInfo.folders.map(dir => (
                     <div key={dir.name} className="flex justify-between items-center p-3.5 bg-gray-900 shadow-inner rounded-xl border border-gray-800 hover:border-gray-600 transition-all">
                       <div className="flex items-center gap-3">
-                        <span className="text-blue-500">ROOT/</span>
+                        <span className="text-blue-500">BUCKET/</span>
                         <span className="text-gray-200 font-bold">{dir.name}</span>
                       </div>
                       <span className="font-mono text-sm text-gray-400 bg-black px-3 py-1 rounded-md">{dir.sizeFormatted}</span>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-6 p-4 bg-gray-900/50 rounded-xl border border-gray-800">
+                  <h4 className="text-[10px] font-bold text-gray-500 uppercase mb-2">AWS S3 Pricing Info (Seoul)</h4>
+                  <div className="grid grid-cols-3 gap-4 text-[11px] text-gray-400 font-mono">
+                    <div>0 - 50 TB: <span className="text-white">$0.023</span> / GB</div>
+                    <div>50 - 500 TB: <span className="text-white">$0.022</span> / GB</div>
+                    <div>500+ TB: <span className="text-white">$0.021</span> / GB</div>
+                  </div>
                 </div>
               </div>
             )}
@@ -873,32 +894,46 @@ const AdminPanel = ({ currentUser }) => {
             <div className="bg-gray-800/90 rounded-lg p-6 border border-gray-700 shadow-xl overflow-hidden">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500 font-black">/PATH:</span>
-                  <span className="bg-gray-950 px-4 py-2 rounded-lg font-mono text-sm text-green-400 border border-gray-800">{currentPath}</span>
+                  <span className="text-gray-500 font-black">/PREFIX:</span>
+                  <span className="bg-gray-950 px-4 py-2 rounded-lg font-mono text-sm text-green-400 border border-gray-800">
+                    {currentPath || '(root)'}
+                  </span>
                 </div>
-                {currentPath !== '.' && (
-                  <button onClick={() => browseDirectory(currentPath.split('/').slice(0, -1).join('/') || '.')} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs font-black">⬆ UP</button>
+                {currentPath && currentPath !== '' && (
+                  <button
+                    onClick={() => {
+                      const parts = currentPath.split('/').filter(p => p);
+                      parts.pop();
+                      const parent = parts.length > 0 ? parts.join('/') + '/' : '';
+                      browseDirectory(parent);
+                    }}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs font-black">
+                    ⬆ UP
+                  </button>
                 )}
               </div>
               <div className="grid grid-cols-1 gap-1">
-                {directoryContents.length === 0 ? <div className="p-12 text-center text-gray-600 italic">No files found.</div> :
+                {directoryContents.length === 0 ? <div className="p-12 text-center text-gray-600 italic">No objects found.</div> :
                   directoryContents.map(item => (
                     <div key={item.path} className="flex justify-between items-center p-3 hover:bg-gray-700/50 rounded-xl group transition-all">
                       <div className="flex items-center gap-4 cursor-pointer" onClick={() => item.isDirectory && browseDirectory(item.path)}>
                         <span className="text-2xl filter drop-shadow-md">{item.isDirectory ? '📁' : '📄'}</span>
                         <div>
                           <div className="text-sm font-bold text-gray-200 group-hover:text-blue-400">{item.name}</div>
-                          <div className="text-[10px] text-gray-600">{!item.isDirectory && `${(item.size / 1024).toFixed(1)} KB • `}{formatDateTime(item.modified)}</div>
+                          <div className="text-[10px] text-gray-600">
+                            {!item.isDirectory && `${(item.size / 1024).toFixed(1)} KB • `}
+                            {item.modified ? formatDateTime(item.modified) : '-'}
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {item.isDirectory ? (
                           <button onClick={() => browseDirectory(item.path)} className="p-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-[10px] font-black">OPEN</button>
                         ) : (
-                          <button className="p-2 bg-gray-700/50 text-gray-500 rounded-lg text-[10px] font-black cursor-not-allowed">VIEW</button>
+                          <button className="p-2 bg-gray-700/50 text-gray-500 rounded-lg text-[10px] font-black cursor-not-allowed" title="S3 객체는 미리보기 불가">VIEW</button>
                         )}
                         {item.deletable && (
-                          <button onClick={() => deleteItem(item.path)} className="p-2 bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white rounded-lg text-[10px] font-black">PURGE</button>
+                          <button onClick={() => deleteItem(item.path)} className="p-2 bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white rounded-lg text-[10px] font-black">DELETE</button>
                         )}
                       </div>
                     </div>

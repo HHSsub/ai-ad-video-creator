@@ -14,23 +14,23 @@ export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  
+
   try {
     // GET 방식일 경우 쿼리 파라미터에서 가져오기
-    const searchQuery = req.method === 'GET' 
-      ? req.query.searchQuery 
+    const searchQuery = req.method === 'GET'
+      ? req.query.searchQuery
       : req.body.searchQuery;
 
     const count = req.method === 'GET'
       ? (req.query.count || 5)
       : (req.body.count || 5);
-    
+
     const { searchQuery, count = 5 } = req.body;
 
     // API 키 확인
-    const API_KEY = process.env.FREEPIK_API_KEY || 
-                    process.env.REACT_APP_FREEPIK_API_KEY || 
-                    process.env.VITE_FREEPIK_API_KEY;
+    const API_KEY = process.env.FREEPIK_API_KEY ||
+      process.env.REACT_APP_FREEPIK_API_KEY ||
+      process.env.VITE_FREEPIK_API_KEY;
 
     console.log('=== Freepik Proxy Debug ===');
     console.log('환경변수 확인:', {
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
         error: 'Freepik API key not found',
         success: false,
         debug: {
-          availableEnvVars: Object.keys(process.env).filter(key => 
+          availableEnvVars: Object.keys(process.env).filter(key =>
             key.includes('FREEPIK') || key.includes('API')
           )
         }
@@ -101,10 +101,10 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Freepik API 오류:', errorText);
-      
+
       let errorMessage = `API Error ${response.status}`;
       let errorDetails = errorText;
-      
+
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.message || errorJson.error || errorMessage;
@@ -112,7 +112,7 @@ export default async function handler(req, res) {
       } catch (e) {
         // JSON 파싱 실패시 원본 텍스트 사용
       }
-      
+
       return res.status(response.status).json({
         error: errorMessage,
         details: errorDetails,
@@ -138,7 +138,7 @@ export default async function handler(req, res) {
         hasThumbnails: !!data.data[0].thumbnails
       } : 'NO_DATA'
     });
-    
+
     // 응답 데이터 처리
     if (data && data.data && Array.isArray(data.data)) {
       const images = data.data.map((item, index) => {
@@ -150,12 +150,12 @@ export default async function handler(req, res) {
         if (item.image) {
           imageUrl = item.image.source?.url || item.image.url;
         }
-        
+
         // 썸네일 URL 우선순위  
         if (item.thumbnails) {
-          thumbnailUrl = item.thumbnails.large?.url || 
-                        item.thumbnails.medium?.url || 
-                        item.thumbnails.small?.url;
+          thumbnailUrl = item.thumbnails.large?.url ||
+            item.thumbnails.medium?.url ||
+            item.thumbnails.small?.url;
         }
 
         // 썸네일이 없으면 원본 이미지 사용
@@ -191,7 +191,7 @@ export default async function handler(req, res) {
 
       console.log(`성공: ${images.length}개 이미지 반환`);
       return res.status(200).json(result);
-      
+
     } else {
       console.log('이미지 없음 - API 응답:', data);
       return res.status(200).json({
@@ -209,7 +209,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('Proxy 전체 오류:', error);
     console.error('오류 스택:', error.stack);
-    
+
     return res.status(500).json({
       error: 'Internal server error',
       details: error.message,

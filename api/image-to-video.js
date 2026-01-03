@@ -6,30 +6,9 @@ const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MAX_RETRY = 5;
 
-// 🔥 engines.json에서 현재 엔진 설정 로드
-function loadCurrentEngine() {
-  try {
-    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
-    const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
-    const imageToVideo = enginesData.currentEngine.imageToVideo;
-    return {
-      endpoint: `${FREEPIK_API_BASE}${imageToVideo.endpoint}`,
-      model: imageToVideo.model,
-      statusEndpoint: imageToVideo.statusEndpoint,
-      // 🔥 supportedDurations 추가
-      supportedDurations: imageToVideo.parameters?.supportedDurations || ['6']
-    };
-  } catch (error) {
-    console.error('[loadCurrentEngine] 오류:', error.message);
-    // 폴백: hailuo 사용
-    return {
-      endpoint: `${FREEPIK_API_BASE}/ai/image-to-video/minimax-hailuo-02-1080p`,
-      model: 'minimax-hailuo-02-1080p',
-      statusEndpoint: '/ai/image-to-video/minimax-hailuo-02-1080p/{task-id}',
-      supportedDurations: ['6'] // 🔥 fallback도 6초 고정
-    };
-  }
-}
+import { getImageToVideoEngine, getImageToVideoUrl } from '../src/utils/engineConfigLoader.js';
+
+// 🔥 engines.json에서 현재 엔진 설정 로드 (Deleted local duplicate)
 
 function sanitizeCameraSegments(text) {
   if (!text) return '';
@@ -37,7 +16,7 @@ function sanitizeCameraSegments(text) {
 }
 
 function optimizeVideoPrompt(rawPrompt, formData) {
-  const base = sanitizeCameraSegments((rawPrompt || '').replace(/\*\*/g,'').replace(/[`"]/g,'').replace(/\s+/g,' ').trim());
+  const base = sanitizeCameraSegments((rawPrompt || '').replace(/\*\*/g, '').replace(/[`"]/g, '').replace(/\s+/g, ' ').trim());
   let head = [
     formData?.brandName ? `Brand: ${formData.brandName}` : null,
     formData?.productServiceName ? `Product: ${formData.productServiceName}` : formData?.productServiceCategory ? `Product Category: ${formData.productServiceCategory}` : null,
@@ -51,7 +30,7 @@ function optimizeVideoPrompt(rawPrompt, formData) {
   return merged.slice(0, 1800);
 }
 
-async function safeFreepikCall(url, options, label, logObj={}) {
+async function safeFreepikCall(url, options, label, logObj = {}) {
   let lastErr;
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     try {
@@ -63,7 +42,7 @@ async function safeFreepikCall(url, options, label, logObj={}) {
       try { json = JSON.parse(rawTxt); } catch { json = rawTxt; }
       if (!res.ok) {
         console.error(`[${label}] HTTP ${res.status}`, rawTxt);
-        if ([429,500,502,503,504].includes(res.status) && attempt < MAX_RETRY) {
+        if ([429, 500, 502, 503, 504].includes(res.status) && attempt < MAX_RETRY) {
           const wait = attempt * 1200;
           console.log(`[${label}] 재시도 대기: ${wait}ms`);
           await sleep(wait);
@@ -87,12 +66,12 @@ async function safeFreepikCall(url, options, label, logObj={}) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin','*');
-  res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers','Content-Type');
-  res.setHeader('Access-Control-Max-Age','86400');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error:'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const startTime = Date.now();
   try {
@@ -110,36 +89,37 @@ export default async function handler(req, res) {
 
     if (!imageUrl) {
       console.error('[image-to-video] 필수 imageUrl 없음!');
-      return res.status(400).json({ error:'imageUrl required' });
+      return res.status(400).json({ error: 'imageUrl required' });
     }
 
     const apiKey = process.env.FREEPIK_API_KEY ||
-                   process.env.VITE_FREEPIK_API_KEY ||
-                   process.env.REACT_APP_FREEPIK_API_KEY;
+      process.env.VITE_FREEPIK_API_KEY ||
+      process.env.REACT_APP_FREEPIK_API_KEY;
     if (!apiKey) {
       console.error('[image-to-video] Freepik API 키 없음!');
       throw new Error('Freepik API 키가 설정되지 않았습니다');
     }
 
-    // 🔥 엔진 동적 로드
-    const engineConfig = loadCurrentEngine();
-    console.log('[image-to-video] 🔥 사용 엔진:', engineConfig.model, engineConfig.endpoint);
+    // 🔥 엔진 동적 로드 (Centralized)
+    const engineConfig = getImageToVideoEngine();
+    const endpoint = getImageToVideoUrl();
+    console.log('[image-to-video] 🔥 사용 엔진:', engineConfig.model, endpoint);
 
     const optimized = optimizeVideoPrompt(prompt, formData);
 
     // 🔥 엔진 설정에서 지원 duration 동적 로드
-    const supportedDurations = engineConfig.supportedDurations || ['5', '10']; // fallback
+    const supportedDurations = engineConfig.parameters?.supportedDurations || ['5']; // fallback
     const numDuration = Number(duration);
     const isValid = supportedDurations.map(Number).includes(numDuration);
     let validDuration = String(isValid ? numDuration : Number(supportedDurations[0]));
-    
+
     console.log('[image-to-video] Duration 검증:', {
       입력값: duration,
       지원목록: supportedDurations,
       최종선택: validDuration,
       엔진: engineConfig.model
     });
-        
+
     // 공식문서 기반 인자만 남김
     const requestBody = {
       image: imageUrl,
@@ -155,33 +135,33 @@ export default async function handler(req, res) {
     console.log('[image-to-video] 최종 요청 바디:', JSON.stringify(requestBody));
 
     const result = await safeFreepikCall(
-      engineConfig.endpoint,
+      endpoint,
       {
         method: 'POST',
         headers: {
-          'Content-Type':'application/json',
+          'Content-Type': 'application/json',
           'x-freepik-api-key': apiKey,
-          'User-Agent':'AI-Ad-Creator/2025'
+          'User-Agent': 'AI-Ad-Creator/2025'
         },
         body: JSON.stringify(requestBody)
       },
       `image-to-video-${engineConfig.model}`,
-      {requestBody}
+      { requestBody }
     );
 
     if (!result.data?.task_id) {
-      console.error(`[image-to-video-${engineConfig.model}] task_id 없음:`, JSON.stringify(result,null,2));
+      console.error(`[image-to-video-${engineConfig.model}] task_id 없음:`, JSON.stringify(result, null, 2));
       throw new Error('비디오 생성 태스크 ID를 받지 못했습니다');
     }
 
     res.status(200).json({
-      success:true,
-      task:{
+      success: true,
+      task: {
         taskId: result.data.task_id,
         duration: validDuration,
         createdAt: new Date().toISOString()
       },
-      meta:{
+      meta: {
         processingTime: Date.now() - startTime,
         provider: `Freepik ${engineConfig.model}`,
         engine: engineConfig.model,
@@ -192,7 +172,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('[image-to-video] 전체 실패:', error);
     res.status(500).json({
-      success:false,
+      success: false,
       error: error.message
     });
   }
