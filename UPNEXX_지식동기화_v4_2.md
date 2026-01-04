@@ -96,6 +96,21 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-05 08:30 - [EMERGENCY] 인물 합성 API 404 및 UI/UX 긴급 수정
+- **긴급 이슈**: 
+  1. `POST /api/synthesis-person` 404 에러 (라우트 미등록)
+  2. 인물 합성 모달 UI가 화면 중앙에 떠서 마우스 동선 비효율적
+  3. 인물 목록 48개 전체 로딩으로 인한 성능 저하
+- **조치 사항**:
+  1. **API 구현**: `api/synthesis-person.js` 신규 생성 및 `server/index.js`에 라우트 등록.
+     - `seedream-compose` 로직 활용하여 Seedream v4 합성 연결.
+     - 결과 이미지 S3 업로드 로직 포함.
+  2. **UI/UX 개선 (`Step4.jsx`)**:
+     - **Popover 방식 변경**: 모달을 버튼 바로 우측(`rect.right + 10`)에 뜨도록 `absolute` 포지셔닝 변경.
+     - **Pagination 도입**: 초기 4명만 렌더링하고 '더 보기' 버튼으로 추가 로드하도록 최적화 (`visiblePeopleCount`).
+     - **Layout 최적화**: 거대한 모달을 컴팩트한 사이즈(width: 550px)로 변경하고 필터를 상단 칩 형태로 간소화.
+- **상태**: ✅ 완료 (긴급 배포)
+
 ### 2025-12-26 18:35 - 인물 합성 Polling 404 오류 수정 (Task Z)
 - **문제**: 인물 합성(`seedream-compose`) 시 Freepik API 태스크 생성은 성공하지만, 상태 확인(Polling) 중 404 오류가 발생하여 합성에 실패함.
 - **원인**: `api/seedream-compose.js`에서 사용하는 상태 조회 URL이 `seedream-v4` 모델에 맞는 경로(`/v1/ai/text-to-image/seedream-v4/{id}`)가 아닌 일반 경로(`/v1/ai/text-to-image/{id}`)로 하드코딩되어 있었음.

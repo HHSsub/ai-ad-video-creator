@@ -48,9 +48,11 @@ const Step4 = ({
 
   // 🔥 인물 합성 관련 상태
   const [showPersonModal, setShowPersonModal] = useState(false);
+  const [modalPosition, setModalPosition] = useState({ top: 0, left: 0 }); // Pos State
   const [targetSceneNumber, setTargetSceneNumber] = useState(null);
   const [featurePeople, setFeaturePeople] = useState([]);
   const [filteredPeople, setFilteredPeople] = useState([]);
+  const [visiblePeopleCount, setVisiblePeopleCount] = useState(4); // Pagination State
   const [personFilters, setPersonFilters] = useState({
     age: [],
     gender: [],
@@ -547,10 +549,31 @@ const Step4 = ({
     }
   };
 
-  // 🔥 모달 열기
-  const handleOpenPersonModal = (sceneNumber) => {
+  // 🔥 모달 열기 (위치 계산 포함)
+  const handleOpenPersonModal = (sceneNumber, e) => {
+    // 1. 버튼 위치 계산
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scrollY = window.scrollY;
+
+    // 화면 오른쪽 여유 확인
+    const windowWidth = window.innerWidth;
+    const modalWidth = 550; // 예상 너비
+
+    let left = rect.right + 10;
+    // 화면 넘어가지 않도록 조정 (너무 오른쪽이면 버튼 왼쪽에 표시)
+    if (left + modalWidth > windowWidth) {
+      left = rect.left - modalWidth - 10;
+    }
+
+    setModalPosition({
+      top: rect.top + scrollY - 100, // 약간 위쪽으로 올려서 보기 편하게
+      left: left
+    });
+
     setTargetSceneNumber(sceneNumber);
     setShowPersonModal(true);
+    setVisiblePeopleCount(4); // 4명만 먼저 보여줌 (최적화)
+
     if (featurePeople.length === 0) {
       fetchFeaturePeople();
     }
@@ -892,10 +915,10 @@ const Step4 = ({
                               </button>
                             )}
 
-                            {/* 🔥 인물 합성 버튼 추가 */}
+                            {/* 🔥 인물 합성 버튼 추가 (이벤트 전달) */}
                             {permissions.editPrompt && (
                               <button
-                                onClick={() => handleOpenPersonModal(img.sceneNumber)}
+                                onClick={(e) => handleOpenPersonModal(img.sceneNumber, e)}
                                 disabled={loading || isRegenerating}
                                 className="w-full px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
                               >
@@ -1094,139 +1117,135 @@ const Step4 = ({
               </div>
             )}
 
-            {/* 🔥 필터 모달 */}
+            {/* 🔥 필터 모달 (Popover Style) */}
             {showPersonModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                <div className="bg-gray-800 rounded-2xl w-full max-w-5xl h-[80vh] flex flex-col border border-gray-700 shadow-2xl">
-                  <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-900/50 rounded-t-2xl">
-                    <h3 className="text-xl font-bold text-white">👤 인물 선택 (Seedream 합성)</h3>
+              <>
+                {/* Backdrop to close on click outside */}
+                <div
+                  className="fixed inset-0 z-40 bg-transparent"
+                  onClick={() => setShowPersonModal(false)}
+                />
+
+                <div
+                  className="absolute z-50 bg-gray-800 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
+                  style={{
+                    top: modalPosition.top,
+                    left: modalPosition.left,
+                    width: '550px',
+                    height: '650px',
+                    maxHeight: '90vh'
+                  }}
+                >
+                  <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/80 backdrop-blur-sm">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      👤 인물 선택 <span className="text-xs font-normal text-gray-400">(Seedream 합성)</span>
+                    </h3>
                     <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white">✕</button>
                   </div>
 
-                  <div className="flex flex-1 overflow-hidden">
-                    {/* 왼쪽 필터 사이드바 */}
-                    <div className="w-64 bg-gray-900/50 border-r border-gray-700 p-6 overflow-y-auto">
-                      <h4 className="font-semibold text-gray-300 mb-4">필터</h4>
-
-                      {/* 연령대 */}
-                      <div className="mb-6">
-                        <label className="text-sm text-gray-400 mb-2 block font-medium">연령</label>
-                        <div className="space-y-2">
-                          {uniqueAges.map(age => (
-                            <label key={age} className="flex items-center space-x-2 cursor-pointer group">
-                              <input
-                                type="checkbox"
-                                checked={personFilters.age.includes(age)}
-                                onChange={() => handleFilterChange('age', age)}
-                                className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
-                              />
-                              <span className="text-gray-300 text-sm group-hover:text-white transition-colors">{age}대</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 성별 */}
-                      <div className="mb-6">
-                        <label className="text-sm text-gray-400 mb-2 block font-medium">성별</label>
-                        <div className="space-y-2">
-                          {uniqueGenders.map(gender => (
-                            <label key={gender} className="flex items-center space-x-2 cursor-pointer group">
-                              <input
-                                type="checkbox"
-                                checked={personFilters.gender.includes(gender)}
-                                onChange={() => handleFilterChange('gender', gender)}
-                                className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
-                              />
-                              <span className="text-gray-300 text-sm group-hover:text-white transition-colors">{gender}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 국적 */}
-                      <div className="mb-6">
-                        <label className="text-sm text-gray-400 mb-2 block font-medium">국적</label>
-                        <div className="space-y-2">
-                          {uniqueNationalities.map(nat => (
-                            <label key={nat} className="flex items-center space-x-2 cursor-pointer group">
-                              <input
-                                type="checkbox"
-                                checked={personFilters.nationality.includes(nat)}
-                                onChange={() => handleFilterChange('nationality', nat)}
-                                className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
-                              />
-                              <span className="text-gray-300 text-sm group-hover:text-white transition-colors">{nat}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 오른쪽 그리드 */}
-                    <div className="flex-1 p-6 overflow-y-auto bg-gray-800">
-                      <div className="mb-4 text-gray-400 text-sm">
-                        검색 결과: {filteredPeople.length}명
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {filteredPeople.map(person => (
-                          <div
-                            key={person.key || person.url}
-                            onClick={() => setSelectedPerson(person)}
-                            className={`relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-200 ${selectedPerson?.url === person.url
-                                ? 'border-blue-500 ring-2 ring-blue-500/50 shadow-lg scale-105'
-                                : 'border-transparent hover:border-gray-500'
-                              }`}
-                          >
-                            <div className="aspect-[3/4] bg-gray-900">
-                              <img src={person.url} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
-                            </div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                              <p className="text-white font-bold text-sm truncate">{person.name}</p>
-                              <p className="text-gray-300 text-xs truncate">{person.age} / {person.gender}</p>
-                            </div>
-                            {selectedPerson?.url === person.url && (
-                              <div className="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full shadow-lg">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                              </div>
-                            )}
-                          </div>
+                  {/* 필터 영역 (상단 수평 배치) */}
+                  <div className="p-3 bg-gray-900/50 border-b border-gray-700 overflow-x-auto whitespace-nowrap scrollbar-hide">
+                    <div className="flex gap-4">
+                      {/* 연령 */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 font-bold">AGE</span>
+                        {uniqueAges.map(age => (
+                          <label key={age} className="flex items-center space-x-1 cursor-pointer bg-gray-800 px-2 py-1 rounded border border-gray-700 hover:border-blue-500 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={personFilters.age.includes(age)}
+                              onChange={() => handleFilterChange('age', age)}
+                              className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 h-3 w-3"
+                            />
+                            <span className="text-gray-300 text-xs">{age}</span>
+                          </label>
                         ))}
                       </div>
+                      <div className="w-px h-6 bg-gray-700 mx-1"></div>
 
-                      {filteredPeople.length === 0 && (
-                        <div className="h-full flex items-center justify-center text-gray-500">
-                          <p>조건에 맞는 인물이 없습니다.</p>
-                        </div>
-                      )}
+                      {/* 성별 */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 font-bold">SEX</span>
+                        {uniqueGenders.map(gender => (
+                          <label key={gender} className="flex items-center space-x-1 cursor-pointer bg-gray-800 px-2 py-1 rounded border border-gray-700 hover:border-blue-500 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={personFilters.gender.includes(gender)}
+                              onChange={() => handleFilterChange('gender', gender)}
+                              className="rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 h-3 w-3"
+                            />
+                            <span className="text-gray-300 text-xs">{gender}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-6 border-t border-gray-700 bg-gray-900/50 rounded-b-2xl flex justify-end gap-3">
+                  {/* 인물 그리드 (Pagination 적용) */}
+                  <div className="flex-1 p-4 overflow-y-auto bg-gray-800">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {filteredPeople.slice(0, visiblePeopleCount).map(person => (
+                        <div
+                          key={person.key || person.url}
+                          onClick={() => setSelectedPerson(person)}
+                          className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 ${selectedPerson?.url === person.url
+                            ? 'border-blue-500 ring-2 ring-blue-500/50'
+                            : 'border-transparent hover:border-gray-500'
+                            }`}
+                        >
+                          <div className="aspect-[3/4] bg-gray-900">
+                            <img src={person.url} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
+                          </div>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                            <p className="text-white font-bold text-xs truncate">{person.name}</p>
+                            <p className="text-gray-400 text-[10px] truncate">{person.age} / {person.gender}</p>
+                          </div>
+                          {selectedPerson?.url === person.url && (
+                            <div className="absolute top-1 right-1 bg-blue-500 text-white p-0.5 rounded-full shadow-lg">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Load More Button */}
+                    {filteredPeople.length > visiblePeopleCount && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVisiblePeopleCount(prev => prev + 4);
+                        }}
+                        className="w-full mt-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm transition-colors"
+                      >
+                        더 보기 ({visiblePeopleCount} / {filteredPeople.length})
+                      </button>
+                    )}
+
+                    {filteredPeople.length === 0 && (
+                      <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                        <p>조건에 맞는 인물이 없습니다.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 border-t border-gray-700 bg-gray-900/50 flex justify-end gap-2">
                     <button
                       onClick={() => setShowPersonModal(false)}
-                      className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                      className="px-3 py-1.5 text-gray-400 hover:text-white text-sm"
                     >
                       취소
                     </button>
                     <button
                       onClick={handleSynthesizePerson}
                       disabled={!selectedPerson || synthesisLoading}
-                      className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-bold transition-all"
+                      className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-bold"
                     >
-                      {synthesisLoading ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                          합성 중...
-                        </>
-                      ) : (
-                        '선택한 인물로 합성 시작'
-                      )}
+                      {synthesisLoading ? '합성 중...' : '합성 시작'}
                     </button>
                   </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         </div>
