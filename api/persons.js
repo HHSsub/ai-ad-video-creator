@@ -16,47 +16,71 @@ const s3Client = new S3Client({ region: 'ap-northeast-2' });
 // 목록 조회
 router.get('/', async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 0; // 0 means all
+
+        let allPersons = [];
+        let source = '';
+
         // 1. 메타데이터 캐시 확인
         const metadataPath = path.resolve(process.cwd(), 'config/persons-metadata.json');
         if (fs.existsSync(metadataPath)) {
-            const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
-            // 성공 시 바로 반환
-            return res.json({ success: true, persons: metadata, source: 'cache' });
+            allPersons = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+            source = 'cache';
+        } else {
+            // 2. 캐시 없으면 S3 리스팅 (기존 로직)
+            // 🔥 변경된 S3 구조 반영: nexxii-storage/persons/
+            const files = await listS3Files('nexxii-storage/persons/');
+
+            // 🔥 S3 폴더 객체 및 이미지 아닌 파일 필터링
+            const validFiles = files.filter(file => {
+                // 1. 자기 자신(폴더 접두사) 제외
+                if (file.key === 'nexxii-storage/persons/') return false;
+                // 2. 폴더 객체(/로 끝나는 것) 제외
+                if (file.key.endsWith('/')) return false;
+                // 3. 크기가 0인 객체 제외
+                if (file.size === 0) return false;
+                // 4. 이미지 확장자만 허용
+                const ext = file.key.split('.').pop().toLowerCase();
+                return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+            });
+
+            allPersons = validFiles.map(file => {
+                // 키에서 이름 추출 (예: nexxii-storage/persons/man.jpg -> man)
+                const name = file.key.replace('nexxii-storage/persons/', '').split('.')[0];
+                const fixedUrl = `https://upnexx.ai/${file.key}`;
+
+                return {
+                    ...file,
+                    name,
+                    url: fixedUrl,
+                    age: 'Unknown',
+                    gender: 'Unknown',
+                    nationality: 'Unknown'
+                };
+            });
+            source = 's3';
         }
 
-        // 2. 캐시 없으면 S3 리스팅 (기존 로직)
-        // 🔥 변경된 S3 구조 반영: nexxii-storage/persons/
-        const files = await listS3Files('nexxii-storage/persons/');
+        // 페이지네이션 적용
+        if (limit > 0) {
+            const startIndex = (page - 1) * limit;
+            const endIndex = startIndex + limit;
+            const paginatedPersons = allPersons.slice(startIndex, endIndex);
 
-        // 🔥 S3 폴더 객체 및 이미지 아닌 파일 필터링
-        const validFiles = files.filter(file => {
-            // 1. 자기 자신(폴더 접두사) 제외
-            if (file.key === 'nexxii-storage/persons/') return false;
-            // 2. 폴더 객체(/로 끝나는 것) 제외
-            if (file.key.endsWith('/')) return false;
-            // 3. 크기가 0인 객체 제외
-            if (file.size === 0) return false;
-            // 4. 이미지 확장자만 허용
-            const ext = file.key.split('.').pop().toLowerCase();
-            return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-        });
+            return res.json({
+                success: true,
+                persons: paginatedPersons,
+                total: allPersons.length,
+                page,
+                limit,
+                totalPages: Math.ceil(allPersons.length / limit),
+                source
+            });
+        }
 
-        const persons = validFiles.map(file => {
-            // 키에서 이름 추출 (예: nexxii-storage/persons/man.jpg -> man)
-            const name = file.key.replace('nexxii-storage/persons/', '').split('.')[0];
-            const fixedUrl = `https://upnexx.ai/${file.key}`;
+        res.json({ success: true, persons: allPersons, total: allPersons.length, source });
 
-            return {
-                ...file,
-                name,
-                url: fixedUrl,
-                age: 'Unknown',
-                gender: 'Unknown',
-                nationality: 'Unknown'
-            };
-        });
-
-        res.json({ success: true, persons, source: 's3' });
     } catch (error) {
         console.error('[Persons] Create Error:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch persons' });

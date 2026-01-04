@@ -8,17 +8,23 @@ const PersonManagement = () => {
 
     const [syncing, setSyncing] = useState(false);
 
-    useEffect(() => {
-        loadPersons();
-    }, []);
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const LIMIT = 5;
 
-    const loadPersons = async () => {
+    useEffect(() => {
+        loadPersons(currentPage);
+    }, [currentPage]);
+
+    const loadPersons = async (page = 1) => {
         setLoading(true);
         try {
-            const response = await fetch('/nexxii/api/persons');
+            const response = await fetch(`/nexxii/api/persons?page=${page}&limit=${LIMIT}`);
             const data = await response.json();
             if (data.success) {
                 setPersons(data.persons || []);
+                setTotalPages(data.totalPages || 1);
             }
         } catch (error) {
             console.error('Failed to load persons:', error);
@@ -46,7 +52,8 @@ const PersonManagement = () => {
 
             if (data.success) {
                 alert(`동기화 완료!\n총 ${data.count}개의 인물 정보를 갱신했습니다.`);
-                loadPersons();
+                loadPersons(1);
+                setCurrentPage(1);
             } else {
                 throw new Error(data.error || '동기화 실패');
             }
@@ -78,7 +85,7 @@ const PersonManagement = () => {
                 setSelectedFile(null);
                 // Reset file input
                 document.getElementById('person-upload-input').value = '';
-                loadPersons();
+                loadPersons(currentPage);
             } else {
                 alert('업로드 실패: ' + data.error);
             }
@@ -102,7 +109,7 @@ const PersonManagement = () => {
             });
             const data = await response.json();
             if (data.success) {
-                loadPersons();
+                loadPersons(currentPage);
             } else {
                 alert('삭제 실패: ' + data.error);
             }
@@ -125,8 +132,8 @@ const PersonManagement = () => {
                         onClick={handleDriveSync}
                         disabled={syncing}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all border ${syncing
-                                ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-not-allowed'
-                                : 'bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:border-green-400'
+                            ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-not-allowed'
+                            : 'bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:border-green-400'
                             }`}
                     >
                         <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,33 +180,58 @@ const PersonManagement = () => {
                         등록된 인물이 없습니다.
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        {persons.map((person) => (
-                            <div key={person.key} className="group relative bg-gray-900 rounded-xl overflow-hidden border border-gray-800 hover:border-blue-500 transition-all">
-                                <div className="aspect-[3/4] overflow-hidden bg-gray-950">
-                                    <img
-                                        src={person.url}
-                                        alt={person.name}
-                                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                                        onError={(e) => {
-                                            e.target.closest('.group').style.display = 'none';
-                                        }}
-                                    />
+                    <>
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            {persons.map((person) => (
+                                <div key={person.key} className="group relative bg-gray-900 rounded-xl overflow-hidden border border-gray-800 hover:border-blue-500 transition-all">
+                                    <div className="aspect-[3/4] overflow-hidden bg-gray-950">
+                                        <img
+                                            src={person.url}
+                                            alt={person.name}
+                                            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                                            onError={(e) => {
+                                                e.target.closest('.group').style.display = 'none';
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                                        <div className="text-white font-bold text-sm truncate">{person.name}</div>
+                                        <div className="text-[10px] text-gray-400">{new Date(person.lastModified).toLocaleDateString()}</div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDelete(person.key.split('/').pop())}
+                                        className="absolute top-2 right-2 p-1.5 bg-red-600/80 text-white rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all transform hover:scale-110"
+                                        title="삭제"
+                                    >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
                                 </div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                                    <div className="text-white font-bold text-sm truncate">{person.name}</div>
-                                    <div className="text-[10px] text-gray-400">{new Date(person.lastModified).toLocaleDateString()}</div>
-                                </div>
-                                <button
-                                    onClick={() => handleDelete(person.key.split('/').pop())}
-                                    className="absolute top-2 right-2 p-1.5 bg-red-600/80 text-white rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all transform hover:scale-110"
-                                    title="삭제"
-                                >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+
+                        {/* Pagination Controls */}
+                        <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-700">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                            </button>
+
+                            <span className="text-gray-400 font-medium">
+                                {currentPage} / {totalPages}
+                            </span>
+
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                                className="p-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                        </div>
+                    </>
                 )}
             </div>
         </div>
