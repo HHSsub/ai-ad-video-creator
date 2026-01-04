@@ -268,7 +268,9 @@ const Step4 = ({
           sceneNumber: sceneNumber,
           projectId: currentProject?.id,
           conceptId: selectedConceptId,
-          duration: 3
+          prompt: scene.prompt, // 🔥 AI Video Prompt
+          motionPrompt: scene.motionPrompt, // 🔥 Detailed Motion Guide
+          duration: 5 // Kling Standard
         })
       });
 

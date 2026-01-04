@@ -2,7 +2,7 @@
 // 사용자 요청: NanoBanana(Gemini) 대체용, Async -> Sync 변환 처리
 
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
-import { getTextToImageUrl } from '../src/utils/engineConfigLoader.js';
+import { getTextToImageUrl, getTextToImageStatusUrl } from '../src/utils/engineConfigLoader.js';
 
 const POLLING_TIMEOUT = 180000; // 3분 타임아웃
 const POLLING_INTERVAL = 3000; // 3초 간격 폴링
@@ -17,8 +17,8 @@ async function pollSeedreamStatus(taskId) {
         try {
             // console.log(`[Seedream] 태스크 ${taskId} 상태 확인 중...`);
 
-            // Freepik 표준 상태 확인 URL (v4는 모델명 포함 필수)
-            const url = `https://api.freepik.com/v1/ai/text-to-image/seedream-v4/${taskId}`;
+            // Freepik 표준 상태 확인 URL (Dynamic)
+            const url = getTextToImageStatusUrl(taskId);
 
             const result = await safeCallFreepik(url, {
                 method: 'GET',

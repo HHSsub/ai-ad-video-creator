@@ -1,57 +1,55 @@
-// api/convert-single-scene.js - 단일 씬 영상 변환 API
+// api/convert-single-scene.js - 단일 씬 영상 변환 API (Kling AI Integration)
+// FFmpeg Simple Zoom 제거 -> Freepik Kling AI Engine 연동
 import fs from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
 import crypto from 'crypto';
 import { uploadVideoToS3 } from '../server/utils/s3-uploader.js';
+import { safeCallFreepik } from '../src/utils/apiHelpers.js';
+import { getImageToVideoUrl, getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
 
-const FFMPEG_TIMEOUT = 60000; // 1분
+const POLLING_TIMEOUT = 300000; // 5분 (비디오 생성은 오래 걸림)
+const POLLING_INTERVAL = 5000; // 5초 간격
 
-async function downloadImage(imageUrl, outputPath) {
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-        throw new Error(`Image download failed: ${response.status}`);
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    fs.writeFileSync(outputPath, buffer);
-    return outputPath;
-}
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-function runFFmpeg(args) {
-    return new Promise((resolve, reject) => {
-        console.log(`[convert-single-scene] FFmpeg: ${args.join(' ')}`);
+async function pollVideoStatus(taskId) {
+    const startTime = Date.now();
 
-        const process = spawn('ffmpeg', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    while (Date.now() - startTime < POLLING_TIMEOUT) {
+        try {
+            // 엔진 설정에서 동적 상태 URL 가져오기
+            const url = getImageToVideoStatusUrl(taskId);
 
-        let stderr = '';
+            const result = await safeCallFreepik(url, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            }, 'kling-video', `status-${taskId}`);
 
-        if (process.stdin) {
-            process.stdin.end();
-        }
+            if (result && result.data) {
+                const { status, generated } = result.data;
+                console.log(`[Kling] Task ${taskId} Status: ${status}`);
 
-        process.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
+                if (status === 'COMPLETED') {
+                    if (generated && generated.length > 0) {
+                        return generated[0].url; // 최종 비디오 URL
+                    }
+                    throw new Error('STATUS=COMPLETED but no video URL returned');
+                } else if (status === 'FAILED') {
+                    throw new Error('Kling A.I. generation failed');
+                }
 
-        const timeout = setTimeout(() => {
-            process.kill('SIGKILL');
-            reject(new Error('FFmpeg timeout'));
-        }, FFMPEG_TIMEOUT);
-
-        process.on('close', (code) => {
-            clearTimeout(timeout);
-            if (code === 0) {
-                resolve();
+                await sleep(POLLING_INTERVAL);
             } else {
-                reject(new Error(`FFmpeg failed with code ${code}: ${stderr}`));
+                throw new Error('Invalid status response from Freepik');
             }
-        });
 
-        process.on('error', (err) => {
-            clearTimeout(timeout);
-            reject(err);
-        });
-    });
+        } catch (err) {
+            console.error(`[Kling] Polling error: ${err.message}`);
+            if (Date.now() - startTime > POLLING_TIMEOUT) throw err;
+            await sleep(POLLING_INTERVAL);
+        }
+    }
+    throw new Error('Video generation timed out');
 }
 
 export default async function handler(req, res) {
@@ -59,79 +57,97 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { imageUrl, sceneNumber, projectId, conceptId, duration = 3 } = req.body;
+    // timeout 증가
+    res.setTimeout(300000); // 5분
 
-    console.log('[convert-single-scene] 요청:', { imageUrl, sceneNumber, projectId, conceptId, duration });
+    const { imageUrl, sceneNumber, projectId, conceptId, prompt, motionPrompt, duration = 5 } = req.body;
+
+    console.log('[convert-single-scene] AI Video Request:', {
+        sceneNumber,
+        promptLength: prompt?.length,
+        hasMotion: !!motionPrompt,
+        engine: 'Kling v2.1 Pro'
+    });
 
     if (!imageUrl || !sceneNumber) {
         return res.status(400).json({ error: 'imageUrl and sceneNumber required' });
     }
 
-    const tempDir = path.join(process.cwd(), 'tmp', `scene_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`);
-
     try {
-        // 1. 임시 디렉토리 생성
-        fs.mkdirSync(tempDir, { recursive: true });
-        console.log('[convert-single-scene] 임시 디렉토리:', tempDir);
+        // 1. 요청 페이로드 구성
+        const createUrl = getImageToVideoUrl();
 
-        // 2. 이미지 다운로드
-        const imagePath = path.join(tempDir, 'input.jpg');
-        await downloadImage(imageUrl, imagePath);
-        console.log('[convert-single-scene] 이미지 다운로드 완료');
-
-        // 3. 이미지 → 영상 변환 (간단한 줌 효과)
-        const outputPath = path.join(tempDir, 'output.mp4');
-
-        await runFFmpeg([
-            '-loop', '1',
-            '-i', imagePath,
-            '-vf', `scale=1920:1080,zoompan=z='min(zoom+0.0015,1.5)':d=${duration * 25}:s=1920x1080:fps=25`,
-            '-c:v', 'libx264',
-            '-t', String(duration),
-            '-pix_fmt', 'yuv420p',
-            '-y',
-            outputPath
-        ]);
-
-        console.log('[convert-single-scene] 영상 변환 완료');
-
-        // 4. S3 업로드
-        const filename = `scene_${sceneNumber}_${Date.now()}`;
-        const videoUrl = await uploadVideoToS3(
-            outputPath,
-            projectId || 'unknown',
-            conceptId || 'unknown',
-            filename
-        );
-
-        console.log('[convert-single-scene] S3 업로드 완료:', videoUrl);
-
-        // 5. 임시 파일 정리
-        try {
-            fs.rmSync(tempDir, { recursive: true, force: true });
-        } catch (cleanupError) {
-            console.warn('[convert-single-scene] 정리 실패:', cleanupError.message);
+        // 프롬프트 구성 (Scene Description + Motion)
+        let finalPrompt = prompt || 'Cinematic shot, high quality';
+        if (motionPrompt && motionPrompt.description) {
+            finalPrompt += `, ${motionPrompt.description}`;
         }
+        finalPrompt += ", high quality, 4k, fluid motion, physically accurate";
+
+        const payload = {
+            image: { url: imageUrl },
+            prompt: finalPrompt,
+            negative_prompt: "blurry, distorted, low quality, morphing, glitch",
+            duration: 5, // Kling v2.1 supports 5s or 10s usually
+            cfg_scale: 0.5
+        };
+
+        // 2. 태스크 생성 요청
+        const createResult = await safeCallFreepik(createUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        }, 'kling-video', 'create');
+
+        if (!createResult?.data?.task_id) {
+            throw new Error('Failed to create AI video task');
+        }
+
+        const taskId = createResult.data.task_id;
+        console.log(`[convert-single-scene] Task Created: ${taskId}`);
+
+        // 3. 폴링 (Sync-like behavior)
+        const engineVideoUrl = await pollVideoStatus(taskId);
+        console.log(`[convert-single-scene] Generation Success: ${engineVideoUrl}`);
+
+        // 4. S3 업로드 (영구 보관)
+        const filename = `scene_${sceneNumber}_kling_${Date.now()}.mp4`;
+        // Kling URL을 다운로드해서 S3에 업로드? -> uploadVideoToS3는 로컬 경로를 받음.
+        // 하지만 여기선 URL to S3 Stream이 효율적.
+        // 기존 uploadVideoToS3가 로컬파일만 지원한다면 다운로드 필요.
+
+        // 임시 다운로드
+        const tempDir = path.join(process.cwd(), 'tmp');
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+        const tempFilePath = path.join(tempDir, filename);
+
+        // 다운로드
+        const vidRes = await fetch(engineVideoUrl);
+        const buffer = Buffer.from(await vidRes.arrayBuffer());
+        fs.writeFileSync(tempFilePath, buffer);
+
+        // 업로드
+        const s3Url = await uploadVideoToS3(tempFilePath, projectId || 'unknown', conceptId || 'unknown', filename.replace('.mp4', ''));
+
+        // 정리
+        fs.unlinkSync(tempFilePath);
+
+        console.log(`[convert-single-scene] S3 Uploaded: ${s3Url}`);
 
         return res.json({
             success: true,
-            videoUrl: videoUrl,
+            videoUrl: s3Url,
             sceneNumber: sceneNumber,
-            duration: duration
+            duration: 5,
+            engine: 'kling-v2-1-pro'
         });
 
     } catch (error) {
-        console.error('[convert-single-scene] 오류:', error);
-
-        // 임시 파일 정리
-        try {
-            if (fs.existsSync(tempDir)) {
-                fs.rmSync(tempDir, { recursive: true, force: true });
-            }
-        } catch (cleanupError) {
-            console.warn('[convert-single-scene] 정리 실패:', cleanupError.message);
-        }
-
+        console.error('[convert-single-scene] Error:', error);
         return res.status(500).json({
             success: false,
             error: error.message

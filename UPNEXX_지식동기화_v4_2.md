@@ -121,6 +121,15 @@
       -   **Layout**: 가로 스크롤 필터 폐기 -> **Vertical Sidebar (Left)** 방식으로 변경. Age/Sex 체크박스를 세로로 나열하여 잘림 없이 한눈에 볼 수 있게 함.
 - **상태**: ✅ 완료 (긴급 배포 2차)
 
+### 2026-01-05 08:55 - [CRITICAL] 영상 생성 로직 및 합성 엔진 긴급 수정
+- **이슈 1**: "영상 변환" 시 AI(Kling)가 아닌 단순 FFmpeg Zoom만 적용되어 퀄리티 저하 및 프롬프트 무시 현상 발생. (사용자 극대노)
+- **이슈 2**: 인물 합성 시 `400 Bad Request` 또는 `404 Not Found` 발생 (Freepik Polling URL 하드코딩 문제).
+- **조치 사항**:
+  1.  **Video Generation**: `api/convert-single-scene.js`를 **Kling v2.1 Pro** 엔진 연동으로 전면 교체. 단순 Zoom 로직 폐기.
+  2.  **Frontend**: `Step4.jsx`에서 `prompt`와 `motionPrompt`를 API로 전달하도록 수정. 이제 "지하철"이나 "달리기" 같은 프롬프트가 영상에 반영됨.
+  3.  **Synthesis Engine**: `api/seedream-compose.js`의 하드코딩된 Polling URL을 `getTextToImageStatusUrl(taskId)` 동적 함수로 교체하여 404 오류 해결.
+- **상태**: ✅ 완료 (엔진 정상화)
+
 ### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정
 - **이슈**: 모달이 우측 구석에 뜨거나 화면 밖으로 잘리는 현상 발생. 사용자는 버튼을 "덮을 정도로" 중앙에 뜨기를 강력히 원함.
 - **수정**: `Step4.jsx`의 `handleOpenPersonModal` 좌표 계산 로직 변경.
