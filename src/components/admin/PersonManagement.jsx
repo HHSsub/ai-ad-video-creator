@@ -18,6 +18,9 @@ const PersonManagement = () => {
     const [filterGender, setFilterGender] = useState('');
     const [filterNationality, setFilterNationality] = useState('');
 
+    // Dynamic Facets (for dropdown options)
+    const [facets, setFacets] = useState({ ages: [], genders: [], nationalities: [] });
+
     useEffect(() => {
         loadPersons(1); // Reset to page 1 when filters change
         setCurrentPage(1);
@@ -44,6 +47,12 @@ const PersonManagement = () => {
             if (data.success) {
                 setPersons(data.persons || []);
                 setTotalPages(data.totalPages || 1);
+
+                // Update Facets if provided
+                if (data.facets) {
+                    setFacets(data.facets);
+                }
+
                 // If page > totalPages, reset to last page (optional, but good UX)
                 if (page > (data.totalPages || 1)) {
                     setCurrentPage(data.totalPages || 1);
@@ -156,8 +165,8 @@ const PersonManagement = () => {
                         onClick={handleDriveSync}
                         disabled={syncing}
                         className={`hidden flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all border ${syncing
-                                ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-not-allowed'
-                                : 'bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:border-green-400'
+                            ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-not-allowed'
+                            : 'bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:border-green-400'
                             }`}
                         title="Google Drive 동기화 (숨김 처리됨)"
                     >
@@ -175,7 +184,7 @@ const PersonManagement = () => {
                             className="bg-gray-700 text-white text-xs p-2 rounded-lg border border-gray-600 outline-none focus:border-blue-500"
                         >
                             <option value="">(전체 국적)</option>
-                            {['Korean', 'Western', 'Asian'].map(n => <option key={n} value={n}>{n}</option>)}
+                            {facets.nationalities.map(n => <option key={n} value={n}>{n}</option>)}
                         </select>
                         <select
                             value={filterGender}
@@ -183,7 +192,7 @@ const PersonManagement = () => {
                             className="bg-gray-700 text-white text-xs p-2 rounded-lg border border-gray-600 outline-none focus:border-blue-500"
                         >
                             <option value="">(전체 성별)</option>
-                            {['Male', 'Female'].map(g => <option key={g} value={g}>{g}</option>)}
+                            {facets.genders.map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                         <select
                             value={filterAge}
@@ -191,7 +200,7 @@ const PersonManagement = () => {
                             className="bg-gray-700 text-white text-xs p-2 rounded-lg border border-gray-600 outline-none focus:border-blue-500"
                         >
                             <option value="">(전체 연령)</option>
-                            {['10', '20', '30', '40', '50', '60'].map(a => <option key={a} value={a}>{a}대</option>)}
+                            {facets.ages.map(a => <option key={a} value={a}>{a}대</option>)}
                         </select>
                     </div>
                 </div>

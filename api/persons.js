@@ -46,21 +46,45 @@ router.get('/', async (req, res) => {
             });
 
             allPersons = validFiles.map(file => {
-                // 키에서 이름 추출 (예: nexxii-storage/persons/man.jpg -> man)
-                const name = file.key.replace('nexxii-storage/persons/', '').split('.')[0];
+                // 키에서 이름 추출 및 메타데이터 파싱
+                // Format: Age_Gender_Nationality_Name.ext
+                // Example: 10_Female_Caucasian_Luna.png
+
+                const filename = file.key.replace('nexxii-storage/persons/', '');
+                const nameParts = filename.split('.')[0].split('_');
+
+                let age = 'Unknown';
+                let gender = 'Unknown';
+                let nationality = 'Unknown';
+                let name = filename.split('.')[0];
+
+                if (nameParts.length >= 4) {
+                    age = nameParts[0];
+                    gender = nameParts[1];
+                    nationality = nameParts[2];
+                    name = nameParts[3];
+                }
+
                 const fixedUrl = `https://upnexx.ai/${file.key}`;
 
                 return {
                     ...file,
                     name,
                     url: fixedUrl,
-                    age: 'Unknown',
-                    gender: 'Unknown',
-                    nationality: 'Unknown'
+                    age,
+                    gender,
+                    nationality
                 };
             });
             source = 's3';
         }
+
+        // 🔥 Dynamic Facets Extraction (From ALL persons, even before filtering)
+        const facets = {
+            ages: [...new Set(allPersons.map(p => p.age))].filter(v => v && v !== 'Unknown').sort(),
+            genders: [...new Set(allPersons.map(p => p.gender))].filter(v => v && v !== 'Unknown').sort(),
+            nationalities: [...new Set(allPersons.map(p => p.nationality))].filter(v => v && v !== 'Unknown').sort()
+        };
 
         // 필터링 적용
         const { age, gender, nationality } = req.query;
@@ -88,11 +112,13 @@ router.get('/', async (req, res) => {
                 page,
                 limit,
                 totalPages: Math.ceil(allPersons.length / limit),
-                source
+                totalPages: Math.ceil(allPersons.length / limit),
+                source,
+                facets // 🔥 Include facets in response
             });
         }
 
-        res.json({ success: true, persons: allPersons, total: allPersons.length, source });
+        res.json({ success: true, persons: allPersons, total: allPersons.length, source, facets });
 
     } catch (error) {
         console.error('[Persons] Create Error:', error);
