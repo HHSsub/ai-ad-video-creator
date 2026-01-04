@@ -111,6 +111,16 @@
      - **Layout 최적화**: 거대한 모달을 컴팩트한 사이즈(width: 550px)로 변경하고 필터를 상단 칩 형태로 간소화.
 - **상태**: ✅ 완료 (긴급 배포 1차)
 
+### 2026-01-05 08:45 - [HOTFIX] 인물 합성 Crash 수정 및 UI 전면 개편
+- **긴급 이슈 1**: 합성 실패 `getTextToImageUrl is not defined` 발생.
+- **긴급 이슈 2**: 모달 위치가 여전히 정확하지 않고, 가로형 필터가 잘려서 사용 불가.
+- **조치 사항**:
+  1.  **Crash 해결**: `api/seedream-compose.js`에 `getTextToImageUrl` import 추가.
+  2.  **UI 전면 개편**:
+      -   **Positioning**: `absolute` -> `fixed`로 변경. `rect`와 `window.innerWidth/Height`를 직접 비교하여 스크롤 영향 없이 "버튼 정중앙"을 완벽하게 덮도록 계산.
+      -   **Layout**: 가로 스크롤 필터 폐기 -> **Vertical Sidebar (Left)** 방식으로 변경. Age/Sex 체크박스를 세로로 나열하여 잘림 없이 한눈에 볼 수 있게 함.
+- **상태**: ✅ 완료 (긴급 배포 2차)
+
 ### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정
 - **이슈**: 모달이 우측 구석에 뜨거나 화면 밖으로 잘리는 현상 발생. 사용자는 버튼을 "덮을 정도로" 중앙에 뜨기를 강력히 원함.
 - **수정**: `Step4.jsx`의 `handleOpenPersonModal` 좌표 계산 로직 변경.

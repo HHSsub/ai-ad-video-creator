@@ -2,6 +2,7 @@
 // 사용자 요청: NanoBanana(Gemini) 대체용, Async -> Sync 변환 처리
 
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
+import { getTextToImageUrl } from '../src/utils/engineConfigLoader.js';
 
 const POLLING_TIMEOUT = 180000; // 3분 타임아웃
 const POLLING_INTERVAL = 3000; // 3초 간격 폴링
