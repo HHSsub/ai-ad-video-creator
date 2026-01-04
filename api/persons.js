@@ -62,6 +62,19 @@ router.get('/', async (req, res) => {
             source = 's3';
         }
 
+        // 필터링 적용
+        const { age, gender, nationality } = req.query;
+
+        if (age || gender || nationality) {
+            allPersons = allPersons.filter(p => {
+                // 정확히 일치하는 경우만 필터링 (필요시 포함 검색으로 변경 가능)
+                if (age && p.age !== age) return false;
+                if (gender && p.gender !== gender) return false;
+                if (nationality && p.nationality !== nationality) return false;
+                return true;
+            });
+        }
+
         // 페이지네이션 적용
         if (limit > 0) {
             const startIndex = (page - 1) * limit;

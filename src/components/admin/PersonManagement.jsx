@@ -13,6 +13,16 @@ const PersonManagement = () => {
     const [totalPages, setTotalPages] = useState(1);
     const LIMIT = 5;
 
+    // Filter State
+    const [filterAge, setFilterAge] = useState('');
+    const [filterGender, setFilterGender] = useState('');
+    const [filterNationality, setFilterNationality] = useState('');
+
+    useEffect(() => {
+        loadPersons(1); // Reset to page 1 when filters change
+        setCurrentPage(1);
+    }, [filterAge, filterGender, filterNationality]);
+
     useEffect(() => {
         loadPersons(currentPage);
     }, [currentPage]);
@@ -20,11 +30,24 @@ const PersonManagement = () => {
     const loadPersons = async (page = 1) => {
         setLoading(true);
         try {
-            const response = await fetch(`/nexxii/api/persons?page=${page}&limit=${LIMIT}`);
+            // Build Query Params
+            const params = new URLSearchParams({
+                page: page.toString(), // Ensure string
+                limit: LIMIT.toString()
+            });
+            if (filterAge) params.append('age', filterAge);
+            if (filterGender) params.append('gender', filterGender);
+            if (filterNationality) params.append('nationality', filterNationality);
+
+            const response = await fetch(`/nexxii/api/persons?${params.toString()}`);
             const data = await response.json();
             if (data.success) {
                 setPersons(data.persons || []);
                 setTotalPages(data.totalPages || 1);
+                // If page > totalPages, reset to last page (optional, but good UX)
+                if (page > (data.totalPages || 1)) {
+                    setCurrentPage(data.totalPages || 1);
+                }
             }
         } catch (error) {
             console.error('Failed to load persons:', error);
@@ -128,19 +151,49 @@ const PersonManagement = () => {
                             영상 합성에 사용할 인물 이미지를 관리합니다. 구글 드라이브와 동기화하여 최신화할 수 있습니다.
                         </p>
                     </div>
+                    {/* Hidden Drive Sync Button */}
                     <button
                         onClick={handleDriveSync}
                         disabled={syncing}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all border ${syncing
-                            ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-not-allowed'
-                            : 'bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:border-green-400'
+                        className={`hidden flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all border ${syncing
+                                ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-not-allowed'
+                                : 'bg-green-600/20 text-green-400 border-green-500/50 hover:bg-green-600/30 hover:border-green-400'
                             }`}
+                        title="Google Drive 동기화 (숨김 처리됨)"
                     >
                         <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                         {syncing ? '동기화 중...' : 'Google Drive 동기화'}
                     </button>
+
+                    {/* Filter UI */}
+                    <div className="flex gap-2">
+                        <select
+                            value={filterNationality}
+                            onChange={(e) => setFilterNationality(e.target.value)}
+                            className="bg-gray-700 text-white text-xs p-2 rounded-lg border border-gray-600 outline-none focus:border-blue-500"
+                        >
+                            <option value="">(전체 국적)</option>
+                            {['Korean', 'Western', 'Asian'].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        <select
+                            value={filterGender}
+                            onChange={(e) => setFilterGender(e.target.value)}
+                            className="bg-gray-700 text-white text-xs p-2 rounded-lg border border-gray-600 outline-none focus:border-blue-500"
+                        >
+                            <option value="">(전체 성별)</option>
+                            {['Male', 'Female'].map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                        <select
+                            value={filterAge}
+                            onChange={(e) => setFilterAge(e.target.value)}
+                            className="bg-gray-700 text-white text-xs p-2 rounded-lg border border-gray-600 outline-none focus:border-blue-500"
+                        >
+                            <option value="">(전체 연령)</option>
+                            {['10', '20', '30', '40', '50', '60'].map(a => <option key={a} value={a}>{a}대</option>)}
+                        </select>
+                    </div>
                 </div>
 
                 {/* Upload Area */}
