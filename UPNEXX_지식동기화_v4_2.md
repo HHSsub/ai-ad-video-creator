@@ -109,7 +109,15 @@
      - **Popover 방식 변경**: 모달을 버튼 바로 우측(`rect.right + 10`)에 뜨도록 `absolute` 포지셔닝 변경.
      - **Pagination 도입**: 초기 4명만 렌더링하고 '더 보기' 버튼으로 추가 로드하도록 최적화 (`visiblePeopleCount`).
      - **Layout 최적화**: 거대한 모달을 컴팩트한 사이즈(width: 550px)로 변경하고 필터를 상단 칩 형태로 간소화.
-- **상태**: ✅ 완료 (긴급 배포)
+- **상태**: ✅ 완료 (긴급 배포 1차)
+
+### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정
+- **이슈**: 모달이 우측 구석에 뜨거나 화면 밖으로 잘리는 현상 발생. 사용자는 버튼을 "덮을 정도로" 중앙에 뜨기를 강력히 원함.
+- **수정**: `Step4.jsx`의 `handleOpenPersonModal` 좌표 계산 로직 변경.
+  - `rect.right + 10` 방식 폐기.
+  - **Button Center Alignment**: `left = rect.left + (rect.width/2) - (modalWidth/2)` 적용.
+  - 버튼의 정중앙과 모달의 정중앙을 일치시킴.
+- **상태**: ✅ 완료
 
 ### 2025-12-26 18:35 - 인물 합성 Polling 404 오류 수정 (Task Z)
 - **문제**: 인물 합성(`seedream-compose`) 시 Freepik API 태스크 생성은 성공하지만, 상태 확인(Polling) 중 404 오류가 발생하여 합성에 실패함.

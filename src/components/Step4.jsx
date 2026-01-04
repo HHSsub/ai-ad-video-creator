@@ -549,30 +549,41 @@ const Step4 = ({
     }
   };
 
-  // 🔥 모달 열기 (위치 계산 포함)
+  // 🔥 모달 열기 (위치 계산: 버튼 중앙 정렬 - User Requested)
   const handleOpenPersonModal = (sceneNumber, e) => {
-    // 1. 버튼 위치 계산
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 1. 버튼 위치 및 크기
     const rect = e.currentTarget.getBoundingClientRect();
     const scrollY = window.scrollY;
 
-    // 화면 오른쪽 여유 확인
-    const windowWidth = window.innerWidth;
-    const modalWidth = 550; // 예상 너비
+    const modalWidth = 550;
+    const modalHeight = 650;
 
-    let left = rect.right + 10;
-    // 화면 넘어가지 않도록 조정 (너무 오른쪽이면 버튼 왼쪽에 표시)
-    if (left + modalWidth > windowWidth) {
-      left = rect.left - modalWidth - 10;
+    // 2. 정확히 버튼 중앙에 모달 중앙을 위치시킴
+    let left = rect.left + (rect.width / 2) - (modalWidth / 2);
+    let top = rect.top + scrollY + (rect.height / 2) - (modalHeight / 2);
+
+    // 3. 뷰포트 경계 (최소한의 안전장치)
+    // 왼쪽으로 너무 나가면 10px 여유
+    if (left < 10) left = 10;
+
+    // 오른쪽으로 너무 나가면 조정
+    if (left + modalWidth > window.innerWidth - 10) {
+      left = window.innerWidth - modalWidth - 10;
     }
 
-    setModalPosition({
-      top: rect.top + scrollY - 100, // 약간 위쪽으로 올려서 보기 편하게
-      left: left
-    });
+    // 뷰포트 상단 체크 (화면 위로 잘리지 않게)
+    // top은 문서 전체 기준 좌표. 뷰포트 기준 top은 top - scrollY
+    if (top - scrollY < 10) {
+      top = scrollY + 10;
+    }
 
+    setModalPosition({ top, left });
     setTargetSceneNumber(sceneNumber);
     setShowPersonModal(true);
-    setVisiblePeopleCount(4); // 4명만 먼저 보여줌 (최적화)
+    setVisiblePeopleCount(4);
 
     if (featurePeople.length === 0) {
       fetchFeaturePeople();
