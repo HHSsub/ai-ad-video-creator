@@ -77,7 +77,8 @@ export default async function handler(req, res) {
 
     try {
         // 1. 요청 페이로드 구성
-        const createUrl = getImageToVideoUrl();
+        const apiKey = process.env.FREEPIK_API_KEY || process.env.REACT_APP_FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
+        if (!apiKey) throw new Error('Freepik API key not found');
 
         // 프롬프트 구성 (Scene Description + Motion)
         let finalPrompt = prompt || 'Cinematic shot, high quality';
@@ -85,12 +86,14 @@ export default async function handler(req, res) {
             finalPrompt += `, ${motionPrompt.description}`;
         }
         finalPrompt += ", high quality, 4k, fluid motion, physically accurate";
+        // Clamp prompt like generate-video.js
+        if (finalPrompt.length > 2000) finalPrompt = finalPrompt.slice(0, 1900);
 
         const payload = {
-            image: imageUrl, // 🔥 Change: Send string URL directly (like generate-video.js), not {url: ...}
+            webhook_url: null,
+            image: imageUrl,
             prompt: finalPrompt,
             negative_prompt: "blurry, distorted, low quality, morphing, glitch",
-            duration: 5,
             duration: 5
         };
 
@@ -101,15 +104,28 @@ export default async function handler(req, res) {
             }
         });
 
-        // 2. 태스크 생성 요청
-        const createResult = await safeCallFreepik(createUrl, {
+        console.log('[convert-single-scene] Calling Kling v2.1 Pro directly:', {
+            url: 'https://api.freepik.com/v1/ai/image-to-video/kling-v2-1-pro',
+            payloadKeys: Object.keys(payload)
+        });
+
+        // 2. 태스크 생성 요청 (Direct Fetch to bypass Config/Helper)
+        const response = await fetch('https://api.freepik.com/v1/ai/image-to-video/kling-v2-1-pro', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'x-freepik-api-key': apiKey
             },
             body: JSON.stringify(payload)
-        }, 'kling-video', 'create');
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error('[convert-single-scene] Freepik API Error:', response.status, errText);
+            throw new Error(`Video API failed ${response.status}: ${errText}`);
+        }
+
+        const createResult = await response.json();
 
         if (!createResult?.data?.task_id) {
             throw new Error('Failed to create AI video task');

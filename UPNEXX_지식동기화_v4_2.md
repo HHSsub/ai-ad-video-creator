@@ -150,6 +150,17 @@
   2. **Frontend**: `Step4.jsx`에서 `handleSynthesizePerson` 성공 시 `setSortedImages`를 통해 해당 씬의 `imageUrl`을 즉시 S3 URL로 교체하는 로직 검증/추가.
   3. **Synthesis**: `strength`를 `0.9`로 상향하고, `reference_strength` 파라미터(가능한 경우) 확인. `prompt`에 인물 묘사 비중 대폭 강화.
   4. **Video Gen**: Frontend에서 넘어오는 `imageUrl` 로그를 `api/convert-single-scene.js` 최상단에 추가하여 URL 유효성(S3 여부) 검증.
+- **상태**: ❌ 실패 (400 해결 안 됨 - 로직 차이 존재 추정)
+
+### 2026-01-05 09:35 - [CRITICAL] 4차 수정: 동기화 원칙 준수 및 영상 엔진 완전 동기화
+- **현상**:
+  1. **Video Gen**: `cfg_scale` 제거 후에도 400 에러 지속. `generate-video.js`(성공본)와 `convert-single-scene.js`(실패본) 사이에 **URL 호출 방식(fetch vs safeCallFreepik)** 또는 **헤더/URL 처리**에 결정적 차이가 있음.
+  2. **Process**: 문서 선(先) 업데이트 원칙 위반으로 인한 강력한 경고 접수.
+  3. **Modal**: Portal 도입으로 위치 문제는 해결된 것으로 보임.
+- **수정 계획**:
+  1. **Doc Update**: 작업 착수 전 본 문서 업데이트 (최우선 수행).
+  2. **Video Gen**: `convert-single-scene.js`를 `generate-video.js`와 **완전히 동일한 구조(Direct Fetch, Hardcoded URL)**로 리팩토링하여 중간 변수(ConfigLoader, Helper) 개입을 배제. 엔진 스펙(`engines.json`)을 따르되, 성공한 코드의 방식을 그대로 복제.
+  3. **Payload**: `generate-video.js`의 Payload 생성 함수(`buildVideoPrompt` 등)와 Cleaning 로직을 그대로 이식.
 - **상태**: 🔄 진행 중
 
 ### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정
