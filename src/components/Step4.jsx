@@ -725,43 +725,18 @@ const Step4 = ({
 
         if (data.success && data.video) {
           setRecommendedVideo(data.video);
-        } else {
-          // console.warn('[Step4] No recommendation found:', data.message);
-          // Optional: Set a dummy "Not Found" state if needed for UI
         }
       } catch (err) {
-        console.error('[Step4] Failed to fetch recommendation:', err);
+        // Silent fail
       }
     };
 
-    fetchRecommendation();
+    if (formData?.productService || formData?.projectType || currentProject?.type) {
+      fetchRecommendation();
+    }
   }, [formData, currentProject]);
 
-  // 🔥 Fetch Recommendation
-  useEffect(() => {
-    // Fallback logic for concept type
-    const conceptType = formData?.productService || formData?.projectType || currentProject?.type || 'product'; // Default to product if unknown
 
-    log(`[Step4] Recommendation Fetch Triggered. Concept: ${conceptType}`);
-
-    if (conceptType) {
-      fetch(`${API_BASE}/api/recommend-video`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conceptType })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.video) {
-            setRecommendedVideo(data.video);
-            log(`[Step4] 추천 영상 로드됨: ${data.video.title}`);
-          } else {
-            log(`[Step4] 추천 영상 없음: ${data.message}`);
-          }
-        })
-        .catch(err => console.error('[Step4] 추천 영상 로드 실패:', err));
-    }
-  }, [formData?.productService, formData?.projectType, currentProject?.type]);
 
   // 🔥 합성 실행
   const handleSynthesizePerson = async () => {
