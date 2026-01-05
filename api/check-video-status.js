@@ -78,18 +78,8 @@ export default async function handler(req, res) {
                 throw new Error('Completed but no video URL');
             }
 
-            // 🔥 Freepik API returns Array of Strings (URLs) or Objects.
-            // video-status.js Reference: videoUrl = taskData.generated[0];
-            let engineVideoUrl = generated[0];
-            if (typeof engineVideoUrl === 'object' && engineVideoUrl.url) {
-                engineVideoUrl = engineVideoUrl.url;
-            }
-
+            const engineVideoUrl = generated[0].url;
             console.log(`[check-video-status] Generation Success (Engine): ${engineVideoUrl}`);
-
-            if (!engineVideoUrl) {
-                throw new Error('Failed to extract video URL from response');
-            }
 
             // 🔥 후처리: Download -> Trim -> Upload
             const tempDir = path.join(process.cwd(), 'tmp');

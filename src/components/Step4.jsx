@@ -271,7 +271,9 @@ const Step4 = ({
           conceptId: selectedConceptId,
           prompt: scene.prompt, // 🔥 AI Video Prompt
           motionPrompt: scene.motionPrompt, // 🔥 Detailed Motion Guide
-          duration: Math.round(formData.videoLength / sortedImages.length) || 5 // 🔥 Dynamic Duration (User Selected / Scene Count)
+          // 🔥 Auto vs Manual Duration Logic
+          // If scene has specific duration (Manual), use it. Else calculate average (Auto).
+          duration: scene.duration ? scene.duration : (Math.round(formData.videoLength / sortedImages.length) || 5)
         })
       });
 
