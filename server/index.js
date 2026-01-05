@@ -60,7 +60,9 @@ import storageInfoHandler from '../api/storage-info.js';
 import storageBrowseHandler from '../api/storage-browse.js';
 
 // 🔥 모든 엔진 프롬프트 조회 API
+// 🔥 모든 엔진 프롬프트 조회 API
 import promptsAllHandler from '../api/prompts-all.js';
+import checkVideoStatus from '../api/check-video-status.js'; // 🔥 Async Polling Status API
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -255,6 +257,8 @@ app.use('/api/synthesis-person', synthesisPersonRouter);
 // ✅ 엔진 관리 API 라우팅 추가 - 🔥 수정: /get, /update 제거
 app.use('/api/engines', enginesGet);
 app.use('/api/engines', enginesUpdate);
+
+app.post('/api/check-video-status', checkVideoStatus); // 🔥 Async Status Check
 
 app.get('/health', (req, res) => {
   res.status(200).json({
