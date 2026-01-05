@@ -76,7 +76,9 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     videoPath: videoUrl,
-                    mood: selectedMood
+                    mood: selectedMood,
+                    projectId: currentProject?.id, // 🔥 S3 업로드용
+                    conceptId: selectedConceptId // 🔥 S3 업로드용
                 })
             });
 

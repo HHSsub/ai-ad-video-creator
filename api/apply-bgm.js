@@ -3,6 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
+import { uploadVideoToS3 } from '../server/utils/s3-uploader.js'; // 🔥 S3 업로드 추가
 import { randomUUID } from 'crypto';
 
 const BGM_DIR = path.join(process.cwd(), 'BGM');
@@ -335,12 +336,23 @@ export default async function handler(req, res) {
       });
     }
 
+    // 5. Upload to S3 (Crucial for CloudFront CDN access)
+    console.log('[apply-bgm] S3 업로드 시작...');
+    const projectId = req.body.projectId || 'unknown_project';
+    const conceptId = req.body.conceptId || 'bgm_applied';
+    const outputFilename = path.basename(mergedVideoPath).replace('.mp4', '');
+
+    // 🔥 S3 업로드 (비동기 처리 후 URL 반환)
+    const s3Url = await uploadVideoToS3(mergedVideoPath, projectId, conceptId, outputFilename);
+    console.log(`[apply-bgm] ✅ S3 업로드 완료: ${s3Url}`);
+
     const processingTime = Date.now() - startTime;
 
-    // 🔥 성공 응답에 상세 정보 포함
+    // 🔥 성공 응답에 상세 정보 포함 (URL 변경: mergedVideoPath -> S3 URL)
     const response = {
       success: true,
-      mergedVideoPath: mergedVideoPath,
+      mergedVideoPath: s3Url, // 이제 클라이언트가 읽을 수 있는 URL입니다.
+      localPath: mergedVideoPath, // 디버깅용
       bgm: {
         ...bgmInfo,
         mood: mood,
@@ -362,7 +374,8 @@ export default async function handler(req, res) {
       mood: mood,
       bgmFile: bgmInfo.name,
       processingTime: processingTime + 'ms',
-      outputSize: response.fileInfo.outputSize + ' bytes'
+      outputSize: response.fileInfo.outputSize + ' bytes',
+      s3Url: s3Url
     });
 
     res.status(200).json(response);

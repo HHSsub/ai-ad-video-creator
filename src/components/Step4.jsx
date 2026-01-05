@@ -733,7 +733,10 @@ const Step4 = ({
     };
 
     if (formData?.productService || formData?.projectType || currentProject?.type) {
+      console.log('[Step4] Fetching recommendation...');
       fetchRecommendation();
+    } else {
+      console.log('[Step4] Skipping recommendation: No project type found', { formData, currentProject });
     }
   }, [formData, currentProject]);
 
