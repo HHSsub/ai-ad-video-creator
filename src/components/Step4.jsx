@@ -125,9 +125,10 @@ const Step4 = ({
       }
     }));
 
-    if (!modifiedScenes.includes(sceneNumber)) {
-      setModifiedScenes(prev => [...prev, sceneNumber]);
-    }
+    setModifiedScenes(prev => {
+      if (prev.includes(sceneNumber)) return prev;
+      return [...prev, sceneNumber];
+    });
   };
 
   const getEditedPrompt = (sceneNumber, field, originalValue) => {
@@ -697,6 +698,45 @@ const Step4 = ({
     setFilteredPeople(result);
   }, [personFilters, featurePeople]);
 
+  // 🔥 Task AA: 참고 영상 추천 가져오기 (Missing Logic Restored)
+  useEffect(() => {
+    const fetchRecommendation = async () => {
+      try {
+        // Fallback Logic for conceptType
+        let conceptType = 'product'; // Default
+        if (formData?.productService) {
+          conceptType = formData.productService === '제품' ? 'product' : 'service';
+        } else if (formData?.projectType) {
+          conceptType = formData.projectType === 'product' ? 'product' : 'service';
+        } else if (currentProject?.type) {
+          conceptType = currentProject.type === 'product' ? 'product' : 'service';
+        }
+
+        console.log('[Step4] Fetching recommendation for concept:', conceptType);
+
+        const res = await fetch(`${API_BASE}/api/recommend-video`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conceptType })
+        });
+
+        const data = await res.json();
+        console.log('[Step4] Recommendation Response:', data);
+
+        if (data.success && data.video) {
+          setRecommendedVideo(data.video);
+        } else {
+          console.warn('[Step4] No recommendation found:', data.message);
+          // Optional: Set a dummy "Not Found" state if needed for UI
+        }
+      } catch (err) {
+        console.error('[Step4] Failed to fetch recommendation:', err);
+      }
+    };
+
+    fetchRecommendation();
+  }, [formData, currentProject]);
+
   // 🔥 Fetch Recommendation
   useEffect(() => {
     // Fallback logic for concept type
@@ -1177,7 +1217,7 @@ const Step4 = ({
                 </span>
                 <button
                   onClick={handleConfirmAndComplete}
-                  disabled={sortedImages.filter(img => img.videoUrl).length === 0}
+                  disabled={loading || sortedImages.filter(img => img.videoUrl).length === 0}
                   className="px-6 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
                   title={sortedImages.filter(img => img.videoUrl).length === 0 ? '최소 1개 씬을 영상으로 변환해주세요' : ''}
                 >

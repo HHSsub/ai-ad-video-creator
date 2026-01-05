@@ -225,13 +225,15 @@ function mergeBgm(videoPath, bgmPath, options = {}) {
 
       if (audioPresent) {
         // 기존 오디오가 있는 경우 - 믹싱
-        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -i "${bgmPath}" ` +
-          `-filter_complex "[1:a]volume=${volume},aloop=loop=-1:size=2e+09[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]" ` +
+        // -stream_loop -1: 입력 1(BGM)을 무한 반복
+        // -shortest가 없어야 -t (duration)까지 감
+        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -stream_loop -1 -i "${bgmPath}" ` +
+          `-filter_complex "[1:a]volume=${volume}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]" ` +
           `-map 0:v -map "[aout]" -c:v copy -c:a aac -t ${videoDuration} "${outFile}"`;
       } else {
         // 기존 오디오가 없는 경우 - BGM만 추가
-        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -i "${bgmPath}" ` +
-          `-filter_complex "[1:a]volume=${volume},aloop=loop=-1:size=2e+09[bgm]" ` +
+        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -stream_loop -1 -i "${bgmPath}" ` +
+          `-filter_complex "[1:a]volume=${volume}[bgm]" ` +
           `-map 0:v -map "[bgm]" -c:v copy -c:a aac -t ${videoDuration} "${outFile}"`;
       }
 

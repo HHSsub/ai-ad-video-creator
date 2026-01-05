@@ -57,12 +57,19 @@ router.post('/', async (req, res) => {
         const buffer = await getStreamBuffer(response.Body);
 
         // 3. Parse Excel
+        console.log('[Recommend] Parsing Excel buffer...');
         const workbook = XLSX.read(buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
+        console.log(`[Recommend] Sheet Name: ${sheetName}`);
+
         const sheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(sheet);
 
-        console.log(`[Recommend] Loaded ${data.length} rows.`);
+        console.log(`[Recommend] Loaded ${data.length} rows from Excel.`);
+
+        if (data.length > 0) {
+            console.log('[Recommend] First row keys:', Object.keys(data[0]));
+        }
 
         // 4. Filter Data
         const candidates = data.filter(row => {
@@ -80,20 +87,28 @@ router.post('/', async (req, res) => {
             const hasUrl = !!row['URL'];
             const hasTitle = !!row['영상제목'];
 
+            // Log exclusions for first few rows for debugging
+            // if (!hasKeyword || !isShort || !hasUrl || !hasTitle) {
+            //    // console.log(`[Recommend] Excluded row: Keyword=${hasKeyword}, Short=${isShort} (${durationSec}s), URL=${hasUrl}`);
+            // }
+
             return hasKeyword && isShort && hasUrl && hasTitle;
         });
 
         console.log(`[Recommend] Found ${candidates.length} candidates for ${targetKeyword}`);
 
         if (candidates.length === 0) {
-            return res.json({ success: false, message: 'No matching video found' });
+            console.warn('[Recommend] No matches found. Converting conceptType fallback...');
+            // Fallback: Try searching WITHOUT keyword if nothing found? Or just return empty.
+            // For now, return explicit failure message to frontend.
+            return res.json({ success: false, message: 'No matching video found', totalRows: data.length });
         }
 
         // 5. Sort by Views (조회수) - Descending
         // Column: "조회수" (ensure it's treated as number)
         candidates.sort((a, b) => {
-            const viewsA = parseInt(a['조회수'] || 0);
-            const viewsB = parseInt(b['조회수'] || 0);
+            const viewsA = parseInt(String(a['조회수']).replace(/,/g, '') || 0); // Handle "1,234" format
+            const viewsB = parseInt(String(b['조회수']).replace(/,/g, '') || 0);
             return viewsB - viewsA;
         });
 
