@@ -1096,6 +1096,29 @@ const Step4 = ({
                             )}
                           </div>
                         </div>
+
+                        {/* 🔥 참고 영상 추천 섹션 (우측 하단) */}
+                        {recommendedVideo && (
+                          <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-700/50 rounded-lg p-4">
+                            <h4 className="text-sm font-bold text-blue-300 mb-2 flex items-center gap-2">
+                              🎬 참고 영상 추천
+                            </h4>
+                            <div className="space-y-2">
+                              <a
+                                href={recommendedVideo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block text-sm text-white hover:text-blue-300 font-medium line-clamp-2 transition-colors"
+                              >
+                                {recommendedVideo.title}
+                              </a>
+                              <div className="flex items-center justify-between text-xs text-gray-400">
+                                <span>👁️ {recommendedVideo.views?.toLocaleString() || 'N/A'} 조회</span>
+                                <span>⏱️ {recommendedVideo.duration}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="md:col-span-1">

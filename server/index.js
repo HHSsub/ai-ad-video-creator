@@ -265,6 +265,9 @@ app.get('/api/prompts', promptsGetHandler);
 app.post('/api/prompts', promptsUpdateHandler);
 app.post('/api/prompts/generate', generatePrompt);
 
+// 🔥 추천 영상 API (Missing Route Fixed)
+app.use('/api/recommend-video', recommendVideo);
+
 app.post('/api/check-video-status', checkVideoStatus); // 🔥 Async Status Check
 
 app.get('/health', (req, res) => {
