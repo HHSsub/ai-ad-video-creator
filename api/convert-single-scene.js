@@ -91,8 +91,15 @@ export default async function handler(req, res) {
             prompt: finalPrompt,
             negative_prompt: "blurry, distorted, low quality, morphing, glitch",
             duration: 5,
-            cfg_scale: 0.5
+            duration: 5
         };
+
+        // Undefined/null 제거 (generate-video.js와 동일 산식)
+        Object.keys(payload).forEach(key => {
+            if (payload[key] === undefined || payload[key] === null) {
+                delete payload[key];
+            }
+        });
 
         // 2. 태스크 생성 요청
         const createResult = await safeCallFreepik(createUrl, {

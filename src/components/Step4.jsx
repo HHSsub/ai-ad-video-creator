@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
 // 🔥 API_BASE를 /nexxii로 강제 (프로덕션/로컬 모두 호환)
@@ -655,27 +656,17 @@ const Step4 = ({
       const result = await response.json();
 
       if (result.success) {
-        // 성공 시 이미지 교체 (Immutable Update)
-        const newImageUrl = result.imageUrl;
-
-        setSortedImages(prev => prev.map(img => {
-          if (img.sceneNumber === targetSceneNumber) {
-            return {
-              ...img,
-              imageUrl: newImageUrl, // 🔥 S3 URL
-              videoUrl: null, // 영상 초기화
-              status: 'image_synthesized',
-              prompt: img.prompt || img.copy // Context update
-            };
-          }
-          return img;
-        }));
+        // 성공 시 이미지 교체
+        scene.imageUrl = result.imageUrl; // S3 URL
+        scene.videoUrl = null; // 영상 초기화
+        scene.status = 'image_synthesized';
+        scene.prompt = scene.prompt || scene.copy; // Context update
 
         if (!modifiedScenes.includes(targetSceneNumber)) {
           setModifiedScenes(prev => [...prev, targetSceneNumber]);
         }
 
-        log(`씬 ${targetSceneNumber} 인물 합성 완료: ${newImageUrl}`);
+        log(`씬 ${targetSceneNumber} 인물 합성 완료: ${result.imageUrl}`);
         setShowPersonModal(false);
         setSelectedPerson(null);
 
@@ -1145,7 +1136,8 @@ const Step4 = ({
             )}
 
             {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) */}
-            {showPersonModal && (
+            {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) - Portal 사용 */}
+            {showPersonModal && createPortal(
               <>
                 <div
                   className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[1px]"
@@ -1286,7 +1278,8 @@ const Step4 = ({
                     </button>
                   </div>
                 </div>
-              </>
+              </>,
+              document.body // 🔥 Render directly to Body
             )}
           </div>
         </div>
