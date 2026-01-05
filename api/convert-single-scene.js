@@ -66,7 +66,9 @@ export default async function handler(req, res) {
         sceneNumber,
         promptLength: prompt?.length,
         hasMotion: !!motionPrompt,
-        engine: 'Kling v2.1 Pro'
+        engine: 'Kling v2.1 Pro',
+        imageUrlPreview: imageUrl?.substring(0, 50),
+        isS3: imageUrl?.includes('upnexx') || imageUrl?.includes('s3') // Check origin
     });
 
     if (!imageUrl || !sceneNumber) {
