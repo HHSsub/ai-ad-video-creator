@@ -630,8 +630,11 @@ app.post('/api/prompts/test', async (req, res) => {
     }
 
     const timestamp = Date.now();
-    const fileName = `${promptKey}_test_${timestamp}.json`;
+    const fileName = `${effectivePromptKey}_test_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
+
+    console.log(`[prompts/test] 💾 저장 경로: ${responsesPath}`);
+    console.log(`[prompts/test] 📁 파일명: ${fileName}`);
 
     const responseData = {
       promptKey: effectivePromptKey,

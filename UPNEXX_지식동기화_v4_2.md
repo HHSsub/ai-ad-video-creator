@@ -96,6 +96,19 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-05 13:30 - [CRITICAL] 프롬프트 테스트 저장 버그 수정 (Task II)
+- **긴급 이슈**: 관리자 패널에서 프롬프트 테스트 실행 시 백엔드 로그는 "✅ 저장 완료"인데 프론트엔드 Gemini 응답 로그에는 아무것도 표시되지 않음.
+- **원인**: `server/index.js` Line 633에서 잘못된 변수 사용:
+  - ❌ **기존**: `const fileName = \`${promptKey}_test_${timestamp}.json\`;` - `promptKey`는 undefined
+  - ✅ **수정**: `const fileName = \`${effectivePromptKey}_test_${timestamp}.json\`;`
+  - **결과**: 파일명이 `undefined_test_XXX.json`으로 저장되어 조회 필터에 걸리지 않음
+- **해결**:
+  1. Line 633: `promptKey` → `effectivePromptKey` 변경
+  2. Line 635-636: 저장 경로 및 파일명 로그 추가 (디버깅 강화)
+  3. 이제 파일명: `seedream-v4_kling-v2-5-pro_auto_product_test_XXX.json` 형식으로 정상 저장
+- **검증**: PM2 재시작 후 프롬프트 테스트 → 관리자 패널 Gemini 응답 로그에 즉시 표시 확인
+- **상태**: ✅ 완료 (PM2 재시작 필요)
+
 ### 2026-01-05 13:20 - [CRITICAL] Gemini 응답 저장 로직 수정 (Task HH)
 - **긴급 이슈**: 관리자 패널에서 Gemini 응답 히스토리가 0건으로 표시됨. EC2에 `responses` 폴더조차 존재하지 않음.
 - **원인**: `api/storyboard-init.js`에서 `saveGeminiResponse` 호출 시 잘못된 promptKey 전달:
