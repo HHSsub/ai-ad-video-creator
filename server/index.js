@@ -457,10 +457,23 @@ app.get('/api/prompts/responses/:engineId/:promptType', async (req, res) => {
       });
     }
 
-    // 파일명 형식: {promptKey}_storyboard_{step}_{timestamp}.json 또는 {promptKey}_test_{timestamp}.json
-    // promptKey에 이미 engineId가 포함되어 있으므로 이를 접두사로 사용
+    // 🔥 파일명 형식: 
+    // - 신규: {promptKey}_storyboard_{step}_{timestamp}.json (예: seedream-v4_kling-v2-1-pro_auto_product_storyboard_unified_XXX.json)
+    // - 레거시: auto_unified_{timestamp}.json, manual_unified_{timestamp}.json
+    // 둘 다 조회하도록 수정
     const files = fs.readdirSync(responsesPath)
-      .filter(file => file.startsWith(`${promptKey}_`) && file.endsWith('.json'))
+      .filter(file => {
+        if (!file.endsWith('.json')) return false;
+
+        // 신규 형식: promptKey로 시작
+        if (file.startsWith(`${promptKey}_`)) return true;
+
+        // 레거시 형식: auto_ 또는 manual_로 시작
+        if (mode === 'auto' && file.startsWith('auto_')) return true;
+        if (mode === 'manual' && file.startsWith('manual_')) return true;
+
+        return false;
+      })
       .sort((a, b) => {
         const aTimestamp = a.split('_').pop().replace('.json', '');
         const bTimestamp = b.split('_').pop().replace('.json', '');
