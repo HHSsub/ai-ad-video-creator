@@ -138,6 +138,18 @@
   1.  **Video Gen**: 400 에러 해결을 위해 Payload를 `image: string` (단순 URL) 형식으로 변경하고 S3 URL 사용 보장.
   2.  **Modal**: `handleOpenPersonModal` 로직에서 `rect` 계산 로그 추가 및 `absolute` 잔재 확인. `fixed` 좌표 계산검증.
   3.  **Synthesis**: 프롬프트에 인물 묘사(Western, features) 강제 주입 및 Reference 강도 조절 시도.
+- **상태**: ❌ 실패 (400 지속, 합성 퀄리티 미흡)
+
+### 2026-01-05 09:21 - [CRITICAL] 3차 긴급 수정: 영상 400 해결 및 합성 강도 조정
+- **현상**:
+  1. **Video Gen**: `api/generate-video.js`와 동일하게 Payload를 수정했으나 여전히 400 오류 발생. Frontend `state` 업데이트 누락으로 만료된 URL 전송 의심.
+  2. **Synthesis**: "합성 인물이 안 나온다" (원본 유지). `strength: 0.75`가 부족함.
+  3. **Process**: "ㅇㅇ"(지식동기화) 업데이트 지연에 대한 질책 접수. 선(先) 업데이트 원칙 재확인.
+- **수정 계획**:
+  1. **Doc Update**: 작업 전 이슈 기록 (본 항목).
+  2. **Frontend**: `Step4.jsx`에서 `handleSynthesizePerson` 성공 시 `setSortedImages`를 통해 해당 씬의 `imageUrl`을 즉시 S3 URL로 교체하는 로직 검증/추가.
+  3. **Synthesis**: `strength`를 `0.9`로 상향하고, `reference_strength` 파라미터(가능한 경우) 확인. `prompt`에 인물 묘사 비중 대폭 강화.
+  4. **Video Gen**: Frontend에서 넘어오는 `imageUrl` 로그를 `api/convert-single-scene.js` 최상단에 추가하여 URL 유효성(S3 여부) 검증.
 - **상태**: 🔄 진행 중
 
 ### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정

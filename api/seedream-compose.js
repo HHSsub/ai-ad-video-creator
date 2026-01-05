@@ -106,8 +106,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             reference_images: references, // 인물 이미지만 참조
             num_images: 1,
             image: { url: baseImageUrl }, // Base 이미지를 Input(Img2Img)으로 설정하여 배경/구도 유지
-            strength: 0.75, // 🔥 Allow more changes to the base image to blend the person (0.75)
-            guidance_scale: 3.5, // Increase guidance to respect prompt/ref more
+            strength: 0.9, // 🔥 High strength to force face replacement (0.9)
+            guidance_scale: 4.0, // Higher guidance for prompt adherence
             num_inference_steps: 25,
             // 🔥 매핑된 AR 추가 (Generation Endpoint 필수값일 수 있음)
             aspect_ratio: 'widescreen_16_9'

@@ -655,16 +655,27 @@ const Step4 = ({
       const result = await response.json();
 
       if (result.success) {
-        // 성공 시 이미지 교체
-        scene.imageUrl = result.imageUrl;
-        scene.videoUrl = null; // 영상 초기화
-        scene.status = 'image_synthesized';
+        // 성공 시 이미지 교체 (Immutable Update)
+        const newImageUrl = result.imageUrl;
+
+        setSortedImages(prev => prev.map(img => {
+          if (img.sceneNumber === targetSceneNumber) {
+            return {
+              ...img,
+              imageUrl: newImageUrl, // 🔥 S3 URL
+              videoUrl: null, // 영상 초기화
+              status: 'image_synthesized',
+              prompt: img.prompt || img.copy // Context update
+            };
+          }
+          return img;
+        }));
 
         if (!modifiedScenes.includes(targetSceneNumber)) {
           setModifiedScenes(prev => [...prev, targetSceneNumber]);
         }
 
-        log(`씬 ${targetSceneNumber} 인물 합성 완료`);
+        log(`씬 ${targetSceneNumber} 인물 합성 완료: ${newImageUrl}`);
         setShowPersonModal(false);
         setSelectedPerson(null);
 
