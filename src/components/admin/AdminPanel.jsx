@@ -568,7 +568,7 @@ const AdminPanel = ({ currentUser }) => {
                 <div>
                   <h3 className="text-sm font-semibold text-purple-400 mb-3 uppercase tracking-wider">영상 생성 엔진</h3>
                   <div className="grid grid-cols-1 gap-2">
-                    {['kling-v2-1-pro', 'kling-v2-1-std', 'kling-v2-1-master', 'hailuo-2.3-standard'].map(id => (
+                    {['kling-v2-5-pro', 'kling-v2-1-std', 'kling-v2-1-master', 'hailuo-2.3-standard'].map(id => (
                       <button
                         key={id}
                         onClick={() => setSelectedVideoEngine(id)}
@@ -578,7 +578,7 @@ const AdminPanel = ({ currentUser }) => {
                           }`}
                       >
                         <div className="font-medium text-sm">
-                          {id.includes('kling') ? `Kling v2.1 (${id.split('-').pop()})` : 'Hailuo 2.3 (MiniMax)'}
+                          {id === 'kling-v2-5-pro' ? 'Kling v2.5 Pro' : id.includes('kling') ? `Kling v2.1 (${id.split('-').pop()})` : 'Hailuo 2.3 (MiniMax)'}
                         </div>
                         <div className="text-[10px] opacity-60 font-mono mt-0.5">{id}</div>
                       </button>
