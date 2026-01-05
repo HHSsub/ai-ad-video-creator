@@ -30,8 +30,15 @@ async function pollSeedreamStatus(taskId) {
 
                 if (status === 'COMPLETED') {
                     if (generated && generated.length > 0) {
-                        console.log(`[Seedream] 합성 완료. URL: ${generated[0].url}`);
-                        return generated[0].url; // 최종 이미지 URL 반환
+                        // 🔥 Fix: generated[0] can be a string (URL) or object {url: ...}
+                        const finalUrl = typeof generated[0] === 'string' ? generated[0] : generated[0].url;
+                        console.log(`[Seedream] 합성 완료. URL: ${finalUrl}`);
+
+                        if (!finalUrl) {
+                            console.error('[Seedream] generated[0] structure:', JSON.stringify(generated[0]));
+                            throw new Error('URL extraction failed from generated result');
+                        }
+                        return finalUrl;
                     }
                     throw new Error('상태는 완료되었으나 생성된 이미지가 없습니다.');
                 } else if (status === 'FAILED') {
