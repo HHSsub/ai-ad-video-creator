@@ -582,6 +582,9 @@ const Step4 = ({
       top = window.innerHeight - modalHeight - 20;
     }
 
+    console.log('[handleOpenPersonModal] Clicked Button Rect:', rect);
+    console.log('[handleOpenPersonModal] Calculated Position:', { top, left, scrollY: window.scrollY });
+
     setModalPosition({ top, left });
     setTargetSceneNumber(sceneNumber);
     setShowPersonModal(true);

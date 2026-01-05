@@ -85,10 +85,10 @@ export default async function handler(req, res) {
         finalPrompt += ", high quality, 4k, fluid motion, physically accurate";
 
         const payload = {
-            image: { url: imageUrl },
+            image: imageUrl, // 🔥 Change: Send string URL directly (like generate-video.js), not {url: ...}
             prompt: finalPrompt,
             negative_prompt: "blurry, distorted, low quality, morphing, glitch",
-            duration: 5, // Kling v2.1 supports 5s or 10s usually
+            duration: 5,
             cfg_scale: 0.5
         };
 

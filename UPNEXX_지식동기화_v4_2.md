@@ -130,6 +130,16 @@
   3.  **Synthesis Engine**: `api/seedream-compose.js`의 하드코딩된 Polling URL을 `getTextToImageStatusUrl(taskId)` 동적 함수로 교체하여 404 오류 해결.
 - **상태**: ✅ 완료 (엔진 정상화)
 
+### 2026-01-05 09:15 - [CRITICAL] 영상 변환 400, 모달 위치 고정, 합성 퀄리티 불만 긴급 수정
+- **이슈 1 (영상 변환)**: Kling 엔진 호출 시 400 BAd Request 발생. 원인: Payload 형식(`image: {url}` vs `image: string`) 불일치 또는 만료된 URL 사용 의심.
+- **이슈 2 (모달 위치)**: "Scene 2를 눌러도 Scene 1 위치에 뜬다"는 불만. `e.currentTarget` 좌표 스냅샷 시점이나 State 업데이트 문제 확인 필요.
+- **이슈 3 (합성 퀄리티)**: 서양인 이미지를 넣어도 원본 얼굴(동양인 등)이 그대로 유지됨. Seedream Reference 강도가 낮거나 Base Image 영향이 너무 큼.
+- **조치 계획**:
+  1.  **Video Gen**: 400 에러 해결을 위해 Payload를 `image: string` (단순 URL) 형식으로 변경하고 S3 URL 사용 보장.
+  2.  **Modal**: `handleOpenPersonModal` 로직에서 `rect` 계산 로그 추가 및 `absolute` 잔재 확인. `fixed` 좌표 계산검증.
+  3.  **Synthesis**: 프롬프트에 인물 묘사(Western, features) 강제 주입 및 Reference 강도 조절 시도.
+- **상태**: 🔄 진행 중
+
 ### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정
 - **이슈**: 모달이 우측 구석에 뜨거나 화면 밖으로 잘리는 현상 발생. 사용자는 버튼을 "덮을 정도로" 중앙에 뜨기를 강력히 원함.
 - **수정**: `Step4.jsx`의 `handleOpenPersonModal` 좌표 계산 로직 변경.
