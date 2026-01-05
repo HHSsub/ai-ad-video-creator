@@ -73,12 +73,25 @@ router.post('/', async (req, res) => {
 
         // 4. Filter Data
         const candidates = data.filter(row => {
-            // Check Keyword in "153.종합 분석_산업"
-            const industryAnalysis = row['153.종합 분석_산업'] || '';
-            const hasKeyword = industryAnalysis.includes(targetKeyword);
+            // 153.종합 분석_산업 Check
+            const rawText = row['153.종합 분석_산업'] || '';
+            const text = String(rawText);
 
-            // Check Duration <= 1m 30s (90 seconds)
-            // Column: "영상길이" (e.g., PT21M59S)
+            const hasProduct = text.includes('제품');
+            const hasBranding = text.includes('브랜딩');
+
+            // Broad Matching Logic:
+            // Product Request -> Include '제품' OR 'Universal' (Not Branding)
+            // Service Request -> Include '브랜딩' OR 'Universal' (Not Product)
+            // Universal (Neither) -> Included in both
+            let isMatch = false;
+            if (conceptType === 'product') {
+                isMatch = hasProduct || !hasBranding;
+            } else {
+                isMatch = hasBranding || !hasProduct;
+            }
+
+            // Check Duration <= 90 seconds
             const durationStr = row['영상길이'];
             const durationSec = parseDuration(durationStr);
             const isShort = durationSec <= 90;
@@ -87,12 +100,7 @@ router.post('/', async (req, res) => {
             const hasUrl = !!row['URL'];
             const hasTitle = !!row['영상제목'];
 
-            // Log exclusions for first few rows for debugging
-            // if (!hasKeyword || !isShort || !hasUrl || !hasTitle) {
-            //    // console.log(`[Recommend] Excluded row: Keyword=${hasKeyword}, Short=${isShort} (${durationSec}s), URL=${hasUrl}`);
-            // }
-
-            return hasKeyword && isShort && hasUrl && hasTitle;
+            return isMatch && isShort && hasUrl && hasTitle;
         });
 
         console.log(`[Recommend] Found ${candidates.length} candidates for ${targetKeyword}`);

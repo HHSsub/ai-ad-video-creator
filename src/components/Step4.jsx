@@ -712,7 +712,7 @@ const Step4 = ({
           conceptType = currentProject.type === 'product' ? 'product' : 'service';
         }
 
-        console.log('[Step4] Fetching recommendation for concept:', conceptType);
+
 
         const res = await fetch(`${API_BASE}/api/recommend-video`, {
           method: 'POST',
@@ -721,12 +721,12 @@ const Step4 = ({
         });
 
         const data = await res.json();
-        console.log('[Step4] Recommendation Response:', data);
+
 
         if (data.success && data.video) {
           setRecommendedVideo(data.video);
         } else {
-          console.warn('[Step4] No recommendation found:', data.message);
+          // console.warn('[Step4] No recommendation found:', data.message);
           // Optional: Set a dummy "Not Found" state if needed for UI
         }
       } catch (err) {
