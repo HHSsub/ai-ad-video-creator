@@ -680,22 +680,29 @@ const Step4 = ({
 
   // 🔥 Fetch Recommendation
   useEffect(() => {
-    if (formData?.productService) {
+    // Fallback logic for concept type
+    const conceptType = formData?.productService || formData?.projectType || currentProject?.type || 'product'; // Default to product if unknown
+
+    log(`[Step4] Recommendation Fetch Triggered. Concept: ${conceptType}`);
+
+    if (conceptType) {
       fetch(`${API_BASE}/api/recommend-video`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conceptType: formData.productService })
+        body: JSON.stringify({ conceptType })
       })
         .then(res => res.json())
         .then(data => {
           if (data.success && data.video) {
             setRecommendedVideo(data.video);
             log(`[Step4] 추천 영상 로드됨: ${data.video.title}`);
+          } else {
+            log(`[Step4] 추천 영상 없음: ${data.message}`);
           }
         })
         .catch(err => console.error('[Step4] 추천 영상 로드 실패:', err));
     }
-  }, [formData?.productService]);
+  }, [formData?.productService, formData?.projectType, currentProject?.type]);
 
   // 🔥 합성 실행
   const handleSynthesizePerson = async () => {
@@ -716,7 +723,12 @@ const Step4 = ({
         body: JSON.stringify({
           sceneImage: scene.imageUrl || '',
           personImage: selectedPerson.url,
-          personMetadata: selectedPerson,
+          personMetadata: {
+            age: selectedPerson.age,
+            gender: selectedPerson.gender,
+            nationality: selectedPerson.nationality,
+            name: selectedPerson.name
+          },
           sceneContext: scene.prompt || scene.copy,
           projectId: currentProject?.id,
           aspectRatio: formData?.aspectRatioCode // 🔥 Pass Aspect Ratio

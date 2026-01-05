@@ -73,11 +73,23 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
     try {
         console.log('[safeComposeWithSeedream] 합성 시작 (Freepik v4-edit)');
 
-        // 1. 프롬프트 구성
-        // 🔥 Prompt Tuning: Stronger identity enforcement
-        const prompt = compositingInfo.sceneDescription
+        // 1. 프롬프트 구성 (Forcing Identity)
+        const meta = compositingInfo.personMetadata || {};
+        const identityDesc = [
+            meta.nationality ? `${meta.nationality}` : '',
+            meta.gender || 'person',
+            meta.age ? `(${meta.age}s)` : ''
+        ].filter(Boolean).join(' ');
+
+        // 메타데이터가 있으면 프롬프트 앞단에 배치하여 강제성 부여
+        const subjectPrompt = identityDesc ? `Close up shot of a ${identityDesc}, ` : '';
+
+        const basePrompt = compositingInfo.sceneDescription
             ? `${compositingInfo.sceneDescription}, highly detailed, 8k`
             : "High quality photo, ultra realistic, seamless composition, 8k";
+
+        // 최종 프롬프트: "Close up shot of a American Woman (20s), [Scene Desc], featuring the person..."
+        const prompt = `${subjectPrompt}${basePrompt}`;
 
         // 2. 입력 이미지 구성 (Reference Image for Person)
         const references = [];
@@ -91,15 +103,15 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         const url = getTextToImageUrl();
 
         const payload = {
-            prompt: `${prompt}, featuring the person from reference image, perfect face match, identical facial features, same identity`,
+            prompt: `${prompt}, featuring specific person from reference image, perfect face match, identical facial features, same identity, high fidelity face swap`,
             reference_images: references,
             num_images: 1,
             image: { url: baseImageUrl },
-            strength: 0.95, // 🔥 Maximized for replacement
-            guidance_scale: 16.0, // 🔥 High adherence to "featuring person"
-            num_inference_steps: 25,
-            // 🔥 Dynamic Aspect Ratio (Remove hardcoding)
-            // If aspect_ratio provided, use it. Else omit/default.
+            strength: 0.95, // Prioritize Person > Base Scene
+            guidance_scale: 18.0, // Maximum enforcement of prompt/reference
+            num_inference_steps: 30, // Better quality
+            negative_prompt: "deformed, distorted face, wrong identity, mixed race, different person, blurry, low quality, bad anatomy, ghosting",
+            // 🔥 Dynamic Aspect Ratio
             aspect_ratio: compositingInfo?.aspectRatio || undefined
         };
 
