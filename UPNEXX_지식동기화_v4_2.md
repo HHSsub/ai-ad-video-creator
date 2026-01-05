@@ -96,6 +96,18 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-05 13:20 - [CRITICAL] Gemini 응답 저장 로직 수정 (Task HH)
+- **긴급 이슈**: 관리자 패널에서 Gemini 응답 히스토리가 0건으로 표시됨. EC2에 `responses` 폴더조차 존재하지 않음.
+- **원인**: `api/storyboard-init.js`에서 `saveGeminiResponse` 호출 시 잘못된 promptKey 전달:
+  - ❌ **기존**: `saveGeminiResponse(mode, 'unified', body, fullOutput)` - `mode`만 전달 (예: 'auto')
+  - ✅ **수정**: `generatePromptKey()`로 전체 promptKey 생성 (예: 'seedream-v4_kling-v2-5-pro_auto_product')
+- **해결**:
+  1. Line 7: `generatePromptKey` import 추가
+  2. Line 784-787: 올바른 promptKey 생성 후 전달
+  3. `saveGeminiResponse()` 함수 내부에서 정확한 경로로 응답 저장: `/public/prompts/{engineID}/{mode}/responses/`
+- **검증**: 다음 Gemini 호출 시 `responses` 폴더에 JSON 파일 생성 확인 필요
+- **상태**: ✅ 완료 (PM2 재시작 필요)
+
 ### 2026-01-05 13:09 - [CRITICAL] Excel 컬럼명 매칭 오류 긴급 수정 (Task GG)
 - **긴급 이슈**: 참고 영상 추천 시 "Has URL/Title: 0" 오류로 인해 필터링된 결과가 0건, 추천 영상 미표시.
 - **원인**: `api/recommend-video.js`가 잘못된 Excel 컬럼명으로 데이터 접근 시도:

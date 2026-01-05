@@ -781,7 +781,11 @@ async function processStoryboardAsync(body, username, sessionId) {
     });
 
     // 🔥 응답 저장 (엔진별 폴더에 저장)
-    saveGeminiResponse(mode, 'unified', body, fullOutput);
+    // generatePromptKey로 올바른 promptKey 생성
+    const { generatePromptKey } = await import('../src/utils/enginePromptHelper.js');
+    const promptKey = generatePromptKey(mode === 'manual' ? 'manual' : 'auto', videoPurpose);
+    console.log(`[storyboard-init] 💾 Gemini 응답 저장 중... (promptKey: ${promptKey})`);
+    saveGeminiResponse(promptKey, 'storyboard_unified', body, fullOutput);
     const sceneCountPerConcept = getSceneCount(videoLength);
     const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
