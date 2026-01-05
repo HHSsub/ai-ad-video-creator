@@ -702,17 +702,16 @@ const Step4 = ({
   useEffect(() => {
     const fetchRecommendation = async () => {
       try {
-        // Fallback Logic for conceptType
+        // Correct field name: videoPurpose (NOT productService!)
+        // Value: 'product' or 'service' (from fieldConfig.js)
         let conceptType = 'product'; // Default
-        if (formData?.productService) {
-          conceptType = formData.productService === '제품' ? 'product' : 'service';
-        } else if (formData?.projectType) {
-          conceptType = formData.projectType === 'product' ? 'product' : 'service';
-        } else if (currentProject?.type) {
-          conceptType = currentProject.type === 'product' ? 'product' : 'service';
+        if (formData?.videoPurpose) {
+          conceptType = formData.videoPurpose; // Already 'product' or 'service'
+        } else if (storyboard?.formData?.videoPurpose) {
+          conceptType = storyboard.formData.videoPurpose;
         }
 
-
+        console.log(`[Step4] Fetching recommendation with conceptType=${conceptType}`);
 
         const res = await fetch(`${API_BASE}/api/recommend-video`, {
           method: 'POST',
@@ -722,23 +721,25 @@ const Step4 = ({
 
         const data = await res.json();
 
-
         if (data.success && data.video) {
           setRecommendedVideo(data.video);
+          console.log('[Step4] Recommendation loaded:', data.video);
+        } else {
+          console.log('[Step4] No recommendation returned');
         }
       } catch (err) {
         console.error('[Step4] Recommendation fetch failed:', err);
-        // log(`[Step4] 추천 실패: ${err.message}`); // Optional: UI log
       }
     };
 
-    if (formData?.productService || formData?.projectType || currentProject?.type) {
+    // Execute if videoPurpose exists in formData or storyboard
+    if (formData?.videoPurpose || storyboard?.formData?.videoPurpose) {
       console.log('[Step4] Fetching recommendation...');
       fetchRecommendation();
     } else {
-      console.log('[Step4] Skipping recommendation: No project type found', { formData, currentProject });
+      console.log('[Step4] Skipping recommendation: No videoPurpose found', { formData, storyboard });
     }
-  }, [formData, currentProject]);
+  }, [formData?.videoPurpose, storyboard?.formData?.videoPurpose]);
 
 
 
