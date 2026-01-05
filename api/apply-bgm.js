@@ -103,173 +103,137 @@ function pickRandomBgm(mood) {
   return chosen;
 }
 
-// 🔥 수정: 비디오 파일 경로 처리 개선
-function resolveVideoPath(videoPath) {
-  // URL인 경우 그대로 반환 (이미 public에 있는 파일)
-  if (videoPath.startsWith('http')) {
-    return videoPath;
-  }
+// Helper to download video to tmp
+async function downloadVideoToTmp(videoUrl) {
+  // If it's already a local path, return it
+  if (!videoUrl.startsWith('http')) return videoUrl;
 
-  // /tmp/compiled로 시작하는 경우 프로젝트 루트 기준으로 처리
-  if (videoPath.startsWith('/tmp/')) {
-    return path.join(process.cwd(), videoPath.substring(1));
-  }
+  const tmpDir = path.join(process.cwd(), 'tmp');
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
-  // 절대 경로인 경우 그대로 사용
-  if (path.isAbsolute(videoPath)) {
-    return videoPath;
-  }
+  const fileName = `download-${Date.now()}-${randomUUID()}.mp4`;
+  const destPath = path.join(tmpDir, fileName);
 
-  // 상대 경로인 경우 프로젝트 루트 기준
-  return path.join(process.cwd(), videoPath);
+  console.log(`[apply-bgm] Downloading video: ${videoUrl} -> ${destPath}`);
+
+  const res = await fetch(videoUrl);
+  if (!res.ok) throw new Error(`Failed to download video: ${res.statusText}`);
+
+  const buffer = await res.arrayBuffer();
+  fs.writeFileSync(destPath, Buffer.from(buffer));
+  return destPath;
 }
 
-function hasAudioStream(videoPath) {
+// 🔥 수정된 비디오 길이 확인 함수 (Local File Only)
+function getVideoDuration(localPath) {
   return new Promise((resolve) => {
-    const resolvedPath = resolveVideoPath(videoPath);
-
-    // 🔥 URL이면 로컬 파일 확인 스킵
-    if (!resolvedPath.startsWith('http') && !fs.existsSync(resolvedPath)) {
-      console.error(`[apply-bgm] 비디오 파일이 존재하지 않음: ${resolvedPath}`);
-      resolve(false);
-      return;
+    if (!fs.existsSync(localPath)) {
+      console.error(`[apply-bgm] File not found: ${localPath}`);
+      return resolve(10);
     }
-
-    exec(`ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "${resolvedPath}"`,
+    exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localPath}"`,
       (error, stdout) => {
         if (error) {
-          console.warn(`[apply-bgm] 오디오 스트림 확인 실패: ${error.message}`);
-        }
-        resolve(!error && stdout.trim().length > 0);
-      });
-  });
-}
-
-// 🔥 수정된 비디오 길이 확인 함수
-function getVideoDuration(videoPath) {
-  return new Promise((resolve) => {
-    const resolvedPath = resolveVideoPath(videoPath);
-
-    // 🔥 URL이면 로컬 파일 확인 스킵
-    if (!resolvedPath.startsWith('http') && !fs.existsSync(resolvedPath)) {
-      console.error(`[apply-bgm] 비디오 파일이 존재하지 않음: ${resolvedPath}`);
-      resolve(10); // 기본값 10초
-      return;
-    }
-
-    exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${resolvedPath}"`,
-      (error, stdout) => {
-        if (error) {
-          console.warn(`[apply-bgm] 비디오 길이 확인 실패: ${error.message}`);
-          resolve(10); // 기본값 10초
+          console.warn(`[apply-bgm] Length probe failed: ${error.message}`);
+          resolve(10);
         } else {
           const duration = parseFloat(stdout.trim()) || 10;
-          console.log(`[apply-bgm] 비디오 길이: ${duration}초`);
+          console.log(`[apply-bgm] Video Duration: ${duration}s`);
           resolve(duration);
         }
       });
   });
 }
 
+function hasAudioStream(localPath) {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(localPath)) return resolve(false);
+    exec(`ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "${localPath}"`,
+      (error, stdout) => {
+        resolve(!error && stdout.trim().length > 0);
+      });
+  });
+}
+
 // 🔥 수정된 BGM 합성 함수
-function mergeBgm(videoPath, bgmPath, options = {}) {
+function mergeBgm(videoUrlOrPath, bgmPath, options = {}) {
   return new Promise(async (resolve, reject) => {
-    const volume = parseFloat(process.env.BGM_VOLUME_DEFAULT || '0.3'); // 볼륨 낮춤
+    const volume = parseFloat(process.env.BGM_VOLUME_DEFAULT || '0.3');
     const fadeSec = parseFloat(process.env.BGM_FADE_SECONDS || '1.0');
 
-    // 출력 디렉토리 생성
+    // Output Directory
     const outDir = path.join(process.cwd(), 'tmp', 'bgm');
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+    let localVideoPath = null;
 
     try {
-      if (!fs.existsSync(outDir)) {
-        fs.mkdirSync(outDir, { recursive: true });
-        console.log(`[apply-bgm] 출력 디렉토리 생성: ${outDir}`);
-      }
-    } catch (error) {
-      console.error(`[apply-bgm] 출력 디렉토리 생성 실패: ${error.message}`);
-      return reject(error);
-    }
+      // 1. Download Video if Remote
+      localVideoPath = await downloadVideoToTmp(videoUrlOrPath);
 
-    const outFile = path.join(outDir, `merged-${Date.now()}-${randomUUID()}.mp4`);
-    const resolvedVideoPath = resolveVideoPath(videoPath);
+      // 2. Check Existence
+      if (!fs.existsSync(localVideoPath)) throw new Error('Video file missing');
+      if (!fs.existsSync(bgmPath)) throw new Error('BGM file missing');
 
-    // 입력 파일들 존재 확인 (URL이면 스킵)
-    if (!resolvedVideoPath.startsWith('http') && !fs.existsSync(resolvedVideoPath)) {
-      return reject(new Error(`비디오 파일이 존재하지 않습니다: ${resolvedVideoPath}`));
-    }
+      const outFile = path.join(outDir, `merged-${Date.now()}-${randomUUID()}.mp4`);
 
-    if (!fs.existsSync(bgmPath)) {
-      return reject(new Error(`BGM 파일이 존재하지 않습니다: ${bgmPath}`));
-    }
+      // 3. Get Info
+      const videoDuration = await getVideoDuration(localVideoPath);
+      const audioPresent = await hasAudioStream(localVideoPath);
 
-    console.log(`[apply-bgm] BGM 합성 시작:`, {
-      videoPath: resolvedVideoPath,
-      bgmPath: bgmPath,
-      outputPath: outFile,
-      volume: volume,
-      fadeSec: fadeSec,
-      videoExists: resolvedVideoPath.startsWith('http') ? 'Remote URL' : fs.existsSync(resolvedVideoPath),
-      videoSize: !resolvedVideoPath.startsWith('http') && fs.existsSync(resolvedVideoPath) ? fs.statSync(resolvedVideoPath).size : 'N/A',
-      bgmExists: fs.existsSync(bgmPath),
-      bgmSize: fs.existsSync(bgmPath) ? fs.statSync(bgmPath).size : 0,
-      outputDir: path.dirname(outFile),
-      outputDirExists: fs.existsSync(path.dirname(outFile))
-    });
-
-    try {
-      // 🔥 비디오 길이 확인
-      const videoDuration = await getVideoDuration(resolvedVideoPath);
-      const audioPresent = await hasAudioStream(resolvedVideoPath);
+      console.log(`[apply-bgm] Processing: ${localVideoPath} (${videoDuration}s) + ${bgmPath}`);
 
       let cmd;
-
+      // Use -stream_loop -1 for infinite BGM loop
+      // Use -t videoDuration to cut exactly at video end
       if (audioPresent) {
-        // 기존 오디오가 있는 경우 - 믹싱
-        // -stream_loop -1: 입력 1(BGM)을 무한 반복
-        // -shortest가 없어야 -t (duration)까지 감
-        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -stream_loop -1 -i "${bgmPath}" ` +
+        cmd = `ffmpeg -y -i "${localVideoPath}" -stream_loop -1 -i "${bgmPath}" ` +
           `-filter_complex "[1:a]volume=${volume}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]" ` +
           `-map 0:v -map "[aout]" -c:v copy -c:a aac -t ${videoDuration} "${outFile}"`;
       } else {
-        // 기존 오디오가 없는 경우 - BGM만 추가
-        cmd = `ffmpeg -y -i "${resolvedVideoPath}" -stream_loop -1 -i "${bgmPath}" ` +
+        cmd = `ffmpeg -y -i "${localVideoPath}" -stream_loop -1 -i "${bgmPath}" ` +
           `-filter_complex "[1:a]volume=${volume}[bgm]" ` +
           `-map 0:v -map "[bgm]" -c:v copy -c:a aac -t ${videoDuration} "${outFile}"`;
       }
 
-      console.log(`[apply-bgm] FFmpeg 명령어 실행`);
-      console.log(`[apply-bgm] 비디오 길이: ${videoDuration}초, 기존 오디오: ${audioPresent ? '있음' : '없음'}`);
-
       exec(cmd, { timeout: 120000 }, (error, stdout, stderr) => {
         if (error) {
-          console.error(`[apply-bgm] FFmpeg 실행 실패:`, error.message);
-          console.error(`[apply-bgm] stderr:`, stderr);
-          return reject(error);
+          console.error(`[apply-bgm] FFmpeg Error: ${error.message}`);
+          console.error(stderr);
+          reject(error);
+        } else {
+          resolve(outFile);
         }
+      });
 
-        // 🔥 결과 파일 검증
-        if (!fs.existsSync(outFile)) {
-          return reject(new Error(`출력 파일이 생성되지 않았습니다: ${outFile}`));
-        }
+    } catch (err) {
+      console.error(`[apply-bgm] Internal Error:`, err);
+      reject(err);
+    }
+  });
+}
+if (!fs.existsSync(outFile)) {
+  return reject(new Error(`출력 파일이 생성되지 않았습니다: ${outFile}`));
+}
 
-        const outputStats = fs.statSync(outFile);
-        if (outputStats.size === 0) {
-          return reject(new Error(`출력 파일이 비어있습니다: ${outFile}`));
-        }
+const outputStats = fs.statSync(outFile);
+if (outputStats.size === 0) {
+  return reject(new Error(`출력 파일이 비어있습니다: ${outFile}`));
+}
 
-        console.log(`[apply-bgm] BGM 합성 완료: ${outFile} (${(outputStats.size / 1024 / 1024).toFixed(2)} MB)`);
+console.log(`[apply-bgm] BGM 합성 완료: ${outFile} (${(outputStats.size / 1024 / 1024).toFixed(2)} MB)`);
 
-        // 🔥 public URL로 변환
-        const publicFileName = path.basename(outFile);
-        const publicUrl = `/tmp/bgm/${publicFileName}`;
+// 🔥 public URL로 변환
+const publicFileName = path.basename(outFile);
+const publicUrl = `/tmp/bgm/${publicFileName}`;
 
-        resolve(publicUrl);
+resolve(publicUrl);
       });
 
     } catch (audioCheckError) {
-      console.error(`[apply-bgm] 비디오 분석 중 오류:`, audioCheckError.message);
-      reject(audioCheckError);
-    }
+  console.error(`[apply-bgm] 비디오 분석 중 오류:`, audioCheckError.message);
+  reject(audioCheckError);
+}
   });
 }
 
