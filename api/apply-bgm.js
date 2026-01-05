@@ -212,30 +212,7 @@ function mergeBgm(videoUrlOrPath, bgmPath, options = {}) {
     }
   });
 }
-if (!fs.existsSync(outFile)) {
-  return reject(new Error(`출력 파일이 생성되지 않았습니다: ${outFile}`));
-}
 
-const outputStats = fs.statSync(outFile);
-if (outputStats.size === 0) {
-  return reject(new Error(`출력 파일이 비어있습니다: ${outFile}`));
-}
-
-console.log(`[apply-bgm] BGM 합성 완료: ${outFile} (${(outputStats.size / 1024 / 1024).toFixed(2)} MB)`);
-
-// 🔥 public URL로 변환
-const publicFileName = path.basename(outFile);
-const publicUrl = `/tmp/bgm/${publicFileName}`;
-
-resolve(publicUrl);
-      });
-
-    } catch (audioCheckError) {
-  console.error(`[apply-bgm] 비디오 분석 중 오류:`, audioCheckError.message);
-  reject(audioCheckError);
-}
-  });
-}
 
 // 드롭다운용 mood 목록 제공 API (GET)
 export async function get(req, res) {
