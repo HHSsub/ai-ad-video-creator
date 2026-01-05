@@ -394,7 +394,9 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
       const data = await response.json();
       apiKeyManager.markKeySuccess('freepik', keyIndex);
 
-      console.log(`[${label}] ✅ 성공 (컨셉: ${conceptId}, 키: ${keyIndex}, 시간: ${processingTime}ms)`);
+      if (!options.silent) {
+        console.log(`[${label}] ✅ 성공 (컨셉: ${conceptId}, 키: ${keyIndex}, 시간: ${processingTime}ms)`);
+      }
 
       return data;
 

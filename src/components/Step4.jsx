@@ -353,9 +353,10 @@ const Step4 = ({
     } catch (err) {
       setError(`씬 ${sceneNumber} 변환 오류: ${err.message}`);
       log(`씬 ${sceneNumber} 변환 오류: ${err.message}`);
-    } finally {
       setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
     }
+    // 🔥 Finally 제거: Polling 시에는 상태를 유지해야 함.
+    // Polling 흐름에서는 내부적으로 false 처리함.
   };
 
   // 🔥 E-2: 일괄 영상 변환

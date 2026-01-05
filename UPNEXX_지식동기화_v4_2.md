@@ -216,16 +216,21 @@
      - `convert` 호출 후 `taskId` 수신.
      - `setInterval`로 `check-video-status` 주기적 호출 (3초 간격).
      - 완료 응답 수신 시 UI 업데이트.
-- **상태**: ✅ 해결 (Async Polling 적용 및 테스트 대기)
+- **상태**: ✅ 해결 (API `check-video-status` Registered in `server/index.js`)
 
 ### 최종 점검
 - **Engine**: Dynamic Loader 사용 (O)
 - **Validation**: Duration '5' 고정 전송 (O)
 - **Trimming**: User Duration에 맞춰 FFmpeg 후처리 (O)
 - **Latency**: Async Polling으로 Browser Timeout 방지 (O)
-- **UI**: Polling 중에도 "생성 중..." 상태 유지 (O)
+- **Routing**: `server/index.js`에 Endpoint 등록 완료 (O)
+- **Status Parsing**: `check-video-status.js`에서 URL 추출 로직 수정 (Array of Strings 지원) (O)
+- **UI State**: `Step4.jsx` Polling 시 상태 유지 (`finally` 제거) (O)
 
-### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정
+### 2026-01-05 10:35 - [HOTFIX] Polling URL Parsing & UI State Logic
+- **Critical Fix**: Freepik 응답의 `generated` 배열이 객체가 아닌 URL 문자열 배열임을 확인하여 수정.
+- **UI Fix**: Polling 시작 시 `finally` 블록에 의해 로딩 상태가 풀리는 문제 수정.
+- **Syntax Fix**: `Step4.jsx` 구문 오류 수정.
 - **이슈**: 모달이 우측 구석에 뜨거나 화면 밖으로 잘리는 현상 발생. 사용자는 버튼을 "덮을 정도로" 중앙에 뜨기를 강력히 원함.
 - **수정**: `Step4.jsx`의 `handleOpenPersonModal` 좌표 계산 로직 변경.
   - `rect.right + 10` 방식 폐기.

@@ -92,23 +92,19 @@ export default async function handler(req, res) {
 
     const { imageUrl, sceneNumber, projectId, conceptId, prompt, motionPrompt, duration = 5 } = req.body; // duration comes from frontend now
 
-    console.log('[convert-single-scene] AI Video Request:', {
-        sceneNumber,
-        promptLength: prompt?.length,
-        hasMotion: !!motionPrompt,
-        engine: 'Kling v2.1 Pro',
-        targetDuration: duration
-    });
-
-    if (!imageUrl || !sceneNumber) {
-        return res.status(400).json({ error: 'imageUrl and sceneNumber required' });
-    }
-
     try {
         // 1. 엔진 설정 로드 (Dynamic Configuration)
         const engineConfig = getImageToVideoEngine();
         const createUrl = getImageToVideoUrl();
         const defaultParams = engineConfig.parameters || {};
+
+        console.log('[convert-single-scene] AI Video Request:', {
+            sceneNumber,
+            promptLength: prompt?.length,
+            hasMotion: !!motionPrompt,
+            engine: engineConfig.displayName || 'Unknown Engine',
+            targetDuration: duration
+        });
 
         // 프롬프트 구성 (Scene Description + Motion)
         let finalPrompt = prompt || 'Cinematic shot, high quality';
@@ -121,9 +117,8 @@ export default async function handler(req, res) {
         if (finalPrompt.length > 2000) finalPrompt = finalPrompt.slice(0, 1900);
 
         // 🔥 CRITICAL: Duration Type Casting (Must be String '5' or '10')
-        // Kling API에는 무조건 '5' (또는 '10')를 보내야 함. (400 해결)
-        // req.body.duration은 "최종 결과물 길이(Trimming Target)"로만 사용.
-        const klingDuration = '5';
+        // Kling API: "5" or "10". User request >= 8 -> "10", else "5"
+        const klingDuration = duration >= 8 ? '10' : '5';
 
         const payload = {
             ...defaultParams, // 🔥 engines.json의 기본 파라미터 적용 (cfg_scale 등)
@@ -131,7 +126,7 @@ export default async function handler(req, res) {
             image: imageUrl,
             prompt: finalPrompt,
             negative_prompt: defaultParams.negative_prompt || "blurry, distorted, low quality, morphing, glitch",
-            duration: klingDuration // 🔥 Kling requires '5' or '10'
+            duration: klingDuration // 🔥 '5' or '10'
         };
 
         // Undefined/null 제거
@@ -145,7 +140,7 @@ export default async function handler(req, res) {
             model: engineConfig.model,
             url: createUrl,
             duration: payload.duration,
-            durationType: typeof payload.duration
+            type: typeof payload.duration
         });
 
         // 2. 태스크 생성 요청 (SafeCallFreepik 복구 - Dynamic Endpoint)

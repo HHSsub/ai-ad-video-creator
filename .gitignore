@@ -39,6 +39,7 @@ public/gemini_responses/
 
 # 설정파일
 config/
+!config/engines.json
 public/versions/
 ffmpeg-*
 nohup.out

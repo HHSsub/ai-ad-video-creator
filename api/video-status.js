@@ -1,18 +1,20 @@
-// api/video-status.js - Freepik Kling v2.1 Pro 공식문서 기반 폴링 시스템
+// api/video-status.js - Freepik Kling v2.1 Pro 공식문서 기반 폴링 시스템 -> 동적엔진
 const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 const CACHE = new Map(); // taskId -> { status, videoUrl, sceneNumber, updatedAt }
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
+
+import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function isRetryableError(error, statusCode) {
   if ([429, 500, 502, 503, 504].includes(statusCode)) return true;
   const message = error?.message?.toLowerCase() || '';
-  return message.includes('timeout') || 
-         message.includes('network') || 
-         message.includes('fetch') ||
-         message.includes('overload');
+  return message.includes('timeout') ||
+    message.includes('network') ||
+    message.includes('fetch') ||
+    message.includes('overload');
 }
 
 async function safeApiCall(url, options, label) {
@@ -25,7 +27,7 @@ async function safeApiCall(url, options, label) {
       });
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
-        if (isRetryableError({message: errorText}, response.status) && attempt < MAX_RETRIES) {
+        if (isRetryableError({ message: errorText }, response.status) && attempt < MAX_RETRIES) {
           console.warn(`[${label}] HTTP ${response.status}, 재시도 ${attempt}`);
           await sleep(RETRY_DELAY * attempt);
           continue;
@@ -49,10 +51,8 @@ async function safeApiCall(url, options, label) {
 // 단일 태스크 상태 확인 - Kling v2.1 Pro API 스펙 
 // 🔥🔥🔥 핵심 수정: POST는 kling-v2-1-pro, GET은 kling-v2-1 🔥🔥🔥
 async function checkSingleTaskStatus(taskId, apiKey) {
-  // 🔥 Freepik 공식 문서에 따른 올바른 GET 엔드포인트 <- 이 주석 절대 삭제금지
-  // POST (생성): /ai/image-to-video/kling-v2-1-pro <- 이 주석 절대 삭제금지
-  // GET (조회): /ai/image-to-video/kling-v2-1/{task-id} <- 이 주석 절대 삭제금지
-  const url = `${FREEPIK_API_BASE}/ai/image-to-video/kling-v2-1/${taskId}`;
+  // 🔥 Dynamic Loader로 엔진 버전(v2.5/v2.1) 자동 대응
+  const url = getImageToVideoStatusUrl(taskId);
 
   const options = {
     method: 'GET',
@@ -143,8 +143,8 @@ export default async function handler(req, res) {
     });
 
     const apiKey = process.env.FREEPIK_API_KEY ||
-                   process.env.REACT_APP_FREEPIK_API_KEY ||
-                   process.env.VITE_FREEPIK_API_KEY;
+      process.env.REACT_APP_FREEPIK_API_KEY ||
+      process.env.VITE_FREEPIK_API_KEY;
 
     if (!apiKey) {
       console.error('[video-status] Freepik API 키 없음');
@@ -218,7 +218,7 @@ export default async function handler(req, res) {
     });
 
     const results = await Promise.all(statusPromises);
-    
+
     const summary = {
       total: results.length,
       ready: results.filter(r => r.status === 'completed').length,
