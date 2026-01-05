@@ -96,6 +96,30 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-05 11:30 - [FEATURE] 참고 영상 추천 시스템 및 인물 합성 고도화 (Task AA)
+- **요청 사항**:
+  1. 기획 단계(Step 1)의 프로젝트 유형(제품/서비스)에 따라, S3에 저장된 엑셀 분석 DB에서 "조회수 높은 90초 이내 영상" 1개를 추천해줄 것.
+  2. 인물 합성 시 원본 얼굴이 그대로 유지되는 문제 해결 (동양인 -> 서양인 변경 불가 등).
+  3. 서버 502 오류 및 모듈(`xlsx`) 미설치 해결.
+- **구현 내용**:
+  1. **영상 추천 시스템 (`api/recommend-video.js`)**:
+     - S3에서 `분석DB_전체_2026-01-05.xlsx` 다운로드 및 파싱.
+     - 필터링: `conceptType`(제품/브랜딩) 매칭 + `duration <= 90s` + `URL/Title` 존재.
+     - 정렬: 조회수 내림차순 (Top 1 반환).
+     - UI (`Step4.jsx`): 기존/신규 프로젝트 모두 호환되도록 Fallback 로직(`productService` OR `projectType`) 추가 및 우측 상단 배지 표시.
+  2. **인물 합성 고도화 (Identity Forcing)**:
+     - **UI**: `Step4.jsx`에서 `personMetadata`(나이, 국적, 성별)를 API로 전송.
+     - **Engine (`api/seedream-compose.js`)**:
+       - Prompt Tuning: `[Nationality] [Gender] ([Age])`를 프롬프트 최상단에 강제 주입.
+       - Parameters: `strength: 0.95`, `guidance_scale: 18.0`으로 상향 조정.
+       - Negative Prompt: "wrong identity, mixed race" 등 추가.
+  3. **서버 안정화**:
+     - `server/index.js` 중복 Import 제거 (502 해결).
+     - `api/recommend-video.js` 잘못된 Import 수정.
+     - `npm install xlsx` 수행.
+     - `api/synthesis-person.js` S3 업로드 로직 주석 정리 (정상 작동 확인).
+- **상태**: ✅ 완료 (사용자 확인 대기)
+
 ### 2026-01-05 08:30 - [EMERGENCY] 인물 합성 API 404 및 UI/UX 긴급 수정
 - **긴급 이슈**: 
   1. `POST /api/synthesis-person` 404 에러 (라우트 미등록)

@@ -78,7 +78,14 @@ export default async function handler(req, res) {
                 throw new Error('Completed but no video URL');
             }
 
-            const engineVideoUrl = generated[0].url;
+            // 🔥 Fix: Handle both string (URL) and object {url: ...} formats
+            const engineVideoUrl = typeof generated[0] === 'string' ? generated[0] : generated[0].url;
+
+            if (!engineVideoUrl) {
+                console.error('[check-video-status] generated result structure:', JSON.stringify(generated));
+                throw new Error('Failed to extract video URL from generated result');
+            }
+
             console.log(`[check-video-status] Generation Success (Engine): ${engineVideoUrl}`);
 
             // 🔥 후처리: Download -> Trim -> Upload

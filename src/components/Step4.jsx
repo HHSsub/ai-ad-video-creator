@@ -308,7 +308,26 @@ const Step4 = ({
               scene.status = 'video_done';
               log(`씬 ${sceneNumber} 영상 변환 완료: ${statusData.videoUrl}`);
               setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
-              setModifiedScenes(prev => [...prev, sceneNumber]); // Trigger Save
+              setModifiedScenes(prev => [...prev, sceneNumber]);
+
+              // 🔥 중요: Async Polling 완료 후 즉시 저장 (유실 방지)
+              try {
+                await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-username': user?.username || 'anonymous'
+                  },
+                  body: JSON.stringify({
+                    storyboard: storyboard, // Updated storyboard with videoUrl
+                    formData: formData
+                  })
+                });
+                log(`씬 ${sceneNumber} 변환 결과 저장 완료`);
+              } catch (saveErr) {
+                console.error('프로젝트 저장 실패:', saveErr);
+                log('⚠️ 프로젝트 저장 실패 (새로고침 시 유실될 수 있음)');
+              }
             } else if (statusData.status === 'processing') {
               // Continue Polling
               setTimeout(pollStatus, POLLING_INTERVAL);
@@ -865,8 +884,8 @@ const Step4 = ({
             <div className="flex items-center gap-4 mb-4">
               <h3 className="text-lg font-semibold text-white">📋 씬별 스토리보드</h3>
               {recommendedVideo && (
-                <div className="hidden md:flex items-center bg-gray-800/80 rounded-full px-4 py-1.5 border border-purple-500/30 backdrop-blur-sm animate-fade-in">
-                  <span className="text-xs text-purple-300 font-bold mr-2">📺 참고영상 추천</span>
+                <div className="flex items-center bg-gray-800/80 rounded-full px-4 py-1.5 border border-purple-500/30 backdrop-blur-sm animate-fade-in shadow-lg shadow-purple-900/20">
+                  <span className="text-xs text-purple-300 font-bold mr-2">✨ 추천 레퍼런스</span>
                   <a
                     href={recommendedVideo.url}
                     target="_blank"
