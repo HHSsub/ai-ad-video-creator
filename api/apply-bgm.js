@@ -238,6 +238,14 @@ export async function get(req, res) {
   }
 }
 
+// 🔥 비디오 경로 해결 함수 (Missing Function Fix)
+function resolveVideoPath(videoPath) {
+  if (!videoPath) return '';
+  if (videoPath.startsWith('http')) return videoPath;
+  if (path.isAbsolute(videoPath)) return videoPath;
+  return path.resolve(process.cwd(), videoPath);
+}
+
 // main apply-bgm API (POST)
 export default async function handler(req, res) {
   // CORS 설정

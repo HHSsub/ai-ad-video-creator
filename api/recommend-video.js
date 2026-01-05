@@ -72,36 +72,49 @@ router.post('/', async (req, res) => {
         }
 
         // 4. Filter Data
+        // 4. Filter Data (With Debugging)
+        let countMatchKeyword = 0;
+        let countMatchDuration = 0;
+        let countHasUrlTitle = 0;
+
         const candidates = data.filter(row => {
-            // 153.종합 분석_산업 Check
+            // Safe Access & Trimming
             const rawText = row['153.종합 분석_산업'] || '';
-            const text = String(rawText);
+            const text = String(rawText).trim();
 
             const hasProduct = text.includes('제품');
             const hasBranding = text.includes('브랜딩');
 
-            // Broad Matching Logic:
-            // Product Request -> Include '제품' OR 'Universal' (Not Branding)
-            // Service Request -> Include '브랜딩' OR 'Universal' (Not Product)
-            // Universal (Neither) -> Included in both
+            // Broad Matching Logic
             let isMatch = false;
             if (conceptType === 'product') {
                 isMatch = hasProduct || !hasBranding;
             } else {
                 isMatch = hasBranding || !hasProduct;
             }
+            if (isMatch) countMatchKeyword++;
 
-            // Check Duration <= 90 seconds
+            // Duration Check
             const durationStr = row['영상길이'];
             const durationSec = parseDuration(durationStr);
             const isShort = durationSec <= 90;
+            if (isMatch && isShort) countMatchDuration++;
 
-            // Must have URL and Title
-            const hasUrl = !!row['URL'];
-            const hasTitle = !!row['영상제목'];
+            // URL & Title Check
+            const hasUrl = !!row['URL'] && String(row['URL']).trim().length > 0;
+            const hasTitle = !!row['영상제목'] && String(row['영상제목']).trim().length > 0;
+            if (isMatch && isShort && hasUrl && hasTitle) countHasUrlTitle++;
 
             return isMatch && isShort && hasUrl && hasTitle;
         });
+
+        console.log(`[Recommend] Filtering Stats:
+            - Total Rows: ${data.length}
+            - Match Keyword (${targetKeyword}): ${countMatchKeyword}
+            - Match Duration (<=90s): ${countMatchDuration}
+            - Has URL/Title: ${countHasUrlTitle}
+            - Final Candidates: ${candidates.length}
+        `);
 
         console.log(`[Recommend] Found ${candidates.length} candidates for ${targetKeyword}`);
 

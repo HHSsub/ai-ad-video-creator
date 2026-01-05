@@ -727,7 +727,8 @@ const Step4 = ({
           setRecommendedVideo(data.video);
         }
       } catch (err) {
-        // Silent fail
+        console.error('[Step4] Recommendation fetch failed:', err);
+        // log(`[Step4] 추천 실패: ${err.message}`); // Optional: UI log
       }
     };
 

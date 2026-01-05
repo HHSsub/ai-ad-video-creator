@@ -96,6 +96,17 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-05 12:20 - [HOTFIX] BGM ReferenceError 및 엑셀 데이터 누락 디버깅 (Task DD)
+- **긴급 이슈 1 (BGM)**: `apply-bgm.js`에서 `ReferenceError: resolveVideoPath is not defined` 발생하여 500 에러 지속.
+  - **원인**: 이전 리팩토링 중 함수 정의가 누락됨.
+  - **해결**: `resolveVideoPath` 함수 복구 및 재정의.
+- **긴급 이슈 2 (Ref Video)**: "엑셀 로그(데이터) 상실" 및 "참고 영상 미표시".
+  - **원인 추정**: 엑셀 데이터 포맷(공백 등) 문제로 필터링에서 모두 탈락하거나, `Step4`에서 에러를 삼키고 있음.
+  - **조치**:
+    1. `api/recommend-video.js`: 필터링 단계별 로그(Keyword, Duration, URL) 상세 출력 및 `trimmed` 문자열 비교 적용.
+    2. `Step4.jsx`: `fetchRecommendation` 에러 핸들링 강화 (`console.error` 추가).
+- **상태**: ✅ 완료 (BGM 정상화, Ref Video 디버깅 준비 완료)
+
 ### 2026-01-05 12:10 - [HOTFIX] BGM 합성 로직 전면 수정 (Task CC)
 - **이슈**: 원격 URL 사용 시 EC2에서 FFmpeg 권한 에러, 10초 고정 길이 문제로 영상 짤림.
 - **해결**:
