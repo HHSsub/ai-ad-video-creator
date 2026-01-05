@@ -513,6 +513,47 @@ app.get('/api/prompts/responses/:engineId/:promptType', async (req, res) => {
 });
 
 
+// 🔥 엔진ID 기반 응답 상세 조회 (신규)
+app.get('/api/prompts/responses/detail/:engineId/:promptType/:fileName', async (req, res) => {
+  try {
+    const { engineId, promptType, fileName } = req.params;
+
+    console.log(`[responses/detail] 조회 요청: engineId=${engineId}, type=${promptType}, file=${fileName}`);
+
+    const { getGeminiResponsesDir } = await import('../src/utils/enginePromptHelper.js');
+    const mode = promptType.includes('manual') ? 'manual' : 'auto';
+    const responsesPath = getGeminiResponsesDir(mode);
+    const filePath = path.join(responsesPath, fileName);
+
+    console.log(`[responses/detail] 파일 경로: ${filePath}`);
+
+    if (!fs.existsSync(filePath)) {
+      console.log(`[responses/detail] ❌ 파일 없음: ${filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: '응답 파일을 찾을 수 없습니다.'
+      });
+    }
+
+    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+
+    console.log(`[responses/detail] ✅ 조회 성공`);
+    res.json({
+      success: true,
+      detail: content
+    });
+
+  } catch (error) {
+    console.error('[responses/detail] 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gemini 응답 상세 조회에 실패했습니다.',
+      error: error.message
+    });
+  }
+});
+
+// 🔥 레거시 응답 상세 조회 (하위 호환성 유지)
 app.get('/api/prompts/response-detail/:fileName', async (req, res) => { // 수정됨: /api/ 추가
   try {
     const { fileName } = req.params;

@@ -102,11 +102,15 @@
   - ❌ **기존**: `const fileName = \`${promptKey}_test_${timestamp}.json\`;` - `promptKey`는 undefined
   - ✅ **수정**: `const fileName = \`${effectivePromptKey}_test_${timestamp}.json\`;`
   - **결과**: 파일명이 `undefined_test_XXX.json`으로 저장되어 조회 필터에 걸리지 않음
+- **추가 이슈**: 응답 상세 보기 클릭 시 404 에러 (라우트 불일치)
+  - Frontend URL: `/api/prompts/responses/detail/{engineId}/{promptType}/{fileName}`
+  - Backend 라우트: `/api/prompts/response-detail/:fileName` (레거시, 엔진ID 없음)
 - **해결**:
   1. Line 633: `promptKey` → `effectivePromptKey` 변경
   2. Line 635-636: 저장 경로 및 파일명 로그 추가 (디버깅 강화)
-  3. 이제 파일명: `seedream-v4_kling-v2-5-pro_auto_product_test_XXX.json` 형식으로 정상 저장
-- **검증**: PM2 재시작 후 프롬프트 테스트 → 관리자 패널 Gemini 응답 로그에 즉시 표시 확인
+  3. **Line 516-554**: 엔진ID 기반 응답 상세 조회 라우트 추가 (`/api/prompts/responses/detail/:engineId/:promptType/:fileName`)
+  4. 동적으로 현재 엔진 조합의 responses 폴더에서 JSON 로드하여 반환
+- **검증**: PM2 재시작 후 프롬프트 테스트 → Gemini 응답 클릭 → 상세 내용 즉시 표시
 - **상태**: ✅ 완료 (PM2 재시작 필요)
 
 ### 2026-01-05 13:20 - [CRITICAL] Gemini 응답 저장 로직 수정 (Task HH)
