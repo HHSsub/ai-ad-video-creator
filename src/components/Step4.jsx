@@ -278,6 +278,51 @@ const Step4 = ({
       const result = await response.json();
       console.log(`[Step4] 씬 ${sceneNumber} 영상 변환 응답:`, result);
 
+      // 🔥 Async Polling Logic
+      if (result.processing && result.taskId) {
+        log(`씬 ${sceneNumber} 영상 생성 중... (Polling 시작)`);
+
+        const POLLING_INTERVAL = 3000;
+        const pollStatus = async () => {
+          try {
+            const statusRes = await fetch(`${API_BASE}/api/check-video-status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                taskId: result.taskId,
+                sceneNumber,
+                targetDuration: result.targetDuration, // Pass target for trimming
+                projectId: currentProject?.id,
+                conceptId: selectedConceptId
+              })
+            });
+            const statusData = await statusRes.json();
+
+            if (statusData.status === 'completed' && statusData.videoUrl) {
+              // Success
+              scene.videoUrl = statusData.videoUrl;
+              scene.status = 'video_done';
+              log(`씬 ${sceneNumber} 영상 변환 완료: ${statusData.videoUrl}`);
+              setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
+              setModifiedScenes(prev => [...prev, sceneNumber]); // Trigger Save
+            } else if (statusData.status === 'processing') {
+              // Continue Polling
+              setTimeout(pollStatus, POLLING_INTERVAL);
+            } else {
+              // Failed
+              throw new Error(statusData.error || 'Generation failed');
+            }
+          } catch (pollErr) {
+            console.error(`[Step4] Polling Error:`, pollErr);
+            setError(`씬 ${sceneNumber} Polling 실패: ${pollErr.message}`);
+            setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
+          }
+        };
+
+        pollStatus(); // Start Polling
+        return; // Exit main flow, polling handles the rest
+      }
+
       if (result.success && result.videoUrl) {
         scene.videoUrl = result.videoUrl;
         scene.status = 'video_done';

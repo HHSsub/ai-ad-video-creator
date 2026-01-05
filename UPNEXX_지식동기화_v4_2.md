@@ -200,7 +200,30 @@
   2. **Backend (`convert-single-scene.js`)**:
      - **Kling API 호출 시**: `duration` 파라미터는 무조건 **String "5"**로 고정 (API 스펙 준수).
      - **FFmpeg Trimming 시**: Frontend에서 받은 `req.body.duration`을 사용하여, 5초짜리 영상을 해당 길이로 잘라냄.
-- **상태**: 🔄 진행 중
+- **상태**: ❌ 실패 (Browser Timeout - Backend Loop)
+
+### 2026-01-05 10:25 - [ARCH] 8차 수정: Async Polling 아키텍처 도입 (Browser Timeout 해결)
+- **현상**:
+  1. Frontend에서 "동그라미만 돌고 영상이 안 나옴" + Backend 로그는 "Infinite Loop (IN_PROGRESS)".
+  2. **원인**: Kling 생성 시간(3~5분)이 Browser/Network Timeout(약 2분)을 초과함. Backend는 계속 돌지만 Frontend 연결이 끊겨 응답을 못 받음.
+  3. **요구사항**: 사용자에게 진행 상황을 보여주고, 끊김 없이 결과를 전달해야 함.
+- **수정 계획**:
+  1. **Backend (`convert-single-scene.js`)**: Polling 로직 제거. Task ID 생성 후 **즉시 반환**.
+  2. **Backend (`check-video-status.js` - 신규)**:
+     - Frontend의 Polling 요청을 받아 상태 확인.
+     - `COMPLETED` 시: Download -> **FFmpeg Trim** -> S3 Upload -> URL 반환.
+  3. **Frontend (`Step4.jsx`)**:
+     - `convert` 호출 후 `taskId` 수신.
+     - `setInterval`로 `check-video-status` 주기적 호출 (3초 간격).
+     - 완료 응답 수신 시 UI 업데이트.
+- **상태**: ✅ 해결 (Async Polling 적용 및 테스트 대기)
+
+### 최종 점검
+- **Engine**: Dynamic Loader 사용 (O)
+- **Validation**: Duration '5' 고정 전송 (O)
+- **Trimming**: User Duration에 맞춰 FFmpeg 후처리 (O)
+- **Latency**: Async Polling으로 Browser Timeout 방지 (O)
+- **UI**: Polling 중에도 "생성 중..." 상태 유지 (O)
 
 ### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정
 - **이슈**: 모달이 우측 구석에 뜨거나 화면 밖으로 잘리는 현상 발생. 사용자는 버튼을 "덮을 정도로" 중앙에 뜨기를 강력히 원함.
