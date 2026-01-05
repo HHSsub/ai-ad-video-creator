@@ -161,6 +161,45 @@
   1. **Doc Update**: 작업 착수 전 본 문서 업데이트 (최우선 수행).
   2. **Video Gen**: `convert-single-scene.js`를 `generate-video.js`와 **완전히 동일한 구조(Direct Fetch, Hardcoded URL)**로 리팩토링하여 중간 변수(ConfigLoader, Helper) 개입을 배제. 엔진 스펙(`engines.json`)을 따르되, 성공한 코드의 방식을 그대로 복제.
   3. **Payload**: `generate-video.js`의 Payload 생성 함수(`buildVideoPrompt` 등)와 Cleaning 로직을 그대로 이식.
+- **상태**: ❌ 실패 (400 - Param Type Mismatch)
+
+### 2026-01-05 10:11 - [CRITICAL] 5차 수정: Duration Type 수정 및 동적 엔진 복구
+- **현상**:
+  1. **Video Gen**: `Validation error: body.duration Input should be '5' or '10'`. `duration`을 숫자 `5`로 보내서 발생. String `"5"`여야 함.
+  2. **Rule**: "무지성 하드코딩 말고 동적 엔진 방식 사용하라"는 지시. 복제본 사용 취소.
+  3. **Engine**: `engines.json`에 정의된 `duration: "5"` 타입을 준수해야 함.
+- **수정 계획**:
+  1. **Doc Update**: 본 문서 선행 업데이트.
+  2. **Refactor**: `convert-single-scene.js`를 다시 `getImageToVideoUrl()` 등 동적 라우팅/설정 로더를 사용하는 방식으로 복구.
+  3. **Type Casting**: Payload 구성 시 `duration`을 반드시 **String**으로 변환(`String(duration)`).
+  4. **Param Handling**: `engines.json`의 파라미터를 존중하되, API 스펙에 맞게 타입 검증.
+- **상태**: ❌ 실패 (FFmpeg Trimming Logic 누락)
+
+### 2026-01-05 10:15 - [CRITICAL] 6차 수정: FFmpeg Duration Logic 복구
+- **현상**:
+  1. **Regression**: "무지성 Zoom In" 제거 과정에서 **FFmpeg Trimming(초수 맞춤) 로직까지 삭제됨**.
+  2. **Requirement**: AI(Kling)는 5초/10초 고정이나, 실제 Storyboard 씬은 가변 길이(예: 3초)일 수 있음. 생성 후 **Trimming**이 필수.
+  3. **Frontend**: `Step4.jsx`가 현재 `duration: 5`를 하드코딩해서 보내고 있는지 확인 필요.
+- **수정 계획**:
+  1. **Doc Update**: 작업 전 이슈 명시 (본 항목).
+  2. **Frontend**: `Step4.jsx`에서 `scene.duration` 또는 `totalLength / sceneCount` 로직을 확인하여 정확한 `req.body.duration`을 전송하도록 수정.
+  3. **Backend (`convert-single-scene.js`)**:
+     - AI 영상 생성 및 다운로드 (완료).
+     - **FFmpeg 추가**: 요청된 `duration`과 생성된 영상의 길이를 비교.
+     - 요청 길이가 짧을 경우 `ffmpeg`로 Trimming 수행.
+     - Trimming된 영상을 S3에 업로드.
+- **상태**: ❌ 실패 (API 400 - Decoupling 실패)
+
+### 2026-01-05 10:20 - [CRITICAL] 7차 수정: Kling 요청(5s)과 결과물(Trim) 분리
+- **원인 파악**:
+  1. 사용자 지적: "Video API failed 400: Input should be '5' or '10'".
+  2. 내 실수: Frontend에서 계산한 `duration` (예: 2초, 3초)을 **그대로 Kling API Payload에 넣음**. Kling은 5/10만 허용하므로 400 발생.
+  3. 로직 오류: **"요청(Gen)"**과 **"결과(Trim)"**의 초수를 분리하지 않음.
+- **수정 계획 (Decoupling)**:
+  1. **Frontend (`Step4.jsx`)**: `duration` 필드에 사용자가 원하는 **최종 씬 길이(Target Duration)**를 담아 보냄 (Auto: 2s, Manual: Total/Count).
+  2. **Backend (`convert-single-scene.js`)**:
+     - **Kling API 호출 시**: `duration` 파라미터는 무조건 **String "5"**로 고정 (API 스펙 준수).
+     - **FFmpeg Trimming 시**: Frontend에서 받은 `req.body.duration`을 사용하여, 5초짜리 영상을 해당 길이로 잘라냄.
 - **상태**: 🔄 진행 중
 
 ### 2026-01-05 08:35 - [HOTFIX] 인물 합성 모달 위치 재수정

@@ -271,7 +271,7 @@ const Step4 = ({
           conceptId: selectedConceptId,
           prompt: scene.prompt, // 🔥 AI Video Prompt
           motionPrompt: scene.motionPrompt, // 🔥 Detailed Motion Guide
-          duration: 5 // Kling Standard
+          duration: Math.round(formData.videoLength / sortedImages.length) || 5 // 🔥 Dynamic Duration (User Selected / Scene Count)
         })
       });
 

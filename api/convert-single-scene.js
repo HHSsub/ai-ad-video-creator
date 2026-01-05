@@ -3,9 +3,10 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { spawn } from 'child_process';
 import { uploadVideoToS3 } from '../server/utils/s3-uploader.js';
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
-import { getImageToVideoUrl, getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
+import { getImageToVideoUrl, getImageToVideoStatusUrl, getImageToVideoEngine } from '../src/utils/engineConfigLoader.js'; // 🔥 Restore dynamic loader
 
 const POLLING_TIMEOUT = 300000; // 5분 (비디오 생성은 오래 걸림)
 const POLLING_INTERVAL = 5000; // 5초 간격
@@ -52,6 +53,35 @@ async function pollVideoStatus(taskId) {
     throw new Error('Video generation timed out');
 }
 
+// 🔥 FFmpeg 실행 (Helper)
+function runFFmpeg(args, label = 'ffmpeg', workingDir = null) {
+    return new Promise((resolve, reject) => {
+        console.log(`[${label}] 실행: ffmpeg ${args.join(' ')}`);
+        const process = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+        let stderr = '';
+        process.stderr.on('data', d => stderr += d.toString());
+
+        process.on('close', code => {
+            if (code === 0) resolve();
+            else reject(new Error(`FFmpeg failed: ${stderr.slice(-200)}`));
+        });
+        process.on('error', reject);
+    });
+}
+
+// 🔥 비디오 길이 조정 함수
+async function trimVideo(inputPath, outputPath, targetDuration) {
+    await runFFmpeg([
+        '-y', '-i', inputPath,
+        '-t', targetDuration.toString(),
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28',
+        '-c:a', 'aac', // Audio copy or re-encode
+        '-movflags', '+faststart',
+        outputPath
+    ], 'trim');
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -60,15 +90,14 @@ export default async function handler(req, res) {
     // timeout 증가
     res.setTimeout(300000); // 5분
 
-    const { imageUrl, sceneNumber, projectId, conceptId, prompt, motionPrompt, duration = 5 } = req.body;
+    const { imageUrl, sceneNumber, projectId, conceptId, prompt, motionPrompt, duration = 5 } = req.body; // duration comes from frontend now
 
     console.log('[convert-single-scene] AI Video Request:', {
         sceneNumber,
         promptLength: prompt?.length,
         hasMotion: !!motionPrompt,
         engine: 'Kling v2.1 Pro',
-        imageUrlPreview: imageUrl?.substring(0, 50),
-        isS3: imageUrl?.includes('upnexx') || imageUrl?.includes('s3') // Check origin
+        targetDuration: duration
     });
 
     if (!imageUrl || !sceneNumber) {
@@ -76,9 +105,10 @@ export default async function handler(req, res) {
     }
 
     try {
-        // 1. 요청 페이로드 구성
-        const apiKey = process.env.FREEPIK_API_KEY || process.env.REACT_APP_FREEPIK_API_KEY || process.env.VITE_FREEPIK_API_KEY;
-        if (!apiKey) throw new Error('Freepik API key not found');
+        // 1. 엔진 설정 로드 (Dynamic Configuration)
+        const engineConfig = getImageToVideoEngine();
+        const createUrl = getImageToVideoUrl();
+        const defaultParams = engineConfig.parameters || {};
 
         // 프롬프트 구성 (Scene Description + Motion)
         let finalPrompt = prompt || 'Cinematic shot, high quality';
@@ -86,46 +116,47 @@ export default async function handler(req, res) {
             finalPrompt += `, ${motionPrompt.description}`;
         }
         finalPrompt += ", high quality, 4k, fluid motion, physically accurate";
-        // Clamp prompt like generate-video.js
+
+        // Clamp prompt
         if (finalPrompt.length > 2000) finalPrompt = finalPrompt.slice(0, 1900);
 
+        // 🔥 CRITICAL: Duration Type Casting (Must be String '5' or '10')
+        // Kling API에는 무조건 '5' (또는 '10')를 보내야 함. (400 해결)
+        // req.body.duration은 "최종 결과물 길이(Trimming Target)"로만 사용.
+        const klingDuration = '5';
+
         const payload = {
+            ...defaultParams, // 🔥 engines.json의 기본 파라미터 적용 (cfg_scale 등)
             webhook_url: null,
             image: imageUrl,
             prompt: finalPrompt,
-            negative_prompt: "blurry, distorted, low quality, morphing, glitch",
-            duration: 5
+            negative_prompt: defaultParams.negative_prompt || "blurry, distorted, low quality, morphing, glitch",
+            duration: klingDuration // 🔥 Kling requires '5' or '10'
         };
 
-        // Undefined/null 제거 (generate-video.js와 동일 산식)
+        // Undefined/null 제거
         Object.keys(payload).forEach(key => {
             if (payload[key] === undefined || payload[key] === null) {
                 delete payload[key];
             }
         });
 
-        console.log('[convert-single-scene] Calling Kling v2.1 Pro directly:', {
-            url: 'https://api.freepik.com/v1/ai/image-to-video/kling-v2-1-pro',
-            payloadKeys: Object.keys(payload)
+        console.log('[convert-single-scene] Calling Dynamic Engine:', {
+            model: engineConfig.model,
+            url: createUrl,
+            duration: payload.duration,
+            durationType: typeof payload.duration
         });
 
-        // 2. 태스크 생성 요청 (Direct Fetch to bypass Config/Helper)
-        const response = await fetch('https://api.freepik.com/v1/ai/image-to-video/kling-v2-1-pro', {
+        // 2. 태스크 생성 요청 (SafeCallFreepik 복구 - Dynamic Endpoint)
+        const createResult = await safeCallFreepik(createUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-freepik-api-key': apiKey
+                'Accept': 'application/json'
             },
             body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error('[convert-single-scene] Freepik API Error:', response.status, errText);
-            throw new Error(`Video API failed ${response.status}: ${errText}`);
-        }
-
-        const createResult = await response.json();
+        }, 'kling-video', 'create');
 
         if (!createResult?.data?.task_id) {
             throw new Error('Failed to create AI video task');
@@ -155,19 +186,38 @@ export default async function handler(req, res) {
         const buffer = Buffer.from(await vidRes.arrayBuffer());
         fs.writeFileSync(tempFilePath, buffer);
 
+        let finalPath = tempFilePath;
+        let finalDuration = 5; // Enigne default
+
+        // 🔥 CRITICAL: Duration Adjustment (Trimming)
+        // 요청된 길이가 5초 미만이면 Trimming 수행 (예: 2초, 3초)
+        // 만약 요청이 5초 이상이면, Kling (5s/10s) 원본 사용
+        const requestedDuration = parseFloat(duration);
+        if (requestedDuration > 0 && requestedDuration < 5) {
+            const trimmedFilename = `trimmed_${filename}`;
+            const trimmedPath = path.join(tempDir, trimmedFilename);
+
+            console.log(`[convert-single-scene] Trimming video: 5s -> ${requestedDuration}s`);
+            await trimVideo(tempFilePath, trimmedPath, requestedDuration);
+
+            finalPath = trimmedPath;
+            finalDuration = requestedDuration;
+        }
+
         // 업로드
-        const s3Url = await uploadVideoToS3(tempFilePath, projectId || 'unknown', conceptId || 'unknown', filename.replace('.mp4', ''));
+        const s3Url = await uploadVideoToS3(finalPath, projectId || 'unknown', conceptId || 'unknown', filename.replace('.mp4', ''));
 
         // 정리
-        fs.unlinkSync(tempFilePath);
+        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        if (finalPath !== tempFilePath && fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
 
-        console.log(`[convert-single-scene] S3 Uploaded: ${s3Url}`);
+        console.log(`[convert-single-scene] S3 Uploaded: ${s3Url} (${finalDuration}s)`);
 
         return res.json({
             success: true,
             videoUrl: s3Url,
             sceneNumber: sceneNumber,
-            duration: 5,
+            duration: finalDuration,
             engine: 'kling-v2-1-pro'
         });
 
