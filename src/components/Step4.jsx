@@ -63,6 +63,8 @@ const Step4 = ({
   const [synthesisLoading, setSynthesisLoading] = useState(false);
 
   const [imageLoadStates, setImageLoadStates] = useState({});
+  // 🔥 Reference Video Recommendation State
+  const [recommendedVideo, setRecommendedVideo] = useState(null);
 
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
@@ -676,6 +678,25 @@ const Step4 = ({
     setFilteredPeople(result);
   }, [personFilters, featurePeople]);
 
+  // 🔥 Fetch Recommendation
+  useEffect(() => {
+    if (formData?.productService) {
+      fetch(`${API_BASE}/api/recommend-video`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conceptType: formData.productService })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.video) {
+            setRecommendedVideo(data.video);
+            log(`[Step4] 추천 영상 로드됨: ${data.video.title}`);
+          }
+        })
+        .catch(err => console.error('[Step4] 추천 영상 로드 실패:', err));
+    }
+  }, [formData?.productService]);
+
   // 🔥 합성 실행
   const handleSynthesizePerson = async () => {
     if (!selectedPerson || !targetSceneNumber) return;
@@ -829,7 +850,26 @@ const Step4 = ({
           )}
 
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-white mb-4">📋 씬별 스토리보드</h3>
+            <div className="flex items-center gap-4 mb-4">
+              <h3 className="text-lg font-semibold text-white">📋 씬별 스토리보드</h3>
+              {recommendedVideo && (
+                <div className="hidden md:flex items-center bg-gray-800/80 rounded-full px-4 py-1.5 border border-purple-500/30 backdrop-blur-sm animate-fade-in">
+                  <span className="text-xs text-purple-300 font-bold mr-2">📺 참고영상 추천</span>
+                  <a
+                    href={recommendedVideo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-white hover:text-purple-300 hover:underline flex items-center gap-1 transition-colors"
+                    title={`조회수: ${parseInt(recommendedVideo.views).toLocaleString()}회, 길이: ${recommendedVideo.duration}`}
+                  >
+                    {recommendedVideo.title}
+                    <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </div>
+              )}
+            </div>
             <div className="space-y-6">
               {sortedImages.map((img) => {
                 const isRegenerating = regeneratingScenes[img.sceneNumber];
@@ -1245,141 +1285,144 @@ const Step4 = ({
                                 onChange={() => handleFilterChange('gender', gender)}
                                 className="w-3.5 h-3.5 rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-1 focus:ring-blue-500 checked:bg-blue-600"
                               />
-                            </div>
-                    </div> {/* This div closes the 'Filter Sidebar (Vertical)' div. It should be removed. */}
-
-                        {/* Nationality Group */}
-                        <div className="mt-6">
-                          <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Nationality</label>
-                          <div className="flex flex-col gap-2">
-                            {uniqueNationalities.map(nat => (
-                              <label key={nat} className="flex items-center gap-2 cursor-pointer group">
-                                <input
-                                  type="checkbox"
-                                  checked={personFilters.nationality.includes(nat)}
-                                  onChange={() => handleFilterChange('nationality', nat)}
-                                  className="w-3.5 h-3.5 rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-1 focus:ring-blue-500 checked:bg-blue-600"
-                                />
-                                <span className="text-gray-400 text-xs group-hover:text-gray-200">{nat}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Main Grid Content */}
-                      <div className="flex-1 bg-gray-900 p-4 overflow-y-auto w-full">
-                        <div className="grid grid-cols-3 gap-3">
-                          {filteredPeople.slice(0, visiblePeopleCount).map(person => (
-                            <div
-                              key={person.key || person.url}
-                              onClick={() => setSelectedPerson(person)}
-                              className={`relative group cursor-pointer rounded-lg overflow-hidden border transition-all duration-200 aspect-[3/4] ${selectedPerson?.url === person.url
-                                ? 'border-blue-500 shadow-lg shadow-blue-500/20'
-                                : 'border-gray-800 hover:border-gray-600'
-                                }`}
-                            >
-                              <img src={person.url} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
-
-                              {/* Hover Overlay */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                                <p className="text-white font-bold text-[11px] truncate">{person.name}</p>
-                                <p className="text-gray-400 text-[10px] truncate">{person.age} / {person.gender}</p>
-                              </div>
-
-                              {/* Selected Indicator */}
-                              {selectedPerson?.url === person.url && (
-                                <div className="absolute top-2 right-2 bg-blue-600 text-white p-0.5 rounded-full shadow-lg z-10">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                                </div>
-                              )}
-                            </div>
+                              <span className="text-gray-400 text-xs group-hover:text-gray-200">{gender}</span>
+                            </label>
                           ))}
                         </div>
+                      </div>
 
-                        {/* Load More */}
-                        {filteredPeople.length > visiblePeopleCount && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVisiblePeopleCount(prev => prev + 4);
-                            }}
-                            className="w-full mt-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 text-xs transition-colors"
-                          >
-                            + Load More ({filteredPeople.length - visiblePeopleCount})
-                          </button>
-                        )}
-
-                        {filteredPeople.length === 0 && (
-                          <div className="h-full flex flex-col items-center justify-center text-gray-500 text-xs">
-                            <span>No persons found</span>
-                          </div>
-                        )}
+                      {/* Nationality Group */}
+                      <div className="mt-6">
+                        <label className="text-xs font-bold text-gray-500 mb-2 block uppercase tracking-wider">Nationality</label>
+                        <div className="flex flex-col gap-2">
+                          {uniqueNationalities.map(nat => (
+                            <label key={nat} className="flex items-center gap-2 cursor-pointer group">
+                              <input
+                                type="checkbox"
+                                checked={personFilters.nationality.includes(nat)}
+                                onChange={() => handleFilterChange('nationality', nat)}
+                                className="w-3.5 h-3.5 rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-1 focus:ring-blue-500 checked:bg-blue-600"
+                              />
+                              <span className="text-gray-400 text-xs group-hover:text-gray-200">{nat}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-end gap-2">
-                      <button
-                        onClick={() => setShowPersonModal(false)}
-                        className="px-3 py-2 text-gray-400 hover:text-white text-xs"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSynthesizePerson}
-                        disabled={!selectedPerson || synthesisLoading}
-                        className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                      >
-                        {synthesisLoading ? (
-                          <>
-                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Processing...
-                          </>
-                        ) : (
-                          'Synthesize'
-                        )}
-                      </button>
+                    {/* Main Grid Content */}
+                    <div className="flex-1 bg-gray-900 p-4 overflow-y-auto w-full">
+                      <div className="grid grid-cols-3 gap-3">
+                        {filteredPeople.slice(0, visiblePeopleCount).map(person => (
+                          <div
+                            key={person.key || person.url}
+                            onClick={() => setSelectedPerson(person)}
+                            className={`relative group cursor-pointer rounded-lg overflow-hidden border transition-all duration-200 aspect-[3/4] ${selectedPerson?.url === person.url
+                              ? 'border-blue-500 shadow-lg shadow-blue-500/20'
+                              : 'border-gray-800 hover:border-gray-600'
+                              }`}
+                          >
+                            <img src={person.url} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
+
+                            {/* Hover Overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                              <p className="text-white font-bold text-[11px] truncate">{person.name}</p>
+                              <p className="text-gray-400 text-[10px] truncate">{person.age} / {person.gender}</p>
+                            </div>
+
+                            {/* Selected Indicator */}
+                            {selectedPerson?.url === person.url && (
+                              <div className="absolute top-2 right-2 bg-blue-600 text-white p-0.5 rounded-full shadow-lg z-10">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Load More */}
+                      {filteredPeople.length > visiblePeopleCount && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setVisiblePeopleCount(prev => prev + 4);
+                          }}
+                          className="w-full mt-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 text-xs transition-colors"
+                        >
+                          + Load More ({filteredPeople.length - visiblePeopleCount})
+                        </button>
+                      )}
+
+                      {filteredPeople.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-500 text-xs">
+                          <span>No persons found</span>
+                        </div>
+                      )}
                     </div>
-                  </div >
-                </>,
-                document.body // 🔥 Render directly to Body
+                  </div>
+
+                  {/* Footer */}
+                  <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-end gap-2">
+                    <button
+                      onClick={() => setShowPersonModal(false)}
+                      className="px-3 py-2 text-gray-400 hover:text-white text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSynthesizePerson}
+                      disabled={!selectedPerson || synthesisLoading}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                    >
+                      {synthesisLoading ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Processing...
+                        </>
+                      ) : (
+                        'Synthesize'
+                      )}
+                    </button>
+                  </div>
+                </div >
+              </>,
+              document.body // 🔥 Render directly to Body
             )}
-              </div >
-      </div>
+          </div >
         </div>
-      </div >
-      );
+      </div>
+    </div >
+  );
 };
 
-      Step4.propTypes = {
-        storyboard: PropTypes.shape({
-        styles: PropTypes.arrayOf(PropTypes.shape({
-        concept_id: PropTypes.number,
+Step4.propTypes = {
+  storyboard: PropTypes.shape({
+    styles: PropTypes.arrayOf(PropTypes.shape({
+      concept_id: PropTypes.number,
       conceptId: PropTypes.number,
       conceptName: PropTypes.string,
       style: PropTypes.string,
       images: PropTypes.arrayOf(PropTypes.shape({
         sceneNumber: PropTypes.number.isRequired,
-      imageUrl: PropTypes.string,
-      videoUrl: PropTypes.string,
-      title: PropTypes.string,
-      prompt: PropTypes.string,
-      motionPrompt: PropTypes.object,
-      copy: PropTypes.string,
-      status: PropTypes.string
+        imageUrl: PropTypes.string,
+        videoUrl: PropTypes.string,
+        title: PropTypes.string,
+        prompt: PropTypes.string,
+        motionPrompt: PropTypes.object,
+        copy: PropTypes.string,
+        status: PropTypes.string
       }))
     })),
-      finalVideos: PropTypes.array,
-      metadata: PropTypes.object
+    finalVideos: PropTypes.array,
+    metadata: PropTypes.object
   }),
-      selectedConceptId: PropTypes.number,
-      formData: PropTypes.object,
-      onPrev: PropTypes.func.isRequired,
-      onComplete: PropTypes.func.isRequired,
-      user: PropTypes.object,
-      currentProject: PropTypes.object,
-      userRole: PropTypes.oneOf(['viewer', 'commenter', 'editor', 'manager', 'owner'])
+  selectedConceptId: PropTypes.number,
+  formData: PropTypes.object,
+  onPrev: PropTypes.func.isRequired,
+  onComplete: PropTypes.func.isRequired,
+  user: PropTypes.object,
+  currentProject: PropTypes.object,
+  userRole: PropTypes.oneOf(['viewer', 'commenter', 'editor', 'manager', 'owner'])
 };
 
-      export default Step4;
+export default Step4;

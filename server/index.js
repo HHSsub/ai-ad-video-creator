@@ -58,6 +58,8 @@ import storyboardManualInject from '../api/storyboard-manual-inject.js';
 // 🔥 저장소 관리 API
 import storageInfoHandler from '../api/storage-info.js';
 import storageBrowseHandler from '../api/storage-browse.js';
+import recommendVideo from '../api/recommend-video.js';
+import checkVideoStatus from '../api/check-video-status.js'; // 🔥 Check Status API Check
 
 // 🔥 모든 엔진 프롬프트 조회 API
 // 🔥 모든 엔진 프롬프트 조회 API
@@ -670,10 +672,13 @@ app.use('/api/storage/info', storageInfoHandler);
 app.use('/api/storage/browse', storageBrowseHandler);
 
 // 🔥 모든 엔진 프롬프트 조회 API
-app.use('/api/prompts/all', promptsAllHandler);
+app.get('/api/storage/files', storageBrowseHandler);
 
-// 🔥 엔진 관리 API
-app.get('/api/engines', (req, res) => {
+// 🔥 Reference Video Recommendation
+app.use('/api/recommend-video', recommendVideo);
+
+// 🔥 통합 검색 API
+app.get('/api/search', async (req, res) => {
   try {
     const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
 
