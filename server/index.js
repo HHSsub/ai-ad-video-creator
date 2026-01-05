@@ -258,6 +258,13 @@ app.use('/api/synthesis-person', synthesisPersonRouter);
 app.use('/api/engines', enginesGet);
 app.use('/api/engines', enginesUpdate);
 
+// 🔥 프롬프트 조회 및 생성 (Missing Route Fixed)
+console.log('✅ Route Registered: /api/prompts/all');
+app.get('/api/prompts/all', promptsAllHandler);
+app.get('/api/prompts', promptsGetHandler);
+app.post('/api/prompts', promptsUpdateHandler);
+app.post('/api/prompts/generate', generatePrompt);
+
 app.post('/api/check-video-status', checkVideoStatus); // 🔥 Async Status Check
 
 app.get('/health', (req, res) => {
