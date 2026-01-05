@@ -62,9 +62,7 @@ import recommendVideo from '../api/recommend-video.js';
 import checkVideoStatus from '../api/check-video-status.js'; // 🔥 Check Status API Check
 
 // 🔥 모든 엔진 프롬프트 조회 API
-// 🔥 모든 엔진 프롬프트 조회 API
 import promptsAllHandler from '../api/prompts-all.js';
-import checkVideoStatus from '../api/check-video-status.js'; // 🔥 Async Polling Status API
 
 const app = express();
 const PORT = process.env.PORT || 3000;
