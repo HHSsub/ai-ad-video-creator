@@ -74,43 +74,33 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         console.log('[safeComposeWithSeedream] 합성 시작 (Freepik v4-edit)');
 
         // 1. 프롬프트 구성
+        // 🔥 Prompt Tuning: Stronger identity enforcement
         const prompt = compositingInfo.sceneDescription
-            ? `High quality photo, ${compositingInfo.sceneDescription}, highly detailed, photorealistic, 8k`
+            ? `${compositingInfo.sceneDescription}, highly detailed, 8k`
             : "High quality photo, ultra realistic, seamless composition, 8k";
 
-        // 2. 입력 이미지 구성 (reference_images)
-        // 🔥 수정: '인물 합성'을 위해 Base 이미지는 Input으로, 인물 이미지는 Reference로 분리
-        // Base Image -> Input Image (Main Canvas)
-        // Person Image -> Reference Image (Content/Style Guide)
-
+        // 2. 입력 이미지 구성 (Reference Image for Person)
         const references = [];
-
-        // Overlay Image (Person) -> Reference로 추가
         if (overlayImageData.startsWith('http')) {
-            references.push({
-                image: { url: overlayImageData }
-            });
+            references.push({ image: { url: overlayImageData } });
         } else {
             const base64Clean = overlayImageData.replace(/^data:image\/\w+;base64,/, "");
-            references.push({
-                image: { base64: base64Clean }
-            });
+            references.push({ image: { base64: base64Clean } });
         }
 
-        // 3. API 요청 (Generation Endpoint 유지: v4)
-        // 🔥 수정: 'seedream' (404) -> 'seedream-v4' (Valid)
         const url = getTextToImageUrl();
 
         const payload = {
-            prompt: `${prompt}, featuring the person from reference image, detailed face, accurate likeness`,
-            reference_images: references, // 인물 이미지만 참조
+            prompt: `${prompt}, featuring the person from reference image, perfect face match, identical facial features, same identity`,
+            reference_images: references,
             num_images: 1,
-            image: { url: baseImageUrl }, // Base 이미지를 Input(Img2Img)으로 설정하여 배경/구도 유지
-            strength: 0.9, // 🔥 High strength to force face replacement (0.9)
-            guidance_scale: 4.0, // Higher guidance for prompt adherence
+            image: { url: baseImageUrl },
+            strength: 0.95, // 🔥 Maximized for replacement
+            guidance_scale: 16.0, // 🔥 High adherence to "featuring person"
             num_inference_steps: 25,
-            // 🔥 매핑된 AR 추가 (Generation Endpoint 필수값일 수 있음)
-            aspect_ratio: 'widescreen_16_9'
+            // 🔥 Dynamic Aspect Ratio (Remove hardcoding)
+            // If aspect_ratio provided, use it. Else omit/default.
+            aspect_ratio: compositingInfo?.aspectRatio || undefined
         };
 
         console.log('[Seedream] 요청 Payload: Img2Img (Base) + Reference (Person)');

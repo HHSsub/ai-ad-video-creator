@@ -7,13 +7,14 @@ const router = express.Router();
 
 router.post('/', async (req, res) => {
     try {
-        const { sceneImage, personImage, personMetadata, sceneContext, projectId } = req.body;
+        const { sceneImage, personImage, personMetadata, sceneContext, projectId, aspectRatio } = req.body;
 
         console.log('[API] Person Synthesis Request:', {
             projectId,
             personName: personMetadata?.name,
             hasSceneImage: !!sceneImage,
-            hasPersonImage: !!personImage
+            hasPersonImage: !!personImage,
+            aspectRatio
         });
 
         if (!sceneImage || !personImage) {
@@ -26,7 +27,8 @@ router.post('/', async (req, res) => {
         // 1. 합성 실행 (Seedream v4)
         // compositingInfo 구성
         const compositingInfo = {
-            sceneDescription: sceneContext || 'High quality cinematic shot'
+            sceneDescription: sceneContext || 'High quality cinematic shot',
+            aspectRatio: aspectRatio || 'widescreen_16_9' // Default fallback
         };
 
         const result = await safeComposeWithSeedream(sceneImage, personImage, compositingInfo);

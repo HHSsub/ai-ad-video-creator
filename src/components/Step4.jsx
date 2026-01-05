@@ -697,7 +697,8 @@ const Step4 = ({
           personImage: selectedPerson.url,
           personMetadata: selectedPerson,
           sceneContext: scene.prompt || scene.copy,
-          projectId: currentProject?.id
+          projectId: currentProject?.id,
+          aspectRatio: formData?.aspectRatioCode // 🔥 Pass Aspect Ratio
         })
       });
 
