@@ -68,7 +68,18 @@ router.post('/', async (req, res) => {
         console.log(`[Recommend] Loaded ${data.length} rows from Excel.`);
 
         if (data.length > 0) {
-            console.log('[Recommend] First row keys:', Object.keys(data[0]));
+            const allKeys = Object.keys(data[0]);
+            console.log(`[Recommend] Total Columns: ${allKeys.length}`);
+            console.log('[Recommend] First row keys:', allKeys);
+
+            // 🔥 URL/Title 관련 컬럼 찾기
+            const urlKeys = allKeys.filter(k => k.toLowerCase().includes('url') || k.includes('링크') || k.includes('주소'));
+            const titleKeys = allKeys.filter(k => k.includes('제목') || k.includes('타이틀') || k.toLowerCase().includes('title'));
+
+            console.log('[Recommend] 🔍 URL-related columns:', urlKeys);
+            console.log('[Recommend] 🔍 Title-related columns:', titleKeys);
+            console.log('[Recommend] 📋 Sample Row[0] URL field:', data[0]['URL']);
+            console.log('[Recommend] 📋 Sample Row[0] Title field:', data[0]['영상 제목']);
         }
 
         // 4. Filter Data
@@ -95,14 +106,14 @@ router.post('/', async (req, res) => {
             if (isMatch) countMatchKeyword++;
 
             // Duration Check
-            const durationStr = row['영상길이'];
+            const durationStr = row['156.종합 분석_전체 영상 길이'];
             const durationSec = parseDuration(durationStr);
             const isShort = durationSec <= 90;
             if (isMatch && isShort) countMatchDuration++;
 
             // URL & Title Check
             const hasUrl = !!row['URL'] && String(row['URL']).trim().length > 0;
-            const hasTitle = !!row['영상제목'] && String(row['영상제목']).trim().length > 0;
+            const hasTitle = !!row['영상 제목'] && String(row['영상 제목']).trim().length > 0;
             if (isMatch && isShort && hasUrl && hasTitle) countHasUrlTitle++;
 
             return isMatch && isShort && hasUrl && hasTitle;
@@ -139,10 +150,10 @@ router.post('/', async (req, res) => {
         res.json({
             success: true,
             video: {
-                title: topVideo['영상제목'],
+                title: topVideo['영상 제목'],
                 url: topVideo['URL'],
                 views: topVideo['조회수'],
-                duration: topVideo['영상길이']
+                duration: topVideo['156.종합 분석_전체 영상 길이']
             }
         });
 

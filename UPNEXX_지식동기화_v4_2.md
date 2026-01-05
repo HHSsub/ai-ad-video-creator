@@ -96,6 +96,25 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-05 12:55 - [HOTFIX] 참고 영상 추천 완전 수정 및 라우팅 복구 (Task FF)
+- **이슈 1**: Step4에서 참고 영상이 전혀 표시되지 않고 백엔드 로그도 없음.
+- **원인**: 
+  1. `server/index.js`에 `/api/recommend-video` 라우트 등록 누락 → 404
+  2. `/api/prompts/all` 라우트 등록 누락 → Admin Panel 크래시
+  3. Step4.jsx useEffect가 존재하지 않는 `formData.productService` 필드 체크 → 실행 안 됨
+  4. 추천 영상 UI 렌더링 코드 완전 누락
+- **해결**:
+  1. `server/index.js`에 `app.use('/api/recommend-video', recommendVideo)` 추가
+  2. `server/index.js`에 `app.get('/api/prompts/all', promptsAllHandler)` 추가
+  3. Step4.jsx useEffect 조건을 `formData.videoPurpose` 기반으로 수정 (fieldConfig.js 명세 준수)
+  4. Step4.jsx 우측 하단에 추천 영상 UI 박스 추가 (제목/조회수/길이 표시)
+  5. AdminPanel.jsx 영상 엔진 목록에 `kling-v2-5-pro` 추가
+  6. `apply-bgm.js`에 S3 업로드 추가하여 로컬 경로 대신 CloudFront URL 반환
+  7. **정리**: `src/utils/fieldConfig.js`를 `.backup`으로 변경 (실제 사용: `config/runtime-field-config.json`)
+  8. **디버깅 강화**: `recommend-video.js`에 URL/Title 컬럼 탐지 로직 추가 (Has URL/Title: 0 문제 해결)
+- **코드 검증**: runtime-field-config.json, enginePromptHelper.js, Step1Auto.jsx, Step1Manual.jsx, App.jsx 등 10+ 파일 의존성 분석
+- **상태**: ✅ 완료 (PM2 재시작 필요, 엑셀 컬럼명 확인 후 추가 수정 가능)
+
 ### 2026-01-05 12:20 - [HOTFIX] BGM ReferenceError 및 엑셀 데이터 누락 디버깅 (Task DD)
 - **긴급 이슈 1 (BGM)**: `apply-bgm.js`에서 `ReferenceError: resolveVideoPath is not defined` 발생하여 500 에러 지속.
   - **원인**: 이전 리팩토링 중 함수 정의가 누락됨.
