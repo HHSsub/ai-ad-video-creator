@@ -183,11 +183,16 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
             const actualSceneCount = sceneKeys.length;
             console.log(`[manual-inject] 컨셉 ${conceptIdx + 1}: ${actualSceneCount}개 씬 감지`);
 
+            // 🔥 씬별 생성 결과 추적
+            const sceneResults = new Map(); // sceneNum -> { success: boolean, data: object }
+
+            // 🔥 1차 시도: 모든 씬 생성
             for (let sceneNum = 1; sceneNum <= actualSceneCount; sceneNum++) {
                 const sceneKey = `scene_${sceneNum}`;
                 const scene = concept[sceneKey];
                 if (!scene) {
                     console.warn(`[manual-inject] ⚠️ ${sceneKey} 누락 - 건너뜀`);
+                    sceneResults.set(sceneNum, { success: false, error: '씬 데이터 없음' });
                     continue;
                 }
 
@@ -200,15 +205,18 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
                     const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username, formData.projectId, 3, personSelection);
                     console.log(`[manual-inject] 🖼️ 씬 ${sceneNum} 이미지 생성 완료`);
 
-                    images.push({
-                        sceneNumber: sceneNum,
-                        imageUrl: imageUrl,
-                        videoUrl: null,
-                        title: scene.title || `씬 ${sceneNum}`,
-                        prompt: scene.image_prompt?.prompt || '',
-                        motionPrompt: scene.motion_prompt,
-                        copy: scene.copy?.copy || '',
-                        status: 'image_done'
+                    sceneResults.set(sceneNum, {
+                        success: true,
+                        data: {
+                            sceneNumber: sceneNum,
+                            imageUrl: imageUrl,
+                            videoUrl: null,
+                            title: scene.title || `씬 ${sceneNum}`,
+                            prompt: scene.image_prompt?.prompt || '',
+                            motionPrompt: scene.motion_prompt,
+                            copy: scene.copy?.copy || '',
+                            status: 'image_done'
+                        }
                     });
 
                     const progress = ((conceptIdx * actualSceneCount + sceneNum) / (mcJson.concepts.length * actualSceneCount)) * 100;
@@ -221,12 +229,85 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
                     });
                 } catch (error) {
                     console.error(`이미지 생성 실패 (씬 ${sceneNum}):`, error);
+                    sceneResults.set(sceneNum, {
+                        success: false,
+                        error: error.message,
+                        scene: scene
+                    });
+                }
+            }
+
+            // 🔥 실패한 씬 재시도 (최대 2회)
+            const failedScenes = Array.from(sceneResults.entries())
+                .filter(([_, result]) => !result.success)
+                .map(([sceneNum, _]) => sceneNum);
+
+            if (failedScenes.length > 0) {
+                console.log(`[manual-inject] 🔄 실패한 씬 재시도: ${failedScenes.join(', ')}`);
+
+                for (const sceneNum of failedScenes) {
+                    const sceneKey = `scene_${sceneNum}`;
+                    const scene = concept[sceneKey];
+                    if (!scene) continue;
+
+                    for (let retryAttempt = 1; retryAttempt <= 2; retryAttempt++) {
+                        try {
+                            console.log(`[manual-inject] 🔁 씬 ${sceneNum} 재시도 ${retryAttempt}/2`);
+
+                            const imagePrompt = {
+                                ...scene.image_prompt,
+                                aspect_ratio: mapAspectRatio(scene.image_prompt?.aspect_ratio || aspectRatioCode || 'widescreen_16_9')
+                            };
+
+                            const imageUrl = await generateImage(imagePrompt, sceneNum, conceptIdx + 1, username, formData.projectId, 3, personSelection);
+
+                            sceneResults.set(sceneNum, {
+                                success: true,
+                                data: {
+                                    sceneNumber: sceneNum,
+                                    imageUrl: imageUrl,
+                                    videoUrl: null,
+                                    title: scene.title || `씬 ${sceneNum}`,
+                                    prompt: scene.image_prompt?.prompt || '',
+                                    motionPrompt: scene.motion_prompt,
+                                    copy: scene.copy?.copy || '',
+                                    status: 'image_done'
+                                }
+                            });
+
+                            console.log(`[manual-inject] ✅ 씬 ${sceneNum} 재시도 성공`);
+                            break; // 성공 시 더 이상 재시도 안 함
+
+                        } catch (retryError) {
+                            console.error(`[manual-inject] ❌ 씬 ${sceneNum} 재시도 ${retryAttempt} 실패:`, retryError.message);
+                            if (retryAttempt === 2) {
+                                // 최종 실패
+                                sceneResults.set(sceneNum, {
+                                    success: false,
+                                    error: retryError.message
+                                });
+                            }
+                            await new Promise(resolve => setTimeout(resolve, 5000)); // 5초 대기
+                        }
+                    }
+                }
+            }
+
+            // 🔥 최종 이미지 배열 생성 (순서 보장, 누락 표시)
+            for (let sceneNum = 1; sceneNum <= actualSceneCount; sceneNum++) {
+                const result = sceneResults.get(sceneNum);
+                if (result && result.success) {
+                    images.push(result.data);
+                } else {
+                    // 누락된 씬 명시적 표시
+                    console.warn(`[manual-inject] ⚠️ 씬 ${sceneNum} 최종 실패 - 플레이스홀더 추가`);
                     images.push({
                         sceneNumber: sceneNum,
                         imageUrl: null,
                         videoUrl: null,
+                        title: `씬 ${sceneNum} (생성 실패)`,
                         status: 'image_failed',
-                        error: error.message
+                        error: result?.error || '알 수 없는 오류'
                     });
                 }
             }

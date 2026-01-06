@@ -1,6 +1,7 @@
 // src/utils/apiHelpers.js - 🔥 모델명 로깅 + 이미지 합성 모델 정확히 설정
 
 import { apiKeyManager } from './apiKeyManager.js';
+import { freepikRateLimiter } from './rateLimiter.js'; // 🔥 Rate Limiter 추가
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const MAX_RETRIES = 3;
@@ -308,7 +309,7 @@ export async function safeCallGemini(prompt, options = {}) {
 }
 
 /**
- * 🔥 안전한 Freepik API 호출 (개선된 재시도 로직 - 429 에러 시 즉시 다른 키 사용)
+ * 🔥 안전한 Freepik API 호출 (Rate Limiter 통합 - 사전 예방)
  */
 export async function safeCallFreepik(url, options = {}, conceptId = 0) {
   const {
@@ -329,6 +330,10 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
     let requestStartTime = Date.now();
 
     try {
+      // 🔥🔥🔥 Rate Limiter 대기 (429 에러 사전 방지)
+      await freepikRateLimiter.waitForSlot();
+      console.log(`[${label}] ✅ Rate Limit 슬롯 확보 완료`);
+
       // 🔥 사용 가능한 키 선택 (이미 사용한 키 제외)
       keyIndex = null;
 
@@ -348,7 +353,7 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
 
       usedKeys.add(keyIndex);
       const { key: apiKey } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
-      console.log(`[${label}] 시도 ${attempt + 1}/${maxTotalAttempts} (컨셉: ${conceptId}, 키: ${keyIndex}, 사용된 키: ${usedKeys.size - 1}/${totalKeys})`);
+      console.log(`[${label}] 시도 ${attempt + 1}/${maxTotalAttempts} (컨셉: ${conceptId}, 키: ${keyIndex}, 사용된 키: ${usedKeys.size}/${totalKeys})`);
 
       const response = await withTimeout(
         fetch(url, {

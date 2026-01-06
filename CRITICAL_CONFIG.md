@@ -6,6 +6,72 @@
 
 ## ⚠️ 최우선 절대 규칙 (ABSOLUTE RULES)
 
+### 🔴 규칙 0: AI 작업 전 필수 체크리스트 (재발 방지)
+
+**매번 반복되는 실수 패턴:**
+- 변수 만들고 안 씀
+- 로직 짜고 등록 안 함
+- 상호의존 확인 안 해서 변수명 틀림
+- 멋대로 함수명/변수명 바꿔서 연동 풀림
+- 없는 이름 지어냄
+
+**작업 전 반드시 수행:**
+
+1. **문서 3종 세트 확인**
+   - [ ] `CRITICAL_CONFIG.md` 전체 읽기
+   - [ ] `지식동기화 문서` 최상단 규칙 읽기
+   - [ ] 관련 섹션 찾아서 읽기
+
+2. **기존 코드 패턴 참조 (최소 3개)**
+   - [ ] 유사 컴포넌트 3개 이상 열어서 패턴 확인
+   - [ ] 상수 선언 방식 확인 (예: `API_BASE`, `ENGINE_ID`)
+   - [ ] fetch 호출 방식 확인
+   - [ ] import 구조 확인
+
+3. **상호의존성 검증 (백엔드-프론트엔드 계약)**
+   ```bash
+   # 예시: API 응답 수정 시
+   1. 백엔드 파일 먼저 읽기 (api/api-keys.js Line 343-350)
+   2. 실제 응답 구조 확인: {success, message, keysUpdated}
+   3. 프론트엔드 파일 읽기 (AdminPanel.jsx Line 522-535)
+   4. 사용하는 필드 확인: data.success, data.keysUpdated
+   5. 불일치 발견 시 수정 (존재하지 않는 data.restartResult 제거)
+   ```
+
+4. **변수/상수 추가 시 즉시 검증**
+   ```bash
+   # 예시: API_BASE 상수 추가 시
+   1. 상수 선언: const API_BASE = ...
+   2. 즉시 grep 검색: grep -r "fetch.*api/" src/components/admin/AdminPanel.jsx
+   3. 모든 사용처 수정: /api/engines → ${API_BASE}/api/engines
+   4. 재검색으로 누락 확인: grep -r "'/api/" src/components/admin/AdminPanel.jsx
+   ```
+
+5. **함수명/변수명 변경 시 전파 확인**
+   ```bash
+   # 예시: restartResult → 제거 시
+   1. 백엔드에서 제거: api/api-keys.js
+   2. grep으로 사용처 찾기: grep -r "restartResult" src/
+   3. 모든 사용처 수정 또는 제거
+   4. 재검색으로 잔여 확인
+   ```
+
+6. **라우트 등록 시 즉시 검증**
+   ```bash
+   # 예시: api/new-route.js 생성 시
+   1. 파일 작성
+   2. server/index.js에 import 추가
+   3. app.use('/api/new-route', newRoute) 등록
+   4. curl 또는 브라우저로 즉시 테스트
+   ```
+
+**위반 시 조치:**
+- 즉시 작업 중단
+- 누락된 체크리스트 항목 수행
+- 수정 후 재검증
+
+---
+
 ### 🔴 규칙 1: API/엔진 관련 수정 절대 금지
 
 **절대로 추측, 추정, 가정으로 API 호출 코드를 작성하거나 수정하지 말 것**
