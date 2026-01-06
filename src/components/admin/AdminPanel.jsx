@@ -1218,19 +1218,20 @@ const AdminPanel = ({ currentUser }) => {
                           저장 중...
                         </>
                       ) : (
-                        <>💾 저장 및 서버 재시작</>
+                        <>💾 저장 및 즉시 반영</>
                       )}
                     </button>
                   </div>
 
                   {/* 주의사항 */}
-                  <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4">
-                    <h4 className="text-yellow-400 font-bold text-sm mb-2">⚠️ 주의사항</h4>
+                  <div className="bg-green-900/20 border border-green-800/50 rounded-lg p-4">
+                    <h4 className="text-green-400 font-bold text-sm mb-2">✨ 즉시 반영 시스템</h4>
                     <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-                      <li>API 키 저장 시 .env 파일이 수정되고 서버가 자동으로 재시작됩니다.</li>
+                      <li>API 키 저장 시 서버 재시작 없이 즉시 시스템에 반영됩니다.</li>
                       <li>여러 개의 키를 등록하면 시스템이 자동으로 부하를 분산합니다.</li>
                       <li>키를 삭제하려면 해당 키를 비워두지 말고 "삭제" 버튼을 눌러주세요.</li>
-                      <li>서버 재시작 전까지 기존 .env.backup 파일로 백업이 생성됩니다.</li>
+                      <li>저장 시 자동으로 .env.backup 파일로 백업이 생성됩니다.</li>
+                      <li>다운타임 없이 즉시 새 키가 적용되며, 진행 중인 작업에 영향을 주지 않습니다.</li>
                     </ul>
                   </div>
                 </div>

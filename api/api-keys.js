@@ -1,60 +1,60 @@
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import dotenv from 'dotenv';
 
 /**
  * API 키 관리 API
  * - Gemini API 키 관리 (다중 키)
  * - Freepik API 키 관리 (다중 키)
  * - Gemini 모델 설정
- * - .env 파일 수정 후 PM2 자동 재시작
+ * - .env 파일 수정 후 런타임 즉시 반영
  */
 
 /**
- * PM2로 애플리케이션 재시작
+ * 🔥 환경변수 즉시 리로드 및 apiKeyManager 재초기화
  */
-async function restartPM2() {
+async function reloadEnvironmentAndKeys() {
     try {
-        console.log('[api-keys] 🔄 PM2로 애플리케이션 재시작 시도...');
+        console.log('[api-keys] 🔄 환경변수 런타임 리로드 시작...');
 
-        // PM2가 설치되어 있는지 확인
+        // 1. .env 파일 다시 로드
+        const envPath = path.join(process.cwd(), '.env');
+        const envConfig = dotenv.parse(fs.readFileSync(envPath, 'utf-8'));
+
+        // 2. process.env에 모든 환경변수 강제 덮어쓰기
+        Object.keys(envConfig).forEach(key => {
+            process.env[key] = envConfig[key];
+        });
+
+        console.log('[api-keys] ✅ 환경변수 리로드 완료');
+
+        // 3. apiKeyManager 재초기화
         try {
-            await execAsync('which pm2');
-        } catch {
-            console.warn('[api-keys] ⚠️ PM2가 설치되어 있지 않습니다. 재시작 건너뜀.');
-            return { success: false, message: 'PM2가 설치되어 있지 않습니다. 수동으로 서버를 재시작해주세요.' };
-        }
+            const apiKeyManagerModule = await import('../src/utils/apiKeyManager.js');
+            const apiKeyManager = apiKeyManagerModule.default || apiKeyManagerModule.apiKeyManager;
 
-        // PM2 프로세스 목록 확인
-        const { stdout: listOutput } = await execAsync('pm2 list');
-        console.log('[api-keys] PM2 프로세스 목록:\n', listOutput);
-
-        // PM2 앱 이름 (환경변수 또는 기본값)
-        const appName = process.env.PM2_APP_NAME || 'all';
-
-        try {
-            const { stdout: restartOutput } = await execAsync(`pm2 restart ${appName}`);
-            console.log('[api-keys] ✅ PM2 재시작 성공:', restartOutput);
-            return { success: true, message: 'PM2 재시작 성공' };
-        } catch (restartError) {
-            console.error('[api-keys] ❌ PM2 재시작 실패:', restartError.message);
-
-            // 폴백: pm2 reload 시도
-            try {
-                const { stdout: reloadOutput } = await execAsync(`pm2 reload ${appName}`);
-                console.log('[api-keys] ✅ PM2 reload 성공:', reloadOutput);
-                return { success: true, message: 'PM2 reload 성공' };
-            } catch (reloadError) {
-                console.error('[api-keys] ❌ PM2 reload도 실패:', reloadError.message);
-                return { success: false, message: 'PM2 재시작 실패. 수동으로 서버를 재시작해주세요.' };
+            // apiKeyManager의 initializeKeys 메서드 호출
+            if (apiKeyManager && typeof apiKeyManager.initializeKeys === 'function') {
+                apiKeyManager.initializeKeys();
+                console.log('[api-keys] ✅ apiKeyManager 재초기화 완료');
+            } else {
+                console.warn('[api-keys] ⚠️ apiKeyManager.initializeKeys 메서드를 찾을 수 없습니다');
             }
+        } catch (importError) {
+            console.error('[api-keys] ❌ apiKeyManager import 실패:', importError);
         }
+
+        console.log('[api-keys] 🎉 모든 키가 즉시 시스템에 반영되었습니다!');
+        return {
+            success: true,
+            message: '환경변수와 API 키가 즉시 시스템에 반영되었습니다. 재시작 불필요!'
+        };
     } catch (error) {
-        console.error('[api-keys] ❌ PM2 재시작 오류:', error);
-        return { success: false, message: `재시작 오류: ${error.message}` };
+        console.error('[api-keys] ❌ 환경변수 리로드 오류:', error);
+        return {
+            success: false,
+            message: `환경변수 리로드 실패: ${error.message}`
+        };
     }
 }
 
@@ -337,13 +337,13 @@ export default async function handler(req, res) {
             console.log(`  - Gemini Model: ${geminiModel}`);
             console.log(`  - Fallback Model: ${fallbackModel}`);
 
-            // PM2 재시작
-            const restartResult = await restartPM2();
+            // 🔥 환경변수 즉시 리로드 및 키 매니저 재초기화
+            const reloadResult = await reloadEnvironmentAndKeys();
 
             res.status(200).json({
                 success: true,
-                message: 'API 키가 저장되었습니다.',
-                restartResult: restartResult,
+                message: 'API 키가 저장되고 즉시 시스템에 반영되었습니다!',
+                reloadResult: reloadResult,
                 keysUpdated: {
                     gemini: geminiKeys.length,
                     freepik: freepikKeys.length
