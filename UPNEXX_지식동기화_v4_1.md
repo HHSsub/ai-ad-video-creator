@@ -100,6 +100,22 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-07 02:45 - API 키 저장 응답 실패 버그 수정
+- **파일**: `api/api-keys.js`
+- **문제**:
+  - **백엔드**: .env 저장 및 키 매니저 재초기화 성공 (로그 확인)
+  - **프론트엔드**: "서버 연결 실패" 에러 (`TypeError: Cannot read properties of undefined (reading 'success')`)
+  - **원인**: `reloadEnvironmentAndKeys()` 호출 후 응답 반환이 제대로 되지 않음
+- **수정 내용**:
+  - Line 340-354: POST 핸들러 응답 로직 수정
+    - `reloadEnvironmentAndKeys()` 호출을 try-catch로 감싸서 에러 발생 시에도 응답 반환 보장
+    - `return res.status(200).json(...)` 추가하여 응답이 확실히 반환되도록 수정
+    - `reloadResult` 필드 제거 (불필요한 응답 구조 간소화)
+- **검증**: 
+  - 응답 구조 간소화: `{success, message, keysUpdated}` 만 반환
+  - `AdminPanel.jsx`의 기대 응답 구조와 일치 확인
+- **상태**: 코드 수정 완료, 사용자 테스트 대기
+
 ### 2026-01-07 02:40 - 사용자 리미트 필드명 버그 수정 및 에러 메시지 개선
 - **파일**: `api/storyboard-init.js`
 - **문제**:

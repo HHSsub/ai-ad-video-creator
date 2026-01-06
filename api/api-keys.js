@@ -338,12 +338,17 @@ export default async function handler(req, res) {
             console.log(`  - Fallback Model: ${fallbackModel}`);
 
             // 🔥 환경변수 즉시 리로드 및 키 매니저 재초기화
-            const reloadResult = await reloadEnvironmentAndKeys();
+            try {
+                await reloadEnvironmentAndKeys();
+                console.log('[api-keys] ✅ 환경변수 및 키 매니저 재초기화 완료');
+            } catch (reloadError) {
+                console.error('[api-keys] ⚠️ 리로드 실패:', reloadError);
+            }
 
-            res.status(200).json({
+            // 🔥 응답 반환
+            return res.status(200).json({
                 success: true,
                 message: 'API 키가 저장되고 즉시 시스템에 반영되었습니다!',
-                reloadResult: reloadResult,
                 keysUpdated: {
                     gemini: geminiKeys.length,
                     freepik: freepikKeys.length
