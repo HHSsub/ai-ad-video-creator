@@ -215,17 +215,28 @@ function checkAndResetDaily(user) {
 
 function checkUsageLimit(username) {
   try {
-    if (!username) return { allowed: false, message: '사용자 정보가 없습니다.' };
+    if (!username) return { allowed: false, message: '사용자 정보가 없습니다. 관리자에게 문의하세요.' };
     const users = loadUsers();
     const user = users[username];
-    if (!user) return { allowed: false, message: '존재하지 않는 사용자입니다.' };
+    if (!user) return { allowed: false, message: '존재하지 않는 사용자입니다. 관리자에게 문의하세요.' };
     checkAndResetDaily(user);
-    if (user.usageCount >= user.dailyLimit) {
-      return { allowed: false, message: `일일 사용 한도(${user.dailyLimit}회)를 초과했습니다.` };
+
+    // 🔥 수정: dailyLimit → usageLimit (실제 DB 필드명)
+    if (user.usageLimit === null || user.usageLimit === undefined) {
+      // 무제한 사용자
+      return { allowed: true, user };
+    }
+
+    if (user.usageCount >= user.usageLimit) {
+      return {
+        allowed: false,
+        message: `일일 사용 한도를 초과했습니다. (오늘: ${user.usageCount}/${user.usageLimit}회)\n관리자에게 문의하세요.`
+      };
     }
     return { allowed: true, user };
   } catch (error) {
-    return { allowed: false, message: '사용 한도 확인 중 오류가 발생했습니다.' };
+    console.error('[checkUsageLimit] 오류:', error);
+    return { allowed: false, message: '사용 한도 확인 중 오류가 발생했습니다. 관리자에게 문의하세요.' };
   }
 }
 

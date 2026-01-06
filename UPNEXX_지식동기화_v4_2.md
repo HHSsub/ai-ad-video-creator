@@ -96,6 +96,79 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-07 02:25 - [REVIEW] 사용횟수 카운팅 시스템 검토 완료
+- **요청**: "오늘 사용횟수"가 Step3 갤러리 완료 시 1회로 카운팅되는지, 리미트 기능이 제대로 작동하는지 검토
+- **검토 결과**:
+  1. **카운팅 시점**: ✅ Step2 이미지 생성 **시작 시** 카운팅 (`storyboard-init.js` Line 958)
+     - Gemini 응답 후 이미지 생성 막 시작할 때 `incrementUsageCount()` 호출
+     - **Step3 완료 시점이 아님** (이미지 생성 자체가 API 비용 시점이므로 합리적)
+  2. **리미트 체크**: ⚠️ **필드명 불일치 버그 발견**
+     - `storyboard-init.js`: `user.dailyLimit` 체크 (Line 223)
+     - 실제 `users.json` 및 `api/users.js`: `user.usageLimit` 사용
+     - **결과**: 리미트 체크가 undefined와 비교되어 작동하지 않을 가능성
+  3. **일일 리셋**: ✅ 정상 작동 (`checkAndResetDaily` 함수, 날짜 비교 기반)
+  4. **중복 함수 문제**: `storyboard-init.js`가 자체 로컬 함수 사용하는 대신 `api/users.js`의 표준 export 함수 사용 권장
+- **권장 수정**:
+  - Option 1 (추천): `import { checkUsageLimit, incrementUsage } from './users.js'` 후 표준 API 사용
+  - Option 2: 로컬 함수에서 `dailyLimit` → `usageLimit`로 수정 + `totalUsageCount` 증가 로직 추가
+- **검토 문서**: `usage_count_review.md` (상세 분석 포함)
+- **상태**: ✅ 검토 완료 (수정은 사용자 판단)
+
+### 2026-01-07 02:20 - [FEATURE] API 키 관리 시스템 구현 완료 (런타임 즉시 반영)
+- **요청**: 관리자 패널에서 Gemini/Freepik API 키 여러 개 관리, .env 저장 후 **즉시 시스템 전체 반영** (PM2 재시작 없이)
+- **긴급 수정 (02:26)**: server/index.js에 라우트 등록 누락으로 404 발생 → import 및 등록 추가
+- **구현 내용**:
+  1. **Backend API (`api/api-keys.js`)**:
+     - `GET /nexxii/api/api-keys`: 현재 .env에서 모든 키 조회 (Gemini, Freepik, 모델 설정)
+     - `POST /nexxii/api/api-keys`: 새 키 목록으로 .env 재작성 + **런타임 환경변수 리로드**
+     - **핵심 로직**:
+       ```javascript
+       // .env 파일 업데이트
+       fs.writeFileSync(envPath, envContent, 'utf-8');
+       
+       // ✅ 런타임 환경변수 즉시 리로드
+       const envConfig = dotenv.parse(fs.readFileSync(envPath, 'utf-8'));
+       Object.keys(envConfig).forEach(key => {
+         process.env[key] = envConfig[key];
+       });
+       
+       // ✅ apiKeyManager 재초기화
+       const apiKeyManager = await import('../src/utils/apiKeyManager.js');
+       apiKeyManager.initializeKeys();
+       ```
+     - **백업**: 매 저장 시 `.env.backup.{timestamp}` 자동 생성
+  2. **Server Route (`server/index.js`)**:
+     - `app.use('/api/api-keys', apiKeys)` 등록
+  3. **Frontend UI (`src/components/admin/AdminPanel.jsx`)**:
+     - "🔐 API 키 관리" 탭 추가 (사용자 관리 탭 우측)
+     - **Gemini 키 섹션**: 여러 개 추가/수정/삭제 (파란색 테마)
+     - **Freepik 키 섹션**: 여러 개 추가/수정/삭제 (초록색 테마)
+     - **모델 설정**: GEMINI_MODEL, FALLBACK_GEMINI_MODEL (보라색 테마)
+     - **키 표시/숨김**: password/text 타입 토글
+     - **저장 버튼**: "💾 저장 및 즉시 반영" (재시작 불필요 강조)
+  4. **Freepik 환경변수 통일**:
+     - 기존 `VITE_FREEPIK_API_KEY`, `REACT_APP_FREEPIK_API_KEY` 모두 제거
+     - `FREEPIK_API_KEY`, `FREEPIK_API_KEY_1~10` 형식으로 통일
+  5. **.env 파일 구조**:
+     ```bash
+     FREEPIK_API_KEY=FPSX...
+     FREEPIK_API_KEY_2=FPSX...
+     
+     GEMINI_MODEL=gemini-2.5-flash
+     FALLBACK_GEMINI_MODEL=gemini-2.5-flash-lite
+     GEMINI_API_KEY=AIza...
+     GEMINI_API_KEY_2=AIza...
+     ```
+- **작동 방식**:
+  1. Admin이 키 추가/수정
+  2. "저장 및 즉시 반영" 클릭
+  3. .env 파일 업데이트 → `dotenv.parse()` 재로드 → `process.env` 덮어쓰기
+  4. `apiKeyManager.initializeKeys()` 재호출 → 새 키 Pool 재구성
+  5. **다운타임 0초** - 진행 중인 작업 영향 없음
+- **Key Pool 시스템 연동**: 기존 `apiKeyManager.js`가 이미 다중 키 패턴 인식하므로 추가 수정 불필요
+- **문서**: `implementation_plan.md`, `walkthrough.md` 생성
+- **상태**: ✅ 완료 (사용자 테스트 대기)
+
 ### 2026-01-05 13:30 - [CRITICAL] 프롬프트 테스트 저장 버그 수정 (Task II)
 - **긴급 이슈**: 관리자 패널에서 프롬프트 테스트 실행 시 백엔드 로그는 "✅ 저장 완료"인데 프론트엔드 Gemini 응답 로그에는 아무것도 표시되지 않음.
 - **원인**: `server/index.js` Line 633에서 잘못된 변수 사용:
