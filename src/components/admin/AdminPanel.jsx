@@ -5,7 +5,7 @@ import PersonManagement from './PersonManagement';
 
 const AdminPanel = ({ currentUser }) => {
   // ===== 상태 관리 =====
-  const [activeMainTab, setActiveMainTab] = useState('prompts'); // prompts, engines, storage, users
+  const [activeMainTab, setActiveMainTab] = useState('prompts'); // prompts, engines, storage, users, apikeys
 
   // 프롬프트 관리 (12개 엔진 조합 매트릭스)
   const [selectedImageEngine, setSelectedImageEngine] = useState('seedream-v4');
@@ -53,6 +53,15 @@ const AdminPanel = ({ currentUser }) => {
   const [directoryContents, setDirectoryContents] = useState([]);
   const [storageLoading, setStorageLoading] = useState(false);
 
+  // 🔥 API 키 관리 상태
+  const [geminiKeys, setGeminiKeys] = useState([]);
+  const [freepikKeys, setFreepikKeys] = useState([]);
+  const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash');
+  const [fallbackModel, setFallbackModel] = useState('gemini-2.5-flash-lite');
+  const [savingKeys, setSavingKeys] = useState(false);
+  const [loadingKeys, setLoadingKeys] = useState(false);
+  const [showKeys, setShowKeys] = useState(false);
+
   const versionsPerPage = 10;
 
   // ===== 초기 로드 =====
@@ -62,6 +71,9 @@ const AdminPanel = ({ currentUser }) => {
     if (activeMainTab === 'storage') {
       browseDirectory('');
       loadStorageInfo();
+    }
+    if (activeMainTab === 'apikeys') {
+      loadApiKeys();
     }
   }, [activeMainTab]);
 
@@ -462,6 +474,101 @@ const AdminPanel = ({ currentUser }) => {
     }
   };
 
+  // 🔥 API 키 관리 함수
+  const loadApiKeys = async () => {
+    setLoadingKeys(true);
+    try {
+      const response = await fetch('/nexxii/api/api-keys');
+      const data = await response.json();
+
+      if (data.success) {
+        setGeminiKeys(data.data.geminiKeys || []);
+        setFreepikKeys(data.data.freepikKeys || []);
+        setGeminiModel(data.data.geminiModel || 'gemini-2.5-flash');
+        setFallbackModel(data.data.fallbackModel || 'gemini-2.5-flash-lite');
+        console.log('[AdminPanel] ✅ API 키 로드 완료');
+      } else {
+        showMessage('error', 'API 키 로드 실패');
+      }
+    } catch (error) {
+      console.error('[AdminPanel] API 키 로드 오류:', error);
+      showMessage('error', '서버 연결 실패');
+    } finally {
+      setLoadingKeys(false);
+    }
+  };
+
+  const handleSaveKeys = async () => {
+    if (!confirm('API 키를 저장하면 서버가 자동으로 재시작됩니다.\n계속하시겠습니까?')) {
+      return;
+    }
+
+    setSavingKeys(true);
+    try {
+      const response = await fetch('/nexxii/api/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          geminiKeys: geminiKeys.filter(k => k && k.trim().length > 0),
+          freepikKeys: freepikKeys.filter(k => k && k.trim().length > 0),
+          geminiModel,
+          fallbackModel
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        let successMsg = '✅ API 키가 저장되었습니다!\n\n';
+        successMsg += `Gemini 키: ${data.keysUpdated.gemini}개\n`;
+        successMsg += `Freepik 키: ${data.keysUpdated.freepik}개\n\n`;
+
+        if (data.restartResult.success) {
+          successMsg += '🔄 서버가 재시작되었습니다.\n새 API 키가 즉시 적용됩니다.';
+        } else {
+          successMsg += `⚠️ ${data.restartResult.message}\n수동으로 서버를 재시작해주세요.`;
+        }
+
+        showMessage('success', successMsg);
+      } else {
+        showMessage('error', `저장 실패: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('[AdminPanel] API 키 저장 오류:', error);
+      showMessage('error', '서버 연결 실패');
+    } finally {
+      setSavingKeys(false);
+    }
+  };
+
+  const addGeminiKey = () => {
+    setGeminiKeys([...geminiKeys, '']);
+  };
+
+  const removeGeminiKey = (index) => {
+    setGeminiKeys(geminiKeys.filter((_, i) => i !== index));
+  };
+
+  const updateGeminiKey = (index, value) => {
+    const newKeys = [...geminiKeys];
+    newKeys[index] = value;
+    setGeminiKeys(newKeys);
+  };
+
+  const addFreepikKey = () => {
+    setFreepikKeys([...freepikKeys, '']);
+  };
+
+  const removeFreepikKey = (index) => {
+    setFreepikKeys(freepikKeys.filter((_, i) => i !== index));
+  };
+
+  const updateFreepikKey = (index, value) => {
+    const newKeys = [...freepikKeys];
+    newKeys[index] = value;
+    setFreepikKeys(newKeys);
+  };
+
   const getCurrentPageVersions = () => {
     const startIndex = (currentPage - 1) * versionsPerPage;
     return versions.slice(startIndex, startIndex + versionsPerPage);
@@ -510,7 +617,8 @@ const AdminPanel = ({ currentUser }) => {
             { id: 'engines', label: '🎨 엔진 관리' },
             { id: 'persons', label: '👤 인물 관리' },
             { id: 'storage', label: '💾 저장소 관리' },
-            { id: 'users', label: '👥 사용자 관리' }
+            { id: 'users', label: '👥 사용자 관리' },
+            { id: 'apikeys', label: '🔐 API 키 관리' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -960,6 +1068,175 @@ const AdminPanel = ({ currentUser }) => {
         {/* 4. 사용자 관리 탭 */}
         {activeMainTab === 'users' && (
           <UserManagement currentUser={currentUser} />
+        )}
+
+        {/* 5. API 키 관리 탭 */}
+        {activeMainTab === 'apikeys' && (
+          <div className="space-y-6">
+            <div className="bg-gray-800/90 rounded-lg p-8 border border-gray-700 shadow-xl">
+              <div className="mb-6 flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2">🔐 API 키 관리</h2>
+                  <p className="text-gray-400 text-sm">시스템에서 사용하는 API 키를 확인하고 수정할 수 있습니다</p>
+                </div>
+                <button
+                  onClick={() => setShowKeys(!showKeys)}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs font-bold transition"
+                >
+                  {showKeys ? '🙈 키 숨기기' : '👁️ 키 표시'}
+                </button>
+              </div>
+
+              {loadingKeys ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Gemini API 키 섹션 */}
+                  <div className="border border-blue-800/30 rounded-xl p-6 bg-blue-900/10">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-bold text-blue-400">🤖 Gemini API 키</h3>
+                      <button
+                        onClick={addGeminiKey}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-2"
+                      >
+                        <span>+</span> 키 추가
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {geminiKeys.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-sm">
+                          등록된 Gemini API 키가 없습니다. 키를 추가해주세요.
+                        </div>
+                      ) : (
+                        geminiKeys.map((key, index) => (
+                          <div key={index} className="flex gap-2 items-center">
+                            <span className="text-xs text-gray-500 font-mono w-16">KEY {index + 1}</span>
+                            <input
+                              type={showKeys ? 'text' : 'password'}
+                              value={key}
+                              onChange={(e) => updateGeminiKey(index, e.target.value)}
+                              className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="AIza..."
+                            />
+                            <button
+                              onClick={() => removeGeminiKey(index)}
+                              className="px-3 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg text-xs font-bold transition"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Freepik API 키 섹션 */}
+                  <div className="border border-green-800/30 rounded-xl p-6 bg-green-900/10">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-bold text-green-400">🎨 Freepik API 키</h3>
+                      <button
+                        onClick={addFreepikKey}
+                        className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-2"
+                      >
+                        <span>+</span> 키 추가
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {freepikKeys.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-sm">
+                          등록된 Freepik API 키가 없습니다. 키를 추가해주세요.
+                        </div>
+                      ) : (
+                        freepikKeys.map((key, index) => (
+                          <div key={index} className="flex gap-2 items-center">
+                            <span className="text-xs text-gray-500 font-mono w-16">KEY {index + 1}</span>
+                            <input
+                              type={showKeys ? 'text' : 'password'}
+                              value={key}
+                              onChange={(e) => updateFreepikKey(index, e.target.value)}
+                              className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                              placeholder="FPSX..."
+                            />
+                            <button
+                              onClick={() => removeFreepikKey(index)}
+                              className="px-3 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg text-xs font-bold transition"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Gemini 모델 설정 섹션 */}
+                  <div className="border border-purple-800/30 rounded-xl p-6 bg-purple-900/10">
+                    <h3 className="text-lg font-bold text-purple-400 mb-4">⚙️ Gemini 모델 설정</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-2 font-bold">주 모델 (GEMINI_MODEL)</label>
+                        <input
+                          type="text"
+                          value={geminiModel}
+                          onChange={(e) => setGeminiModel(e.target.value)}
+                          className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="gemini-2.5-flash"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-2 font-bold">폴백 모델 (FALLBACK_GEMINI_MODEL)</label>
+                        <input
+                          type="text"
+                          value={fallbackModel}
+                          onChange={(e) => setFallbackModel(e.target.value)}
+                          className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          placeholder="gemini-2.5-flash-lite"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 저장 버튼 */}
+                  <div className="flex justify-end gap-4 pt-4 border-t border-gray-700">
+                    <button
+                      onClick={loadApiKeys}
+                      disabled={loadingKeys}
+                      className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-bold transition disabled:opacity-50"
+                    >
+                      🔄 새로고침
+                    </button>
+                    <button
+                      onClick={handleSaveKeys}
+                      disabled={savingKeys}
+                      className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-lg transition disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {savingKeys ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          저장 중...
+                        </>
+                      ) : (
+                        <>💾 저장 및 서버 재시작</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* 주의사항 */}
+                  <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4">
+                    <h4 className="text-yellow-400 font-bold text-sm mb-2">⚠️ 주의사항</h4>
+                    <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
+                      <li>API 키 저장 시 .env 파일이 수정되고 서버가 자동으로 재시작됩니다.</li>
+                      <li>여러 개의 키를 등록하면 시스템이 자동으로 부하를 분산합니다.</li>
+                      <li>키를 삭제하려면 해당 키를 비워두지 말고 "삭제" 버튼을 눌러주세요.</li>
+                      <li>서버 재시작 전까지 기존 .env.backup 파일로 백업이 생성됩니다.</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

@@ -250,6 +250,11 @@ app.use(bodyParser.urlencoded({
 app.use('/api/admin-config', adminConfig);
 app.use('/api/users', usersApi); // 수정됨: /api/ 추가
 app.use('/api/admin-field-config', adminFieldConfig); // 수정됨: /api/ 추가
+
+// 🔥 API 키 관리
+import apiKeys from '../api/api-keys.js';
+app.use('/api/api-keys', apiKeys);
+
 app.use('/api/auth', authRouter);
 app.use('/api/persons', personsRouter);
 app.use('/api/synthesis-person', synthesisPersonRouter);
