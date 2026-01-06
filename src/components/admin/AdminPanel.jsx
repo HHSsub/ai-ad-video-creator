@@ -3,6 +3,9 @@ import PropTypes from 'prop-types';
 import UserManagement from './UserManagement';
 import PersonManagement from './PersonManagement';
 
+// 🔥 API_BASE 상수 추가 (CRITICAL: VITE_API_BASE_URL 사용)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
+
 const AdminPanel = ({ currentUser }) => {
   // ===== 상태 관리 =====
   const [activeMainTab, setActiveMainTab] = useState('prompts'); // prompts, engines, storage, users, apikeys
@@ -122,7 +125,7 @@ const AdminPanel = ({ currentUser }) => {
   const loadEngineInfo = async () => {
     setLoadingEngines(true);
     try {
-      const response = await fetch('/nexxii/api/engines');
+      const response = await fetch(`${API_BASE}/api/engines`);
       const data = await response.json();
 
       if (data.success) {
@@ -156,7 +159,7 @@ const AdminPanel = ({ currentUser }) => {
 
     setUpdatingEngine(true);
     try {
-      const response = await fetch('/nexxii/api/engines', {
+      const response = await fetch(`${API_BASE}/api/engines`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -214,7 +217,7 @@ const AdminPanel = ({ currentUser }) => {
   const loadAllPrompts = async () => {
     setPromptLoading(true);
     try {
-      const response = await fetch('/nexxii/api/prompts/all');
+      const response = await fetch(`${API_BASE}/api/prompts/all`);
       const data = await response.json();
 
       if (data.success) {
@@ -236,7 +239,7 @@ const AdminPanel = ({ currentUser }) => {
       const id = engineId || `${selectedImageEngine}_${selectedVideoEngine}`;
       const type = promptType || selectedPromptType;
 
-      const response = await fetch(`/nexxii/api/prompts/versions?engineId=${id}&promptType=${type}`);
+      const response = await fetch(`${API_BASE}/api/prompts/versions?engineId=${id}&promptType=${type}`);
       const data = await response.json();
 
       if (data.success) {
@@ -268,7 +271,7 @@ const AdminPanel = ({ currentUser }) => {
       const id = engineId || `${selectedImageEngine}_${selectedVideoEngine}`;
       const type = promptType || selectedPromptType;
 
-      const response = await fetch(`/nexxii/api/prompts/responses/${id}/${type}`);
+      const response = await fetch(`${API_BASE}/api/prompts/responses/${id}/${type}`);
       const data = await response.json();
 
       if (data.success) {
@@ -287,7 +290,7 @@ const AdminPanel = ({ currentUser }) => {
     try {
       const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
 
-      const response = await fetch('/nexxii/api/prompts/update', {
+      const response = await fetch(`${API_BASE}/api/prompts/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -320,7 +323,7 @@ const AdminPanel = ({ currentUser }) => {
     try {
       const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
 
-      const response = await fetch('/nexxii/api/prompts/restore', {
+      const response = await fetch(`${API_BASE}/api/prompts/restore`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -353,7 +356,7 @@ const AdminPanel = ({ currentUser }) => {
       showMessage('info', '⏳ 프롬프트 테스트 진행 중...');
       const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
 
-      const response = await fetch('/nexxii/api/prompts/test', {
+      const response = await fetch(`${API_BASE}/api/prompts/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -423,7 +426,7 @@ const AdminPanel = ({ currentUser }) => {
   const loadStorageInfo = async () => {
     setStorageLoading(true);
     try {
-      const response = await fetch('/nexxii/api/storage/info');
+      const response = await fetch(`${API_BASE}/api/storage/info`);
       const data = await response.json();
       if (data.success) setStorageInfo(data);
     } catch (error) {
@@ -436,7 +439,7 @@ const AdminPanel = ({ currentUser }) => {
   const browseDirectory = async (path) => {
     setStorageLoading(true);
     try {
-      const response = await fetch(`/nexxii/api/storage/browse?path=${encodeURIComponent(path)}`);
+      const response = await fetch(`${API_BASE}/api/storage/browse?path=${encodeURIComponent(path)}`);
       const data = await response.json();
 
       if (data.success) {
@@ -456,7 +459,7 @@ const AdminPanel = ({ currentUser }) => {
     if (!confirm(`정말 삭제하시겠습니까?\n\n${itemPath}`)) return;
 
     try {
-      const response = await fetch('/nexxii/api/storage/browse', {
+      const response = await fetch(`${API_BASE}/api/storage/browse`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: itemPath })
@@ -478,7 +481,7 @@ const AdminPanel = ({ currentUser }) => {
   const loadApiKeys = async () => {
     setLoadingKeys(true);
     try {
-      const response = await fetch('/nexxii/api/api-keys');
+      const response = await fetch(`${API_BASE}/api/api-keys`);
       const data = await response.json();
 
       if (data.success) {
@@ -499,13 +502,13 @@ const AdminPanel = ({ currentUser }) => {
   };
 
   const handleSaveKeys = async () => {
-    if (!confirm('API 키를 저장하면 서버가 자동으로 재시작됩니다.\n계속하시겠습니까?')) {
+    if (!confirm('API 키를 저장하면 시스템에 즉시 반영됩니다.\n계속하시겠습니까?')) {
       return;
     }
 
     setSavingKeys(true);
     try {
-      const response = await fetch('/nexxii/api/api-keys', {
+      const response = await fetch(`${API_BASE}/api/api-keys`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -516,26 +519,26 @@ const AdminPanel = ({ currentUser }) => {
         })
       });
 
+      // 🔥 응답 상태 체크
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
       if (data.success) {
         let successMsg = '✅ API 키가 저장되었습니다!\n\n';
         successMsg += `Gemini 키: ${data.keysUpdated.gemini}개\n`;
         successMsg += `Freepik 키: ${data.keysUpdated.freepik}개\n\n`;
-
-        if (data.restartResult.success) {
-          successMsg += '🔄 서버가 재시작되었습니다.\n새 API 키가 즉시 적용됩니다.';
-        } else {
-          successMsg += `⚠️ ${data.restartResult.message}\n수동으로 서버를 재시작해주세요.`;
-        }
+        successMsg += '🔄 새 API 키가 시스템에 즉시 반영되었습니다.';
 
         showMessage('success', successMsg);
       } else {
-        showMessage('error', `저장 실패: ${data.error}`);
+        showMessage('error', `저장 실패: ${data.error || '알 수 없는 오류'}`);
       }
     } catch (error) {
       console.error('[AdminPanel] API 키 저장 오류:', error);
-      showMessage('error', '서버 연결 실패');
+      showMessage('error', `서버 연결 실패: ${error.message}`);
     } finally {
       setSavingKeys(false);
     }
@@ -577,7 +580,7 @@ const AdminPanel = ({ currentUser }) => {
   const viewResponseDetail = async (fileName) => {
     try {
       const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
-      const response = await fetch(`/nexxii/api/prompts/responses/detail/${engineId}/${selectedPromptType}/${fileName}`);
+      const response = await fetch(`${API_BASE}/api/prompts/responses/detail/${engineId}/${selectedPromptType}/${fileName}`);
       const data = await response.json();
 
       if (data.success) {
