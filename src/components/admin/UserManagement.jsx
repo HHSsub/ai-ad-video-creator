@@ -197,36 +197,36 @@ const UserManagement = ({ currentUser }) => {
       )}
 
       <div className="bg-gray-800 rounded-lg overflow-x-auto border border-gray-700">
-        <table className="w-full table-fixed">
+        <table className="w-full">
           <thead className="bg-gray-800">
             <tr>
-              <th className="w-[100px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 아이디
               </th>
-              <th className="w-[80px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 이름
               </th>
-              <th className="w-[60px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 권한
               </th>
               {currentUser.role === 'admin' && (
-                <th className="w-[120px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                   비밀번호
                 </th>
               )}
-              <th className="w-[70px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 총 사용횟수
               </th>
-              <th className="w-[60px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 한도
               </th>
-              <th className="w-[70px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 남은 횟수
               </th>
-              <th className="w-[90px] px-3 py-2 text-left text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 한도 마지막 편집
               </th>
-              <th className="w-[140px] px-3 py-2 text-right text-[10px] font-medium text-gray-300 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                 관리
               </th>
             </tr>
@@ -238,60 +238,58 @@ const UserManagement = ({ currentUser }) => {
 
               return (
                 <tr key={user.username} className="hover:bg-gray-700/50 transition-colors">
-                  <td className="px-3 py-2 whitespace-nowrap text-xs text-white">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
                     {user.username}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                     {user.name}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs">
-                    <span className={`px-2 py-1 rounded-full text-[10px] ${user.role === 'admin'
-                        ? 'bg-purple-900/50 text-purple-200'
-                        : 'bg-gray-700 text-gray-300'
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span className={`px-2 py-1 rounded-full text-xs ${user.role === 'admin'
+                      ? 'bg-purple-900/50 text-purple-200'
+                      : 'bg-gray-700 text-gray-300'
                       }`}>
                       {user.role === 'admin' ? '관리자' : '사용자'}
                     </span>
                   </td>
                   {currentUser.role === 'admin' && (
-                    <td className="px-3 py-2 whitespace-nowrap text-xs font-mono text-gray-400">
-                      {user.plainPassword || user.password || '********'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-400">
+                      {user.plainPassword || '********'}
                     </td>
                   )}
-                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                     {user.usageCount || 0}회
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                     {user.usageLimit !== null && user.usageLimit !== undefined ? `${user.usageLimit}회` : '무제한'}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`font-semibold ${usageStatus === 'exceeded' ? 'text-red-400' :
-                        usageStatus === 'warning' ? 'text-yellow-400' :
-                          usageStatus === 'unlimited' ? 'text-green-400' :
-                            'text-blue-400'
+                      usageStatus === 'warning' ? 'text-yellow-400' :
+                        usageStatus === 'unlimited' ? 'text-green-400' :
+                          'text-blue-400'
                       }`}>
                       {remaining}
                     </span>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-400">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                     {user.lastResetDate || '-'}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs">
-                    <div className="flex gap-1 justify-end">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">
+                    <button
+                      onClick={() => openEditModal(user)}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
+                    >
+                      수정
+                    </button>
+                    {user.username !== 'admin' && (
                       <button
-                        onClick={() => openEditModal(user)}
-                        className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors text-[10px]"
+                        onClick={() => handleDeleteUser(user.username)}
+                        className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
                       >
-                        수정
+                        삭제
                       </button>
-                      {user.username !== 'admin' && (
-                        <button
-                          onClick={() => handleDeleteUser(user.username)}
-                          className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors text-[10px]"
-                        >
-                          삭제
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </td>
                 </tr>
               );
