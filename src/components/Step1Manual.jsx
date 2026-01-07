@@ -160,7 +160,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   return (
     <div className="step1-manual">
       <div className="manual-header">
-        <h1>Manual Mode - 세밀한 설정</h1>
+        <h1>Custom Mode - 세밀한 설정</h1>
         <p>필수 옵션을 선택하고, 원하는 영상을 자유롭게 설명해주세요</p>
 
         {/* 🔥 Admin 전용: 숨겨진 항목 복구 UI */}
