@@ -903,23 +903,6 @@ const Step4 = ({
           <div className="mb-8">
             <div className="flex items-center gap-4 mb-4">
               <h3 className="text-lg font-semibold text-white">📋 씬별 스토리보드</h3>
-              {recommendedVideo && (
-                <div className="flex items-center bg-gray-800/80 rounded-full px-4 py-1.5 border border-purple-500/30 backdrop-blur-sm animate-fade-in shadow-lg shadow-purple-900/20">
-                  <span className="text-xs text-purple-300 font-bold mr-2">✨ 추천 레퍼런스</span>
-                  <a
-                    href={recommendedVideo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-white hover:text-purple-300 hover:underline flex items-center gap-1 transition-colors"
-                    title={`조회수: ${parseInt(recommendedVideo.views).toLocaleString()}회, 길이: ${recommendedVideo.duration}`}
-                  >
-                    {recommendedVideo.title}
-                    <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
-                </div>
-              )}
             </div>
             <div className="space-y-6">
               {sortedImages.map((img) => {

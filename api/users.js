@@ -155,6 +155,7 @@ router.post('/', async (req, res) => {
     users[username] = {
       id: username,
       password: hashedPassword,
+      plainPassword: password, // 🔥 평문 비밀번호 저장 (관리자 접근용)
       role: 'user',
       name: name || username,
       usageLimit: usageLimit !== undefined && usageLimit !== null && usageLimit !== '' ? parseInt(usageLimit) : null,
@@ -231,6 +232,7 @@ router.put('/', async (req, res) => {
       // 🔥 비밀번호 해싱
       const hashedPassword = await bcrypt.hash(updateData.password, 10);
       users[username].password = hashedPassword;
+      users[username].plainPassword = updateData.password; // 🔥 평문 비밀번호도 저장
       console.log('[users PUT] 🔐 비밀번호 해싱 완료:', username);
     }
 

@@ -168,6 +168,14 @@ export default async function handler(req, res) {
 
             console.log(`[storage-browse] Deleting folder: ${prefix}`);
 
+            // 🔥 프로젝트 ID 추출 (예: nexxii-storage/projects/project_1766739481756/ -> project_1766739481756)
+            const projectIdMatch = prefix.match(/projects\/(project_\d+)\//);
+            const projectId = projectIdMatch ? projectIdMatch[1] : null;
+
+            if (projectId) {
+                console.log(`[storage-browse] 🔍 프로젝트 ID 감지: ${projectId}`);
+            }
+
             // List all objects with this prefix
             const listCommand = new ListObjectsV2Command({
                 Bucket: BUCKET_NAME,
@@ -197,10 +205,43 @@ export default async function handler(req, res) {
 
             console.log(`[storage-browse] ✅ 폴더 삭제 완료: ${prefix} (${deletedCount}개 파일)`);
 
+            // 🔥 프로젝트 DB 레코드도 삭제
+            if (projectId) {
+                try {
+                    const fs = await import('fs');
+                    const path = await import('path');
+                    const projectsFile = path.default.join(process.cwd(), 'config', 'projects.json');
+                    const membersFile = path.default.join(process.cwd(), 'config', 'project-members.json');
+
+                    // projects.json 읽기
+                    const projectsData = JSON.parse(fs.default.readFileSync(projectsFile, 'utf8'));
+                    const membersData = JSON.parse(fs.default.readFileSync(membersFile, 'utf8'));
+
+                    // 프로젝트 찾기 및 삭제
+                    const projectIndex = projectsData.projects.findIndex(p => p.id === projectId);
+                    if (projectIndex !== -1) {
+                        projectsData.projects.splice(projectIndex, 1);
+                        fs.default.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2));
+                        console.log(`[storage-browse] 🗑️ 프로젝트 DB 삭제: ${projectId}`);
+
+                        // 멤버도 삭제
+                        membersData.members = membersData.members.filter(m => m.projectId !== projectId);
+                        fs.default.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
+                        console.log(`[storage-browse] 🗑️ 프로젝트 멤버 삭제 완료`);
+                    } else {
+                        console.log(`[storage-browse] ⚠️ 프로젝트 DB에 없음: ${projectId}`);
+                    }
+                } catch (dbError) {
+                    console.error(`[storage-browse] ❌ 프로젝트 DB 삭제 실패:`, dbError);
+                    // DB 삭제 실패해도 S3 삭제는 성공했으므로 계속 진행
+                }
+            }
+
             return res.status(200).json({
                 success: true,
-                message: `폴더가 삭제되었습니다. (${deletedCount}개 파일)`,
-                deletedCount
+                message: `폴더가 삭제되었습니다. (${deletedCount}개 파일)${projectId ? ' + DB 레코드' : ''}`,
+                deletedCount,
+                projectDeleted: !!projectId
             });
 
         } catch (error) {
