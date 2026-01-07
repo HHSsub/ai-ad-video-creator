@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './Step1Manual.css';
 import { loadFieldConfig, saveFieldConfig } from '../utils/fieldConfig';
+import { forceScrollTop } from '../forceScrollTop';
 
-const Step1Manual = ({ form Data, setFormData, user, onPrev, onNext }) => {
+const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   useEffect(() => {
     forceScrollTop();
   }, []);
