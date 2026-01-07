@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import './ModeSelector.css';
 import { forceScrollTop } from '../forceScrollTop';
 
-const ModeSelector = ({ project, onSelectMode, onBack, onInviteMember }) => {
+const ModeSelector = ({ project, user, onSelectMode, onBack, onInviteMember }) => {
   useEffect(() => {
     forceScrollTop();
   }, []);
@@ -102,6 +102,38 @@ const ModeSelector = ({ project, onSelectMode, onBack, onInviteMember }) => {
               </svg>
             </button>
           </div>
+
+          {/* Admin 모드 - admin 전용 */}
+          {user?.role === 'admin' && (
+            <div
+              className="mode-card manual-mode"
+              onClick={() => onSelectMode('admin')}
+              style={{ borderColor: '#f59e0b' }}
+            >
+              <div className="card-glow" style={{ background: 'radial-gradient(circle at center, rgba(245, 158, 11, 0.15), transparent)' }}></div>
+              <div className="mode-icon-wrapper">
+                <svg className="mode-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 15C15.866 15 19 11.866 19 8C19 4.13401 15.866 1 12 1C8.13401 1 5 4.13401 5 8C5 11.866 8.13401 15 12 15Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M8.21 13.89L7 23L12 20L17 23L15.79 13.88" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <h3 className="mode-name" style={{ color: '#f59e0b' }}>Admin Mode</h3>
+              <p className="mode-desc">
+                Gemini 응답 직접 입력
+              </p>
+              <ul className="mode-features">
+                <li><span className="check-icon">✓</span> 수동 응답 제어</li>
+                <li><span className="check-icon">✓</span> Gemini 우회</li>
+                <li><span className="check-icon">✓</span> 고급 디버깅</li>
+              </ul>
+              <button className="btn-select" style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}>
+                <span>선택하기</span>
+                <svg className="arrow-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mode-info">
@@ -120,6 +152,7 @@ const ModeSelector = ({ project, onSelectMode, onBack, onInviteMember }) => {
 
 ModeSelector.propTypes = {
   project: PropTypes.object.isRequired,
+  user: PropTypes.object,
   onSelectMode: PropTypes.func.isRequired,
   onBack: PropTypes.func.isRequired,
   onInviteMember: PropTypes.func

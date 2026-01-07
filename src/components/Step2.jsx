@@ -1,7 +1,6 @@
 // src/components/Step2.jsx - 완전한 전체 코드 (생략 없음)
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import ManualPromptModal from './ManualPromptModal';
 import { forceScrollTop } from '../forceScrollTop';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
@@ -105,7 +104,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   const [error, setError] = useState('');
   const [debugInfo, setDebugInfo] = useState(null);
   const [styles, setStyles] = useState([]);
-  const [showManualModal, setShowManualModal] = useState(false);
 
   const isBusy = isLoading;
   const progressManager = new ProgressManager();
@@ -163,6 +161,28 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       checkOngoingSession();
     }
   }, [user?.username]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 자동 실행 로직
+  useEffect(() => {
+    const shouldAutoStart = sessionStorage.getItem('autoStartStep2');
+
+    if (shouldAutoStart === 'true') {
+      sessionStorage.removeItem('autoStartStep2');
+
+      // 0.5초 후 자동 실행 (컴포넌트 마운트 대기)
+      setTimeout(() => {
+        if (formData.mode === 'admin') {
+          // Admin 모드: Gemini 호출 생략, 직접 이미지 생성
+          if (formData.geminiResponse) {
+            handleManualSubmit(formData.geminiResponse);
+          }
+        } else {
+          // Auto/Manual 모드: 일반 생성 시작
+          handleGenerateStoryboard();
+        }
+      }, 500);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 🔥 [M] Person Selection 기능
   const [persons, setPersons] = useState([]);
@@ -688,7 +708,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
   const getButtonText = () => {
     const imageInfo = getUnifiedImageData(formData);
     return imageInfo.hasImage
-      ? '광고 영상 생성 + 이미지 합성 시작'
+      ? '광고 영상 생성 시작'
       : '광고 영상 생성 시작';
   };
 

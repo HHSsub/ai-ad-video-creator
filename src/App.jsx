@@ -11,6 +11,7 @@ import ModeSelector from './components/ModeSelector';
 import InviteMemberModal from './components/InviteMemberModal';
 import Step1Manual from './components/Step1Manual';
 import Step1Auto from './components/Step1Auto';
+import Step1Admin from './components/Step1Admin';
 import Step5 from './components/Step5';
 
 function App() {
@@ -312,11 +313,10 @@ function App() {
 
     setStep(1);
 
-    if (mode === 'auto') {
-      setCurrentView('step1-auto');
-    } else if (mode === 'manual') {
-      setCurrentView('step1-manual');
-    }
+    const view = mode === 'auto' ? 'step1-auto'
+      : mode === 'manual' ? 'step1-manual'
+        : 'step1-admin';
+    setCurrentView(view);
   };
 
   const handleBackToProjects = () => {
@@ -625,6 +625,7 @@ function App() {
           {currentView === 'mode-select' && currentProject && (
             <ModeSelector
               project={currentProject}
+              user={user}
               onSelectMode={handleSelectMode}
               onBack={handleBackToProjects}
               onInviteMember={() => setShowInviteModal(true)}
@@ -640,7 +641,8 @@ function App() {
               onNext={() => {
                 console.log('Step1Auto 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
-                saveProjectData(formData); // 🔥 자동 저장 추가
+                saveProjectData(formData);
+                sessionStorage.setItem('autoStartStep2', 'true'); // 자동 실행 플래그
                 setStep(2);
                 setCurrentView('step2');
               }}
@@ -657,7 +659,25 @@ function App() {
                 console.log('Step1Manual 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
                 console.log('🔥 사용자 설명:', formData.userdescription);
-                saveProjectData(formData); // 🔥 자동 저장 추가
+                saveProjectData(formData);
+                sessionStorage.setItem('autoStartStep2', 'true'); // 자동 실행 플래그
+                setStep(2);
+                setCurrentView('step2');
+              }}
+            />
+          )}
+
+          {currentView === 'step1-admin' && (
+            <Step1Admin
+              formData={formData}
+              setFormData={setFormData}
+              user={user}
+              onPrev={handleBackToModeSelect}
+              onNext={() => {
+                console.log('Step1Admin 완료, formData:', formData);
+                console.log('🔥 Gemini Response:', formData.geminiResponse?.substring(0, 100));
+                saveProjectData(formData);
+                sessionStorage.setItem('autoStartStep2', 'true'); // 자동 실행 플래그
                 setStep(2);
                 setCurrentView('step2');
               }}
