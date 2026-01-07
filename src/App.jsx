@@ -49,6 +49,49 @@ function App() {
         localStorage.removeItem('user');
       }
     }
+
+    // 새로고침 시 상태 복원
+    const savedView = localStorage.getItem('currentView');
+    const savedStep = localStorage.getItem('currentStep');
+    const savedProject = localStorage.getItem('currentProject');
+    const savedMode = localStorage.getItem('currentMode');
+    const savedFormData = localStorage.getItem('formData');
+    const savedStoryboard = localStorage.getItem('storyboard');
+    const savedConceptId = localStorage.getItem('selectedConceptId');
+
+    if (savedView && savedView !== 'projects') {
+      setCurrentView(savedView);
+    }
+    if (savedStep) {
+      setStep(parseInt(savedStep, 10));
+    }
+    if (savedProject) {
+      try {
+        setCurrentProject(JSON.parse(savedProject));
+      } catch (e) {
+        console.error('Failed to parse savedProject:', e);
+      }
+    }
+    if (savedMode) {
+      setCurrentMode(savedMode);
+    }
+    if (savedFormData) {
+      try {
+        setFormData(JSON.parse(savedFormData));
+      } catch (e) {
+        console.error('Failed to parse savedFormData:', e);
+      }
+    }
+    if (savedStoryboard) {
+      try {
+        setStoryboard(JSON.parse(savedStoryboard));
+      } catch (e) {
+        console.error('Failed to parse savedStoryboard:', e);
+      }
+    }
+    if (savedConceptId) {
+      setSelectedConceptId(savedConceptId);
+    }
   }, []);
 
   const handleLogin = (userData) => {
@@ -58,9 +101,87 @@ function App() {
     setStep(1);
   };
 
+  // 상태 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('currentView', currentView);
+    localStorage.setItem('currentStep', step.toString());
+    if (currentProject) {
+      localStorage.setItem('currentProject', JSON.stringify(currentProject));
+    }
+    if (currentMode) {
+      localStorage.setItem('currentMode', currentMode);
+    }
+    localStorage.setItem('formData', JSON.stringify(formData));
+    if (storyboard) {
+      localStorage.setItem('storyboard', JSON.stringify(storyboard));
+    }
+    if (selectedConceptId) {
+      localStorage.setItem('selectedConceptId', selectedConceptId);
+    }
+  }, [currentView, step, currentProject, currentMode, formData, storyboard, selectedConceptId]);
+
+  // 브라우저 뒤로가기 버튼 처리
+  useEffect(() => {
+    const handleBackButton = (e) => {
+      if (currentView === 'projects' || currentView === 'admin' || currentView === 'users') {
+        return; // 메인 화면에서는 기본 동작 허용
+      }
+
+      e.preventDefault();
+
+      // 현재 뷰에 따라 이전 단계로 이동
+      if (currentView === 'step5') {
+        setStep(4);
+        setCurrentView('step4');
+      } else if (currentView === 'step4') {
+        setStep(3);
+        setCurrentView('step3');
+      } else if (currentView === 'step3') {
+        setStep(2);
+        setCurrentView('step2');
+      } else if (currentView === 'step2') {
+        if (storyboard?.imageSetMode || storyboard?.styles?.length > 0) {
+          handleBackToProjects();
+        } else {
+          if (currentMode === 'auto') {
+            setCurrentView('step1-auto');
+          } else {
+            setCurrentView('step1-manual');
+          }
+          setStep(1);
+        }
+      } else if (currentView === 'step1-auto' || currentView === 'step1-manual') {
+        handleBackToModeSelect();
+      } else if (currentView === 'mode-select') {
+        handleBackToProjects();
+      }
+
+      // 히스토리에 다시 추가하여 뒤로가기 방지
+      window.history.pushState(null, '', window.location.href);
+    };
+
+    // 초기 히스토리 상태 추가
+    window.history.pushState(null, '', window.location.href);
+
+    // popstate 이벤트 리스너 등록
+    window.addEventListener('popstate', handleBackButton);
+
+    return () => {
+      window.removeEventListener('popstate', handleBackButton);
+    };
+  }, [currentView, step, storyboard, currentMode]);
+
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    // 상태 초기화
+    localStorage.removeItem('currentView');
+    localStorage.removeItem('currentStep');
+    localStorage.removeItem('currentProject');
+    localStorage.removeItem('currentMode');
+    localStorage.removeItem('formData');
+    localStorage.removeItem('storyboard');
+    localStorage.removeItem('selectedConceptId');
     setCurrentView('projects');
     setStep(1);
     setFormData({
