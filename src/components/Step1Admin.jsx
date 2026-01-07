@@ -58,16 +58,9 @@ const Step1Admin = ({ formData, setFormData, user, onPrev, onNext }) => {
             newErrors.videoPurpose = '영상 목적을 선택하세요';
         }
 
-        // Gemini response 검증
+        // Gemini response 검증 - JSON 파싱 제거, 단순 길이만 체크
         if (!formData.geminiResponse || formData.geminiResponse.trim().length < 10) {
             newErrors.geminiResponse = '최소 10자 이상 입력하세요';
-        } else {
-            // JSON 파싱 가능 여부 확인
-            try {
-                JSON.parse(formData.geminiResponse);
-            } catch (e) {
-                newErrors.geminiResponse = '유효한 JSON 형식이 아닙니다';
-            }
         }
 
         setErrors(newErrors);
@@ -161,15 +154,38 @@ const Step1Admin = ({ formData, setFormData, user, onPrev, onNext }) => {
                         <textarea
                             value={formData.geminiResponse || ''}
                             onChange={(e) => handleChange('geminiResponse', e.target.value)}
-                            placeholder="외부에서 받은 Gemini response JSON을 여기에 붙여넣기하세요.
+                            placeholder={`외부에서 받은 Gemini response를 여기에 붙여넣기하세요.
 
 예시:
-{
-  &quot;styles&quot;: [...],
-  &quot;metadata&quot;: {...}
-}
+🎬 Section 2. Cinematic Storyboard (Total 9 Scenes)
 
-JSON 형식이어야 합니다."
+### S#1 (0:00-0:02) 새로운 시작
+
+Visual Description: 어두운 배경 속, 스포트라이트를 받으며 빛나는 러닝화 한 켤레가 서서히 화면 중앙으로 줌인된다. 신발의 역동적인 디자인과 소재의 질감이 선명하게 드러나며, 곧 시작될 질주를 암시하는 듯한 에너지가 느껴진다.
+
+\`\`\`json
+{
+  "prompt": "Dynamic close-up shot of a sleek, modern running shoe in a dark studio setting...",
+  "negative_prompt": "text, letters, logo, watermark, low quality...",
+  "num_images": 1,
+  "image": { "size": "portrait_9_16" },
+  "styling": { "style": "product photography, high contrast", "lighting": "dramatic spotlight, cinematic" }
+}
+\`\`\`
+
+\`\`\`json
+{
+  "prompt": "Smooth push-in shot, moving from a close-up on the running shoe's toe..."
+}
+\`\`\`
+
+\`\`\`json
+{
+  "copy": "모든 한계를 넘어서는 시작"
+}
+\`\`\`
+
+...이런 형식으로 전체 응답(_Section 2 전체 내용_)을 붙여넣으세요.`}
                             rows={15}
                         />
                         <div className="char-count">
