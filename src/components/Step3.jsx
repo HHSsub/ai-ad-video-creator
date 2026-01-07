@@ -118,10 +118,10 @@ const Step3 = ({
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black">
         <div className="max-w-7xl mx-auto p-6">
           <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
-            <h2 className="text-3xl font-bold mb-4 text-white">🖼️ 이미지 세트 선택</h2>
+            <h2 className="text-3xl font-bold mb-4 text-white">컨셉 선택</h2>
             <div className="bg-yellow-900/30 border border-yellow-800 text-yellow-300 p-6 rounded-lg">
-              <p className="font-semibold mb-2">아직 생성된 이미지 세트가 없습니다.</p>
-              <p className="text-sm">이전 단계에서 이미지 생성을 완료해주세요.</p>
+              <p className="font-semibold mb-2">아직 생성된 컨셉이 없습니다.</p>
+              <p className="text-sm">이전 단계에서 컨셉 생성을 완료해주세요.</p>
             </div>
             <div className="mt-6">
               <button
@@ -142,13 +142,12 @@ const Step3 = ({
       <div className="max-w-7xl mx-auto p-6">
         <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
           <div className="mb-8">
-            <h2 className="text-3xl font-bold mb-2 text-white">🖼️ 이미지 세트 선택</h2>
-            <p className="text-gray-400">원하는 이미지 세트를 선택하고 편집을 시작하세요</p>
-            {imageSetMode && (
-              <div className="mt-2 text-sm text-blue-400">
-                ✨ 이미지 세트 모드 - Step4에서 선택적으로 영상 변환 가능
-              </div>
-            )}
+            <h2 className="text-3xl font-bold mb-2 text-white">🖼️ 컨셉 선택</h2>
+            <p className="text-gray-400">
+              {formData?.mode === 'manual'
+                ? '각 씬을 검토하고 수정하세요'
+                : '원하는 컨셉을 선택하고 편집해 보세요'}
+            </p>
           </div>
 
           {error && (
@@ -165,7 +164,7 @@ const Step3 = ({
           )}
 
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-white mb-4">📸 생성된 이미지 세트 ({styles.length}개)</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">📸 컨셉 제안 ({styles.length}개)</h3>
             <div className="grid md:grid-cols-3 gap-6">
               {styles.map((style, idx) => (
                 <div
@@ -177,7 +176,7 @@ const Step3 = ({
                     }`}
                 >
                   <h4 className="font-semibold text-white mb-2">
-                    {style.concept_name || style.conceptName || `컨셉 ${idx + 1}`}
+                    Concept {idx + 1}
                   </h4>
 
                   {/* 🔥 v4.1: 이미지 그리드 표시 (개별 로딩 적용) */}
@@ -235,7 +234,7 @@ const Step3 = ({
           {selectedStyle && (
             <div className="mb-8 bg-gray-900/50 rounded-xl p-6 border border-gray-700">
               <h3 className="text-lg font-semibold text-white mb-4">
-                ✅ 선택된 이미지 세트: {selectedStyle.concept_name || selectedStyle.conceptName}
+                ✅ 선택된 컨셉: Concept {styles.findIndex(s => (s.conceptId || s.id) === (selectedStyle.conceptId || selectedStyle.id)) + 1}
               </h3>
 
               {/* 이미지 전체 미리보기 (개별 로딩 적용) */}
@@ -264,11 +263,6 @@ const Step3 = ({
                       <span className="absolute top-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded z-20">
                         씬 #{img.sceneNumber}
                       </span>
-                      {img.title && (
-                        <div className="mt-1 text-xs text-gray-400 truncate">
-                          {img.title}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -281,25 +275,8 @@ const Step3 = ({
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <button
-                  onClick={handleGoToEdit}
-                  className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
-                >
-                  ✏️ 이미지 편집 및 영상 변환 (Step4)
-                </button>
-              </div>
             </div>
           )}
-
-          <details className="mb-6">
-            <summary className="cursor-pointer font-semibold text-gray-300 hover:text-white">
-              📋 진행 로그
-            </summary>
-            <div className="mt-2 h-32 overflow-auto bg-gray-900 text-green-400 p-3 text-xs font-mono whitespace-pre-wrap rounded-lg border border-gray-700">
-              {logs.length === 0 ? '로그가 없습니다.' : logs.join('\n')}
-            </div>
-          </details>
 
           <div className="flex justify-between pt-6 border-t border-gray-700">
             <button
@@ -308,7 +285,14 @@ const Step3 = ({
             >
               ← 이전 단계
             </button>
-            {!selectedStyle && (
+            {selectedStyle ? (
+              <button
+                onClick={handleGoToEdit}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
+              >
+                다음 단계 →
+              </button>
+            ) : (
               <div className="text-gray-500 text-sm self-center">
                 이미지 세트를 선택해주세요
               </div>

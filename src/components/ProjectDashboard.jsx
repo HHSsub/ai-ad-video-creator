@@ -413,7 +413,7 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                   type="text"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="예: 2025 신제품 광고"
+                  placeholder="예: 브랜드 캠페인 / 신규 런칭 광고"
                   maxLength={100}
                   autoFocus
                 />

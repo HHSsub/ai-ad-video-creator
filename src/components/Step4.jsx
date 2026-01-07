@@ -1098,28 +1098,6 @@ const Step4 = ({
                           </div>
                         </div>
 
-                        {/* 🔥 참고 영상 추천 섹션 (우측 하단) */}
-                        {recommendedVideo && (
-                          <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-700/50 rounded-lg p-4">
-                            <h4 className="text-sm font-bold text-blue-300 mb-2 flex items-center gap-2">
-                              🎬 참고 영상 추천
-                            </h4>
-                            <div className="space-y-2">
-                              <a
-                                href={recommendedVideo.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block text-sm text-white hover:text-blue-300 font-medium line-clamp-2 transition-colors"
-                              >
-                                {recommendedVideo.title}
-                              </a>
-                              <div className="flex items-center justify-between text-xs text-gray-400">
-                                <span>👁️ {recommendedVideo.views?.toLocaleString() || 'N/A'} 조회</span>
-                                <span>⏱️ {recommendedVideo.duration}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       <div className="md:col-span-1">
@@ -1174,10 +1152,53 @@ const Step4 = ({
 
           <details className="mb-6">
             <summary className="cursor-pointer font-semibold text-gray-300 hover:text-white">
-              📋 진행 로그
+              ✂️ 편집 포인트 제안
             </summary>
-            <div className="mt-2 h-32 overflow-auto bg-gray-900 text-green-400 p-3 text-xs font-mono whitespace-pre-wrap rounded-lg border border-gray-700">
-              {logs.length === 0 ? '로그가 없습니다.' : logs.join('\n')}
+            <div className="mt-2 bg-gray-900 p-4 rounded-lg border border-gray-700">
+              {/* 🔥 참고 영상 추천 */}
+              {recommendedVideo && (
+                <div className="mb-4 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-700/50 rounded-lg p-4">
+                  <h4 className="text-sm font-bold text-blue-300 mb-2">🎬 참고 영상 추천</h4>
+                  <a
+                    href={recommendedVideo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-sm text-white hover:text-blue-300 font-medium mb-2 transition-colors"
+                  >
+                    {recommendedVideo.title}
+                  </a>
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
+                    <span>👁️ {recommendedVideo.views?.toLocaleString() || 'N/A'} 조회</span>
+                    <span>⏱️ {recommendedVideo.duration}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* 🔥 SFX + Editing 메타데이터 */}
+              {storyboard?.metadata?.audioEditingGuide && (
+                <div className="space-y-3 text-sm">
+                  {storyboard.metadata.audioEditingGuide.sfx && storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' && (
+                    <div>
+                      <h4 className="font-semibold text-gray-300 mb-1">🔉 SFX (Sound Effects)</h4>
+                      <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.sfx}</p>
+                    </div>
+                  )}
+                  {storyboard.metadata.audioEditingGuide.editing && storyboard.metadata.audioEditingGuide.editing !== '정보 없음' && (
+                    <div>
+                      <h4 className="font-semibold text-gray-300 mb-1">✏️ Editing Pace</h4>
+                      <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.editing}</p>
+                    </div>
+                  )}
+                  {(!storyboard.metadata.audioEditingGuide.sfx || storyboard.metadata.audioEditingGuide.sfx === '정보 없음') &&
+                    (!storyboard.metadata.audioEditingGuide.editing || storyboard.metadata.audioEditingGuide.editing === '정보 없음') && (
+                      <p className="text-gray-500">편집 가이드 정보가 없습니다.</p>
+                    )}
+                </div>
+              )}
+
+              {!recommendedVideo && !storyboard?.metadata?.audioEditingGuide && (
+                <p className="text-gray-500 text-sm">편집 포인트 제안이 없습니다.</p>
+              )}
             </div>
           </details>
 
