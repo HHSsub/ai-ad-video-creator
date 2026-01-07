@@ -112,22 +112,22 @@ const UserManagement = ({ currentUser }) => {
           currentUsername: currentUser.username
         })
       });
-  
+
       const data = await response.json();
-  
+
       if (!response.ok) {
         throw new Error(data.message || '사용자 수정에 실패했습니다.');
       }
-  
+
       alert('사용자 정보가 수정되었습니다.');
       setModalOpen(false);
       await loadUsers();
-      
+
     } catch (err) {
       alert(err.message);
     }
   };
-    
+
   const handleDeleteUser = async (username) => {
     if (!confirm(`정말로 "${username}" 사용자를 삭제하시겠습니까?`)) {
       return;
@@ -209,17 +209,22 @@ const UserManagement = ({ currentUser }) => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 권한
               </th>
+              {currentUser.role === 'admin' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  비밀번호
+                </th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                오늘 사용
+                총 사용횟수
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                전체 사용
+                한도
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 남은 횟수
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                마지막 리셋
+                한도 마지막 편집
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                 관리
@@ -230,7 +235,7 @@ const UserManagement = ({ currentUser }) => {
             {users.map((user) => {
               const usageStatus = getUsageStatus(user);
               const remaining = calculateRemaining(user);
-              
+
               return (
                 <tr key={user.username} className="hover:bg-gray-700/50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
@@ -240,33 +245,30 @@ const UserManagement = ({ currentUser }) => {
                     {user.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      user.role === 'admin' 
-                        ? 'bg-purple-900/50 text-purple-200' 
+                    <span className={`px-2 py-1 rounded-full text-xs ${user.role === 'admin'
+                        ? 'bg-purple-900/50 text-purple-200'
                         : 'bg-gray-700 text-gray-300'
-                    }`}>
+                      }`}>
                       {user.role === 'admin' ? '관리자' : '사용자'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`${
-                      usageStatus === 'exceeded' ? 'text-red-400 font-bold' :
-                      usageStatus === 'warning' ? 'text-yellow-400' :
-                      'text-gray-300'
-                    }`}>
-                      {user.usageCount || 0}회
-                    </span>
+                  {currentUser.role === 'admin' && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-400">
+                      {user.password || '********'}
+                    </td>
+                  )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                    {user.usageCount || 0}회
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                    {user.totalUsageCount || 0}회
+                    {user.usageLimit !== null && user.usageLimit !== undefined ? `${user.usageLimit}회` : '무제한'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`font-semibold ${
-                      usageStatus === 'exceeded' ? 'text-red-400' :
-                      usageStatus === 'warning' ? 'text-yellow-400' :
-                      usageStatus === 'unlimited' ? 'text-green-400' :
-                      'text-blue-400'
-                    }`}>
+                    <span className={`font-semibold ${usageStatus === 'exceeded' ? 'text-red-400' :
+                        usageStatus === 'warning' ? 'text-yellow-400' :
+                          usageStatus === 'unlimited' ? 'text-green-400' :
+                            'text-blue-400'
+                      }`}>
                       {remaining}
                     </span>
                   </td>
@@ -347,7 +349,7 @@ const UserManagement = ({ currentUser }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  일일 사용 횟수 제한
+                  총 사용 횟수 제한
                   <span className="text-xs text-gray-400 ml-2">(비워두면 무제한)</span>
                 </label>
                 <input

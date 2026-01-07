@@ -82,7 +82,7 @@ const Step3 = ({
   // 🔥 v4.1: Step4로 이동
   const handleGoToEdit = async () => {
     if (!selectedId) {
-      setError('편집할 이미지 세트를 선택해주세요.');
+      setError('편집할 컨셉을 선택해주세요.');
       return;
     }
     setSelectedConceptId(selectedId);
@@ -294,7 +294,7 @@ const Step3 = ({
               </button>
             ) : (
               <div className="text-gray-500 text-sm self-center">
-                이미지 세트를 선택해주세요
+                컨셉을 선택해주세요
               </div>
             )}
           </div>

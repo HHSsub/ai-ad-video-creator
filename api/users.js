@@ -76,16 +76,12 @@ router.get('/', (req, res) => {
       });
     }
 
-    // 🔥 모든 사용자에 대해 일일 리셋 확인
+    // 🔥 usageCount 필드 마이그레이션 (필요 시)
     let needsSave = false;
     Object.keys(users).forEach(username => {
       const user = users[username];
-      // 🔥 totalUsageCount 필드가 없으면 추가 (기존 데이터 마이그레이션)
-      if (user.totalUsageCount === undefined) {
-        user.totalUsageCount = user.usageCount || 0;
-        needsSave = true;
-      }
-      if (checkAndResetDaily(user)) {
+      if (user.usageCount === undefined) {
+        user.usageCount = 0;
         needsSave = true;
       }
     });
@@ -95,6 +91,11 @@ router.get('/', (req, res) => {
     }
 
     const userList = Object.keys(users).map(username => {
+      // 🔥 admin 요청 시에는 password 포함
+      if (currentUser.role === 'admin') {
+        return { username, ...users[username] };
+      }
+
       const { password, ...userInfo } = users[username];
       return { username, ...userInfo };
     });
@@ -157,9 +158,8 @@ router.post('/', async (req, res) => {
       role: 'user',
       name: name || username,
       usageLimit: usageLimit !== undefined && usageLimit !== null && usageLimit !== '' ? parseInt(usageLimit) : null,
-      usageCount: 0, // 🔥 오늘 사용량
-      totalUsageCount: 0, // 🔥 전체 누적 사용량
-      lastResetDate: new Date().toISOString().split('T')[0]
+      usageCount: 0, // 🔥 누적 총 사용량
+      lastResetDate: new Date().toISOString().split('T')[0] // 🔥 한도 편집 날짜
     };
 
     const saved = saveUsers(users);
@@ -220,9 +220,9 @@ router.put('/', async (req, res) => {
 
     console.log('[users PUT] 수정 전:', JSON.stringify(users[username], null, 2));
 
-    // 🔥 totalUsageCount 필드가 없으면 추가 (기존 데이터 마이그레이션)
-    if (users[username].totalUsageCount === undefined) {
-      users[username].totalUsageCount = users[username].usageCount || 0;
+    // 🔥 usageCount 필드가 없으면 초기화 (기존 데이터 마이그레이션)
+    if (users[username].usageCount === undefined) {
+      users[username].usageCount = 0;
     }
 
     const updateData = req.body || {};
@@ -241,6 +241,9 @@ router.put('/', async (req, res) => {
     if (updateData.hasOwnProperty('usageLimit')) {
       const limit = updateData.usageLimit;
       users[username].usageLimit = (limit === null || limit === '' || limit === undefined) ? null : parseInt(limit);
+      // 🔥 한도 변경 시 lastResetDate 갱신 (한도 마지막 편집 날짜)
+      users[username].lastResetDate = new Date().toISOString().split('T')[0];
+      console.log('[users PUT] 한도 변경 → lastResetDate 갱신:', users[username].lastResetDate);
     }
 
     console.log('[users PUT] 수정 후:', JSON.stringify(users[username], null, 2));
@@ -329,7 +332,7 @@ router.delete('/', (req, res) => {
   }
 });
 
-// 🔥 사용량 제한 확인 (오늘 사용량 기준)
+// 🔥 사용량 제한 확인 (누적 총량 기준)
 export function checkUsageLimit(username) {
   try {
     const users = loadUsers();
@@ -339,14 +342,9 @@ export function checkUsageLimit(username) {
       return { allowed: false, message: '사용자를 찾을 수 없습니다.' };
     }
 
-    // 🔥 totalUsageCount 필드가 없으면 추가
-    if (user.totalUsageCount === undefined) {
-      user.totalUsageCount = user.usageCount || 0;
-      saveUsers(users);
-    }
-
-    const wasReset = checkAndResetDaily(user);
-    if (wasReset) {
+    // 🔥 usageCount 필드가 없으면 초기화
+    if (user.usageCount === undefined) {
+      user.usageCount = 0;
       saveUsers(users);
     }
 
@@ -358,11 +356,11 @@ export function checkUsageLimit(username) {
       return { allowed: true };
     }
 
-    // 🔥 오늘 사용량 기준으로 체크
+    // 🔥 누적 총량 기준으로 체크 (일일 리셋 없음)
     if (user.usageCount >= user.usageLimit) {
       return {
         allowed: false,
-        message: `일일 사용 횟수를 초과했습니다. (오늘: ${user.usageCount}/${user.usageLimit})`
+        message: `사용 횟수 한도를 초과했습니다. (사용: ${user.usageCount}/${user.usageLimit})`
       };
     }
 
@@ -373,7 +371,7 @@ export function checkUsageLimit(username) {
   }
 }
 
-// 🔥 사용량 증가 (오늘 사용량 + 전체 사용량 모두 증가)
+// 🔥 사용량 증가 (누적 총량만 증가)
 export function incrementUsage(username) {
   try {
     const users = loadUsers();
@@ -381,19 +379,16 @@ export function incrementUsage(username) {
 
     if (!user) return false;
 
-    // 🔥 totalUsageCount 필드가 없으면 추가
-    if (user.totalUsageCount === undefined) {
-      user.totalUsageCount = user.usageCount || 0;
+    // 🔥 usageCount 필드가 없으면 초기화
+    if (user.usageCount === undefined) {
+      user.usageCount = 0;
     }
 
-    checkAndResetDaily(user);
-
-    user.usageCount += 1; // 오늘 사용량 증가
-    user.totalUsageCount += 1; // 전체 사용량 증가
+    user.usageCount += 1; // 누적 총량 증가
 
     saveUsers(users);
 
-    console.log(`[incrementUsage] ✅ ${username}: 오늘 ${user.usageCount}/${user.usageLimit || '무제한'}, 전체 ${user.totalUsageCount}회`);
+    console.log(`[incrementUsage] ✅ ${username}: 총 사용 ${user.usageCount}/${user.usageLimit || '무제한'}회`);
 
     return true;
   } catch (error) {

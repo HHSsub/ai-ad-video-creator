@@ -113,7 +113,7 @@ export default async function handler(req, res) {
         }
     }
 
-    // DELETE: Delete S3 Object
+    // DELETE: Delete S3 Object (Single File)
     if (req.method === 'DELETE') {
         try {
             const { path: targetKey } = req.body;
@@ -144,6 +144,67 @@ export default async function handler(req, res) {
 
         } catch (error) {
             console.error('[storage-browse] DELETE 오류:', error);
+            return res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+
+    // POST: Delete Folder (All Objects with Prefix)
+    if (req.method === 'POST') {
+        try {
+            const { folderPath } = req.body;
+
+            if (!folderPath) {
+                return res.status(400).json({ success: false, error: '삭제할 폴더 경로가 필요합니다.' });
+            }
+
+            // Normalize folder path
+            let prefix = folderPath;
+            if (!prefix.endsWith('/')) {
+                prefix += '/';
+            }
+
+            console.log(`[storage-browse] Deleting folder: ${prefix}`);
+
+            // List all objects with this prefix
+            const listCommand = new ListObjectsV2Command({
+                Bucket: BUCKET_NAME,
+                Prefix: prefix
+            });
+
+            const listResponse = await s3Client.send(listCommand);
+
+            if (!listResponse.Contents || listResponse.Contents.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: '폴더가 비어있거나 존재하지 않습니다.'
+                });
+            }
+
+            // Delete all objects
+            let deletedCount = 0;
+            for (const item of listResponse.Contents) {
+                const deleteCommand = new DeleteObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: item.Key
+                });
+                await s3Client.send(deleteCommand);
+                deletedCount++;
+                console.log(`[storage-browse] ✅ 삭제: ${item.Key}`);
+            }
+
+            console.log(`[storage-browse] ✅ 폴더 삭제 완료: ${prefix} (${deletedCount}개 파일)`);
+
+            return res.status(200).json({
+                success: true,
+                message: `폴더가 삭제되었습니다. (${deletedCount}개 파일)`,
+                deletedCount
+            });
+
+        } catch (error) {
+            console.error('[storage-browse] POST (폴더 삭제) 오류:', error);
             return res.status(500).json({
                 success: false,
                 error: error.message

@@ -459,7 +459,7 @@ const AdminPanel = ({ currentUser }) => {
     if (!confirm(`정말 삭제하시겠습니까?\n\n${itemPath}`)) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/storage/browse`, {
+      const response = await fetch(`${API_BASE}/api/storage-browse`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: itemPath })
@@ -474,6 +474,30 @@ const AdminPanel = ({ currentUser }) => {
       }
     } catch (error) {
       console.error('삭제 오류:', error);
+    }
+  };
+
+  // 🔥 폴더 전체 삭제
+  const deleteFolder = async (folderPath) => {
+    if (!confirm(`⚠️ 폴더 전체를 삭제하시겠습니까?\n\n${folderPath}\n\n이 폴더 내의 모든 파일이 삭제됩니다.`)) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/storage-browse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath: folderPath })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        showMessage('success', `✅ 폴더 삭제 완료 (${data.deletedCount}개 파일)`);
+        browseDirectory(currentPath);
+      } else {
+        showMessage('error', data.error || '폴더 삭제 실패');
+      }
+    } catch (error) {
+      console.error('폴더 삭제 오류:', error);
+      showMessage('error', '폴더 삭제 실패');
     }
   };
 
@@ -1039,7 +1063,10 @@ const AdminPanel = ({ currentUser }) => {
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {item.isDirectory ? (
-                          <button onClick={() => browseDirectory(item.path)} className="p-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-[10px] font-black">OPEN</button>
+                          <>
+                            <button onClick={() => browseDirectory(item.path)} className="p-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-[10px] font-black">OPEN</button>
+                            <button onClick={() => deleteFolder(item.path)} className="p-2 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded-lg text-[10px] font-black">DELETE</button>
+                          </>
                         ) : (
                           <button
                             onClick={() => {

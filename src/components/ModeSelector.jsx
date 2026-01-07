@@ -81,7 +81,7 @@ const ModeSelector = ({ project, onSelectMode, onBack, onInviteMember }) => {
                 <path d="M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.43741 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h3 className="mode-name">Manual Mode</h3>
+            <h3 className="mode-name">Custom Mode</h3>
             <p className="mode-desc">
               세밀한 커스터마이징
             </p>

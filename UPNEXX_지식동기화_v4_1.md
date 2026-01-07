@@ -148,6 +148,44 @@ fetch('/api/api-keys', { ... });
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-07 15:45 - UI 개선 및 기능 추가 (5개 기능)
+- **파일**:
+  - `src/components/Step4.jsx`
+  - `src/components/Step3.jsx`
+  - `src/components/ProjectDashboard.jsx`
+  - `src/components/admin/UserManagement.jsx`
+  - `api/users.js`
+- **작업 내용**:
+  1. **Step4 씬별 SFX/Editing 제거**:
+     - Line 984-1019: 씬별 BGM/SFX 정보 표시 블록 삭제
+     - 하단 "✂️ 편집 포인트 제안" 토글은 유지
+  2. **프로젝트 이름 변경 기능**:
+     - ProjectDashboard.jsx: 편집 버튼 추가, 인라인 편집 UI 구현
+     - State 추가: `editingProjectId`, `editingProjectName`
+     - 핸들러: `handleStartEdit`, `handleCancelEdit`, `handleSaveName`
+     - 기존 PATCH 엔드포인트 활용
+  3. **Admin 권한 강화**:
+     - UserManagement.jsx: "비밀번호" column 추가 (admin만 표시)
+     - ProjectDashboard.jsx: admin 시 프로젝트 ID 표시 (카드 하단)
+     - api/users.js: admin 요청 시 password 포함하여 반환
+  4. **사용자 횟수 제한 변경 (일일 → 누적 총량)**:
+     - `checkAndResetDaily()` 함수 완전 제거
+     - `checkUsageLimit()`: 일일 리셋 로직 제거, 누적 기준으로 변경
+     - `incrementUsage()`: usageCount만 증가 (totalUsageCount 제거)
+     - GET /api/users: 일일 리셋 제거
+     - POST /api/users: usageCount만 사용
+     - PUT /api/users: usageLimit 변경 시 lastResetDate 갱신 (한도 편집 날짜로 의미 변경)
+     - UserManagement.jsx UI: "총 사용횟수", "한도", "한도 마지막 편집"으로 텍스트 변경
+  5. **프로젝트 폴더 전체 삭제** (진행 중):
+     - storage-browse.js 기존 코드 확인
+     - 서버 라우트 등록 필요
+- **개선 효과**:
+  - ✅ UI 간소화: Step4 씬별 중복 정보 제거
+  - ✅ 프로젝트 관리 편의성 향상: 이름 변경 기능
+  - ✅ Admin 기능 강화: 비밀번호 확인, 프로젝트 ID 매칭 가능
+  - ✅ 사용자 관리 단순화: 누적 총량 기준, 자동 리셋 없음
+- **상태**: 1-3번, 5번 완료, 4번 진행 중
+
 ### 2026-01-07 03:35 - Freepik Rate Limiter 및 씬 재시도 로직 구현
 - **파일**:
   - `src/utils/rateLimiter.js` (신규)

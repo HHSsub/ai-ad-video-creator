@@ -983,41 +983,6 @@ const Step4 = ({
                           )}
                         </div>
 
-                        {/* 🎵 씬별 BGM/SFX 정보 */}
-                        {storyboard?.metadata?.audioEditingGuide && (
-                          <div className="bg-gray-800/50 rounded-lg p-3 mb-2 text-xs space-y-2">
-                            {storyboard.metadata.audioEditingGuide.sfx &&
-                              storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' &&
-                              storyboard.metadata.audioEditingGuide.sfx.includes(`S#${img.sceneNumber}`) && (
-                                <div>
-                                  <div className="font-semibold text-green-400 mb-1">🔊 SFX</div>
-                                  <div className="text-gray-300 leading-relaxed">
-                                    {storyboard.metadata.audioEditingGuide.sfx
-                                      .split('\n')
-                                      .filter(line => line.includes(`S#${img.sceneNumber}`))
-                                      .join(' ')
-                                      .trim()}
-                                  </div>
-                                </div>
-                              )}
-
-                            {storyboard.metadata.audioEditingGuide.editing &&
-                              storyboard.metadata.audioEditingGuide.editing !== '정보 없음' &&
-                              storyboard.metadata.audioEditingGuide.editing.includes(`S#${img.sceneNumber}`) && (
-                                <div>
-                                  <div className="font-semibold text-purple-400 mb-1">✂️ Editing</div>
-                                  <div className="text-gray-300 leading-relaxed">
-                                    {storyboard.metadata.audioEditingGuide.editing
-                                      .split('→')
-                                      .filter(part => part.includes(`S#${img.sceneNumber}`))
-                                      .join(' ')
-                                      .trim()}
-                                  </div>
-                                </div>
-                              )}
-                          </div>
-                        )}
-
                         {img.videoUrl && (
                           <video
                             src={getVideoSrc(img.videoUrl)}
@@ -1080,7 +1045,7 @@ const Step4 = ({
                                 disabled={loading || isRegenerating}
                                 className="w-full px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
                               >
-                                <span>👤</span> 인물 합성 (Seedream)
+                                <span>👤</span> 이미지 합성(인물/제품/로고)
                               </button>
                             )}
 
@@ -1245,7 +1210,7 @@ const Step4 = ({
                   className="px-6 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
                   title={sortedImages.filter(img => img.videoUrl).length === 0 ? '최소 1개 씬을 영상으로 변환해주세요' : ''}
                 >
-                  ✅ 컨펌 완료
+                  ✅ 최종 영상 제작
                 </button>
               </div>
             )}
@@ -1462,7 +1427,7 @@ const Step4 = ({
                       onClick={() => setShowPersonModal(false)}
                       className="px-3 py-2 text-gray-400 hover:text-white text-xs"
                     >
-                      Cancel
+                      취소
                     </button>
                     <button
                       onClick={handleSynthesizePerson}
@@ -1475,7 +1440,7 @@ const Step4 = ({
                           Processing...
                         </>
                       ) : (
-                        'Synthesize'
+                        '합성'
                       )}
                     </button>
                   </div>

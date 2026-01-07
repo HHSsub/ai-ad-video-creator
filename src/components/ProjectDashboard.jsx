@@ -13,6 +13,10 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // 프로젝트 이름 변경 상태
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  const [editingProjectName, setEditingProjectName] = useState('');
+
   // 정렬 상태
   const [sortBy, setSortBy] = useState('date-desc'); // date-desc, date-asc, name-asc, name-desc
   const [viewMode, setViewMode] = useState('grid'); // grid, list
@@ -111,6 +115,48 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
     } catch (err) {
       console.error('프로젝트 삭제 에러:', err);
       alert(`프로젝트 삭제 실패: ${err.message}`);
+    }
+  };
+
+  // 🔥 프로젝트 이름 변경
+  const handleStartEdit = (project) => {
+    setEditingProjectId(project.id);
+    setEditingProjectName(project.name);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProjectId(null);
+    setEditingProjectName('');
+  };
+
+  const handleSaveName = async (projectId) => {
+    if (!editingProjectName.trim()) {
+      alert('프로젝트 이름을 입력하세요');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          name: editingProjectName.trim()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`이름 변경 실패: ${response.status}`);
+      }
+
+      await fetchProjects();
+      setEditingProjectId(null);
+      setEditingProjectName('');
+    } catch (err) {
+      console.error('프로젝트 이름 변경 에러:', err);
+      alert(`이름 변경 실패: ${err.message}`);
     }
   };
 
@@ -285,7 +331,45 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                 <div
                   className="card-menu"
                   onClick={(e) => e.stopPropagation()}
+                  style={{ display: 'flex', gap: '4px' }}
                 >
+                  {/* 이름 편집 버튼 */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleStartEdit(project);
+                    }}
+                    title="이름 편집"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      color: '#6b7280'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#3b82f620';
+                      e.currentTarget.style.color = '#3b82f6';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#6b7280';
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M18.5 2.5C18.8978 2.10217 19.4374 1.87868 20 1.87868C20.5626 1.87868 21.1022 2.10217 21.5 2.5C21.8978 2.89782 22.1213 3.43739 22.1213 4C22.1213 4.56261 21.8978 5.10217 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  {/* 삭제 버튼 */}
                   <button
                     type="button"
                     className="btn-delete"
@@ -324,7 +408,68 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                 </div>
               </div>
 
-              <h3 className="project-name">{project.name}</h3>
+              {/* 프로젝트 이름 (편집 모드) */}
+              {editingProjectId === project.id ? (
+                <div onClick={(e) => e.stopPropagation()} style={{ marginBottom: '12px' }}>
+                  <input
+                    type="text"
+                    value={editingProjectName}
+                    onChange={(e) => setEditingProjectName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      border: '2px solid #3b82f6',
+                      borderRadius: '6px',
+                      backgroundColor: '#1f2937',
+                      color: 'white',
+                      outline: 'none'
+                    }}
+                    autoFocus
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') handleSaveName(project.id);
+                      if (e.key === 'Escape') handleCancelEdit();
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button
+                      onClick={() => handleSaveName(project.id)}
+                      style={{
+                        flex: 1,
+                        padding: '6px 12px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      style={{
+                        flex: 1,
+                        padding: '6px 12px',
+                        background: '#374151',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <h3 className="project-name">{project.name}</h3>
+              )}
               <p className="project-desc">
                 {project.description || '설명이 없습니다'}
               </p>
@@ -385,81 +530,98 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                   <span>{new Date(project.createdAt).toLocaleDateString('ko-KR')}</span>
                 </div>
               </div>
+
+              {/* 🔥 Admin 전용: 프로젝트 ID 표시 */}
+              {user?.role === 'admin' && (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '6px 10px',
+                  backgroundColor: '#374151',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  color: '#9ca3af'
+                }}>
+                  프로젝트 ID: {project.id}
+                </div>
+              )}
             </div>
           ))
         )}
       </div>
 
       {/* 프로젝트 생성 모달 */}
-      {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>새 프로젝트 만들기</h2>
-              <button
-                className="btn-close"
-                onClick={() => setShowCreateModal(false)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <div className="form-group">
-                <label>프로젝트 이름 *</label>
-                <input
-                  type="text"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="예: 브랜드 캠페인 / 신규 런칭 광고"
-                  maxLength={100}
-                  autoFocus
-                />
-                <span className="char-count">{newProjectName.length}/100</span>
+      {
+        showCreateModal && (
+          <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>새 프로젝트 만들기</h2>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowCreateModal(false)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
               </div>
 
-              <div className="form-group">
-                <label>설명 (선택)</label>
-                <textarea
-                  value={newProjectDesc}
-                  onChange={(e) => setNewProjectDesc(e.target.value)}
-                  placeholder="프로젝트에 대한 간단한 설명을 입력하세요"
-                  rows={4}
-                  maxLength={500}
-                />
-                <span className="char-count">{newProjectDesc.length}/500</span>
-              </div>
-            </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>프로젝트 이름 *</label>
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="예: 브랜드 캠페인 / 신규 런칭 광고"
+                    maxLength={100}
+                    autoFocus
+                  />
+                  <span className="char-count">{newProjectName.length}/100</span>
+                </div>
 
-            <div className="modal-actions">
-              <button
-                className="btn-cancel"
-                onClick={() => setShowCreateModal(false)}
-                disabled={creating}
-              >
-                취소
-              </button>
-              <button
-                className="btn-confirm"
-                onClick={handleCreateProject}
-                disabled={creating || !newProjectName.trim()}
-              >
-                {creating ? (
-                  <>
-                    <div className="btn-spinner"></div>
-                    생성 중...
-                  </>
-                ) : (
-                  '생성하기'
-                )}
-              </button>
+                <div className="form-group">
+                  <label>설명 (선택)</label>
+                  <textarea
+                    value={newProjectDesc}
+                    onChange={(e) => setNewProjectDesc(e.target.value)}
+                    placeholder="프로젝트에 대한 간단한 설명을 입력하세요"
+                    rows={4}
+                    maxLength={500}
+                  />
+                  <span className="char-count">{newProjectDesc.length}/500</span>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  className="btn-cancel"
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={creating}
+                >
+                  취소
+                </button>
+                <button
+                  className="btn-confirm"
+                  onClick={handleCreateProject}
+                  disabled={creating || !newProjectName.trim()}
+                >
+                  {creating ? (
+                    <>
+                      <div className="btn-spinner"></div>
+                      생성 중...
+                    </>
+                  ) : (
+                    '생성하기'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 
