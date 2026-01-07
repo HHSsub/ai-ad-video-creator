@@ -8,6 +8,7 @@ const UserManagement = ({ currentUser }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showPasswords, setShowPasswords] = useState(true);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -211,7 +212,15 @@ const UserManagement = ({ currentUser }) => {
               </th>
               {currentUser.role === 'admin' && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  비밀번호
+                  <div className="flex items-center gap-2">
+                    비밀번호
+                    <button
+                      onClick={() => setShowPasswords(!showPasswords)}
+                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs"
+                    >
+                      {showPasswords ? '숨기기' : '보기'}
+                    </button>
+                  </div>
                 </th>
               )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -254,7 +263,7 @@ const UserManagement = ({ currentUser }) => {
                   </td>
                   {currentUser.role === 'admin' && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-400">
-                      {user.plainPassword || '********'}
+                      {showPasswords ? (user.plainPassword || user.password || '설정안됨') : '••••••••'}
                     </td>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">

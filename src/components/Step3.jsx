@@ -44,6 +44,7 @@ const Step3 = ({
   };
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     if (selectedConceptId && !selectedId) {
       setSelectedId(selectedConceptId);
     }

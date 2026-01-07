@@ -44,6 +44,7 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     const loadConfig = async () => {
       const config = await loadFieldConfig();
       const settings = loadAdminSettings();
