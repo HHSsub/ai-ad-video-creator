@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import ManualPromptModal from './ManualPromptModal';
+import { forceScrollTop } from '../forceScrollTop';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
 
@@ -108,6 +109,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
   const isBusy = isLoading;
   const progressManager = new ProgressManager();
+
+  useEffect(() => {
+    forceScrollTop();
+  }, []);
 
   useEffect(() => {
     const checkOngoingSession = async () => {

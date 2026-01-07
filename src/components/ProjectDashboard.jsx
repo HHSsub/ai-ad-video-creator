@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './ProjectDashboard.css';
+import { forceScrollTop } from '../forceScrollTop';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -20,6 +21,10 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
   // 정렬 상태
   const [sortBy, setSortBy] = useState('date-desc'); // date-desc, date-asc, name-asc, name-desc
   const [viewMode, setViewMode] = useState('grid'); // grid, list
+
+  useEffect(() => {
+    forceScrollTop();
+  }, []);
 
   useEffect(() => {
     fetchProjects();

@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
+import { forceScrollTop } from '../forceScrollTop';
 
 // 🔥 API_BASE를 /nexxii로 강제 (프로덕션/로컬 모두 호환)
 const API_BASE = '/nexxii';
@@ -101,6 +102,10 @@ const Step4 = ({
     }
     return videoUrl;
   };
+
+  useEffect(() => {
+    forceScrollTop();
+  }, []);
 
   useEffect(() => {
     log(`Step4 로드 - 컨셉 ID: ${selectedConceptId}, 역할: ${userRole}`);

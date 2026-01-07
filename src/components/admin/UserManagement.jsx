@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { forceScrollTop } from '../../forceScrollTop';
 
 const UserManagement = ({ currentUser }) => {
   const [users, setUsers] = useState([]);
@@ -38,6 +39,10 @@ const UserManagement = ({ currentUser }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    forceScrollTop();
+  }, []);
 
   useEffect(() => {
     loadUsers();

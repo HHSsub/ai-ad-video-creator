@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './ModeSelector.css';
+import { forceScrollTop } from '../forceScrollTop';
 
 const ModeSelector = ({ project, onSelectMode, onBack, onInviteMember }) => {
   useEffect(() => {
-    window.scrollTo(0, 0);
+    forceScrollTop();
   }, []);
 
   return (

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { forceScrollTop } from '../forceScrollTop';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/nexxii';
 
@@ -44,7 +45,10 @@ const Step3 = ({
   };
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    forceScrollTop();
+  }, []);
+
+  useEffect(() => {
     if (selectedConceptId && !selectedId) {
       setSelectedId(selectedConceptId);
     }

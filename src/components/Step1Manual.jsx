@@ -3,7 +3,11 @@ import PropTypes from 'prop-types';
 import './Step1Manual.css';
 import { loadFieldConfig, saveFieldConfig } from '../utils/fieldConfig';
 
-const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
+const Step1Manual = ({ form Data, setFormData, user, onPrev, onNext }) => {
+  useEffect(() => {
+    forceScrollTop();
+  }, []);
+
   const [errors, setErrors] = useState({});
   const isAdmin = user?.role === 'admin';
 

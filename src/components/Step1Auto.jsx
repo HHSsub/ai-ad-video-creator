@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { loadFieldConfig, saveFieldConfig, loadAdminSettings, saveAdminSettings } from '../utils/fieldConfig';
 import RealtimeConfigSync from './RealtimeConfigSync';
+import { forceScrollTop } from '../forceScrollTop';
 
 const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
   const [fieldConfig, setFieldConfig] = useState({});
