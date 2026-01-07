@@ -157,6 +157,18 @@ const Step1Admin = ({ formData, setFormData, user, onPrev, onNext }) => {
                             placeholder={`외부에서 받은 Gemini response를 여기에 붙여넣기하세요.
 
 예시:
+🎬 러닝화: 속도와 구름 (by GEMINI-ACD) 기획안
+
+🧠 Section 1. ACD's Strategic Inference (전략 분석)
+
+User Intent: 사용자는 최고의 속도감과 구름같이 부드러운 쿠셔닝을 동시에 제공하는 역동적인 러닝화의 핵심 기능을 시각적으로 매력적이고 에너지 넘치게 전달하고자 합니다. 제품의 성능을 극대화하여 소비자의 구매 욕구를 자극하는 것이 목표입니다.
+
+Genre & Tone: 퍼포먼스 제품 프로모 / 에너지 넘치는, 역동적인, 현대적인, 파워풀한
+
+Target Audience: 활동적인 라이프스타일을 즐기는 20대 후반~40대 러너 및 피트니스 애호가. 성능과 디자인을 중시하며, 러닝 경험의 질을 높이고자 하는 소비자.
+
+Visual Concept: "최고의 속도와 구름같은 쿠셔닝이 조화를 이루며, 러닝의 모든 순간을 한계를 넘어서는 경험으로 이끄는 다이내믹한 여정." (A dynamic journey where ultimate speed and cloud-like cushioning harmonize, leading every running moment beyond limits.)
+
 🎬 Section 2. Cinematic Storyboard (Total 9 Scenes)
 
 ### S#1 (0:00-0:02) 새로운 시작
