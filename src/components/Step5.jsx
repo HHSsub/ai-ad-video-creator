@@ -249,15 +249,17 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
                         </div>
                     )}
 
-                    <div className="mb-8 bg-green-900/30 rounded-xl p-6 border border-green-700">
-                        <h3 className="text-lg font-semibold text-white mb-4">✅ 최종 영상 완성!</h3>
-                        <button
-                            onClick={handleDownloadFinalVideo}
-                            className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
-                        >
-                            📥 다운로드
-                        </button>
-                    </div>
+                    {/* 다운로드 */}
+                    {finalVideoWithBGM && (
+                        <div className="mb-8 bg-green-900/30 rounded-xl p-6 border border-green-700">
+                            <h3 className="text-lg font-semibold text-white mb-4">✅ 최종 영상 완성!</h3>
+                            <button
+                                onClick={handleDownloadFinalVideo}
+                                className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
+                            >
+                                📥 다운로드
+                            </button>
+                        </div>
                     )}
 
                     {/* 로그 */}

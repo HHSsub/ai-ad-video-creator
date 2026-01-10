@@ -358,7 +358,13 @@ function App() {
         }
         break;
       case 4: // 최종 완성
-        if (storyboard && storyboard.confirmedVideo) {
+        // Step4까지 완료되었거나 최종 영상이 있으면 이동 가능
+        const hasFinalVideo = storyboard && (
+          storyboard.confirmedVideo ||
+          storyboard.finalVideos?.some(v => v.videoUrl) ||
+          storyboard.styles?.some(s => s.finalVideoUrl)
+        );
+        if (hasFinalVideo) {
           setCurrentView('step5');
           setStep(5);
         }
