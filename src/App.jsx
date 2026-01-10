@@ -331,8 +331,11 @@ function App() {
 
   // 네비게이션 클릭 핸들러
   const handleNavigate = (navStep) => {
-    // navStep: 1=모드선택, 2=정보입력, 3=스토리보드, 4=최종완성
+    // navStep: 0=프로젝트선택, 1=모드선택, 2=정보입력, 3=스토리보드, 4=최종완성
     switch (navStep) {
+      case 0: // 프로젝트 선택
+        handleBackToProjects();
+        break;
       case 1: // 모드선택
         if (currentProject) {
           setCurrentView('mode-select');
@@ -573,47 +576,63 @@ function App() {
                   cursor: "pointer"
                 }}
               />
-              <div className="hidden md:flex items-center gap-1">
-                {[
-                  { num: 1, title: '모드선택', desc: 'Mode' },
-                  { num: 2, title: '정보입력', desc: 'Information' },
-                  { num: 3, title: '스토리보드', desc: 'Storyboard' },
-                  { num: 4, title: '최종완성', desc: 'Final' }
-                ].map((s, idx, arr) => (
-                  <div key={s.num} className="flex items-center">
-                    <div
-                      onClick={() => handleNavigate(s.num)}
-                      className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all cursor-pointer hover:bg-gray-800/50 ${step === s.num
-                        ? 'bg-blue-600/20 border border-blue-500/50'
-                        : step > s.num
-                          ? 'text-gray-500'
-                          : 'text-gray-600'
-                        }`}>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step === s.num
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white'
-                        : step > s.num
-                          ? 'bg-green-600/20 text-green-400 border border-green-600/50'
-                          : 'bg-gray-800 text-gray-500 border border-gray-700'
-                        }`}>
-                        {step > s.num ? '✓' : s.num}
-                      </div>
-                      <div className="hidden lg:block">
-                        <div className={`text-xs font-medium ${step === s.num ? 'text-white' : 'text-gray-400'
-                          }`}>
-                          {s.title}
+              {currentProject && (
+                <div className="hidden md:flex items-center gap-1">
+                  {[
+                    { navStep: 0, title: '프로젝트선택', desc: 'Projects' },
+                    { navStep: 1, title: '모드선택', desc: 'Mode' },
+                    { navStep: 2, title: '정보입력', desc: 'Information' },
+                    { navStep: 3, title: '스토리보드', desc: 'Storyboard' },
+                    { navStep: 4, title: '최종완성', desc: 'Final' }
+                  ].map((s, idx, arr) => {
+                    let currentNavStep = 0;
+                    if (currentView === 'projects') currentNavStep = 0;
+                    else if (currentView === 'mode-select') currentNavStep = 1;
+                    else if (currentView.startsWith('step1')) currentNavStep = 2;
+                    else if (currentView === 'step2') currentNavStep = 3;
+                    else if (currentView === 'step3' || currentView === 'step4') currentNavStep = 3;
+                    else if (currentView === 'step5') currentNavStep = 4;
+
+                    const isActive = currentNavStep === s.navStep;
+                    const isCompleted = currentNavStep > s.navStep;
+
+                    return (
+                      <div key={s.navStep} className="flex items-center">
+                        <div
+                          onClick={() => s.navStep === 0 ? handleBackToProjects() : handleNavigate(s.navStep)}
+                          className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all cursor-pointer hover:bg-gray-800/50 ${isActive
+                            ? 'bg-blue-600/20 border border-blue-500/50'
+                            : isCompleted
+                              ? 'text-gray-500'
+                              : 'text-gray-600'
+                            }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${isActive
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white'
+                            : isCompleted
+                              ? 'bg-green-600/20 text-green-400 border border-green-600/50'
+                              : 'bg-gray-800 text-gray-500 border border-gray-700'
+                            }`}
+                          >
+                            {isCompleted ? '✓' : s.navStep}
+                          </div>
+                          <div className="hidden lg:block">
+                            <div className={`text-xs font-medium ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                              {s.title}
+                            </div>
+                            <div className="text-[10px] text-gray-600">
+                              {s.desc}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-gray-600">
-                          {s.desc}
-                        </div>
+                        {idx < arr.length - 1 && (
+                          <div className={`w-12 h-[1px] ${isCompleted ? 'bg-blue-500' : 'bg-gray-800'}`}></div>
+                        )}
                       </div>
-                    </div>
-                    {idx < arr.length - 1 && (
-                      <div className={`w-12 h-[1px] ${step > s.num ? 'bg-blue-500' : 'bg-gray-800'
-                        }`}></div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-4">
