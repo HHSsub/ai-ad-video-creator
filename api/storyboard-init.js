@@ -906,7 +906,8 @@ async function processStoryboardAsync(body, username, sessionId) {
           const imagePrompt = {
             ...engineDefaults, // 🔥 엔진별 기본 파라미터 우선
             ...scene.image_prompt, // 🔥 Gemini 생성 파라미터로 덮어쓰기
-            aspect_ratio: mapAspectRatio(scene.image_prompt?.aspect_ratio || body.aspectRatioCode || 'widescreen_16_9')
+            // 🔥 [FIX] 사용자 선택 비율 강제 적용 (AI 제안 무시)
+            aspect_ratio: mapAspectRatio(body.aspectRatioCode || body.aspectRatio || 'widescreen_16_9')
           };
           console.log('[DEBUG] imagePrompt before generateImage:', {
             concept: conceptIdx + 1,
