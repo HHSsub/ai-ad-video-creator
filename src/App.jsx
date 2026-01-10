@@ -537,18 +537,20 @@ function App() {
               />
               <div className="hidden md:flex items-center gap-1">
                 {[
-                  { num: 1, title: '정보 입력', desc: 'Information' },
-                  { num: 2, title: '스토리보드', desc: 'Storyboard' },
-                  { num: 3, title: '영상 클립', desc: 'Video Clips' },
-                  { num: 4, title: '최종 완성', desc: 'Final' }
+                  { num: 1, title: '모드선택', desc: 'Mode' },
+                  { num: 2, title: '정보입력', desc: 'Information' },
+                  { num: 3, title: '스토리보드', desc: 'Storyboard' },
+                  { num: 4, title: '최종완성', desc: 'Final' }
                 ].map((s, idx, arr) => (
                   <div key={s.num} className="flex items-center">
-                    <div className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all ${step === s.num
-                      ? 'bg-blue-600/20 border border-blue-500/50'
-                      : step > s.num
-                        ? 'text-gray-500'
-                        : 'text-gray-600'
-                      }`}>
+                    <div
+                      onClick={() => handleNavigate(s.num)}
+                      className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all cursor-pointer hover:bg-gray-800/50 ${step === s.num
+                        ? 'bg-blue-600/20 border border-blue-500/50'
+                        : step > s.num
+                          ? 'text-gray-500'
+                          : 'text-gray-600'
+                        }`}>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step === s.num
                         ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white'
                         : step > s.num
@@ -734,8 +736,12 @@ function App() {
               selectedConceptId={selectedConceptId}
               setSelectedConceptId={setSelectedConceptId}
               onPrev={() => {
-                setStep(2);
-                setCurrentView('step2');
+                // Step2를 건너뛰고 Step1로 이동
+                const view = currentMode === 'auto' ? 'step1-auto'
+                  : currentMode === 'admin' ? 'step1-admin'
+                    : 'step1-manual';
+                setStep(1);
+                setCurrentView(view);
               }}
               onNext={() => {
                 // Step4 (편집 화면)으로 이동
