@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
-import sessionStore from '../src/utils/sessionStore.js';
+import sessionStore from './utils/sessionStore.js';
 import { uploadVideoToS3 } from '../server/utils/s3-uploader.js';
 
 const MAX_DOWNLOAD_RETRIES = 3;

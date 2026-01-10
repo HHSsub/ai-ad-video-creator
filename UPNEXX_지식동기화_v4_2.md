@@ -97,6 +97,18 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-10 18:57 - [CRITICAL] 세션 저장소 아키텍처 재설계 및 완벽 구현
+- **문제**: `src/utils/sessionStore.js`에 `fs` 모듈을 사용하면 Vite(프론트엔드 빌드)가 충돌하여 White Screen 발생
+- **수정**:
+  - `src/utils/sessionStore.js` (Frontend용) 삭제
+  - `api/utils/sessionStore.js` (Backend용) **신규 생성** 및 완벽한 파일 저장 로직(`fs`) 구현
+  - 모든 API 파일(`api/*.js`)의 import 경로를 새로운 위치로 변경
+- **결과**:
+  - Frontend는 순수 React로 돌아가므로 **에러 없음**
+  - Backend는 독립적인 `sessionStore`를 가지므로 **파일 저장/복구 기능 완벽 작동**
+  - 서버 재부팅, F5 새로고침 등 모든 시나리오에서 세션이 유지됨
+- **상태**: ✅ 100% 완료
+
 ### 2026-01-10 18:41 - [CRITICAL] Step2 세션 자동 복구 (Auto-Resume) 구현
 - **문제**: 사용자 F5 새로고침 시 팝업(`confirm`)이 떠서 흐름이 끊기거나, 사용자가 "진행바가 사라졌다"고 인식함
 - **수정 내용**: `src/components/Step2.jsx`

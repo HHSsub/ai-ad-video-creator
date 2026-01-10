@@ -3,7 +3,7 @@
  * POST /api/session/start
  */
 
-import sessionStore from '../../src/utils/sessionStore.js';
+import sessionStore from '../utils/sessionStore.js';
 
 export default async function handler(req, res) {
   // CORS 헤더
@@ -48,9 +48,9 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[session/start] ❌ 오류:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Internal server error',
-      message: error.message 
+      message: error.message
     });
   }
 }
