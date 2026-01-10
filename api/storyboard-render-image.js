@@ -99,28 +99,58 @@ async function pollTaskStatus(taskId, conceptId = 0, projectId = null, sceneNumb
 }
 
 
-// 🔥 Freepik AR 매핑 헬퍼
-// 🔥 Freepik API Adapter (Internal -> API Spec)
-// 문서를 통해 확인된 정확한 파라미터 매핑 수행
+// 🔥 100% 동적 Freepik Params 매핑 (engines.json 기반)
+// API 스펙에 맞는 파라미터 변환 수행
 function mapToFreepikParams(internalParams) {
-  const arMap = {
-    // 내부 코드 -> Freepik Seedream v4 Enum
-    'portrait_9_16': 'social_story_9_16',
-    // Widescreen/Square는 Pass-through (widescreen_16_9, square_1_1)
-  };
-
-  // aspect_ratio 키를 제거하고 image_size로 변환
   const { aspect_ratio, ...rest } = internalParams;
 
-  const mappedParams = {
-    ...rest,
-    // API uses 'image_size', Internal uses 'aspect_ratio'
-    // 매핑된 값이 있으면 사용, 없으면 원본 사용 (default: widescreen_16_9)
-    aspect_ratio: arMap[aspect_ratio] || aspect_ratio || 'widescreen_16_9'
-  };
+  // engines.json에서 현재 엔진의 aspect ratio 매핑 로드
+  let mappedAspectRatio = aspect_ratio || 'widescreen_16_9';
 
-  return mappedParams;
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+
+    if (fs.existsSync(enginesPath)) {
+      const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
+      const currentModel = enginesData.currentEngine?.textToImage?.model;
+      const availableEngines = enginesData.availableEngines?.textToImage || [];
+      const currentEngine = availableEngines.find(e => e.model === currentModel);
+
+      if (currentEngine?.supportedAspectRatios) {
+        // 지원되는 aspect ratio 확인
+        if (currentEngine.supportedAspectRatios.includes(aspect_ratio)) {
+          mappedAspectRatio = aspect_ratio; // 그대로 사용
+        } else {
+          // 매핑 필요 여부 확인 (예: portrait_9_16 -> social_story_9_16)
+          // 엔진별 특수 매핑이 있는 경우 처리
+          if (currentModel === 'seedream-v4') {
+            // Seedream v4 특수 케이스: portrait_9_16 -> social_story_9_16
+            if (aspect_ratio === 'portrait_9_16' && currentEngine.supportedAspectRatios.includes('social_story_9_16')) {
+              mappedAspectRatio = 'social_story_9_16';
+            }
+          }
+
+          // 지원되지 않으면 첫 번째 지원 ratio 사용
+          if (!currentEngine.supportedAspectRatios.includes(mappedAspectRatio)) {
+            mappedAspectRatio = currentEngine.supportedAspectRatios[0];
+            console.warn(`[mapToFreepikParams] aspect_ratio ${aspect_ratio}는 지원되지 않음. ${mappedAspectRatio} 사용`);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[mapToFreepikParams] 동적 매핑 실패:', error.message);
+    // Fallback: 원본 사용
+  }
+
+  return {
+    ...rest,
+    aspect_ratio: mappedAspectRatio
+  };
 }
+
 
 // 🔥 동적 엔진 이미지 생성 함수 (키 풀 활용 + 엔진 독립적 + S3 업로드)
 async function generateImageWithDynamicEngine(imagePrompt, conceptId = 0, projectId = null, sceneNumber = null) {
@@ -243,14 +273,23 @@ export default async function handler(req, res) {
         aspect_ratio: imagePrompt.aspect_ratio ||
           imagePrompt.image?.size ||
           imagePrompt.size ||
-          'widescreen_16_9',
-        guidance_scale: imagePrompt.guidance_scale ||
-          imagePrompt.image_prompt?.guidance_scale ||
-          2.5,
-        seed: imagePrompt.seed ||
-          imagePrompt.image_prompt?.seed ||
-          Math.floor(Math.random() * 1000000)
+          'widescreen_16_9'
       };
+
+      // 🔥 선택적 파라미터는 존재할 때만 포함 (엔진별로 다름)
+      if (imagePrompt.guidance_scale !== undefined) {
+        normalizedPrompt.guidance_scale = imagePrompt.guidance_scale;
+      }
+      if (imagePrompt.seed !== undefined) {
+        normalizedPrompt.seed = imagePrompt.seed;
+      }
+      // 기타 파라미터들도 선택적으로 복사
+      const optionalParams = ['resolution', 'model', 'hdr', 'creative_detailing', 'engine', 'fixed_generation', 'filter_nsfw', 'safe_mode', 'num_images'];
+      for (const param of optionalParams) {
+        if (imagePrompt[param] !== undefined) {
+          normalizedPrompt[param] = imagePrompt[param];
+        }
+      }
 
       imagePrompt = normalizedPrompt;
     }

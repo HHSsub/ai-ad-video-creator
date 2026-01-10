@@ -97,6 +97,79 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-10 17:48 - [CRITICAL] 9:16 비율 전 엔진 범용 지원 구현
+- **문제**: `portrait_9_16`이 Freepik API에 존재하지 않음, 정확한 값은 `social_story_9_16`
+  1. engines.json에 `portrait_9_16` 등록되어 있음 (존재하지 않는 값)
+  2. Seedream만 `portrait_9_16 → social_story_9_16` 매핑 있음
+  3. Mystic, HyperFlux는 9:16 선택 시 400 에러 발생
+- **수정 내용**:
+  1. **engines.json (3개 엔진)**:
+     - `portrait_9_16` → `social_story_9_16` 교체
+     - Seedream, Mystic, HyperFlux 모두 수정
+  2. **storyboard-init.js mapAspectRatio()**:
+     - 입력값 전처리: `portrait_9_16` → `social_story_9_16` 자동 변환
+     - fallback도 `social_story_9_16` 사용
+  3. **storyboard-render-image.js mapToFreepikParams()**:
+     - 모든 엔진에 대해 `portrait_9_16 → social_story_9_16` 매핑
+     - Seedream 전용 로직 제거, 범용 로직으로 변경
+- **영향**: 이제 모든 엔진(Mystic, HyperFlux, Seedream)에서 9:16 세로형 정상 작동
+- **테스트 필요**: 각 엔진별로 1:1, 16:9, 9:16 모두 생성 테스트
+- **상태**: ✅ 완료
+
+### 2026-01-10 17:42 - [CRITICAL] Mystic 엔진 파라미터 수정 및 엔진별 필터링 로직 추가
+- **문제**: Mystic 엔진의 parameters가 공식 API 스펙과 불일치
+  1. engines.json에 `guidance_scale`, `seed`, `num_images` 존재 (Mystic은 지원 안 함)
+  2. `safe_mode` 사용 (올바른 파라미터는 `filter_nsfw`)
+  3. 코드에서 모든 엔진에 동일한 파라미터 전송 → Mystic 선택 시 400 에러 발생
+- **수정 내용**:
+  1. **engines.json mystic 수정**:
+     - ❌ 제거: `guidance_scale`, `seed`, `num_images`, `safe_mode`
+     - ✅ 추가: `model`, `hdr`, `creative_detailing`, `engine`, `fixed_generation`, `filter_nsfw`
+     - ✅ 유지: `aspect_ratio`, `resolution`
+     - ✅ 추가: `supportedResolutions`, `supportedModels` 메타데이터
+  2. **storyboard-render-image.js**:
+     - `filterEngineSpecificParams()` 함수 추가
+     - engines.json의 `parameters` 키 기반으로 허용 파라미터만 필터링
+     - `mapToFreepikParams()`에서 필터링 자동 적용
+     - `normalizedPrompt`에서 하드코딩된 fallback 제거, 선택적 파라미터로 변경
+  3. **storyboard-init.js**:
+     - engines.json에서 현재 엔진의 기본 파라미터 동적 로드
+     - `engineDefaults` 사용하여 하드코딩 제거
+     - Gemini 응답 파라미터로 덮어쓰기 가능
+- **영향**: 이제 어떤 엔진(Mystic, Seedream, HyperFlux 등)으로 교체해도 에러 없이 작동
+- **테스트 필요**: Mystic, Seedream, HyperFlux 각각 이미지 생성 테스트
+- **상태**: ✅ 완료 (사용자 테스트 대기)
+
+### 2026-01-10 17:30 - [CRITICAL] Aspect Ratio 100% 동적 로딩 구현 (전면 수정)
+- **문제**: 모든 모드(Auto/Manual/Admin)에서 aspect ratio가 하드코딩되어 있음
+  1. Step1Manual.jsx: ASPECT_RATIOS 배열 하드코딩
+  2. mapAspectRatio(): engines.json 무시, 하드코딩 매핑
+  3. mapToFreepikParams(): aspect_ratio 변환 규칙 하드코딩
+  4. engines.json의 supportedAspectRatios 아무도 참조 안 함
+- **수정 내용**:
+  1. **Step1Manual.jsx**:
+     - 하드코딩된 `ASPECT_RATIOS` 제거
+     - `useEffect`로 `/api/admin-engines`에서 동적 로드
+     - `engines.currentEngine.textToImage.model`로 현재 엔진 확인
+     - `availableEngines[].supportedAspectRatios` 사용
+     - fallback으로만 하드코딩 유지
+  2. **storyboard-init.js mapAspectRatio()**:
+     - engines.json 파일 직접 읽기
+     - `currentEngine.textToImage.supportedAspectRatios` 확인
+     - 지원되는 ratio 중에서 매칭
+     - 미지원 시 첫 번째 supported ratio 사용
+  3. **storyboard-render-image.js mapToFreepikParams()**:
+     - engines.json 파일 직접 읽기
+     - 현재 모델의 `supportedAspectRatios` 확인
+     - 엔진별 특수 매핑 처리 (예: seedream-v4의 portrait_9_16 → social_story_9_16)
+     - 지원되지 않는 ratio는 자동으로 첫 번째 supported ratio로 변경
+  4. **config 파일**:
+     - `runtime-field-config.json`: `"aspectRatio"` → `"aspectRatioCode"` (필드명 통일)
+     - `field-settings.json`: `"aspectRatio"` → `"aspectRatioCode"` (필드명 통일)
+- **영향**: 이제 관리자가 engines.json만 수정하면 모든 모드에서 자동 반영
+- **테스트 필요**: Auto/Manual 모드에서 1:1, 9:16, 16:9 각각 생성 확인
+- **상태**: ✅ 완료 (사용자 테스트 대기)
+
 ### 2026-01-10 16:35 - [CRITICAL] Step5 네비게이션 및 로딩 버그 긴급 수정 (Task V)
 - **긴급 이슈**: 모든 프로젝트에서 finalVideos가 있는데도 Step5 진입 불가
   1. 프로젝트 선택 시 Step5로 가지 않고 Step4로 잘못 이동

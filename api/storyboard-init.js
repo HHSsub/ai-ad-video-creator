@@ -88,10 +88,64 @@ function getSceneCount(videoLength) {
   return 15;
 }
 
+// 🔥 100% 동적 Aspect Ratio 매핑 (engines.json 기반)
 function mapAspectRatio(input) {
-  if (!input) return 'widescreen_16_9';
+  if (!input) {
+    // engines.json에서 기본값 로드
+    try {
+      const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+      if (fs.existsSync(enginesPath)) {
+        const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
+        return enginesData.currentEngine?.textToImage?.parameters?.aspect_ratio || 'widescreen_16_9';
+      }
+    } catch (error) {
+      console.error('[mapAspectRatio] engines.json 로드 실패:', error.message);
+    }
+    return 'widescreen_16_9'; // Ultimate fallback
+  }
+
   const normalized = String(input).toLowerCase().trim();
 
+  // engines.json에서 supportedAspectRatios 로드
+  try {
+    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+    if (fs.existsSync(enginesPath)) {
+      const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
+      const currentModel = enginesData.currentEngine?.textToImage?.model;
+      const availableEngines = enginesData.availableEngines?.textToImage || [];
+      const currentEngine = availableEngines.find(e => e.model === currentModel);
+
+      if (currentEngine?.supportedAspectRatios) {
+        // 지원되는 aspect ratio 중에서 매칭
+        for (const supportedRatio of currentEngine.supportedAspectRatios) {
+          const supportedNormalized = supportedRatio.toLowerCase();
+          // 직접 매칭
+          if (normalized === supportedNormalized) {
+            return supportedRatio;
+          }
+          // 한글/별칭 매칭
+          if ((normalized.includes('16:9') || normalized.includes('16_9') || normalized === '가로') &&
+            supportedNormalized.includes('16_9')) {
+            return supportedRatio;
+          }
+          if ((normalized.includes('9:16') || normalized.includes('9_16') || normalized === '세로') &&
+            supportedNormalized.includes('9_16')) {
+            return supportedRatio;
+          }
+          if ((normalized.includes('1:1') || normalized.includes('1_1') || normalized === '정사각형') &&
+            supportedNormalized.includes('1_1')) {
+            return supportedRatio;
+          }
+        }
+        // 지원되는 첫 번째 ratio 반환
+        return currentEngine.supportedAspectRatios[0];
+      }
+    }
+  } catch (error) {
+    console.error('[mapAspectRatio] 동적 로드 실패:', error.message);
+  }
+
+  // Fallback: 하드코딩 (engines.json 읽기 실패 시만)
   if (normalized.includes('16:9') || normalized.includes('16_9') || normalized === '가로') {
     return 'widescreen_16_9';
   }
@@ -104,6 +158,7 @@ function mapAspectRatio(input) {
 
   return 'widescreen_16_9';
 }
+
 
 function getWidthFromAspectRatio(aspectRatio) {
   const map = {
@@ -830,14 +885,34 @@ async function processStoryboardAsync(body, username, sessionId) {
         if (!scene) continue;
 
         try {
+          // 🔥 engines.json에서 현재 엔진의 기본 파라미터 로드
+          let engineDefaults = {};
+          try {
+            const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
+            if (fs.existsSync(enginesPath)) {
+              const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
+              const currentModel = enginesData.currentEngine?.textToImage?.model;
+              const availableEngines = enginesData.availableEngines?.textToImage || [];
+              const currentEngine = availableEngines.find(e => e.model === currentModel);
+              if (currentEngine?.parameters) {
+                engineDefaults = { ...currentEngine.parameters };
+                delete engineDefaults.aspect_ratio; // aspect_ratio는 별도 처리
+              }
+            }
+          } catch (err) {
+            console.warn('[storyboard-init] engines.json 로드 실패, 기본값 사용:', err.message);
+          }
+
           const imagePrompt = {
-            ...scene.image_prompt,
+            ...engineDefaults, // 🔥 엔진별 기본 파라미터 우선
+            ...scene.image_prompt, // 🔥 Gemini 생성 파라미터로 덮어쓰기
             aspect_ratio: mapAspectRatio(scene.image_prompt?.aspect_ratio || body.aspectRatioCode || 'widescreen_16_9')
           };
           console.log('[DEBUG] imagePrompt before generateImage:', {
             concept: conceptIdx + 1,
             sceneNum,
-            prompt: scene.image_prompt?.prompt
+            prompt: scene.image_prompt?.prompt,
+            engineDefaults: Object.keys(engineDefaults)
           });
           const imageUrl = await generateImage(
             imagePrompt,

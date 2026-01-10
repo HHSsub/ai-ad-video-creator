@@ -11,6 +11,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
 
   const [errors, setErrors] = useState({});
   const isAdmin = user?.role === 'admin';
+  const [aspectRatios, setAspectRatios] = useState([]);
 
   // ✅ Manual mode 설정
   useEffect(() => {
@@ -19,6 +20,38 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
       mode: 'manual'
     }));
   }, [setFormData]);
+
+  // 🔥 동적 aspect ratio 로드 from engines.json
+  useEffect(() => {
+    const loadAspectRatios = async () => {
+      try {
+        const response = await fetch('/nexxii/api/admin-engines');
+        const data = await response.json();
+        if (data.success && data.engines?.currentEngine?.textToImage) {
+          const engine = data.engines.currentEngine.textToImage;
+          const availableEngine = data.engines.availableEngines?.textToImage?.find(
+            e => e.model === engine.model
+          );
+          if (availableEngine?.supportedAspectRatios) {
+            const ratios = availableEngine.supportedAspectRatios.map(value => ({
+              value,
+              label: formatAspectRatioLabel(value)
+            }));
+            setAspectRatios(ratios);
+          }
+        }
+      } catch (error) {
+        console.error('Aspect ratio 로드 실패:', error);
+        // Fallback
+        setAspectRatios([
+          { value: 'widescreen_16_9', label: '16:9 (가로형)' },
+          { value: 'square_1_1', label: '1:1 (정사각형)' },
+          { value: 'portrait_9_16', label: '9:16 (세로형)' }
+        ]);
+      }
+    };
+    loadAspectRatios();
+  }, []);
 
   // 🔥 [M] Person Selection 기능
   const [persons, setPersons] = useState([]);
@@ -92,17 +125,23 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
     }
   };
 
-  // 필수 옵션값 (fieldConfig.js와 정확히 일치)
+  // 필수 옵션값
   const VIDEO_LENGTHS = ['10초', '20초', '30초'];
-  const ASPECT_RATIOS = [
-    { value: 'widescreen_16_9', label: '16:9 (가로형)' },
-    { value: 'square_1_1', label: '1:1 (정사각형)' },
-    { value: 'portrait_9_16', label: '9:16 (세로형)' }
-  ];
   const VIDEO_PURPOSES = [
     { value: 'product', label: '제품' },
     { value: 'service', label: '서비스' }
   ];
+
+  // 🔥 Aspect ratio 라벨 포맷팅 헬퍼
+  const formatAspectRatioLabel = (value) => {
+    const labelMap = {
+      'widescreen_16_9': '16:9 (가로형)',
+      'square_1_1': '1:1 (정사각형)',
+      'portrait_9_16': '9:16 (세로형)',
+      'social_story_9_16': '9:16 (세로형)'
+    };
+    return labelMap[value] || value;
+  };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -212,7 +251,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
             {errors.aspectRatioCode && <span className="error-text">{errors.aspectRatioCode}</span>}
           </label>
           <div className="option-group">
-            {ASPECT_RATIOS.map(ratio => (
+            {aspectRatios.length > 0 ? aspectRatios.map(ratio => (
               <button
                 key={ratio.value}
                 type="button"
@@ -221,7 +260,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
               >
                 {ratio.label}
               </button>
-            ))}
+            )) : <p className="text-gray-400">로딩 중...</p>}
           </div>
         </div>
 
@@ -399,7 +438,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
             <div className="summary-item">
               <span className="summary-label">영상 비율:</span>
               <span className="summary-value">
-                {ASPECT_RATIOS.find(r => r.value === formData.aspectRatioCode)?.label || '-'}
+                {aspectRatios.find(r => r.value === formData.aspectRatioCode)?.label || '-'}
               </span>
             </div>
             <div className="summary-item">
