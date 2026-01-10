@@ -133,39 +133,22 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
         const data = await response.json();
 
         if (data.hasOngoingSession && data.session) {
-          const shouldResume = window.confirm(
-            `⚠️ 진행 중이던 광고 영상 생성 작업이 있습니다.\n` +
-            `브랜드: ${data.session.formData?.brandName || '(없음)'}\n` +
-            `진행률: ${data.session.progress?.percentage || 0}%\n\n` +
-            `이어서 진행하시겠습니까?`
-          );
+          log('🔄 진행 중인 작업을 감지하여 자동으로 복구합니다...');
 
-          if (shouldResume) {
-            log('🔄 이전 세션을 복구합니다...');
+          // 🔥 진행률 표시 활성화 (자동 복구)
+          setIsLoading(true);
+          setPercent(data.session.progress?.percentage || 0);
 
-            // 🔥 진행률 표시 활성화
-            setIsLoading(true);
-            setPercent(data.session.progress?.percentage || 0);
-
-            if (data.session.storyboard) {
-              setStoryboard(data.session.storyboard);
-              setStyles(data.session.storyboard.styles || []);
-              setPercent(100);
-              setIsLoading(false);
-              log('✅ 광고 영상이 복구되었습니다.');
-            } else {
-              // 🔥 세션 복구 시 폴링 재개
-              log(`📡 세션 ID: ${data.session.sessionId} 폴링 시작...`);
-              pollAndGenerateImages(data.session.sessionId);
-            }
+          if (data.session.storyboard) {
+            setStoryboard(data.session.storyboard);
+            setStyles(data.session.storyboard.styles || []);
+            setPercent(100);
+            setIsLoading(false);
+            log('✅ 작업이 이미 완료되어 있습니다.');
           } else {
-            await fetch(`${API_BASE}/api/session/clear`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-username': user?.username || 'anonymous'
-              }
-            });
+            // 🔥 세션 복구 시 폴링 재개
+            log(`📡 세션 ID: ${data.session.sessionId} 연결 중...`);
+            pollAndGenerateImages(data.session.sessionId);
           }
         } else {
           // 진행 중인 세션이 없으면 아무것도 안 함 (또는 로그)
