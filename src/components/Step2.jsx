@@ -114,6 +114,13 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
   useEffect(() => {
     const checkOngoingSession = async () => {
+      // 이미 체크했으면 스킵
+      const hasChecked = sessionStorage.getItem('sessionCheckDone');
+      if (hasChecked) {
+        console.log('[Step2] 세션 체크 이미 완료됨, 스킵');
+        return;
+      }
+
       try {
         const response = await fetch(`${API_BASE}/api/session/check`, {
           headers: {
@@ -130,6 +137,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             `진행률: ${data.session.progress || 0}%\n\n` +
             `이어서 진행하시겠습니까?`
           );
+
+          // 체크 완료 플래그 설정
+          sessionStorage.setItem('sessionCheckDone', 'true');
 
           if (shouldResume) {
             log('🔄 이전 세션을 복구합니다...');
@@ -151,9 +161,13 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               }
             });
           }
+        } else {
+          // 진행 중인 세션이 없으면 플래그 설정
+          sessionStorage.setItem('sessionCheckDone', 'true');
         }
       } catch (error) {
         console.error('세션 확인 실패:', error);
+        sessionStorage.setItem('sessionCheckDone', 'true');
       }
     };
 

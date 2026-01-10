@@ -93,6 +93,16 @@ function App() {
     if (savedConceptId) {
       setSelectedConceptId(savedConceptId);
     }
+
+    // 복원 완료 로그
+    if (savedView && savedView !== 'projects') {
+      console.log('[App] 상태 복원 완료:', {
+        view: savedView,
+        step: savedStep,
+        project: savedProject ? JSON.parse(savedProject).name : null,
+        mode: savedMode
+      });
+    }
   }, []);
 
   const handleLogin = (userData) => {
