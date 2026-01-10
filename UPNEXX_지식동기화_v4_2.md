@@ -110,6 +110,11 @@
   - ✅ 파일 기반 세션 저장 기능 정상 작동 (fs 모듈 사용)
 - **상태**: ✅ 100% 완료
 
+### 2026-01-10 19:10 - [CRITICAL] Step2 useRef 누락 수정
+- **문제**: Auto-Resume 기능 구현 중 `useRef`를 사용했으나 import 문에서 누락되어 Step2 진입 시 클라이언트 크래시 발생
+- **수정**: `src/components/Step2.jsx` 상단 import문에 `useRef` 추가
+- **결과**: ✅ 에러 없이 Step2 정상 로드됨
+
 ### 2026-01-10 18:41 - [CRITICAL] Step2 세션 자동 복구 (Auto-Resume) 구현
 - **문제**: 사용자 F5 새로고침 시 팝업(`confirm`)이 떠서 흐름이 끊기거나, 사용자가 "진행바가 사라졌다"고 인식함
 - **수정 내용**: `src/components/Step2.jsx`
