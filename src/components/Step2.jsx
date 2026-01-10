@@ -846,25 +846,6 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           </div>
         </div>
       </div>
-
-      {/* Admin 전용 수동 프롬프트 입력 버튼 */}
-      {user?.username === 'admin' && !isBusy && (
-        <button
-          onClick={() => setShowManualModal(true)}
-          className="fixed bottom-6 right-6 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-lg z-50 flex items-center gap-2"
-        >
-          <span>🔧</span>
-          <span>수동 프롬프트 입력</span>
-        </button>
-      )}
-
-      {/* 수동 프롬프트 모달 */}
-      <ManualPromptModal
-        isOpen={showManualModal}
-        onClose={() => setShowManualModal(false)}
-        onSubmit={handleManualSubmit}
-        formData={formData}
-      />
     </div>
   );
 };
