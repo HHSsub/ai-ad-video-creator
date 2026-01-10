@@ -97,6 +97,22 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-10 18:24 - [CRITICAL] Step1Auto 중복 영상비율 필드 제거
+- **문제**: Auto 모드에서 "영상 비율" 필드가 2개 나타남
+  1. `src/utils/fieldConfig.js` Line 75-88: `DEFAULT_FIELD_CONFIG`에 `aspectRatio` 하드코딩
+  2. `runtime-field-config.json`: `aspectRatioCode` 정의
+  3. Line 158: `{ ...DEFAULT_FIELD_CONFIG, ...data.config }` 합침
+  4. 결과: `aspectRatio` + `aspectRatioCode` = 2개 필드 렌더링
+- **수정 내용**:
+  1. **src/utils/fieldConfig.js Line 75-88**:
+     - `aspectRatio` → `aspectRatioCode`로 변경
+     - `key: 'aspectRatio'` → `key: 'aspectRatioCode'`
+     - DEFAULT와 runtime config 키 통일
+- **영향**:
+  - ✅ Step1Auto에서 영상 비율 필드 1개만 표시
+  - ✅ `aspectRatioCode` 일관성 유지
+- **상태**: ✅ 완료
+
 ### 2026-01-10 18:15 - [CRITICAL] 이미지 캐싱 로직 제거 및 상태 전파 수정
 - **문제**: 잘못된 캐시 무시 접근으로 매번 느린 로딩 발생
   1. Step3에 `refreshTimestamp` 추가하여 매 로딩마다 쿼리 파라미터 붙임

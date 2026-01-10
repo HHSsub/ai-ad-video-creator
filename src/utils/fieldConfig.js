@@ -72,8 +72,8 @@ const DEFAULT_FIELD_CONFIG = {
     randomValues: ['10초', '20초', '30초']
   },
 
-  aspectRatio: {
-    key: 'aspectRatio',
+  aspectRatioCode: {
+    key: 'aspectRatioCode',
     label: '영상 비율',
     required: true,
     visible: true,
