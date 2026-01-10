@@ -144,12 +144,19 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           if (shouldResume) {
             log('🔄 이전 세션을 복구합니다...');
 
+            // 🔥 진행률 표시 활성화
+            setIsLoading(true);
+            setPercent(data.session.progress?.percentage || 0);
+
             if (data.session.storyboard) {
               setStoryboard(data.session.storyboard);
               setStyles(data.session.storyboard.styles || []);
               setPercent(100);
+              setIsLoading(false);
               log('✅ 광고 영상이 복구되었습니다.');
             } else {
+              // 🔥 세션 복구 시 폴링 재개
+              log(`📡 세션 ID: ${data.session.sessionId} 폴링 시작...`);
               pollAndGenerateImages(data.session.sessionId);
             }
           } else {
@@ -518,7 +525,8 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               mode: 'imageSetMode'
             });
 
-            setStoryboard(result);
+            // 🔥 CRITICAL: 새 객체 생성하여 React가 변경 감지 (Step3 리렌더링 트리거)
+            setStoryboard({ ...result });
             setStyles(styles);
             setPercent(100);
             setIsLoading(false);

@@ -19,6 +19,7 @@ const Step3 = ({
   const [logs, setLogs] = useState([]);
   // 🔥 추가: 이미지 개별 로딩 상태
   const [imageLoadStates, setImageLoadStates] = useState({});
+  const [refreshTimestamp, setRefreshTimestamp] = useState(Date.now());
 
   // 🔥 v4.1: styles 데이터 소스로 변경
   const styles = storyboard?.styles || [];
@@ -30,14 +31,28 @@ const Step3 = ({
     console.log(`[Step3] ${msg}`);
   };
 
-  // 🔥 v4.1: 이미지 URL 헬퍼
+  // 🔥 CRITICAL: storyboard 업데이트 감지 시 이미지 강제 새로고침
+  useEffect(() => {
+    if (storyboard?.styles && storyboard.styles.length > 0) {
+      console.log('[Step3] 🔥 Storyboard 업데이트 감지! 이미지 강제 새로고침');
+      setRefreshTimestamp(Date.now());
+      setImageLoadStates({}); // 로딩 상태 초기화
+    }
+  }, [storyboard]);
+
+  // 🔥 v4.1: 이미지 URL 헬퍼 (캐시 방지)
   const getImageSrc = (imageUrl) => {
     if (!imageUrl) return '/placeholder.png';
-    if (imageUrl.startsWith('http')) return imageUrl;
+
+    // 🔥 캐시 방지: 타임스탬프 쿼리 파라미터 추가
+    const separator = imageUrl.includes('?') ? '&' : '?';
+    const cacheBuster = `${separator}_t=${refreshTimestamp}`;
+
+    if (imageUrl.startsWith('http')) return imageUrl + cacheBuster;
     if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) {
-      return imageUrl;
+      return imageUrl + cacheBuster;
     }
-    return imageUrl;
+    return imageUrl + cacheBuster;
   };
 
   const handleImageLoad = (uniqueKey) => {

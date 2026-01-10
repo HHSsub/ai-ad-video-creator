@@ -97,6 +97,66 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-10 18:15 - [CRITICAL] 이미지 캐싱 로직 제거 및 상태 전파 수정
+- **문제**: 잘못된 캐시 무시 접근으로 매번 느린 로딩 발생
+  1. Step3에 `refreshTimestamp` 추가하여 매 로딩마다 쿼리 파라미터 붙임
+  2. S3 URL은 이미 파일명에 타임스탬프 포함 (예: `scene_1_1736502000.jpg`)
+  3. 재생성 시 자동으로 새 URL 생성 → 브라우저가 알아서 새 이미지 로딩
+  4. 불필요한 캐시 무시로 매번 느린 로딩만 유발
+- **수정 내용**:
+  1. **src/components/Step3.jsx**:
+     - `refreshTimestamp` 상태 제거
+     - `useEffect` storyboard 감지 로직 제거
+     - `getImageSrc`에서 쿼리 파라미터 추가 로직 제거
+     - 원본 URL 그대로 사용 (S3 타임스탬프만 의존)
+  2. **src/components/Step2.jsx**:
+     - `setStoryboard(result)` → `setStoryboard({...result})` (새 객체 생성)
+     - React가 참조 변경 감지하여 리렌더링 트리거
+- **영향**:
+  - ✅ 캐시 정상 작동, 빠른 로딩
+  - ✅ 재생성 시 새 URL로 자동 갱신
+  - ✅ Step3가 storyboard 변경 감지
+- **상태**: ✅ 완료
+
+### 2026-01-10 18:07 - [EMERGENCY] Step2 세션 복구 시 빈 화면 긴급 수정
+- **문제**: 새로고침 시 진행 중이던 작업의 진행률 바가 표시되지 않음
+  1. Line 144-154: 세션 복구 로직에서 `setIsLoading(true)` 누락
+  2. `pollAndGenerateImages()` 호출 전 상태 초기화 안 됨
+  3. SpinnerOverlay(진행률 바) 표시 조건 `isLoading === true` 미충족
+  4. 백엔드는 정상 실행 중이지만 프론트엔드는 빈 화면만 표시
+- **수정 내용**:
+  1. **src/components/Step2.jsx Line 144-161**:
+     - 세션 복구 시 `setIsLoading(true)` 추가
+     - 현재 진행률 `setPercent(data.session.progress?.percentage || 0)` 설정
+     - 폴링 재개 전 로그 메시지 추가
+- **영향**: 
+  - ✅ 새로고침 시 진행률 바 즉시 표시
+  - ✅ 진행 중인 작업 상태 복구
+  - ✅ 사용자가 작업 진행 상황 확인 가능
+- **테스트 필요**: Step2에서 작업 시작 후 새로고침하여 진행률 바 표시 확인
+- **상태**: ✅ 완료
+
+### 2026-01-10 18:04 - [EMERGENCY] require() 런타임 에러 긴급 수정
+- **문제**: `require is not defined` 에러로 이미지 생성 전면 중단
+  1. `api/storyboard-render-image.js` Line 111-112: `require('fs')`, `require('path')` 사용
+  2. ES Module 환경에서 CommonJS require 사용 불가
+  3. `import().then()` 비동기 코드로 수정 시도했지만 실패 (잘못된 구조)
+  4. 모든 이미지 생성 요청 실패, 백엔드만 실행되고 프론트 맹화면
+- **수정 내용**:
+  1. **storyboard-render-image.js mapToFreepikParams()**:
+     - Lines 102-149 전체 교체
+     - 모든 engines.json 동적 로딩 로직 제거
+     - `portrait_9_16 → social_story_9_16` 하드코딩 단순 변환으로 교체
+     - 비동기 코드 완전 제거, 동기 함수로 변경
+  2. **storyboard-init.js mapAspectRatio()**:
+     - Line 153: fallback 수정 (`portrait_9_16` → `social_story_9_16`)
+- **영향**: 
+  - ✅ require 에러 즉시 해결, 이미지 생성 정상화
+  - ✅ 9:16 세로 이미지 생성 가능
+  - ⚠️ engines.json 동적 로딩 불가 (향후 개선 필요)
+- **테스트 필요**: pm2 restart 후 9:16 세로 이미지 생성 확인
+- **상태**: ✅ 완료 (긴급 수정)
+
 ### 2026-01-10 17:48 - [CRITICAL] 9:16 비율 전 엔진 범용 지원 구현
 - **문제**: `portrait_9_16`이 Freepik API에 존재하지 않음, 정확한 값은 `social_story_9_16`
   1. engines.json에 `portrait_9_16` 등록되어 있음 (존재하지 않는 값)
