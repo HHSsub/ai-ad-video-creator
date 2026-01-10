@@ -234,26 +234,26 @@ function App() {
       if (response.ok) {
         const data = await response.json();
 
-        // 🔥 v4.1 워크플로우: imageSetMode 확인
+        // 🔥 v4.1 워크플로우: finalVideos 우선 체크
         if (data.project.storyboard && data.project.storyboard.styles) {
           console.log('[App] ✅ 기존 작업 발견');
           setStoryboard(data.project.storyboard);
           setFormData(data.project.formData || {});
           setCurrentMode(data.project.mode);
 
+          // 🔥 CRITICAL: finalVideos를 최우선으로 체크 (완성 프로젝트는 무조건 Step5)
+          if (data.project.storyboard.finalVideos && data.project.storyboard.finalVideos.length > 0) {
+            console.log('[App] 🎬 완성된 영상 발견 - Step5로 이동');
+            setCurrentView('step5');
+            setStep(5);
+            return;
+          }
+
           // imageSetMode가 true면 이미지만 생성된 상태 → Step3으로
           if (data.project.storyboard.imageSetMode) {
             console.log('[App] 📸 이미지 세트 발견 - Step3으로 이동');
             setCurrentView('step3');
             setStep(3);
-            return;
-          }
-
-          // finalVideos가 있으면 영상까지 완성된 상태 → Step5로
-          if (data.project.storyboard.finalVideos && data.project.storyboard.finalVideos.length > 0) {
-            console.log('[App] 🎬 완성된 영상 발견 - Step5로 이동');
-            setCurrentView('step5');
-            setStep(5);
             return;
           }
 
