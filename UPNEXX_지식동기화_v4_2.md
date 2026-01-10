@@ -97,6 +97,19 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-10 18:29 - [CRITICAL] Step2 새로고침 시 진행률 바 사라짐 현상 수정
+- **문제**: 작업 중 새로고침 시 `sessionStorage`에 남아있는 `sessionCheckDone` 플래그 때문에 세션 복구 로직이 스킵되어 빈 화면 발생
+- **원인**: `sessionStorage`는 탭을 닫기 전까지 유지되므로, 새로고침 시에도 `hasChecked`가 `true`여서 복구 로직 진입 불가
+- **수정 내용**:
+  1. **src/components/Step2.jsx**:
+     - `sessionStorage` 사용 로직 전면 제거
+     - `useRef(sessionCheckRef)`를 도입하여 컴포넌트 마운트 시 1회만 체크하도록 변경 (새로고침 시에는 초기화되므로 정상 체크)
+     - `checkOngoingSession` 내의 잔재 `sessionStorage.setItem` 제거
+- **영향**:
+  - ✅ 새로고침 시에도 백엔드 세션을 확인하여 진행 중이라면 복구 팝업 표시
+  - ✅ 진행률 바 정상 복구, 빈 화면 방지
+- **상태**: ✅ 완료
+
 ### 2026-01-10 18:24 - [CRITICAL] Step1Auto 중복 영상비율 필드 제거
 - **문제**: Auto 모드에서 "영상 비율" 필드가 2개 나타남
   1. `src/utils/fieldConfig.js` Line 75-88: `DEFAULT_FIELD_CONFIG`에 `aspectRatio` 하드코딩

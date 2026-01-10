@@ -112,14 +112,16 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     forceScrollTop();
   }, []);
 
+  // 🔥 세션 체크 중복 방지용 ref (컴포넌트 마운트 시 1회만 실행)
+  const sessionCheckRef = useRef(false);
+
   useEffect(() => {
     const checkOngoingSession = async () => {
-      // 이미 체크했으면 스킵
-      const hasChecked = sessionStorage.getItem('sessionCheckDone');
-      if (hasChecked) {
-        console.log('[Step2] 세션 체크 이미 완료됨, 스킵');
+      // 이미 체크했으면 스킵 (리렌더링 방지)
+      if (sessionCheckRef.current) {
         return;
       }
+      sessionCheckRef.current = true;
 
       try {
         const response = await fetch(`${API_BASE}/api/session/check`, {
@@ -134,12 +136,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
           const shouldResume = window.confirm(
             `⚠️ 진행 중이던 광고 영상 생성 작업이 있습니다.\n` +
             `브랜드: ${data.session.formData?.brandName || '(없음)'}\n` +
-            `진행률: ${data.session.progress || 0}%\n\n` +
+            `진행률: ${data.session.progress?.percentage || 0}%\n\n` +
             `이어서 진행하시겠습니까?`
           );
-
-          // 체크 완료 플래그 설정
-          sessionStorage.setItem('sessionCheckDone', 'true');
 
           if (shouldResume) {
             log('🔄 이전 세션을 복구합니다...');
@@ -169,12 +168,11 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             });
           }
         } else {
-          // 진행 중인 세션이 없으면 플래그 설정
-          sessionStorage.setItem('sessionCheckDone', 'true');
+          // 진행 중인 세션이 없으면 아무것도 안 함 (또는 로그)
+          console.log('[Step2] 진행 중인 세션 없음');
         }
       } catch (error) {
         console.error('세션 확인 실패:', error);
-        sessionStorage.setItem('sessionCheckDone', 'true');
       }
     };
 
