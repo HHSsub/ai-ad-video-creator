@@ -150,7 +150,7 @@ function mapAspectRatio(input) {
     return 'widescreen_16_9';
   }
   if (normalized.includes('9:16') || normalized.includes('9_16') || normalized === '세로') {
-    return 'portrait_9_16';
+    return 'social_story_9_16'; // ✅ portrait_9_16 대신
   }
   if (normalized.includes('1:1') || normalized.includes('1_1') || normalized === '정사각형') {
     return 'square_1_1';

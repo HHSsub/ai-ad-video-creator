@@ -123,13 +123,10 @@ function mapToFreepikParams(internalParams) {
         if (currentEngine.supportedAspectRatios.includes(aspect_ratio)) {
           mappedAspectRatio = aspect_ratio; // 그대로 사용
         } else {
-          // 매핑 필요 여부 확인 (예: portrait_9_16 -> social_story_9_16)
-          // 엔진별 특수 매핑이 있는 경우 처리
-          if (currentModel === 'seedream-v4') {
-            // Seedream v4 특수 케이스: portrait_9_16 -> social_story_9_16
-            if (aspect_ratio === 'portrait_9_16' && currentEngine.supportedAspectRatios.includes('social_story_9_16')) {
-              mappedAspectRatio = 'social_story_9_16';
-            }
+          // 🔥 범용 매핑: portrait_9_16 → social_story_9_16 (모든 엔진)
+          if (aspect_ratio === 'portrait_9_16' && currentEngine.supportedAspectRatios.includes('social_story_9_16')) {
+            mappedAspectRatio = 'social_story_9_16';
+            console.log(`[mapToFreepikParams] portrait_9_16 → social_story_9_16 변환 (${currentModel})`);
           }
 
           // 지원되지 않으면 첫 번째 지원 ratio 사용
