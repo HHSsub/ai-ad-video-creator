@@ -103,6 +103,7 @@
   - `api/utils/` 폴더 삭제 (라우팅 충돌 원천 차단)
   - `server/utils/sessionStore.js`로 파일 이동 (API 라우트 대상에서 제외)
   - 모든 API 파일의 import 경로를 `../server/utils/sessionStore.js`로 변경
+  - `server/index.js`의 import 경로도 `./utils/sessionStore.js`로 수정 (서버 크래시 원인 해결)
 - **결과**:
   - ✅ Frontend White Screen 해결 (브라우저 코드 분리)
   - ✅ Backend 502 Bad Gateway 해결 (라우터 충돌 방지)

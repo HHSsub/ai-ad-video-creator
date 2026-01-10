@@ -6,7 +6,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import path from 'path';
-import sessionStore from '../src/utils/sessionStore.js';
+import sessionStore from './utils/sessionStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
