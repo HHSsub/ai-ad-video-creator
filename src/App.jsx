@@ -329,6 +329,42 @@ function App() {
     setCurrentView(view);
   };
 
+  // 네비게이션 클릭 핸들러
+  const handleNavigate = (navStep) => {
+    // navStep: 1=모드선택, 2=정보입력, 3=스토리보드, 4=최종완성
+    switch (navStep) {
+      case 1: // 모드선택
+        if (currentProject) {
+          setCurrentView('mode-select');
+          setStep(1);
+        }
+        break;
+      case 2: // 정보입력
+        if (currentMode) {
+          const view = currentMode === 'auto' ? 'step1-auto'
+            : currentMode === 'admin' ? 'step1-admin'
+              : 'step1-manual';
+          setCurrentView(view);
+          setStep(1);
+        }
+        break;
+      case 3: // 스토리보드
+        if (storyboard && storyboard.styles && storyboard.styles.length > 0) {
+          setCurrentView('step3');
+          setStep(3);
+        }
+        break;
+      case 4: // 최종 완성
+        if (storyboard && storyboard.confirmedVideo) {
+          setCurrentView('step5');
+          setStep(5);
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
   const handleBackToProjects = () => {
     setCurrentProject(null);
     setCurrentMode(null);
