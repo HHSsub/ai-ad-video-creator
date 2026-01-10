@@ -617,10 +617,10 @@ function App() {
                             {isCompleted ? '✓' : s.navStep}
                           </div>
                           <div className="hidden lg:block">
-                            <div className={`text-xs font-medium ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                            <div className={`text-xs font-medium whitespace-nowrap ${isActive ? 'text-white' : 'text-gray-400'}`}>
                               {s.title}
                             </div>
-                            <div className="text-[10px] text-gray-600">
+                            <div className="text-[10px] text-gray-600 whitespace-nowrap">
                               {s.desc}
                             </div>
                           </div>

@@ -98,27 +98,70 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
         }
     };
 
-    const handleSkipBGM = () => {
-        log('BGM 없이 완료');
-        onComplete();
+    const handleDownloadWithoutBGM = async () => {
+        try {
+            log('BGM 없이 영상 다운로드 시작');
+
+            const videoUrl = finalVideo?.videoUrl || images.find(img => img.videoUrl)?.videoUrl;
+            if (!videoUrl) {
+                alert('다운로드할 영상이 없습니다.');
+                return;
+            }
+
+            // showSaveFilePicker로 폴더 선택
+            const handle = await window.showSaveFilePicker({
+                suggestedName: `${currentProject?.name || 'video'}_no_bgm.mp4`,
+                types: [{
+                    description: 'Video Files',
+                    accept: { 'video/mp4': ['.mp4'] }
+                }]
+            });
+
+            const response = await fetch(getVideoSrc(videoUrl));
+            const blob = await response.blob();
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+
+            log('✅ BGM 없이 다운로드 완료');
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('다운로드 실패:', error);
+                alert('다운로드에 실패했습니다.');
+            }
+        }
     };
 
-    const handleDownloadFinalVideo = () => {
-        const videoUrl = finalVideoWithBGM || finalVideo?.videoUrl || images.find(img => img.videoUrl)?.videoUrl;
-        if (!videoUrl) {
-            setError('다운로드할 영상이 없습니다.');
-            return;
+    const handleDownloadFinalVideo = async () => {
+        try {
+            const videoUrl = finalVideoWithBGM || finalVideo?.videoUrl || images.find(img => img.videoUrl)?.videoUrl;
+            if (!videoUrl) {
+                setError('다운로드할 영상이 없습니다.');
+                return;
+            }
+
+            // showSaveFilePicker로 폴더 선택
+            const handle = await window.showSaveFilePicker({
+                suggestedName: `${currentProject?.name || 'video'}_final.mp4`,
+                types: [{
+                    description: 'Video Files',
+                    accept: { 'video/mp4': ['.mp4'] }
+                }]
+            });
+
+            const response = await fetch(getVideoSrc(videoUrl));
+            const blob = await response.blob();
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+
+            log('✅ 최종 영상 다운로드 완료');
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('다운로드 실패:', error);
+                alert('다운로드에 실패했습니다.');
+            }
         }
-
-        const link = document.createElement('a');
-        link.href = getVideoSrc(videoUrl);
-        link.download = `${currentProject?.name || 'video'}_final.mp4`;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        log('최종 영상 다운로드 시작');
     };
 
     const currentVideoUrl = finalVideoWithBGM || finalVideo?.videoUrl || images.find(img => img.videoUrl)?.videoUrl;
@@ -189,11 +232,11 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
 
                             <div className="flex gap-3">
                                 <button
-                                    onClick={handleSkipBGM}
+                                    onClick={handleDownloadWithoutBGM}
                                     disabled={applyingBGM}
                                     className="flex-1 px-6 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
                                 >
-                                    BGM 없이 완료
+                                    BGM 없이 다운로드
                                 </button>
                                 <button
                                     onClick={handleApplyBGM}
@@ -206,25 +249,15 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
                         </div>
                     )}
 
-                    {/* 다운로드 및 완료 */}
-                    {finalVideoWithBGM && (
-                        <div className="mb-8 bg-green-900/30 rounded-xl p-6 border border-green-700">
-                            <h3 className="text-lg font-semibold text-white mb-4">✅ 최종 영상 완성!</h3>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={handleDownloadFinalVideo}
-                                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
-                                >
-                                    📥 다운로드
-                                </button>
-                                <button
-                                    onClick={onComplete}
-                                    className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-medium"
-                                >
-                                    ✅ 완료
-                                </button>
-                            </div>
-                        </div>
+                    <div className="mb-8 bg-green-900/30 rounded-xl p-6 border border-green-700">
+                        <h3 className="text-lg font-semibold text-white mb-4">✅ 최종 영상 완성!</h3>
+                        <button
+                            onClick={handleDownloadFinalVideo}
+                            className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
+                        >
+                            📥 다운로드
+                        </button>
+                    </div>
                     )}
 
                     {/* 로그 */}
