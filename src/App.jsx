@@ -564,11 +564,13 @@ function App() {
               <img
                 src="/nexxii/upnexx_logo.png"
                 alt="UPNEXX 로고"
+                onClick={handleBackToProjects}
                 style={{
                   height: "120px",
                   width: "auto",
                   background: "none",
-                  display: "block"
+                  display: "block",
+                  cursor: "pointer"
                 }}
               />
               <div className="hidden md:flex items-center gap-1">
