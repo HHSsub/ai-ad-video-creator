@@ -3,7 +3,7 @@
  * GET /api/session/check
  */
 
-import sessionStore from '../utils/sessionStore.js';
+import sessionStore from '../../server/utils/sessionStore.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

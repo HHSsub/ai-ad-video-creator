@@ -1,6 +1,6 @@
 // api/storyboard-manual-inject.js
 import { parseUnifiedConceptJSON, extractJSONBlocks } from './storyboard-init.js';
-import sessionStore from '../utils/sessionStore.js';
+import sessionStore from '../server/utils/sessionStore.js';
 import path from 'path';
 import fs from 'fs';
 
