@@ -583,7 +583,7 @@ function App() {
                 }}
               />
               {currentProject && (
-                <div className="hidden md:flex items-center gap-1">
+                <div className="flex-1 flex items-center gap-3 mr-4">
                   {[
                     { navStep: 0, title: '프로젝트선택', desc: 'Projects' },
                     { navStep: 1, title: '모드선택', desc: 'Mode' },
@@ -606,14 +606,14 @@ function App() {
                       <div key={s.navStep} className="flex items-center">
                         <div
                           onClick={() => s.navStep === 0 ? handleBackToProjects() : handleNavigate(s.navStep)}
-                          className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all cursor-pointer hover:bg-gray-800/50 ${isActive
+                          className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-all cursor-pointer hover:bg-gray-800/50 whitespace-nowrap ${isActive
                             ? 'bg-blue-600/20 border border-blue-500/50'
                             : isCompleted
                               ? 'text-gray-500'
                               : 'text-gray-600'
                             }`}
                         >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${isActive
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium whitespace-nowrap ${isActive
                             ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white'
                             : isCompleted
                               ? 'bg-green-600/20 text-green-400 border border-green-600/50'
@@ -632,7 +632,7 @@ function App() {
                           </div>
                         </div>
                         {idx < arr.length - 1 && (
-                          <div className={`w-12 h-[1px] ${isCompleted ? 'bg-blue-500' : 'bg-gray-800'}`}></div>
+                          <div className={`w-8 h-[1px] ${isCompleted ? 'bg-blue-500' : 'bg-gray-800'}`}></div>
                         )}
                       </div>
                     );
