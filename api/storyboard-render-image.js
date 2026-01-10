@@ -99,47 +99,16 @@ async function pollTaskStatus(taskId, conceptId = 0, projectId = null, sceneNumb
 }
 
 
-// 🔥 100% 동적 Freepik Params 매핑 (engines.json 기반)
-// API 스펙에 맞는 파라미터 변환 수행
+// 🔥 Freepik Params 매핑 (간소화 버전 - 런타임 에러 방지)
 function mapToFreepikParams(internalParams) {
   const { aspect_ratio, ...rest } = internalParams;
 
-  // engines.json에서 현재 엔진의 aspect ratio 매핑 로드
+  // 🔥 portrait_9_16 → social_story_9_16 하드코딩 매핑 (모든 엔진)
   let mappedAspectRatio = aspect_ratio || 'widescreen_16_9';
 
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
-
-    if (fs.existsSync(enginesPath)) {
-      const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
-      const currentModel = enginesData.currentEngine?.textToImage?.model;
-      const availableEngines = enginesData.availableEngines?.textToImage || [];
-      const currentEngine = availableEngines.find(e => e.model === currentModel);
-
-      if (currentEngine?.supportedAspectRatios) {
-        // 지원되는 aspect ratio 확인
-        if (currentEngine.supportedAspectRatios.includes(aspect_ratio)) {
-          mappedAspectRatio = aspect_ratio; // 그대로 사용
-        } else {
-          // 🔥 범용 매핑: portrait_9_16 → social_story_9_16 (모든 엔진)
-          if (aspect_ratio === 'portrait_9_16' && currentEngine.supportedAspectRatios.includes('social_story_9_16')) {
-            mappedAspectRatio = 'social_story_9_16';
-            console.log(`[mapToFreepikParams] portrait_9_16 → social_story_9_16 변환 (${currentModel})`);
-          }
-
-          // 지원되지 않으면 첫 번째 지원 ratio 사용
-          if (!currentEngine.supportedAspectRatios.includes(mappedAspectRatio)) {
-            mappedAspectRatio = currentEngine.supportedAspectRatios[0];
-            console.warn(`[mapToFreepikParams] aspect_ratio ${aspect_ratio}는 지원되지 않음. ${mappedAspectRatio} 사용`);
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('[mapToFreepikParams] 동적 매핑 실패:', error.message);
-    // Fallback: 원본 사용
+  if (aspect_ratio === 'portrait_9_16') {
+    mappedAspectRatio = 'social_story_9_16';
+    console.log('[mapToFreepikParams] portrait_9_16 → social_story_9_16 자동 변환');
   }
 
   return {
@@ -147,6 +116,7 @@ function mapToFreepikParams(internalParams) {
     aspect_ratio: mappedAspectRatio
   };
 }
+
 
 
 // 🔥 동적 엔진 이미지 생성 함수 (키 풀 활용 + 엔진 독립적 + S3 업로드)
