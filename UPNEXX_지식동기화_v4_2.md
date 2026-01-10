@@ -1,7 +1,7 @@
 # UPNEXX 프로젝트 지식동기화 문서 v4.2 (S3 미디어 영속화판)
 
 **문서 목적**: AI가 코드 작업 시 매번 참조하고 업데이트하여 작업 맥락을 유지  
-**최종 수정**: 2025-12-26 (KST)  
+**최종 수정**: 2026-01-10 (KST)  
 **이전 버전**: v4.1 (2025-12-11)  
 **주요 변경**: S3 미디어 영속화 작업 추가 (작업 I, J, K, L) + 로그 자동 삭제 로직 + **엔진 마이그레이션(NanoBanana -> Seedream) 및 합성 로직 분리**
 
@@ -84,6 +84,7 @@
 | **S** | 합성 파라미터 안정화 | `api/seedream-compose.js` | `seedream-compose.js` 기본 `aspect_ratio`를 `widescreen_16_9`로 고정하여 호출 안정성 확보 | ✅ 완료 | ✅ 승인 |
 | T | Manual Mode 필드 동적 구성 | `config/runtime-field-config.json`<br>`src/components/Step1Manual.jsx` | `config/runtime-field-config.json`에 `manualMode` 섹션 추가 및 `Step1Manual.jsx` 연동 (이미지 업로드 숨김) | 🟢 완료 | ⬜ 대기 |
 | U | 인물 합성 키워드 수정 | `api/storyboard-render-image.js` | `api/storyboard-render-image.js` 정규식 개선 (`girls`, `boys` 등 복수형 및 `\b` 경계 추가) | 🟢 완료 | ⬜ 대기 |
+| **V** | Step5 네비게이션 및 로딩 수정 | `src/App.jsx`<br>`src/components/Step5.jsx` | finalVideos 있으면 Step5로 라우팅 (기존: Step4)<br>네비게이션 탭 클릭 로직 수정 (finalVideos.length 체크)<br>Step5에서 conceptId 없어도 영상 로드 (배열 첫번째 사용)<br>디버깅 로그 추가 | ✅ 완료 | ⬜ 대기 |
 
 **작업 상태 범례**:
 - 🔴 미작업
@@ -95,6 +96,30 @@
 
 
 ## 📝 작업 히스토리 (최신순)
+
+### 2026-01-10 16:35 - [CRITICAL] Step5 네비게이션 및 로딩 버그 긴급 수정 (Task V)
+- **긴급 이슈**: 모든 프로젝트에서 finalVideos가 있는데도 Step5 진입 불가
+  1. 프로젝트 선택 시 Step5로 가지 않고 Step4로 잘못 이동
+  2. 네비게이션 "최종완성" 탭 클릭 시 반응 없음
+  3. Step5 진입해도 영상 로드 안 됨 (selectedConceptId 의존)
+- **발견한 3가지 치명적 버그**:
+  1. **잘못된 라우팅 (App.jsx:252-257)**:
+     - `finalVideos` 있으면 Step4로 이동 → **Step5여야 함**
+     - 코멘트와 코드 불일치 (주석: Step4로, 실제 필요: Step5)
+  2. **구식 필드 체크 (App.jsx:362-366)**:
+     - `confirmedVideo`, `finalVideoUrl` 등 **존재하지 않는 구버전 필드** 체크
+     - 실제로는 `finalVideos` 배열만 존재
+  3. **conceptId 의존성 (Step5.jsx:18)**:
+     - `selectedConceptId` 없으면 영상 찾지 못함
+     - 프로젝트 직접 열 때는 conceptId가 없음
+- **해결 방법**:
+  1. **App.jsx Line 252-257**: finalVideos → **Step5 라우팅**으로 수정
+  2. **App.jsx Line 360-371**: 간단한 `finalVideos.length > 0` 체크로 교체
+  3. **Step5.jsx Line 15-22**: conceptId 있으면 매칭, 없으면 `finalVideos[0]` 사용
+  4. **Step5.jsx Line 38-42**: 로딩 시 상태 디버깅 로그 추가
+- **영향**: 이제 모든 프로젝트에서 최종 영상이 있으면 Step5 정상 진입 및 로딩
+- **수정 파일**: `src/App.jsx` (2곳), `src/components/Step5.jsx` (2곳)
+- **상태**: ✅ 완료 (사용자 테스트 대기)
 
 ### 2026-01-07 02:25 - [REVIEW] 사용횟수 카운팅 시스템 검토 완료
 - **요청**: "오늘 사용횟수"가 Step3 갤러리 완료 시 1회로 카운팅되는지, 리미트 기능이 제대로 작동하는지 검토

@@ -15,7 +15,11 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
     const styles = storyboard?.styles || [];
     const selectedStyle = styles.find(s => s.concept_id === selectedConceptId || s.conceptId === selectedConceptId);
     const images = selectedStyle?.images || [];
-    const finalVideo = storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId);
+
+    // 🔥 FIX: finalVideos 배열에서 영상 찾기 - conceptId가 있으면 매칭, 없으면 첫번째 영상 사용
+    const finalVideo = selectedConceptId
+        ? storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId)
+        : storyboard?.finalVideos?.[0];
 
     const log = (msg) => {
         const timestamp = new Date().toLocaleTimeString();
@@ -34,6 +38,9 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
 
     useEffect(() => {
         log('Step5 로드 - BGM 적용 단계');
+        log(`storyboard.finalVideos: ${storyboard?.finalVideos?.length || 0}개`);
+        log(`selectedConceptId: ${selectedConceptId}`);
+        log(`finalVideo: ${finalVideo?.videoUrl || 'null'}`);
 
         const loadMoods = async () => {
             try {

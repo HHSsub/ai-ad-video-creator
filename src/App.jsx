@@ -249,11 +249,11 @@ function App() {
             return;
           }
 
-          // finalVideos가 있으면 영상까지 완성된 상태 → Step4로
+          // finalVideos가 있으면 영상까지 완성된 상태 → Step5로
           if (data.project.storyboard.finalVideos && data.project.storyboard.finalVideos.length > 0) {
-            console.log('[App] 🎬 완성된 영상 발견 - Step4로 이동');
-            setCurrentView('step4');
-            setStep(4);
+            console.log('[App] 🎬 완성된 영상 발견 - Step5로 이동');
+            setCurrentView('step5');
+            setStep(5);
             return;
           }
 
@@ -358,15 +358,14 @@ function App() {
         }
         break;
       case 4: // 최종 완성
-        // Step4까지 완료되었거나 최종 영상이 있으면 이동 가능
-        const hasFinalVideo = storyboard && (
-          storyboard.confirmedVideo ||
-          storyboard.finalVideos?.some(v => v.videoUrl) ||
-          storyboard.styles?.some(s => s.finalVideoUrl)
-        );
+        // finalVideos 배열에 영상이 있으면 Step5로 이동 가능
+        const hasFinalVideo = storyboard?.finalVideos?.length > 0;
         if (hasFinalVideo) {
+          console.log('[App] Step5로 네비게이션 - finalVideos 존재');
           setCurrentView('step5');
           setStep(5);
+        } else {
+          console.warn('[App] Step5로 이동 불가 - finalVideos가 없음');
         }
         break;
       default:
