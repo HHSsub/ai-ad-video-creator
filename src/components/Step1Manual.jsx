@@ -11,7 +11,11 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
 
   const [errors, setErrors] = useState({});
   const isAdmin = user?.role === 'admin';
-  const [aspectRatios, setAspectRatios] = useState([]);
+  const [aspectRatios, setAspectRatios] = useState([
+    { value: 'widescreen_16_9', label: '16:9 (가로형)' },
+    { value: 'social_story_9_16', label: '9:16 (세로형)' },
+    { value: 'square_1_1', label: '1:1 (정사각형)' }
+  ]);
 
   // ✅ Manual mode 설정
   useEffect(() => {
