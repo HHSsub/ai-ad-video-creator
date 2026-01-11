@@ -914,6 +914,7 @@ app.use('/tmp', express.static('tmp', {
       res.setHeader('Content-Type', 'image/png');
     }
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 day cache
   }
 }));
 

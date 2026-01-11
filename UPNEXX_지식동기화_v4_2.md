@@ -97,6 +97,21 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-11 16:30 - [UI/UX] 멤버 초대 모달 위치 및 편의성 개선 (Task Z-1)
+- **문제**: "멤버 초대" 모달이 화면 하단에 뜨거나, 스크롤 위치에 따라 보이지 않는 문제 (Context Stacking 이슈).
+- **수정**:
+  - `Step4.jsx`: `createPortal`을 사용하여 모달을 `document.body`로 이동.
+  - Positioning: `items-center` 대신 `items-start` + `pt-32`를 적용하여 시선이 머무는 **상단 중앙**에 배치.
+- **결과**: ✅ 스크롤 위치와 관계없이 항상 화면 상단 중앙에 모달 표시.
+
+### 2026-01-11 16:15 - [PERF] 이미지 로딩 최적화 및 프로젝트 ID 복사 (Task Z-2)
+- **성능 개선**:
+  - `Step4.jsx`: 모든 이미지에 `loading="lazy"`, `decoding="async"` 속성 추가.
+  - `server/index.js`: 정적 파일(`/tmp`) 서빙 시 `Cache-Control: public, max-age=86400` 헤더 추가.
+- **편의성 개선**:
+  - `ProjectDashboard.jsx`: 관리자 모드에서 프로젝트 ID 옆에 "복사(📋)" 버튼 추가.
+- **결과**: ✅ 렌더링 속도 체감 향상 및 ID 관리 편의성 증대.
+
 ### 2026-01-10 19:03 - [CRITICAL] 세션 저장소 아키텍처 재설계 및 서버 라우트 충돌 해결 (최종)
 - **문제**: `api/utils/sessionStore.js`를 생성하자 자동 라우터가 이를 API 엔드포인트로 오인하여 실행 시도 → `handler` 함수가 없으므로 서버 크래시(502 에러) 발생
 - **수정**:

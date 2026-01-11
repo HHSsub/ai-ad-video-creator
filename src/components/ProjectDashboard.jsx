@@ -547,7 +547,28 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                   fontFamily: 'monospace',
                   color: '#9ca3af'
                 }}>
-                  프로젝트 ID: {project.id}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <span>프로젝트 ID: {project.id}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(project.id);
+                        alert('프로젝트 ID가 복사되었습니다!');
+                      }}
+                      title="ID 복사"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '2px',
+                        color: '#9ca3af'
+                      }}
+                      onMouseEnter={(e) => e.target.style.color = 'white'}
+                      onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+                    >
+                      📋
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -955,6 +955,8 @@ const Step4 = ({
                             <img
                               src={getImageSrc(img.imageUrl)}
                               alt={`Scene ${img.sceneNumber}`}
+                              loading="lazy"
+                              decoding="async"
                               className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoadStates[img.sceneNumber] ? 'opacity-100' : 'opacity-0'
                                 }`}
                               onLoad={() => handleImageLoad(img.sceneNumber)}
@@ -1203,10 +1205,10 @@ const Step4 = ({
               </div>
             )}
 
-            {/* 🔥 추가: 멤버 초대 모달 */}
-            {showInviteModal && (
-              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-                <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
+            {/* 🔥 추가: 멤버 초대 모달 - Portal & Top Center */}
+            {showInviteModal && createPortal(
+              <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 pt-32" onClick={handleCloseInviteModal}>
+                <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
                   <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
 
                   {inviteError && (
@@ -1269,7 +1271,8 @@ const Step4 = ({
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
 
             {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) */}
@@ -1370,7 +1373,7 @@ const Step4 = ({
                               : 'border-gray-800 hover:border-gray-600'
                               }`}
                           >
-                            <img src={person.url} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
+                            <img src={person.url} alt={person.name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
 
                             {/* Hover Overlay */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
