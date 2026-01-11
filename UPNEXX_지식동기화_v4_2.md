@@ -118,6 +118,13 @@
   - 응답 데이터 구조 접근 방식 수정 (`data.engines.currentEngine` → `data.currentEngine`)
 - **결과**: ✅ Aspect Ratio 목록 정상 로드
 
+### 2026-01-11 15:25 - [CRITICAL] Step5 최종 영상 로드 실패 수정
+- **문제**: 브라우저 새로고침 시 `localStorage`에서 복원된 `selectedConceptId`가 문자열("1")로 저장되어, `finalVideos`의 숫자형 ID(1)와 strict equality(`===`) 비교 실패하여 "영상이 없습니다" 표시됨. 또한 React PropType Warning 발생.
+- **수정**:
+  - `src/components/Step5.jsx`: ID 비교 시 문자열 변환 후 비교(`String(a) === String(b)`)하도록 수정 및 PropTypes를 `number | string` 허용으로 변경
+  - `src/App.jsx`: `localStorage` 복원 로직에서 `Number()`로 형변환 추가
+- **결과**: ✅ 최종 영상 정상 로드 확인
+
 ### 2026-01-10 19:10 - [CRITICAL] Step2 useRef 누락 수정
 - **문제**: Auto-Resume 기능 구현 중 `useRef`를 사용했으나 import 문에서 누락되어 Step2 진입 시 클라이언트 크래시 발생
 - **수정**: `src/components/Step2.jsx` 상단 import문에 `useRef` 추가

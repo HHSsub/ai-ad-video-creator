@@ -91,7 +91,8 @@ function App() {
       }
     }
     if (savedConceptId) {
-      setSelectedConceptId(savedConceptId);
+      // 숫자형으로 변환하여 저장
+      setSelectedConceptId(Number(savedConceptId));
     }
 
     // 복원 완료 로그

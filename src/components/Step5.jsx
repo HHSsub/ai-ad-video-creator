@@ -16,9 +16,9 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
     const selectedStyle = styles.find(s => s.concept_id === selectedConceptId || s.conceptId === selectedConceptId);
     const images = selectedStyle?.images || [];
 
-    // 🔥 FIX: finalVideos 배열에서 영상 찾기 - conceptId가 있으면 매칭, 없으면 첫번째 영상 사용
+    // 🔥 FIX: finalVideos 배열에서 영상 찾기 - conceptId가 있으면 매칭 (형변환 허용), 없으면 첫번째 영상 사용
     const finalVideo = selectedConceptId
-        ? storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId)
+        ? storyboard?.finalVideos?.find(v => String(v.conceptId) === String(selectedConceptId))
         : storyboard?.finalVideos?.[0];
 
     const log = (msg) => {
@@ -39,7 +39,7 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
     useEffect(() => {
         log('Step5 로드 - BGM 적용 단계');
         log(`storyboard.finalVideos: ${storyboard?.finalVideos?.length || 0}개`);
-        log(`selectedConceptId: ${selectedConceptId}`);
+        log(`selectedConceptId: ${selectedConceptId} (type: ${typeof selectedConceptId})`);
         log(`finalVideo: ${finalVideo?.videoUrl || 'null'}`);
 
         const loadMoods = async () => {
@@ -98,104 +98,65 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
                 throw new Error(result.error || 'BGM 적용 실패');
             }
         } catch (err) {
-            setError(`BGM 적용 오류: ${err.message}`);
-            log(`BGM 적용 오류: ${err.message}`);
+            const errorMsg = err.message || 'BGM 적용 중 오류가 발생했습니다.';
+            setError(errorMsg);
+            log(`❌ 에러: ${errorMsg}`);
         } finally {
             setApplyingBGM(false);
         }
     };
 
-    const handleDownloadWithoutBGM = async () => {
-        try {
-            log('BGM 없이 영상 다운로드 시작');
-
-            const videoUrl = finalVideo?.videoUrl || images.find(img => img.videoUrl)?.videoUrl;
-            if (!videoUrl) {
-                alert('다운로드할 영상이 없습니다.');
-                return;
-            }
-
-            // showSaveFilePicker로 폴더 선택
-            const handle = await window.showSaveFilePicker({
-                suggestedName: `${currentProject?.name || 'video'}_no_bgm.mp4`,
-                types: [{
-                    description: 'Video Files',
-                    accept: { 'video/mp4': ['.mp4'] }
-                }]
-            });
-
-            const response = await fetch(getVideoSrc(videoUrl));
-            const blob = await response.blob();
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-
-            log('✅ BGM 없이 다운로드 완료');
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.error('다운로드 실패:', error);
-                alert('다운로드에 실패했습니다.');
-            }
-        }
+    const handleDownloadWithoutBGM = () => {
+        const videoUrl = finalVideo?.videoUrl;
+        if (!videoUrl) return;
+        const link = document.createElement('a');
+        link.href = getVideoSrc(videoUrl);
+        link.download = `video_original_${Date.now()}.mp4`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        log('BGM 없는 원본 영상 다운로드');
     };
 
-    const handleDownloadFinalVideo = async () => {
-        try {
-            const videoUrl = finalVideoWithBGM || finalVideo?.videoUrl || images.find(img => img.videoUrl)?.videoUrl;
-            if (!videoUrl) {
-                setError('다운로드할 영상이 없습니다.');
-                return;
-            }
-
-            // showSaveFilePicker로 폴더 선택
-            const handle = await window.showSaveFilePicker({
-                suggestedName: `${currentProject?.name || 'video'}_final.mp4`,
-                types: [{
-                    description: 'Video Files',
-                    accept: { 'video/mp4': ['.mp4'] }
-                }]
-            });
-
-            const response = await fetch(getVideoSrc(videoUrl));
-            const blob = await response.blob();
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-
-            log('✅ 최종 영상 다운로드 완료');
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                console.error('다운로드 실패:', error);
-                alert('다운로드에 실패했습니다.');
-            }
-        }
+    const handleDownloadFinalVideo = () => {
+        if (!finalVideoWithBGM) return;
+        const link = document.createElement('a');
+        link.href = getVideoSrc(finalVideoWithBGM);
+        link.download = `video_final_${Date.now()}.mp4`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        log('BGM 적용된 최종 영상 다운로드');
     };
 
-    const currentVideoUrl = finalVideoWithBGM || finalVideo?.videoUrl || images.find(img => img.videoUrl)?.videoUrl;
+    const currentVideoUrl = finalVideoWithBGM || finalVideo?.videoUrl;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black">
-            <div className="max-w-5xl mx-auto p-6">
-                <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
-                    <h2 className="text-3xl font-bold mb-2 text-white">🎵 배경음악 및 최종 완성</h2>
-                    <p className="text-gray-400 mb-8">최종 영상에 BGM을 적용하고 다운로드하세요</p>
+        <div className="min-h-screen bg-[#0A0A0B] py-12 px-4">
+            <div className="max-w-4xl mx-auto">
+                <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 shadow-2xl">
+                    <div className="flex items-center gap-3 mb-8">
+                        <span className="text-3xl">🎵</span>
+                        <div>
+                            <h2 className="text-2xl font-bold text-white">배경음악 및 최종 완성</h2>
+                            <p className="text-gray-400">최종 영상에 BGM을 적용하고 다운로드하세요</p>
+                        </div>
+                    </div>
 
                     {error && (
-                        <div className="bg-red-900/30 border border-red-800 text-red-300 p-4 mb-6 rounded-lg">
-                            <div className="font-semibold">오류</div>
-                            <div className="text-sm mt-1">{error}</div>
-                            <button onClick={() => setError(null)} className="mt-2 text-xs text-red-400 hover:text-red-300">
-                                닫기
-                            </button>
+                        <div className="mb-6 p-4 bg-red-900/50 text-red-300 rounded-lg border border-red-700 flex items-center gap-2">
+                            <span>⚠️</span>
+                            {error}
                         </div>
                     )}
 
-                    {/* 현재 영상 미리보기 */}
+                    {/* 영상 재생 영역 */}
                     <div className="mb-8">
-                        <h3 className="text-lg font-semibold text-white mb-3">
-                            {finalVideoWithBGM ? '✅ BGM 적용 완료' : '📹 현재 영상'}
-                        </h3>
-                        <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                        <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+                            <span>📹</span>
+                            현재 영상
+                        </label>
+                        <div className="aspect-video bg-black rounded-xl overflow-hidden border border-gray-700 relative">
                             {currentVideoUrl ? (
                                 <video
                                     src={getVideoSrc(currentVideoUrl)}
@@ -296,7 +257,7 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
 
 Step5.propTypes = {
     storyboard: PropTypes.object,
-    selectedConceptId: PropTypes.number,
+    selectedConceptId: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     onPrev: PropTypes.func.isRequired,
     onComplete: PropTypes.func.isRequired,
     currentProject: PropTypes.object
