@@ -964,8 +964,8 @@ const Step4 = ({
         <div className="bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700 p-8">
           <div className="flex justify-between items-start mb-8">
             <div>
-              <h2 className="text-3xl font-bold mb-2 text-white">
-                ✏️ 영상 편집 - {selectedStyle.conceptName || selectedStyle.style}
+              <h2 className="text-3xl font-bold text-white">
+                ✏️ 영상 편집 - Concept {selectedConceptId}
               </h2>
               <p className="text-gray-400">각 씬을 검토하고 수정하세요</p>
               <div className="mt-2 flex items-center gap-2">
@@ -1036,16 +1036,19 @@ const Step4 = ({
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        {/* 🔥 씬 선택 체크박스 */}
-                        <input
-                          type="checkbox"
-                          checked={selectedScenes.includes(img.sceneNumber)}
-                          onChange={() => handleToggleSceneSelection(img.sceneNumber)}
-                          className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                          title="영상 합치기에 포함"
-                        />
-                        <h4 className={`text-lg font-semibold ${selectedScenes.includes(img.sceneNumber) ? 'text-white' : 'text-gray-500'}`}>
-                          Scene {img.sceneNumber}: {img.title || `씬 ${img.sceneNumber}`}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedScenes.includes(img.sceneNumber)}
+                            onChange={() => handleToggleSceneSelection(img.sceneNumber)}
+                            className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <span className={`text-sm font-medium ${selectedScenes.includes(img.sceneNumber) ? 'text-blue-300' : 'text-gray-500'}`}>
+                            영상 변환 포함
+                          </span>
+                        </label>
+                        <h4 className="text-lg font-semibold text-white">
+                          | Scene {img.sceneNumber}
                         </h4>
                       </div>
 
@@ -1054,12 +1057,13 @@ const Step4 = ({
                         {permissions.editPrompt && (
                           <button
                             onClick={() => handleDeleteScene(img.sceneNumber)}
-                            className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-900/20 rounded transition-colors"
-                            title="씬 삭제 (복구 불가)"
+                            className="flex items-center gap-1 px-2 py-1 bg-red-900/30 hover:bg-red-900/60 text-red-400 hover:text-red-300 rounded transition-colors text-xs border border-red-900/50"
+                            title="이 씬을 영구 삭제합니다"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
+                            씬 삭제
                           </button>
                         )}
 
@@ -1242,57 +1246,59 @@ const Step4 = ({
             </div>
           </div>
 
-          <details className="mb-6">
-            <summary className="cursor-pointer font-semibold text-gray-300 hover:text-white">
-              ✂️ 편집 포인트 제안
-            </summary>
-            <div className="mt-2 bg-gray-900 p-4 rounded-lg border border-gray-700">
-              {/* 🔥 참고 영상 추천 */}
-              {recommendedVideo && (
-                <div className="mb-4 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-700/50 rounded-lg p-4">
-                  <h4 className="text-sm font-bold text-blue-300 mb-2">🎬 참고 영상 추천</h4>
-                  <a
-                    href={recommendedVideo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-white hover:text-blue-300 font-medium mb-2 transition-colors"
-                  >
-                    {recommendedVideo.title}
-                  </a>
-                  <div className="flex items-center gap-4 text-xs text-gray-400">
-                    <span>👁️ {recommendedVideo.views?.toLocaleString() || 'N/A'} 조회</span>
-                    <span>⏱️ {recommendedVideo.duration}</span>
+          {formData?.mode !== 'auto' && (
+            <details className="mb-6">
+              <summary className="cursor-pointer font-semibold text-gray-300 hover:text-white">
+                ✂️ 편집 포인트 제안
+              </summary>
+              <div className="mt-2 bg-gray-900 p-4 rounded-lg border border-gray-700">
+                {/* 🔥 참고 영상 추천 */}
+                {recommendedVideo && (
+                  <div className="mb-4 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-700/50 rounded-lg p-4">
+                    <h4 className="text-sm font-bold text-blue-300 mb-2">🎬 참고 영상 추천</h4>
+                    <a
+                      href={recommendedVideo.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-white hover:text-blue-300 font-medium mb-2 transition-colors"
+                    >
+                      {recommendedVideo.title}
+                    </a>
+                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                      <span>👁️ {recommendedVideo.views?.toLocaleString() || 'N/A'} 조회</span>
+                      <span>⏱️ {recommendedVideo.duration}</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* 🔥 SFX + Editing 메타데이터 */}
-              {storyboard?.metadata?.audioEditingGuide && (
-                <div className="space-y-3 text-sm">
-                  {storyboard.metadata.audioEditingGuide.sfx && storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' && (
-                    <div>
-                      <h4 className="font-semibold text-gray-300 mb-1">🔉 SFX (Sound Effects)</h4>
-                      <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.sfx}</p>
-                    </div>
-                  )}
-                  {storyboard.metadata.audioEditingGuide.editing && storyboard.metadata.audioEditingGuide.editing !== '정보 없음' && (
-                    <div>
-                      <h4 className="font-semibold text-gray-300 mb-1">✏️ Editing Pace</h4>
-                      <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.editing}</p>
-                    </div>
-                  )}
-                  {(!storyboard.metadata.audioEditingGuide.sfx || storyboard.metadata.audioEditingGuide.sfx === '정보 없음') &&
-                    (!storyboard.metadata.audioEditingGuide.editing || storyboard.metadata.audioEditingGuide.editing === '정보 없음') && (
-                      <p className="text-gray-500">편집 가이드 정보가 없습니다.</p>
+                {/* 🔥 SFX + Editing 메타데이터 */}
+                {storyboard?.metadata?.audioEditingGuide && (
+                  <div className="space-y-3 text-sm">
+                    {storyboard.metadata.audioEditingGuide.sfx && storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' && (
+                      <div>
+                        <h4 className="font-semibold text-gray-300 mb-1">🔉 SFX (Sound Effects)</h4>
+                        <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.sfx}</p>
+                      </div>
                     )}
-                </div>
-              )}
+                    {storyboard.metadata.audioEditingGuide.editing && storyboard.metadata.audioEditingGuide.editing !== '정보 없음' && (
+                      <div>
+                        <h4 className="font-semibold text-gray-300 mb-1">✏️ Editing Pace</h4>
+                        <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.editing}</p>
+                      </div>
+                    )}
+                    {(!storyboard.metadata.audioEditingGuide.sfx || storyboard.metadata.audioEditingGuide.sfx === '정보 없음') &&
+                      (!storyboard.metadata.audioEditingGuide.editing || storyboard.metadata.audioEditingGuide.editing === '정보 없음') && (
+                        <p className="text-gray-500">편집 가이드 정보가 없습니다.</p>
+                      )}
+                  </div>
+                )}
 
-              {!recommendedVideo && !storyboard?.metadata?.audioEditingGuide && (
-                <p className="text-gray-500 text-sm">편집 포인트 제안이 없습니다.</p>
-              )}
-            </div>
-          </details>
+                {!recommendedVideo && !storyboard?.metadata?.audioEditingGuide && (
+                  <p className="text-gray-500 text-sm">편집 포인트 제안이 없습니다.</p>
+                )}
+              </div>
+            </details>
+          )}
 
           {/* 🔥 E-2: 일괄 영상 변환 버튼 */}
           <div className="mb-6 flex gap-3">
@@ -1412,7 +1418,6 @@ const Step4 = ({
               document.body
             )}
 
-            {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) */}
             {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) - Portal 사용 */}
             {showPersonModal && createPortal(
               <>
@@ -1572,14 +1577,14 @@ const Step4 = ({
                       )}
                     </button>
                   </div>
-                </div >
+                </div>
               </>,
               document.body // 🔥 Render directly to Body
             )}
-          </div >
+          </div>
         </div>
       </div>
-    </div >
+    </div>
   );
 };
 

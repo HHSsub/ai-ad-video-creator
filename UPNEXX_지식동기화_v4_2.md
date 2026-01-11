@@ -97,6 +97,12 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-11 17:35 - [HOTFIX] ReferenceError (Missing State) 런타임 에러 수정 (Task Z-7)
+- **문제**: `Step4` 진입 시 `Uncaught ReferenceError: imageLoadStates is not defined` 발생.
+- **원인**: 이전 리팩토링 과정에서 `useState` 선언부 일부(`imageLoadStates`, `selectedPerson`, `synthesisLoading`, `recommendedVideo`)가 누락됨.
+- **수정**: `Step4.jsx` 상단에 누락된 State 변수 4종 복구.
+- **결과**: ✅ `npm run build` 통과 및 해당 런타임 에러 해결.
+
 ### 2026-01-11 17:25 - [HOTFIX] ReferenceError (TDZ) 런타임 에러 수정 (Task Z-6)
 - **문제**: `npm run build`는 통과했으나 실행 시 `Uncaught ReferenceError: Cannot access 'xe' before initialization` 발생 (TDZ 에러).
 - **원인**: `Step4.jsx`에서 `useEffect` Dependency Array(`[images.length]`)가 `images` 변수 선언보다 위에 있어, 초기화 전 접근이 발생함.
