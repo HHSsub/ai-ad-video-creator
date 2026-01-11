@@ -64,6 +64,12 @@ const Step4 = ({
   const [selectedScenes, setSelectedScenes] = useState([]);
   const [forceUpdate, setForceUpdate] = useState(0); // 강제 리렌더링용
 
+  // 🔥 복구: 누락된 State 변수들
+  const [imageLoadStates, setImageLoadStates] = useState({});
+  const [selectedPerson, setSelectedPerson] = useState(null);
+  const [synthesisLoading, setSynthesisLoading] = useState(false);
+  const [recommendedVideo, setRecommendedVideo] = useState(null);
+
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
   const styles = storyboard?.styles || [];
