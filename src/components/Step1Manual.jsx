@@ -40,20 +40,34 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
               label: formatAspectRatioLabel(value)
             }));
             setAspectRatios(ratios);
+            return; // API 로드 성공 시 종료
           }
         }
+        // 데이터가 없거나 구조가 다른 경우 Fallback 실행
+        throw new Error('API 데이터 구조 불일치');
       } catch (error) {
-        console.error('Aspect ratio 로드 실패:', error);
-        // Fallback
+        console.warn('Aspect ratio 로드 실패, Fallback 사용:', error);
+        // Fallback (engines.json과 일치시킴: social_story_9_16)
         setAspectRatios([
           { value: 'widescreen_16_9', label: '16:9 (가로형)' },
           { value: 'square_1_1', label: '1:1 (정사각형)' },
-          { value: 'portrait_9_16', label: '9:16 (세로형)' }
+          { value: 'social_story_9_16', label: '9:16 (세로형)' }
         ]);
       }
     };
     loadAspectRatios();
   }, []);
+
+  // 🔥 [Migration] 구버전 값(portrait_9_16) -> 신버전(social_story_9_16) 자동 변환
+  useEffect(() => {
+    if (formData.aspectRatioCode === 'portrait_9_16') {
+      console.log('Aspect Ratio Updated: portrait_9_16 -> social_story_9_16');
+      setFormData(prev => ({
+        ...prev,
+        aspectRatioCode: 'social_story_9_16'
+      }));
+    }
+  }, [formData.aspectRatioCode, setFormData]);
 
   // 🔥 [M] Person Selection 기능
   const [persons, setPersons] = useState([]);

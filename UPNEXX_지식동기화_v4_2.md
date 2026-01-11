@@ -125,6 +125,15 @@
   - `src/App.jsx`: `localStorage` 복원 로직에서 `Number()`로 형변환 추가
 - **결과**: ✅ 최종 영상 정상 로드 확인
 
+### 2026-01-11 15:30 - [CRITICAL] Aspect Ratio 선택값 증발 수정
+- **문제**: API가 최신 값(`social_story_9_16`)을 반환하는 반면, 기존 저장된 formData는 구버전 값(`portrait_9_16`)을 가지고 있어 UI 매칭 실패(선택 안 됨). 또한 Fallback 로직이 불안정하여 "로딩 중" 상태에서 멈춤 현상.
+- **수정**:
+  - `src/components/Step1Manual.jsx`:
+    - Fallback 값을 API 표준(`engines.json`)과 일치시킴 (`portrait_9_16` -> `social_story_9_16`)
+    - API 로드 실패/데이터 누락 시 Fallback이 무조건 실행되도록 로직 개선
+    - 기존 `portrait_9_16` 값을 `social_story_9_16`으로 자동 변환하는 마이그레이션 코드 추가
+- **결과**: ✅ 기존 선택값 복구 및 버튼 활성화
+
 ### 2026-01-10 19:10 - [CRITICAL] Step2 useRef 누락 수정
 - **문제**: Auto-Resume 기능 구현 중 `useRef`를 사용했으나 import 문에서 누락되어 Step2 진입 시 클라이언트 크래시 발생
 - **수정**: `src/components/Step2.jsx` 상단 import문에 `useRef` 추가
