@@ -97,6 +97,20 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-11 17:00 - [OPTIMIZATION] 단일 씬 영상 합치기 Bypass 구현 (Task Z-4)
+- **목표**: 선택된 씬이 1개뿐인 경우, 불필요한 `compile-videos` API 호출(다운로드 -> concatenation)을 생략하고 즉시 완료 처리.
+- **수정**: `src/components/Step4.jsx`
+  - `handleConfirmAndComplete` 함수 내 로직 분기 추가: `videoScenes.length === 1`이면 해당 비디오 URL을 `finalVideoUrl`로 직접 사용.
+  - 다중 씬일 경우에만 기존 `compile-videos` 호출.
+- **결과**: ✅ 1개 씬인 경우 처리 시간 0초(즉시 완료).
+
+### 2026-01-11 16:50 - [FEATURE] Step 4 씬 선택 합의 및 삭제 기능 (Task Z-3)
+- **목표**: 사용자가 원하는 씬만 선택하여 영상으로 합치거나, 불필요한 씬을 영구 삭제하는 기능 요청.
+- **수정**: `src/components/Step4.jsx`
+  1. **Selective Merging**: 씬 헤더에 체크박스 추가. `handleConfirmAndComplete` 시 선택된 씬만 `api/compile-videos`로 전달.
+  2. **Scene Deletion**: "휴지통" 아이콘 추가. 삭제 시 `sortedImages`에서 제거 후 `sceneNumber` 재정렬(1..N). 즉시 백엔드 저장(`PATCH`)하여 데이터 불일치 방지. 최소 1개 씬 유지 유효성 검사 적용.
+- **결과**: ✅ 4씬 -> 3씬 삭제 및 선택적 영상 제작 가능. 데이터 무결성 유지.
+
 ### 2026-01-11 16:30 - [UI/UX] 멤버 초대 모달 위치 및 편의성 개선 (Task Z-1)
 - **문제**: "멤버 초대" 모달이 화면 하단에 뜨거나, 스크롤 위치에 따라 보이지 않는 문제 (Context Stacking 이슈).
 - **수정**:
