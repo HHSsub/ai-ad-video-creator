@@ -110,6 +110,14 @@
   - ✅ 파일 기반 세션 저장 기능 정상 작동 (fs 모듈 사용)
 - **상태**: ✅ 100% 완료
 
+### 2026-01-10 19:15 - [CRITICAL] Aspect Ratio 로드 실패 (SyntaxError) 수정
+- **문제**: `Step1Manual.jsx`에서 존재하지 않는 엔드포인트(`/nexxii/api/admin-engines`)를 호출하여 404 HTML 응답을 JSON으로 파싱하려다 에러 발생
+- **수정**:
+  - URL을 올바른 경로(`/api/engines`)로 수정
+  - 하드코딩된 `/nexxii` 제거 및 환경변수(`VITE_API_BASE_URL`) 사용
+  - 응답 데이터 구조 접근 방식 수정 (`data.engines.currentEngine` → `data.currentEngine`)
+- **결과**: ✅ Aspect Ratio 목록 정상 로드
+
 ### 2026-01-10 19:10 - [CRITICAL] Step2 useRef 누락 수정
 - **문제**: Auto-Resume 기능 구현 중 `useRef`를 사용했으나 import 문에서 누락되어 Step2 진입 시 클라이언트 크래시 발생
 - **수정**: `src/components/Step2.jsx` 상단 import문에 `useRef` 추가

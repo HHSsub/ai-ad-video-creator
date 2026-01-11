@@ -25,11 +25,13 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
   useEffect(() => {
     const loadAspectRatios = async () => {
       try {
-        const response = await fetch('/nexxii/api/admin-engines');
+        const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+        const response = await fetch(`${apiBase}/api/engines`);
         const data = await response.json();
-        if (data.success && data.engines?.currentEngine?.textToImage) {
-          const engine = data.engines.currentEngine.textToImage;
-          const availableEngine = data.engines.availableEngines?.textToImage?.find(
+
+        if (data.success && data.currentEngine?.textToImage) {
+          const engine = data.currentEngine.textToImage;
+          const availableEngine = data.availableEngines?.textToImage?.find(
             e => e.model === engine.model
           );
           if (availableEngine?.supportedAspectRatios) {
