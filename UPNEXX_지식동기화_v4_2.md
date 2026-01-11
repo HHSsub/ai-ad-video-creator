@@ -97,6 +97,12 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-11 17:25 - [HOTFIX] ReferenceError (TDZ) 런타임 에러 수정 (Task Z-6)
+- **문제**: `npm run build`는 통과했으나 실행 시 `Uncaught ReferenceError: Cannot access 'xe' before initialization` 발생 (TDZ 에러).
+- **원인**: `Step4.jsx`에서 `useEffect` Dependency Array(`[images.length]`)가 `images` 변수 선언보다 위에 있어, 초기화 전 접근이 발생함.
+- **수정**: `permissions`, `styles`, `images`, `sortedImages` 등 파생 변수 선언부를 컴포넌트 최상단(`useState` 직후, `useEffect` 이전)으로 이동.
+- **결과**: ✅ `npm run build` 통과 및 런타임 정상화 예상.
+
 ### 2026-01-11 17:15 - [HOTFIX] Step 4 빌드 에러 긴급 수정 (Task Z-5)
 - **문제**: `Step4.jsx` 편집 중 중복 함수 선언(`handleDeleteScene`, `handleToggleSceneSelection`) 및 문법 에러(`;` misplacement)로 빌드 실패.
 - **조치**: 중복된 함수 선언부를 제거하고, 컴포넌트 마지막의 잘못된 닫는 괄호 및 세미콜론 수정.

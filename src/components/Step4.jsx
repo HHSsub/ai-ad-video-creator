@@ -64,6 +64,23 @@ const Step4 = ({
   const [selectedScenes, setSelectedScenes] = useState([]);
   const [forceUpdate, setForceUpdate] = useState(0); // 강제 리렌더링용
 
+  const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
+
+  const styles = storyboard?.styles || [];
+  const selectedStyle = styles.find(s => s.concept_id === selectedConceptId || s.conceptId === selectedConceptId);
+  // 🔥 forceUpdate를 의존성에 추가하여 리렌더링 유도
+  const images = selectedStyle?.images || [];
+
+  const finalVideo = storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId);
+
+  const sortedImages = [...images].sort((a, b) => a.sceneNumber - b.sceneNumber);
+
+  const log = (msg) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, `[${timestamp}] ${msg}`]);
+    console.log(`[Step4] ${msg}`);
+  };
+
   // 🔥 초기 진입 시 모든 씬 선택 상태로 초기화
   useEffect(() => {
     if (images.length > 0 && selectedScenes.length === 0) {
@@ -137,22 +154,7 @@ const Step4 = ({
     });
   };
 
-  const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
-  const styles = storyboard?.styles || [];
-  const selectedStyle = styles.find(s => s.concept_id === selectedConceptId || s.conceptId === selectedConceptId);
-  // 🔥 forceUpdate를 의존성에 추가하여 리렌더링 유도
-  const images = selectedStyle?.images || [];
-
-  const finalVideo = storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId);
-
-  const sortedImages = [...images].sort((a, b) => a.sceneNumber - b.sceneNumber);
-
-  const log = (msg) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setLogs(prev => [...prev, `[${timestamp}] ${msg}`]);
-    console.log(`[Step4] ${msg}`);
-  };
 
 
 
