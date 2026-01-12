@@ -69,32 +69,44 @@ export function getTextToImageEngine() {
  * Image-to-Video 엔진 설정 가져오기
  */
 export function getImageToVideoEngine() {
-  const config = loadEngineConfig();
-  const current = config.currentEngine?.imageToVideo;
+  try {
+    // 🔥 전체 engines.json 로드
+    if (!fs.existsSync(ENGINES_FILE)) {
+      console.error('[getImageToVideoEngine] engines.json 파일이 없습니다.');
+      return {};
+    }
 
-  if (!current) {
-    console.error('❌ [Config] No current imageToVideo engine defined');
+    const data = fs.readFileSync(ENGINES_FILE, 'utf8');
+    const enginesData = JSON.parse(data);
+    const current = enginesData.currentEngine?.imageToVideo;
+
+    if (!current) {
+      console.error('❌ [Config] No current imageToVideo engine defined');
+      return {};
+    }
+
+    // 🔥 Find full metadata from availableEngines to ensure we have supportedDurations
+    const availableList = enginesData.availableEngines?.imageToVideo || [];
+    const fullJson = availableList.find(e => e.id === current.id || (e.model === current.model && e.provider === current.provider));
+
+    if (fullJson) {
+      // Merge supportedDurations and other missing meta into current (current takes precedence for params)
+      return {
+        ...fullJson, // Base defaults
+        ...current,  // User overrides (like parameters)
+        parameters: {
+          ...fullJson.parameters,
+          ...current.parameters
+        },
+        supportedDurations: fullJson.supportedDurations || current.supportedDurations || [] // Explicitly ensure this exists
+      };
+    }
+
+    return current;
+  } catch (error) {
+    console.error('[getImageToVideoEngine] 오류:', error);
     return {};
   }
-
-  // 🔥 Find full metadata from availableEngines to ensure we have supportedDurations
-  const availableList = config.availableEngines?.imageToVideo || [];
-  const fullJson = availableList.find(e => e.id === current.id || (e.model === current.model && e.provider === current.provider));
-
-  if (fullJson) {
-    // Merge supportedDurations and other missing meta into current (current takes precedence for params)
-    return {
-      ...fullJson, // Base defaults
-      ...current,  // User overrides (like parameters)
-      parameters: {
-        ...fullJson.parameters,
-        ...current.parameters
-      },
-      supportedDurations: fullJson.supportedDurations || current.supportedDurations || [] // Explicitly ensure this exists
-    };
-  }
-
-  return current;
 }
 
 /**
