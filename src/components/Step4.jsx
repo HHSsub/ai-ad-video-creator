@@ -351,18 +351,19 @@ const Step4 = ({
     // 현재 입력창에 있는 값 (한글일 수 있음)
     const currentInput = getEditedPrompt(sceneNumber, 'prompt', koreanPrompts[sceneNumber] || scene.prompt);
 
+    // 🔥 1. 즉시 재생성 상태로 변경 (UI 반응성 개선)
+    setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: true }));
+    setError(null);
     setIsTranslating(true);
+
     log(`씬 ${sceneNumber} 프롬프트 번역 및 재생성 시작...`);
 
     try {
-      // 1. 한글 -> 영문 번역
+      // 2. 한글 -> 영문 번역
       const englishPrompt = await translateText(currentInput, 'en');
       log(`번역 완료: ${currentInput.substring(0, 20)}... -> ${englishPrompt.substring(0, 20)}...`);
 
-      // 2. 번역된 영문 프롬프트로 재생성 요청 (기존 핸들러 로직 일부 차용)
-      setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: true }));
-      setError(null);
-
+      // 3. 번역된 영문 프롬프트로 재생성 요청
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
         headers: {
@@ -390,22 +391,23 @@ const Step4 = ({
       const data = await response.json();
 
       // 성공 시 이미지 URL 업데이트 (스토리보드 객체 직접 수정 및 강제 리렌더)
-      // 주의: 원본 배열을 찾아 수정해야 함
       console.log(`[Step4] 재생성된 이미지 URL: ${data.imageUrl}`);
 
       const targetImage = images.find(img => img.sceneNumber === sceneNumber);
       if (targetImage) {
         targetImage.imageUrl = `${data.imageUrl}?t=${Date.now()}`;
         targetImage.prompt = englishPrompt;
+        targetImage.koreanPrompt = currentInput; // 🔥 한글 프롬프트도 업데이트 (재번역 방지)
+        targetImage.status = 'regenerated';
 
-        // 🔥 백엔드 영구 저장 (Missing Logic Restored)
+        // 🔥 백엔드 영구 저장 (Full Persistence)
         try {
           await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
             body: JSON.stringify({ storyboard, formData })
           });
-          console.log(`[Step4] 씬 ${sceneNumber} 재생성 결과 저장 완료`);
+          console.log(`[Step4] 씬 ${sceneNumber} 재생성 결과(한글포함) 저장 완료`);
         } catch (saveErr) {
           console.error(`[Step4] 씬 ${sceneNumber} 저장 실패:`, saveErr);
         }
