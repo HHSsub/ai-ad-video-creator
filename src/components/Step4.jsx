@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import { forceScrollTop } from '../forceScrollTop';
@@ -82,11 +82,19 @@ const Step4 = ({
   // 🔥 forceUpdate를 의존성에 추가하여 리렌더링 유도
   const images = selectedStyle?.images || [];
 
-  // 🔥 씬 번호 강제 순차 재할당 (백엔드 데이터가 잘못되어도 UI는 항상 1,2,3...)
-  const renumberedImages = images.map((img, index) => ({
-    ...img,
-    sceneNumber: index + 1 // 강제로 순차 번호 할당
-  }));
+  // 🔥 씬 번호 강제 순차 재할당 (useMemo로 최적화)
+  const renumberedImages = useMemo(() => {
+    console.log('[Step4] 🔥 리넘버링 실행:', images.length, '개 씬');
+    const result = images.map((img, index) => {
+      const newNum = index + 1;
+      console.log(`  씬 리넘버링: ${img.sceneNumber} -> ${newNum}`);
+      return {
+        ...img,
+        sceneNumber: newNum
+      };
+    });
+    return result;
+  }, [images]);
 
   const finalVideo = storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId);
 

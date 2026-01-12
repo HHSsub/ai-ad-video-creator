@@ -376,6 +376,19 @@ router.delete('/:id', async (req, res) => {
     console.warn(`[projects DELETE] S3 삭제 모듈 로드 실패 (무시): ${importError.message}`);
   }
 
+  // 🔥 로컬 프로젝트 폴더 삭제 (projects/[project_id]/)
+  try {
+    const projectFolder = path.join(__dirname, '../../projects', id);
+    if (fs.existsSync(projectFolder)) {
+      fs.rmSync(projectFolder, { recursive: true, force: true });
+      console.log(`[projects DELETE] 🛠️ 로컬 폴더 삭제 완료: ${projectFolder}`);
+    } else {
+      console.log(`[projects DELETE] 로컬 폴더 없음 (스킵): ${projectFolder}`);
+    }
+  } catch (folderError) {
+    console.error(`[projects DELETE] 로컬 폴더 삭제 실패 (무시): ${folderError.message}`);
+  }
+
   // 프로젝트 삭제
   projectsData.projects.splice(projectIndex, 1);
 
@@ -386,7 +399,7 @@ router.delete('/:id', async (req, res) => {
     return res.status(500).json({ error: 'DB 저장 실패' });
   }
 
-  console.log(`[projects DELETE] ✅ 프로젝트 삭제 완료: ${id}`);
+  console.log(`[projects DELETE] ✅ 프로젝트 완전 삭제 완료: ${id}`);
   res.json({ success: true, message: '프로젝트 삭제됨' });
 });
 
