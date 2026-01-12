@@ -205,6 +205,40 @@ export default async function handler(req, res) {
         const taskId = createResult.data.task_id;
         console.log(`[convert-single-scene] Task Created: ${taskId} (Async Handoff)`);
 
+        // 🔥 Persist Processing Status to DB Immediately
+        // This ensures status is saved even if user refreshes page
+        const projectsFile = path.join(process.cwd(), 'config', 'projects.json');
+        if (fs.existsSync(projectsFile)) {
+            try {
+                const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+                const projectIndex = projectsData.projects.findIndex(p => p.id === projectId);
+
+                if (projectIndex !== -1) {
+                    const project = projectsData.projects[projectIndex];
+                    const conceptIndex = project.storyboard.styles.findIndex(s => s.conceptId === Number(conceptId));
+
+                    if (conceptIndex !== -1) {
+                        const images = project.storyboard.styles[conceptIndex].images;
+                        const imgIndex = images.findIndex(img => img.sceneNumber === Number(sceneNumber));
+
+                        if (imgIndex !== -1) {
+                            // Update Status
+                            images[imgIndex].videoStatus = 'processing';
+                            images[imgIndex].taskId = taskId;
+                            images[imgIndex].videoUrl = null; // Reset previous video if any
+
+                            // Save DB
+                            fs.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2));
+                            console.log(`[convert-single-scene] ✅ Persisted processing status for scene ${sceneNumber} to DB`);
+                        }
+                    }
+                }
+            } catch (dbErr) {
+                console.error('[convert-single-scene] ⚠️ Failed to persist status to DB:', dbErr);
+                // Don't fail the request, just log
+            }
+        }
+
         return res.json({
             success: true,
             processing: true, // Frontend signal to start polling

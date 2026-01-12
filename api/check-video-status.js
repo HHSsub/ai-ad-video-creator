@@ -125,6 +125,39 @@ export default async function handler(req, res) {
 
             console.log(`[check-video-status] Final Processed URL: ${s3Url}`);
 
+            // 🔥 Persist Processing Status to DB Immediately (Validation / Completion)
+            const projectsFile = path.join(process.cwd(), 'config', 'projects.json');
+            if (fs.existsSync(projectsFile)) {
+                try {
+                    const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+                    const projectIndex = projectsData.projects.findIndex(p => p.id === projectId);
+
+                    if (projectIndex !== -1) {
+                        const project = projectsData.projects[projectIndex];
+                        const conceptIndex = project.storyboard.styles.findIndex(s => s.conceptId === Number(conceptId));
+
+                        if (conceptIndex !== -1) {
+                            const images = project.storyboard.styles[conceptIndex].images;
+                            const imgIndex = images.findIndex(img => img.sceneNumber === Number(sceneNumber));
+
+                            if (imgIndex !== -1) {
+                                // Update Status & URL
+                                images[imgIndex].videoStatus = 'completed';
+                                images[imgIndex].videoUrl = s3Url;
+                                images[imgIndex].status = 'video_done'; // Ensure consistency
+                                images[imgIndex].taskId = null; // Clear taskId on completion
+
+                                // Save DB
+                                fs.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2));
+                                console.log(`[check-video-status] ✅ Persisted completion status and URL for scene ${sceneNumber} to DB`);
+                            }
+                        }
+                    }
+                } catch (dbErr) {
+                    console.error('[check-video-status] ⚠️ Failed to persist completion to DB:', dbErr);
+                }
+            }
+
             return res.status(200).json({
                 status: 'completed',
                 videoUrl: s3Url,

@@ -27,7 +27,8 @@ import imageToVideo from '../api/image-to-video.js';
 import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 import compileVideos from '../api/compile-videos.js';
-import convertSingleScene from '../api/convert-single-scene.js'; // 싱글 씨인 변환
+import convertSingleSceneHandler from '../api/convert-single-scene.js'; // 싱글 씨인 변환
+import translateProxyHandler from '../api/translate-proxy.js'; // 싱글 씨인 변환
 
 import debug from '../api/debug.js';
 import applyBgm from '../api/apply-bgm.js';
@@ -299,6 +300,8 @@ app.get('/health', (req, res) => {
 */
 
 app.get('/api/prompts/get', promptsGetHandler);
+import translateProxyHandler from '../api/translate-proxy.js'; // Import handler
+app.post('/api/translate', translateProxyHandler);
 app.post('/api/prompts/update', promptsUpdateHandler);
 
 app.get('/api/prompts/versions', async (req, res) => { // 수정됨: /api/ 추가

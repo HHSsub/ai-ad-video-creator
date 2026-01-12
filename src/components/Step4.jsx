@@ -396,7 +396,8 @@ const Step4 = ({
       setError(`씬 ${sceneNumber} 재생성 오류: ${err.message}`);
       log(`씬 ${sceneNumber} 재생성 오류: ${err.message}`);
     } finally {
-      setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: false }));
+      setIsRegenerating(false);
+      setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
     }
   };
 
@@ -1144,47 +1145,53 @@ const Step4 = ({
 
                     <div className="grid md:grid-cols-3 gap-6">
                       <div className="md:col-span-1">
-                        <div className="aspect-square bg-black rounded-lg overflow-hidden mb-2 relative group">
-                          {/* 🔥 로딩 스켈레톤 (이미지 로드 전 표시) */}
-                          {!imageLoadStates[img.sceneNumber] && img.imageUrl && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800 animate-pulse z-10">
-                              <div className="w-8 h-8 border-4 border-gray-600 border-t-blue-500 rounded-full animate-spin mb-2"></div>
-                              <span className="text-gray-400 text-xs">이미지 로딩 중...</span>
+                        <div className="relative aspect-video bg-black rounded-lg overflow-hidden border border-gray-700 group">
+                          {img.imageUrl ? (
+                            <>
+                              <img
+                                src={`${getImageSrc(img.imageUrl)}?t=${Date.now()}`}
+                                alt={`Scene ${img.sceneNumber}`}
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = 'https://via.placeholder.com/400x225?text=Image+Load+Error';
+                                }}
+                              />
+                              {/* Overlay for regenerate/convert status */}
+                              {isRegenerating || convertingScenes[img.sceneNumber] ? (
+                                <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-10">
+                                  <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-3"></div>
+                                  <span className="text-white font-medium text-sm">
+                                    {isRegenerating ? '이미지 생성 중...' : '영상 변환 중...'}
+                                  </span>
+                                </div>
+                              ) : null}
+                            </>
+                          ) : (
+                            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+                              이미지 없음
                             </div>
                           )}
 
-                          {img.imageUrl ? (
-                            <img
-                              src={getImageSrc(img.imageUrl)}
-                              alt={`Scene ${img.sceneNumber}`}
-                              loading="lazy"
-                              decoding="async"
-                              className={`w-full h-full object-cover transition-opacity duration-500 ${imageLoadStates[img.sceneNumber] ? 'opacity-100' : 'opacity-0'
-                                }`}
-                              onLoad={() => handleImageLoad(img.sceneNumber)}
-                              onError={(e) => {
-                                console.error(`[Step4] 씬 ${img.sceneNumber} 이미지 로드 실패:`, img.imageUrl);
-                                e.target.style.display = 'none';
-                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-500 text-sm">이미지 로드 실패</div>';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-500">
-                              이미지 없음
+                          {/* Video Preview Overlay */}
+                          {!convertingScenes[img.sceneNumber] && img.videoUrl && (
+                            <div className="absolute bottom-2 right-2 flex gap-1">
+                              <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-md shadow-lg flex items-center">
+                                🎬 영상 완료
+                              </span>
                             </div>
                           )}
                         </div>
 
-                        {img.videoUrl && (
-                          <video
-                            src={getVideoSrc(img.videoUrl)}
-                            className="w-full rounded-lg bg-black"
-                            controls
-                            muted
-                            onError={(e) => {
-                              console.error(`[Step4] 씬 ${img.sceneNumber} 영상 로드 실패:`, img.videoUrl);
-                            }}
-                          />
+                        {/* Video Player Check */}
+                        {img.videoUrl && !convertingScenes[img.sceneNumber] && (
+                          <div className="mt-2 text-center">
+                            <video
+                              src={getVideoSrc(img.videoUrl)}
+                              controls
+                              className="w-full rounded-lg border border-gray-700 bg-black"
+                            />
+                          </div>
                         )}
                       </div>
 
