@@ -68,9 +68,13 @@ const AdminPanel = ({ currentUser }) => {
 
   const versionsPerPage = 10;
 
-  // ===== 초기 로드 =====
+  // ===== 초기 엔진 정보 로드 (마운트 시 1회) =====
   useEffect(() => {
-    loadEngineInfo();
+    loadEngineInfo(); // 🔥 이것이 selectedImageEngine/selectedVideoEngine을 실제 설정과 동기화
+  }, []);
+
+  // ===== 탭별 초기 로드 =====
+  useEffect(() => {
     loadAllPrompts();
     if (activeMainTab === 'storage') {
       browseDirectory('');

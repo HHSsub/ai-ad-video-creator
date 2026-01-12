@@ -222,7 +222,7 @@ Final (New Normal): Brightest, Warmest, Halo effect.
 
 
 
-Analyze: brandName : {brandName}, industryCategory : {industryCategory}, productServiceCategory : {productServiceCategory}, productServiceName : {productServiceName}, videoPurpose : {videoPurpose}, videoLength : {videoLength}, aspectRatioCode : {aspectRatioCode}, coreTarget : {coreTarget}, coreDifferentiation : {coreDifferentiation} (USP), videoRequirements : {videoRequirements}, brandLogo : {brandLogo}.
+Analyze: brandName : {brandName}, industryCategory : {industryCategory}, productServiceCategory : {productServiceCategory}, productServiceName : {productServiceName}, videoPurpose : {videoPurpose}, videoLength : {videoLength}, 🔥 TOTAL SCENES REQUIRED : {sceneCountPerConcept} (MANDATORY: You MUST generate EXACTLY this many scenes per concept), aspectRatioCode : {aspectRatioCode}, coreTarget : {coreTarget}, coreDifferentiation : {coreDifferentiation} (USP), videoRequirements : {videoRequirements}, brandLogo : {brandLogo}.
 
 
 

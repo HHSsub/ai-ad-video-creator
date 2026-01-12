@@ -83,10 +83,16 @@ function getSceneCount(videoLength) {
   const lengthStr = String(videoLength).replace(/[^0-9]/g, '');
   const length = parseInt(lengthStr, 10);
 
-  if (length <= 5) return 3;
-  if (length <= 10) return 5;
-  if (length <= 20) return 10;
-  return 15;
+  console.log(`[getSceneCount] 입력: "${videoLength}" → 숫자: ${length}`);
+
+  let sceneCount;
+  if (length <= 5) sceneCount = 3;
+  else if (length <= 10) sceneCount = 5;
+  else if (length <= 20) sceneCount = 10;
+  else sceneCount = 15;
+
+  console.log(`[getSceneCount] ✅ ${length}초 → ${sceneCount}개 씬`);
+  return sceneCount;
 }
 
 // 🔥 100% 동적 Aspect Ratio 매핑 (engines.json 기반)
@@ -749,6 +755,10 @@ async function processStoryboardAsync(body, username, sessionId) {
     console.log("🔥 [SERVER] BODY RECEIVED:", body);
     console.log("🔥 [SERVER] userdescription =", userdescription);
 
+    // 🔥 씬 개수 사전 계산 (Gemini에 전달하기 위해)
+    const sceneCountPerConcept = getSceneCount(videoLength);
+    console.log(`[storyboard-init] 📊 계산된 씬 개수: ${videoLength} → ${sceneCountPerConcept}개`);
+
     await updateSession(sessionId, {
       progress: {
         phase: 'GEMINI',
@@ -777,11 +787,12 @@ async function processStoryboardAsync(body, username, sessionId) {
       productServiceName: productServiceName || '',
       videoPurpose: videoPurpose || 'product',
       videoLength: videoLength || '10초',
+      sceneCountPerConcept: sceneCountPerConcept, // 🔥 명시적으로 씬 개수 전달
       coreTarget: coreTarget || '',
       coreDifferentiation: coreDifferentiation || '',
       videoRequirements: body.videoRequirements || '없음',
       brandLogo: (imageUpload && imageUpload.url && (videoPurpose === 'service' || videoPurpose === 'brand')) ? '업로드됨' : '없음',
-      productImage: (imageUpload && imageUpload.url && (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education')) ? '업로드 됨' : '없음',
+      productImage: (imageUpload && imageUpload.url && (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education')) ? '업로드됨' : '없음',
       aspectRatioCode: mapAspectRatio(aspectRatioCode || aspectRatio),
       userdescription: userdescription || ''
     };
@@ -835,7 +846,7 @@ async function processStoryboardAsync(body, username, sessionId) {
     const promptKey = generatePromptKey(mode === 'manual' ? 'manual' : 'auto', videoPurpose);
     console.log(`[storyboard-init] 💾 Gemini 응답 저장 중... (promptKey: ${promptKey})`);
     saveGeminiResponse(promptKey, 'storyboard_unified', body, fullOutput);
-    const sceneCountPerConcept = getSceneCount(videoLength);
+    // sceneCountPerConcept는 이미 759번 라인에서 계산됨
     const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
     console.log('[DEBUG] 📊 Gemini JSON 전체 구조:');
