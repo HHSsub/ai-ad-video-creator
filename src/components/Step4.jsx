@@ -108,7 +108,10 @@ const Step4 = ({
 
     try {
       // 2. 씬 삭제 API 호출 (Atomically handled by backend)
-      const delResponse = await fetch(`${API_BASE}/api/delete-scene`, {
+      const requestUrl = `${API_BASE}/api/delete-scene`;
+      console.log(`[Step4] 씬 삭제 요청: ${requestUrl}`);
+
+      const delResponse = await fetch(requestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
