@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../server/utils/sessionStore.js';
+import { checkUsageLimit, incrementUsage } from './users.js'; // 🔥 Use single source of truth
 import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
 import { getPromptFilePath, getGeminiResponsesDir } from '../src/utils/enginePromptHelper.js';
 
@@ -234,111 +235,17 @@ function getPromptFile(videoPurpose, mode = 'auto') {
   return 'product';
 }
 
-const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
-
-function loadUsers() {
-  try {
-    if (!fs.existsSync(USERS_FILE)) return {};
-    const data = fs.readFileSync(USERS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('[storyboard-init] 사용자 데이터 로드 오류:', error);
-    return {};
-  }
-}
-
-function saveUsers(users) {
-  try {
-    const data = JSON.stringify(users, null, 2);
-    fs.writeFileSync(USERS_FILE, data, 'utf8');
-    return true;
-  } catch (error) {
-    console.error('[storyboard-init] 사용자 데이터 저장 오류:', error);
-    return false;
-  }
-}
-
-function checkAndResetDaily(user) {
-  const today = new Date().toISOString().split('T')[0];
-  if (user.lastResetDate !== today) {
-    user.usageCount = 0;
-    user.lastResetDate = today;
-    return true;
-  }
-  return false;
-}
-
-function checkUsageLimit(username) {
-  try {
-    if (!username) return { allowed: false, message: '사용자 정보가 없습니다. 관리자에게 문의하세요.' };
-    const users = loadUsers();
-    const user = users[username];
-    if (!user) return { allowed: false, message: '존재하지 않는 사용자입니다. 관리자에게 문의하세요.' };
-    checkAndResetDaily(user);
-
-    // 🔥 수정: dailyLimit → usageLimit (실제 DB 필드명)
-    if (user.usageLimit === null || user.usageLimit === undefined) {
-      // 무제한 사용자
-      return { allowed: true, user };
-    }
-
-    if (user.usageCount >= user.usageLimit) {
-      return {
-        allowed: false,
-        message: `사용 한도를 초과했습니다. (전체: ${user.usageCount}/${user.usageLimit}회)\n관리자에게 문의하세요.`
-      };
-    }
-    return { allowed: true, user };
-  } catch (error) {
-    console.error('[checkUsageLimit] 오류:', error);
-    return { allowed: false, message: '사용 한도 확인 중 오류가 발생했습니다. 관리자에게 문의하세요.' };
-  }
-}
-
-function incrementUsageCount(username) {
-  try {
-    const users = loadUsers();
-    const user = users[username];
-    if (user) {
-      user.usageCount = (user.usageCount || 0) + 1;
-      users[username] = user;
-      saveUsers(users);
-    }
-  } catch (error) {
-    console.error('[storyboard-init] 사용 횟수 증가 오류:', error);
-  }
-}
+// ❌ REMOVED: Duplicate User Management Logic
+// checkUsageLimit and incrementUsage are now imported from ./users.js
+// This prevents logic conflicts (e.g., daily reset vs total limit) and sync issues.
 
 function saveGeminiResponse(promptKey, step, formData, fullResponse) {
   try {
-    // 🔥 수정: require 대신 직접 경로 계산
     const mode = promptKey.includes('manual') ? 'manual' : 'auto';
 
-    // 🔥 engineId 생성 로직 (enginePromptHelper.js의 generateEngineId와 동일)
-    const enginesPath = path.join(process.cwd(), 'config', 'engines.json');
-    let engineId = 'default';
-
-    try {
-      if (fs.existsSync(enginesPath)) {
-        const enginesData = JSON.parse(fs.readFileSync(enginesPath, 'utf8'));
-        const engines = enginesData.currentEngine;
-        const textToImageModel = engines.textToImage?.model || 'unknown';
-        const imageToVideoModel = engines.imageToVideo?.model || 'unknown';
-        engineId = `${textToImageModel}_${imageToVideoModel}`;
-      }
-    } catch (engineError) {
-      console.warn('[saveGeminiResponse] 엔진 ID 생성 실패, 기본값 사용:', engineError.message);
-    }
-
-    // 🔥 responses 디렉토리 경로
-    const responsesPath = path.join(
-      process.cwd(),
-      'public',
-      'prompts',
-      engineId,
-      mode,
-      'responses'
-    );
+    // 🔥 Use centralized helper for directory path
+    // videoPurpose is derived from promptKey roughly, but checking mode is safer for directory structure
+    const responsesPath = getGeminiResponsesDir(mode);
 
     // 디렉토리 생성 (없으면)
     if (!fs.existsSync(responsesPath)) {
@@ -360,7 +267,7 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
 
     fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
 
-    console.log(`[saveGeminiResponse] ✅ 저장 완료: ${fileName}`);
+    console.log(`[saveGeminiResponse] ✅ 저장 완료: ${fileName} (Path: ${filePath})`);
     return { success: true, fileName };
   } catch (error) {
     console.error('[saveGeminiResponse] ❌ 저장 실패:', error);
@@ -426,7 +333,9 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
       };
 
       for (let j = 0; j < sceneMatches.length; j++) {
-        const sceneNum = parseInt(sceneMatches[j][1]);
+        // 🔥 Force sequential numbering to prevent gaps (e.g. 1,2,4,5 -> 1,2,3,4)
+        const sceneNum = j + 1;
+        const originalSceneNum = parseInt(sceneMatches[j][1]); // Keep explicit ref if needed debugging
         const timecode = sceneMatches[j][2].trim();
         const sceneStartIdx = sceneMatches[j].index;
         const sceneEndIdx = j < sceneMatches.length - 1 ? sceneMatches[j + 1].index : conceptText.length;
@@ -452,6 +361,31 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
             };
           } catch (e) {
             console.error(`JSON 파싱 실패 (씬 ${sceneNum}):`, e.message);
+          }
+        } else {
+          // 🔥 Fallback: 정규식 실패 시 Nuclear parser 시도
+          const anyJsons = extractAnyJSON(sceneText);
+          if (anyJsons.length >= 3) {
+            try {
+              // 보통 순서대로 image, motion, copy임 (프롬프트 구조상)
+              const imagePromptJSON = JSON.parse(anyJsons[0]);
+              const motionPromptJSON = JSON.parse(anyJsons[1]);
+              const copyJSON = JSON.parse(anyJsons[2]);
+
+              conceptData[`scene_${sceneNum}`] = {
+                title: `Scene ${sceneNum}`,
+                timecode: timecode,
+                visual_description: visualDescription,
+                image_prompt: imagePromptJSON,
+                motion_prompt: motionPromptJSON,
+                copy: copyJSON
+              };
+              console.log(`[parseUnifiedConceptJSON] ☢️ Nuclear Parser로 씬 ${sceneNum} 복구 성공`);
+            } catch (e) {
+              console.error(`[parseUnifiedConceptJSON] Nuclear Parser 복구 실패 (씬 ${sceneNum}):`, e);
+            }
+          } else {
+            console.warn(`[parseUnifiedConceptJSON] ⚠️ 씬 ${sceneNum} JSON 블록 부족 (Found: ${jsonBlocks.length}, Nuclear: ${anyJsons.length})`);
           }
         }
       }
@@ -495,6 +429,55 @@ function extractJSONBlocks(text) {
     jsonBlocks.push(match.content);
   });
   return jsonBlocks;
+}
+
+// 🔥 Nuclear Option: Generic JSON Extractor (Fallback)
+function extractAnyJSON(text) {
+  const jsonObjects = [];
+  let braceCount = 0;
+  let startIndex = -1;
+  let inString = false;
+  let escape = false;
+
+  // Simple parser to find top-level balanced braces
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inString) {
+      if (char === '\\' && !escape) {
+        escape = true;
+      } else if (char === '"' && !escape) {
+        inString = false;
+      } else {
+        escape = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      if (braceCount === 0) startIndex = i;
+      braceCount++;
+    } else if (char === '}') {
+      braceCount--;
+      if (braceCount === 0 && startIndex !== -1) {
+        const potentialJson = text.substring(startIndex, i + 1);
+        try {
+          // Validate if it is parseable JSON
+          JSON.parse(potentialJson);
+          jsonObjects.push(potentialJson);
+        } catch (e) {
+          // Ignore invalid JSON fragments
+        }
+        startIndex = -1; // Reset
+      }
+    }
+  }
+  return jsonObjects;
 }
 
 export { parseUnifiedConceptJSON, extractJSONBlocks };
@@ -1042,7 +1025,8 @@ async function processStoryboardAsync(body, username, sessionId) {
       audioEditingGuide: audioEditingGuide  // Section 3 정보 추가
     };
 
-    incrementUsageCount(username);
+    // 🔥🔥 사용 횟수 차감 (중요: 단일 소스 사용)
+    incrementUsage(username);
 
     const finalStoryboard = {
       success: true,
