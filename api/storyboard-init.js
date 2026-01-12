@@ -285,7 +285,7 @@ function checkUsageLimit(username) {
     if (user.usageCount >= user.usageLimit) {
       return {
         allowed: false,
-        message: `일일 사용 한도를 초과했습니다. (오늘: ${user.usageCount}/${user.usageLimit}회)\n관리자에게 문의하세요.`
+        message: `사용 한도를 초과했습니다. (전체: ${user.usageCount}/${user.usageLimit}회)\n관리자에게 문의하세요.`
       };
     }
     return { allowed: true, user };
