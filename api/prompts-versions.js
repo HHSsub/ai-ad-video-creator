@@ -19,7 +19,7 @@ export async function getVersions(req, res) {
     }
 
     try {
-        const { engineId, promptType } = req.query;
+        const { engineId, promptType } = req.params; // 🔥 path parameter 사용
 
         if (!engineId || !promptType) {
             return res.status(400).json({
@@ -104,7 +104,7 @@ export async function getResponses(req, res) {
     }
 
     try {
-        const { engineId, promptType } = req.query;
+        const { engineId, promptType } = req.params; // 🔥 path parameter 사용
 
         if (!engineId || !promptType) {
             return res.status(400).json({
@@ -190,7 +190,7 @@ export async function getVersionContent(req, res) {
     }
 
     try {
-        const { engineId, promptType, versionId } = req.query;
+        const { engineId, promptType, versionId } = req.params; // 🔥 path parameter 사용
 
         if (!engineId || !promptType || !versionId) {
             return res.status(400).json({
@@ -250,7 +250,7 @@ export async function getResponseContent(req, res) {
     }
 
     try {
-        const { engineId, promptType, responseId } = req.query;
+        const { engineId, promptType, responseId } = req.params; // 🔥 path parameter 사용
 
         if (!engineId || !promptType || !responseId) {
             return res.status(400).json({
