@@ -287,6 +287,9 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
 
   const handleSubmit = () => {
     if (validateForm()) {
+      // 🔥 v4.3: 세션 시작 로그 (App.jsx -> Step2 전달 과정 추적용)
+      const sessionId = `session_${Date.now()}_${user?.username || 'anonymous'}`;
+      console.log('[Step1Auto] 🚀 정보 입력 완료, 다음 단계로 이동:', { sessionId, videoLength: formData.videoLength });
       onNext();
     }
   };

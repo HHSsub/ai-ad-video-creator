@@ -494,6 +494,10 @@ export { parseUnifiedConceptJSON, extractJSONBlocks };
 // ============================================================
 
 async function updateSession(sessionId, updateData) {
+  if (!sessionId || sessionId === 'undefined') {
+    console.warn('[storyboard-init] updateSession skipped: sessionId is invalid', { sessionId });
+    return false;
+  }
   try {
     if (updateData.progress) {
       sessionStore.updateProgress(sessionId, updateData.progress);
@@ -846,8 +850,14 @@ async function processStoryboardAsync(body, username, sessionId) {
     const { generatePromptKey } = await import('../src/utils/enginePromptHelper.js');
     const promptKey = generatePromptKey(mode === 'manual' ? 'manual' : 'auto', videoPurpose);
     console.log(`[storyboard-init] 💾 Gemini 응답 저장 중... (promptKey: ${promptKey})`);
-    saveGeminiResponse(promptKey, 'storyboard_unified', body, fullOutput);
-    // sceneCountPerConcept는 이미 759번 라인에서 계산됨
+
+    // 🔥 sessionId가 있을 때만 저장 진행 (undefined 방지)
+    if (sessionId) {
+      saveGeminiResponse(promptKey, 'storyboard_unified', body, fullOutput);
+    } else {
+      console.warn('[storyboard-init] sessionId가 없어 응답 저장을 건너뜁니다.');
+    }
+
     const compositingScenes = detectProductCompositingScenes(fullOutput, videoPurpose);
     const mcJson = parseUnifiedConceptJSON(fullOutput, mode);
     console.log('[DEBUG] 📊 Gemini JSON 전체 구조:');
