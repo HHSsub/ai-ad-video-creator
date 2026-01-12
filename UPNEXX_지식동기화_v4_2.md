@@ -123,6 +123,8 @@
   - **Logic 추가**: `useEffect`로 초기 진입 시 영문 프롬프트를 한글로 번역하여 `koreanPrompts`에 저장.
   - **Regeneration**: 사용자가 한글로 수정한 내용을 `translateText`로 영문 변환 후 API 전송하도록 `handleRegenerateWithTranslation` 구현.
 - **결과**: ✅ 기존 프롬프트가 한글로 보이며, 한글로 수정 후 재생성 가능. (단, API Key 누락 시 영문으로 fallback 될 수 있음 -> .env 수정 완료)
+- **추가 수정 (13:25)**: `useEffect` 의존성 배열 수정 및 번역 강제 실행 로직 보강 (로드 시점 번역 누락 방지).
+
 
 
 ### 2026-01-12 12:55 - [CRITICAL] 서버 ReferenceError (변수명 불일치) 수정 (Task Z-15)

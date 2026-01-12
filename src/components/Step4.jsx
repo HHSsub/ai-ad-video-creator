@@ -239,25 +239,36 @@ const Step4 = ({
     }
   };
 
-  // 🔥 초기 로드 시 영문 프롬프트 -> 한글 번역
+  // 🔥 초기 로드 시 영문 프롬프트 -> 한글 번역 (강제 실행 로직 보강)
   useEffect(() => {
     const fetchTranslations = async () => {
-      if (images.length === 0) return;
+      // 1. 이미지가 없으면 종료
+      if (!images || images.length === 0) return;
 
-      // 이미 번역된 씬은 건너뛰기 (최적화)
-      const toTranslate = images.filter(img => img.prompt && !koreanPrompts[img.sceneNumber]);
+      // 2. 번역 대상 추출: 프롬프트가 있고 아직 번역되지 않은 것
+      // (koreanPrompts 키가 없거나 비어있는 경우)
+      const toTranslate = images.filter(img =>
+        img.prompt &&
+        (!koreanPrompts[img.sceneNumber] || koreanPrompts[img.sceneNumber] === '번역 중...')
+      );
+
       if (toTranslate.length === 0) return;
 
-      setIsTranslating(true);
+      // setIsTranslating(true); // UI 깜빡임 방지 위해 제거 (백그라운드 처리)
+
       try {
+        console.log(`[Step4] 번역 시작 (${toTranslate.length}개)...`);
+
         const newTranslations = {};
         // 병렬 처리로 속도 향상
         await Promise.all(toTranslate.map(async (img) => {
+          // 이미 번역 요청 중인 상태면 스킵 (koreanPrompts에 '번역 중...' 마킹할 수도 있음)
           const translated = await translateText(img.prompt, 'ko');
           newTranslations[img.sceneNumber] = translated;
         }));
 
         setKoreanPrompts(prev => ({ ...prev, ...newTranslations }));
+        console.log('[Step4] 번역 완료:', Object.keys(newTranslations));
       } catch (err) {
         console.error('프롬프트 번역 실패:', err);
       } finally {
@@ -266,7 +277,7 @@ const Step4 = ({
     };
 
     fetchTranslations();
-  }, [images, koreanPrompts]);
+  }, [images]); // koreanPrompts 의존성 제거하여 무한 루프 방지
 
   // 🔥 한글 입력 -> 영문 번역 -> 이미지 재생성 wrapper
   const handleRegenerateWithTranslation = async (sceneNumber) => {
@@ -937,9 +948,33 @@ const Step4 = ({
   };
 
   // 🔥 모달 열기 (위치 계산: 버튼 중앙 정렬 - User Requested)
-  const handleOpenPersonModal = (scene) => {
+  // 🔥 모달 열기 (버튼 위치 기준)
+  const handleOpenPersonModal = (scene, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 1. 버튼 위치 및 크기 계산
+    const rect = e.currentTarget.getBoundingClientRect();
+    const modalWidth = 320; // Type Selection Modal Width
+    const modalHeight = 400; // Approx Height
+
+    // 2. 버튼 바로 아래/중앙에 위치시키기
+    let left = rect.left + (rect.width / 2) - (modalWidth / 2);
+    let top = rect.top + rect.height + 10; // 10px Gap
+
+    // 3. 화면 밖으로 나가는 것 방지
+    if (left < 20) left = 20;
+    if (left + modalWidth > window.innerWidth - 20) {
+      left = window.innerWidth - modalWidth - 20;
+    }
+    if (top + modalHeight > window.innerHeight - 20) {
+      // 아래 공간 부족 시 버튼 위로
+      top = rect.top - modalHeight - 10;
+    }
+
+    setModalPosition({ top, left });
     setSelectedScene(scene);
-    setSynthesisMode(null); // Reset to selection mode
+    setSynthesisMode(null);
     setUploadFile(null);
     setUploadPreview(null);
     setShowPersonModal(true);
@@ -1429,7 +1464,7 @@ const Step4 = ({
                             {/* 🔥 인물 합성 버튼 추가 (이벤트 전달) */}
                             {permissions.editPrompt && (
                               <button
-                                onClick={(e) => handleOpenPersonModal(img.sceneNumber, e)}
+                                onClick={(e) => handleOpenPersonModal(img, e)}
                                 disabled={loading || isRegenerating}
                                 className="w-full px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
                               >
