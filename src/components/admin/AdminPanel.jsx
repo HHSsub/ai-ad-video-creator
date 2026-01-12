@@ -836,9 +836,9 @@ const AdminPanel = ({ currentUser }) => {
                     {geminiResponses.length === 0 ? (
                       <div className="py-12 text-center text-gray-600 text-xs">응답 내역이 없습니다.</div>
                     ) : (
-                      geminiResponses.map(res => (
+                      geminiResponses.map((res, index) => (
                         <div
-                          key={res.fileName}
+                          key={res.id || res.fileName || `res-${index}`}
                           onClick={() => viewResponseDetail(res.fileName)}
                           className="p-3 bg-gray-900/50 border border-gray-800 rounded-lg hover:border-gray-600 cursor-pointer group transition-all"
                         >

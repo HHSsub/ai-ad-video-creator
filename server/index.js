@@ -407,15 +407,11 @@ app.post('/api/prompts/restore', async (req, res) => {
 
 // 🔥 프롬프트 버전 관리 API
 app.get('/api/prompts/versions/:engineId/:promptType', (req, res) => getVersions(req, res));
-app.get('/nexxii/api/prompts/versions/:engineId/:promptType', (req, res) => getVersions(req, res));
 app.get('/api/prompts/version-content/:engineId/:promptType/:versionId', (req, res) => getVersionContent(req, res));
-app.get('/nexxii/api/prompts/version-content/:engineId/:promptType/:versionId', (req, res) => getVersionContent(req, res));
 
 // 🔥 Gemini 응답 조회 API
 app.get('/api/prompts/responses/:engineId/:promptType', (req, res) => getResponses(req, res));
-app.get('/nexxii/api/prompts/responses/:engineId/:promptType', (req, res) => getResponses(req, res));
 app.get('/api/prompts/response-content/:engineId/:promptType/:responseId', (req, res) => getResponseContent(req, res));
-app.get('/nexxii/api/prompts/response-content/:engineId/:promptType/:responseId', (req, res) => getResponseContent(req, res));
 
 app.post('/api/prompts/save-response', async (req, res) => {
   try {

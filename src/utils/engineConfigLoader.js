@@ -1,9 +1,10 @@
-// src/utils/engineConfigLoader.js - 엔진 설정 로더
+// src/utils/engineConfigLoader.js - 엔진 설정 로더 (v2.5 Pro 기본값 및 필수 URL 함수 복구)
 
 import fs from 'fs';
 import path from 'path';
 
 const ENGINES_FILE = path.join(process.cwd(), 'config', 'engines.json');
+const FREEPIK_API_BASE = 'https://api.freepik.com/v1';
 
 /**
  * 현재 엔진 설정 로드
@@ -24,11 +25,12 @@ export function loadCurrentEngines() {
 }
 
 /**
- * 기본 엔진 설정 (폴백)
+ * 기본 엔진 설정 (폴백) - 사용자의 요청에 따라 Kling v2.5 Pro를 기본값으로 설정
  */
 function getDefaultEngines() {
   return {
     textToImage: {
+      id: 'seedream-v4',
       provider: 'freepik',
       model: 'seedream-v4',
       endpoint: '/ai/text-to-image/seedream-v4',
@@ -43,16 +45,19 @@ function getDefaultEngines() {
       }
     },
     imageToVideo: {
+      id: 'kling-v2-5-pro',
       provider: 'freepik',
-      model: 'kling-v2-1-pro',
-      endpoint: '/ai/image-to-video/kling-v2-1-pro',
-      statusEndpoint: '/ai/image-to-video/kling-v2-1/{task-id}',
-      displayName: 'Kling v2.1 Pro',
+      model: 'kling-v2-5-pro',
+      endpoint: '/ai/image-to-video/kling-v2-5-pro',
+      statusEndpoint: '/ai/image-to-video/kling-v2-5-pro/{task-id}',
+      displayName: 'Kling v2.5 Pro',
       parameters: {
-        duration: '5',
+        duration: "5",
         cfg_scale: 0.5,
-        negative_prompt: 'blurry, distorted, low quality'
-      }
+        prompt: "",
+        negative_prompt: "blurry, distorted, low quality"
+      },
+      supportedDurations: ["5", "10"]
     }
   };
 }
@@ -70,10 +75,8 @@ export function getTextToImageEngine() {
  */
 export function getImageToVideoEngine() {
   try {
-    // 🔥 전체 engines.json 로드
     if (!fs.existsSync(ENGINES_FILE)) {
-      console.error('[getImageToVideoEngine] engines.json 파일이 없습니다.');
-      return {};
+      return getDefaultEngines().imageToVideo;
     }
 
     const data = fs.readFileSync(ENGINES_FILE, 'utf8');
@@ -81,109 +84,58 @@ export function getImageToVideoEngine() {
     const current = enginesData.currentEngine?.imageToVideo;
 
     if (!current) {
-      console.error('❌ [Config] No current imageToVideo engine defined');
-      return {};
+      return getDefaultEngines().imageToVideo;
     }
 
-    // 🔥 Find full metadata from availableEngines to ensure we have supportedDurations
+    // availableEngines에서 상세 메타데이터(supportedDurations 등) 병합
     const availableList = enginesData.availableEngines?.imageToVideo || [];
     const fullJson = availableList.find(e => e.id === current.id || (e.model === current.model && e.provider === current.provider));
 
     if (fullJson) {
-      // Merge supportedDurations and other missing meta into current (current takes precedence for params)
       return {
-        ...fullJson, // Base defaults
-        ...current,  // User overrides (like parameters)
+        ...fullJson,
+        ...current,
         parameters: {
           ...fullJson.parameters,
           ...current.parameters
         },
-        supportedDurations: fullJson.supportedDurations || current.supportedDurations || [] // Explicitly ensure this exists
+        supportedDurations: fullJson.supportedDurations || current.supportedDurations || ["5", "10"]
       };
     }
 
     return current;
   } catch (error) {
-    console.error('[getImageToVideoEngine] 오류:', error);
-    return {};
+    console.error('[getImageToVideoEngine] Error:', error);
+    return getDefaultEngines().imageToVideo;
   }
 }
 
 /**
- * Freepik API 기본 URL
- */
-export function getFreepikApiBase() {
-  return 'https://api.freepik.com/v1';
-}
-
-/**
- * Text-to-Image 요청 URL 생성
+ * 필수 URL 로더 함수 복구 (API에서 사용됨)
  */
 export function getTextToImageUrl() {
   const engine = getTextToImageEngine();
-  const baseUrl = getFreepikApiBase();
-  return `${baseUrl}${engine.endpoint}`;
+  return `${FREEPIK_API_BASE}${engine.endpoint || '/ai/text-to-image/seedream-v4'}`;
 }
 
-/**
- * Text-to-Image 상태 조회 URL 생성
- */
-export function getTextToImageStatusUrl(taskId) {
-  const engine = getTextToImageEngine();
-  const baseUrl = getFreepikApiBase();
-  const endpoint = engine.statusEndpoint.replace('{task-id}', taskId);
-  return `${baseUrl}${endpoint}`;
-}
-
-/**
- * Image-to-Video 요청 URL 생성
- */
 export function getImageToVideoUrl() {
   const engine = getImageToVideoEngine();
-  const baseUrl = getFreepikApiBase();
-  return `${baseUrl}${engine.endpoint}`;
+  return `${FREEPIK_API_BASE}${engine.endpoint || '/ai/image-to-video/kling-v2-5-pro'}`;
 }
 
-/**
- * Image-to-Video 상태 조회 URL 생성
- */
+export function getTextToImageStatusUrl(taskId) {
+  return `${FREEPIK_API_BASE}/ai/text-to-image/${taskId}`;
+}
+
 export function getImageToVideoStatusUrl(taskId) {
   const engine = getImageToVideoEngine();
-  const baseUrl = getFreepikApiBase();
-  const endpoint = engine.statusEndpoint.replace('{task-id}', taskId);
-  return `${baseUrl}${endpoint}`;
+  // statusEndpoint가 있으면 사용, 없으면 기본값
+  if (engine.statusEndpoint) {
+    return `${FREEPIK_API_BASE}${engine.statusEndpoint.replace('{task-id}', taskId)}`;
+  }
+  return `${FREEPIK_API_BASE}/ai/image-to-video/${taskId}`;
 }
 
-/**
- * Freepik Resources URL 생성 (Proxy용)
- */
-export function getFreepikResourcesUrl() {
-  const baseUrl = getFreepikApiBase();
-  return `${baseUrl}/resources`;
+export function getFreepikApiBase() {
+  return FREEPIK_API_BASE;
 }
-
-/**
- * 엔진 정보 로깅
- */
-export function logEngineInfo() {
-  const engines = loadCurrentEngines();
-  console.log('=== 🎨 현재 엔진 설정 ===');
-  console.log(`Text-to-Image: ${engines.textToImage.displayName} (${engines.textToImage.model})`);
-  console.log(`  → 엔드포인트: ${engines.textToImage.endpoint}`);
-  console.log(`Image-to-Video: ${engines.imageToVideo.displayName} (${engines.imageToVideo.model})`);
-  console.log(`  → 엔드포인트: ${engines.imageToVideo.endpoint}`);
-  console.log('==========================');
-}
-
-export default {
-  loadCurrentEngines,
-  getTextToImageEngine,
-  getImageToVideoEngine,
-  getFreepikApiBase,
-  getTextToImageUrl,
-  getTextToImageStatusUrl,
-  getImageToVideoUrl,
-  getImageToVideoStatusUrl,
-  getFreepikResourcesUrl,
-  logEngineInfo
-};

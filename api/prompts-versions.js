@@ -144,7 +144,7 @@ export async function getResponses(req, res) {
 
                     return {
                         id: filename.replace('.json', ''),
-                        filename: filename,
+                        fileName: filename,
                         timestamp: data.timestamp || stats.mtimeMs,
                         date: data.savedAt || new Date(stats.mtimeMs).toISOString(),
                         formData: data.formData || {},
