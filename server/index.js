@@ -300,7 +300,7 @@ app.get('/health', (req, res) => {
 */
 
 app.get('/api/prompts/get', promptsGetHandler);
-import translateProxyHandler from '../api/translate-proxy.js'; // Import handler
+// import translateProxyHandler from '../api/translate-proxy.js'; // 🔥 Removed duplicate import
 app.post('/api/translate', translateProxyHandler);
 app.post('/api/prompts/update', promptsUpdateHandler);
 
