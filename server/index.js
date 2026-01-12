@@ -736,7 +736,7 @@ app.use('/api/generate-prompt', generatePrompt); // 🔥 수동 프롬프트 생
 app.use('/api/storyboard-manual-inject', storyboardManualInject); // 🔥 수동 프롬프트 처리
 app.use('/api/storyboard-render-image', storyboardRenderImage); // 수정됨: /api/ 추가
 app.use('/api/image-to-video', imageToVideo); // 수정됨: /api/ 추가
-app.use('/api/convert-single-scene', convertSingleScene); // 🔥 싱글 씬 변환
+app.use('/api/convert-single-scene', convertSingleSceneHandler); // 🔥 싱글 씬 변환
 
 app.use('/api/generate-video', generateVideo); // 수정됨: /api/ 추가
 app.use('/api/video-status', videoStatus);

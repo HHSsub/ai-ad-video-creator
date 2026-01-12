@@ -108,6 +108,31 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-12 12:45 - [CRITICAL] 서버 크래시(502) 및 번역기 오류 수정 (Task Z-14)
+- **이슈 1**: 로그인 불가 및 502 Bad Gateway 발생.
+  - **원인**: `server/index.js`에서 `translateProxyHandler`를 중복 import하여 `SyntaxError: Identifier has already been declared` 발생.
+  - **해결**: 중복된 import 구문 제거.
+- **이슈 2**: 한글 번역 기능 작동 불가 ("GEMINI 응답 구조 가정" 코드).
+  - **원인**: `api/translate-proxy.js`에서 `safeCallGemini`의 리턴값을 추측성으로 코딩하여 실제 구조(`{ text, success }`)와 불일치.
+  - **해결**: `apiHelpers.js`를 확인하여 정확한 리턴 구조로 수정하고 추측성 주석 전면 제거.
+- **결과**: ✅ 서버 정상 가동, 로그인 복구, 한글/영어 프롬프트 번역 정상화.
+
+### 2026-01-12 12:30 - [CRITICAL] 영상 변환 상태 영속화 (DB 알박기) 구현 (Task Z-13)
+- **이슈**: 영상 변환이 완료되어도 사용자가 페이지를 새로고침하면 "변환 중" 상태가 풀리거나 영상이 사라짐.
+- **원인**: `api/check-video-status.js`가 완료된 영상 URL을 프론트엔드에만 리턴해주고, **DB(`projects.json`)에는 저장하지 않음**. 프론트엔드가 응답을 받고 저장하기 전에 연결이 끊기면 데이터 소실.
+- **해결**:
+  - `api/check-video-status.js` 수정: 상위 엔진(Kling)에서 `COMPLETED` 응답을 받으면 **즉시 백엔드에서 `projects.json`을 열어 영상 URL과 상태를 저장(Write)**하도록 로직 강화.
+- **결과**: ✅ 변환 중 브라우저를 닫아도, 나중에 들어오면 완료된 영상이 보존됨.
+
+### 2026-01-12 12:15 - [FEATURE] Step 4 한글 프롬프트 지원 및 이미지 캐싱 해결 (Task Z-12)
+- **기능 1 (한글 프롬프트)**:
+  - **구현**: `Step4` 진입 시 `api/translate-proxy`를 통해 영어 프롬프트를 한글로 번역하여 표시.
+  - **수정**: 사용자가 한글로 프롬프트를 수정하고 "재생성"을 누르면, 백엔드가 이를 다시 영어로 번역하여 AI 엔진에 전달.
+- **기능 2 (이미지 캐싱)**:
+  - **문제**: 이미지를 재생성해도 브라우저 캐시 때문에 구버전 이미지가 계속 보임.
+  - **해결**: 이미지 URL 뒤에 `?t=${Date.now()}` 쿼리 파라미터 추가하여 강제 갱신.
+- **수정**: `Step4.jsx` JSX 문법 오류(Tag Mismatch) 수정 완료.
+
 ### 2026-01-12 11:38 - [CRITICAL FIX] 씬 삭제 로직 S3 연동 수정 (Task Z-10)
 - **이슈**: `api/delete-scene.js`가 로컬 파일 삭제를 시도하여 실패함. (미디어는 S3에 저장됨)
 - **수정**: `server/utils/s3-uploader.js`의 `deleteFromS3` 함수를 import하여 S3 객체를 삭제하도록 로직 변경.
