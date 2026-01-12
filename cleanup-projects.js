@@ -11,7 +11,7 @@ const projectsFile = path.join(__dirname, 'config', 'projects.json');
 
 // S3 클라이언트 설정
 const s3Client = new S3Client({ region: 'ap-northeast-2' });
-const BUCKET_NAME = 'upnexx-storage';
+const BUCKET_NAME = 'nexxii-media-storage'; // 🔥 올바른 버킷 이름
 const S3_PREFIX = 'nexxii-storage/projects/';
 
 console.log('🧹 S3 프로젝트 파일 정리 시작...\n');
