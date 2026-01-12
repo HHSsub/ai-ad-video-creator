@@ -1258,21 +1258,39 @@ const Step4 = ({
                       </div>
 
                       <div className="md:col-span-1">
+                        <style>{`
+                            .blue-scrollbar::-webkit-scrollbar {
+                              width: 8px;
+                            }
+                            .blue-scrollbar::-webkit-scrollbar-track {
+                              background: #1f2937; 
+                            }
+                            .blue-scrollbar::-webkit-scrollbar-thumb {
+                              background-color: #3b82f6; 
+                              border-radius: 20px;
+                              border: 3px solid #1f2937;
+                            }
+                            .blue-scrollbar::-webkit-scrollbar-thumb:hover {
+                              background-color: #60a5fa; 
+                            }
+                          `}</style>
                         <label className="block text-sm font-medium text-gray-400 mb-1">
                           💬 코멘트 ({sceneComments.length})
                         </label>
-                        <div className="h-40 overflow-y-auto bg-gray-800 rounded-lg p-3 mb-2 border border-gray-700">
+                        <div className="h-96 overflow-y-auto bg-gray-800 rounded-lg p-3 mb-2 border border-gray-700 blue-scrollbar">
                           {sceneComments.length === 0 ? (
                             <div className="text-gray-500 text-sm">코멘트가 없습니다.</div>
                           ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-4">
                               {sceneComments.map((comment) => (
-                                <div key={comment.id} className="text-sm">
-                                  <span className="text-blue-400">@{comment.username}</span>
-                                  <span className="text-gray-500 ml-2 text-xs">
-                                    {new Date(comment.timestamp).toLocaleString()}
-                                  </span>
-                                  <p className="text-gray-300 mt-1">{comment.text}</p>
+                                <div key={comment.id} className="text-sm bg-gray-700/50 p-3 rounded-lg border border-gray-600/30">
+                                  <div className="flex justify-between items-start mb-1">
+                                    <span className="font-bold text-blue-400">@{comment.username}</span>
+                                    <span className="text-gray-500 text-xs">
+                                      {new Date(comment.timestamp).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-200 whitespace-pre-wrap leading-relaxed">{comment.text}</p>
                                 </div>
                               ))}
                             </div>
@@ -1289,11 +1307,11 @@ const Step4 = ({
                               }))}
                               onKeyPress={(e) => e.key === 'Enter' && handleAddComment(img.sceneNumber)}
                               placeholder="코멘트 입력..."
-                              className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white text-sm focus:border-blue-500 focus:outline-none"
+                              className="flex-1 px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white text-sm focus:border-blue-500 focus:outline-none placeholder-gray-500"
                             />
                             <button
                               onClick={() => handleAddComment(img.sceneNumber)}
-                              className="px-3 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors text-sm"
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-bold whitespace-nowrap"
                             >
                               추가
                             </button>

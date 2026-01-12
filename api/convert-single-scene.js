@@ -173,6 +173,9 @@ export default async function handler(req, res) {
             type: typeof payload.duration
         });
 
+        // 🔥 DEBUG: Log exact payload for 400 error investigation
+        console.log('✅ [FINAL PAYLOAD TO ENGINE]:', JSON.stringify(payload, null, 2));
+
         // 2. 태스크 생성 요청 (SafeCallFreepik 복구 - Dynamic Endpoint)
         const createResult = await safeCallFreepik(createUrl, {
             method: 'POST',
