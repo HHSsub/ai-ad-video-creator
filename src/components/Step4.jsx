@@ -958,26 +958,38 @@ const Step4 = ({
     const modalWidth = 320; // Type Selection Modal Width
     const modalHeight = 400; // Approx Height
 
-    // 2. 버튼 바로 아래/중앙에 위치시키기
+    // 2. 버튼 정중앙에 위치시키기 (덮어쓰기)
     let left = rect.left + (rect.width / 2) - (modalWidth / 2);
-    let top = rect.top + rect.height + 10; // 10px Gap
+    let top = rect.top + (rect.height / 2) - (modalHeight / 2);
 
-    // 3. 화면 밖으로 나가는 것 방지
-    if (left < 20) left = 20;
-    if (left + modalWidth > window.innerWidth - 20) {
-      left = window.innerWidth - modalWidth - 20;
+    // 3. 화면 밖으로 나가는 것 방지 (Viewport Constraints)
+    // 왼쪽/오른쪽 확인
+    if (left < 10) left = 10;
+    if (left + modalWidth > window.innerWidth - 10) {
+      left = window.innerWidth - modalWidth - 10;
     }
-    if (top + modalHeight > window.innerHeight - 20) {
-      // 아래 공간 부족 시 버튼 위로
-      top = rect.top - modalHeight - 10;
+
+    // 위/아래 확인
+    if (top < 10) top = 10;
+    if (top + modalHeight > window.innerHeight - 10) {
+      top = window.innerHeight - modalHeight - 10;
     }
 
     setModalPosition({ top, left });
     setSelectedScene(scene);
+
+    // Reset states
     setSynthesisMode(null);
     setUploadFile(null);
     setUploadPreview(null);
+
+    // Open Modal
     setShowPersonModal(true);
+
+    // 🔥 리스트가 비어있으면 데이터 로드 (복구)
+    if (featurePeople.length === 0) {
+      fetchFeaturePeople();
+    }
   };
 
   const handleModeSelect = (mode) => {
