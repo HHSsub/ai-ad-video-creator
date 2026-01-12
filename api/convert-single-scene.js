@@ -116,9 +116,24 @@ export default async function handler(req, res) {
         // Clamp prompt
         if (finalPrompt.length > 2000) finalPrompt = finalPrompt.slice(0, 1900);
 
-        // 🔥 CRITICAL: Duration Type Casting (Must be Integer 5)
-        // User Requirement: Always request 5s from Kling. Trimming handles the rest (e.g. 2s).
-        const klingDuration = 5;
+        // 🔥 CRITICAL: Duration Handling (Dynamic)
+        // Check supported durations from config, fallback to engine default
+        let targetDuration = duration;
+        const supportedDurations = engineConfig.supportedDurations || [];
+        const defaultDuration = defaultParams.duration || 5;
+
+        // If requested duration is not supported, use closest or default
+        if (supportedDurations.length > 0) {
+            const strDuration = String(duration);
+            if (!supportedDurations.includes(strDuration)) {
+                console.warn(`[convert-single-scene] Requested duration ${duration} not supported by ${engineConfig.displayName}. Supported: ${supportedDurations.join(', ')}`);
+                // Fallback to default
+                targetDuration = parseInt(defaultDuration, 10);
+            }
+        } else {
+            // If no restrictions, keep requested (but protect against null)
+            targetDuration = duration || 5;
+        }
 
         const payload = {
             ...defaultParams, // 🔥 engines.json의 기본 파라미터 적용 (cfg_scale 등)
@@ -126,7 +141,7 @@ export default async function handler(req, res) {
             image: imageUrl,
             prompt: finalPrompt,
             negative_prompt: defaultParams.negative_prompt || "blurry, distorted, low quality, morphing, glitch",
-            duration: klingDuration // 🔥 integer 5 or 10
+            duration: targetDuration // 🔥 Dynamic Duration
         };
 
         // Undefined/null 제거
