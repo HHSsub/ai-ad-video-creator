@@ -244,13 +244,18 @@ const Step4 = ({
     // 1. 초기 로드 시, 이미 저장된 번역이 있는지 확인하여 상태 복구 (Persistence check)
     if (images && images.length > 0) {
       const loadedPrompts = {};
+      console.log('[Step4] Images loaded:', images.length);
       images.forEach(img => {
+        // Debug logs
         if (img.koreanPrompt) {
+          console.log(`[Step4] Scene ${img.sceneNumber}: Load persisted prompt`, img.koreanPrompt.substring(0, 20));
           loadedPrompts[img.sceneNumber] = img.koreanPrompt;
+        } else {
+          console.log(`[Step4] Scene ${img.sceneNumber}: No persisted prompt`);
         }
       });
 
-      // 기존 상태와 병합 (불필요한 리렌더링 방지)
+      // 기존 상태와 병합
       setKoreanPrompts(prev => {
         const next = { ...prev, ...loadedPrompts };
         if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
@@ -1528,7 +1533,11 @@ const Step4 = ({
                             🔒 기존 프롬프트 (한글 번역됨)
                           </label>
                           <textarea
-                            value={koreanPrompts[img.sceneNumber] || img.prompt || '번역 중...'}
+                            value={
+                              koreanPrompts[img.sceneNumber] ||
+                              (img.koreanPrompt) ||
+                              (/[a-zA-Z]/.test(img.prompt) ? '번역 중...' : img.prompt)
+                            }
                             readOnly
                             disabled
                             className="w-full h-20 p-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 text-sm resize-none mb-3"
@@ -1538,7 +1547,11 @@ const Step4 = ({
                             ✏️ 프롬프트 수정 (한글 입력 가능)
                           </label>
                           <textarea
-                            value={getEditedPrompt(img.sceneNumber, 'prompt', koreanPrompts[img.sceneNumber] || img.prompt || '')}
+                            value={getEditedPrompt(img.sceneNumber, 'prompt',
+                              koreanPrompts[img.sceneNumber] ||
+                              (img.koreanPrompt) ||
+                              ''
+                            )}
                             onChange={(e) => handlePromptChange(img.sceneNumber, 'prompt', e.target.value)}
                             disabled={!permissions.editPrompt || isRegenerating}
                             className="w-full h-24 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm resize-none focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed mb-2"
