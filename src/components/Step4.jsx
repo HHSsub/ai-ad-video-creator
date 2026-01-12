@@ -56,7 +56,9 @@ const Step4 = ({
   const [targetSceneNumber, setTargetSceneNumber] = useState(null);
   const [featurePeople, setFeaturePeople] = useState([]);
   const [filteredPeople, setFilteredPeople] = useState([]);
-  const [visiblePeopleCount, setVisiblePeopleCount] = useState(4); // Pagination State
+  const [visiblePeopleCount, setVisiblePeopleCount] = useState(4); const [synthesisMode, setSynthesisMode] = useState(null); // null (selection), 'person', 'product', 'logo'
+  const [uploadFile, setUploadFile] = useState(null); // For Product/Logo
+  const [uploadPreview, setUploadPreview] = useState(null);
   const [personFilters, setPersonFilters] = useState({
     age: [],
     gender: [],
@@ -71,6 +73,7 @@ const Step4 = ({
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [synthesisLoading, setSynthesisLoading] = useState(false);
   const [recommendedVideo, setRecommendedVideo] = useState(null);
+  const [selectedScene, setSelectedScene] = useState(null); // Added for new synthesis logic
 
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
@@ -527,8 +530,8 @@ const Step4 = ({
       setError(`씬 ${sceneNumber} 재생성 오류: ${err.message}`);
       log(`씬 ${sceneNumber} 재생성 오류: ${err.message}`);
     } finally {
-      setIsRegenerating(false);
-      setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
+      // setIsRegenerating(false); // This state variable is not defined
+      setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: false }));
     }
   };
 
@@ -934,48 +937,71 @@ const Step4 = ({
   };
 
   // 🔥 모달 열기 (위치 계산: 버튼 중앙 정렬 - User Requested)
-  const handleOpenPersonModal = (sceneNumber, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // 1. 버튼 위치 및 크기
-    const rect = e.currentTarget.getBoundingClientRect();
-    const scrollY = window.scrollY;
-
-    const modalWidth = 550;
-    const modalHeight = 600;
-
-    // 2. 정확히 버튼 중앙에 모달 중앙을 위치시킴 (Viewport 기준)
-    let left = rect.left + (rect.width / 2) - (modalWidth / 2);
-    let top = rect.top + (rect.height / 2) - (modalHeight / 2);
-
-    // 4. 화면 밖으로 나가는 것 방지 (Viewport Constraints)
-    // 왼쪽 확인
-    if (left < 20) left = 20;
-
-    // 오른쪽 확인
-    if (left + modalWidth > window.innerWidth - 20) {
-      left = window.innerWidth - modalWidth - 20;
-    }
-    // 위쪽 확인
-    if (top < 20) top = 20;
-    // 아래쪽 확인
-    if (top + modalHeight > window.innerHeight - 20) {
-      top = window.innerHeight - modalHeight - 20;
-    }
-
-    console.log('[handleOpenPersonModal] Clicked Button Rect:', rect);
-    console.log('[handleOpenPersonModal] Calculated Position:', { top, left, scrollY: window.scrollY });
-
-    setModalPosition({ top, left });
-    setTargetSceneNumber(sceneNumber);
+  const handleOpenPersonModal = (scene) => {
+    setSelectedScene(scene);
+    setSynthesisMode(null); // Reset to selection mode
+    setUploadFile(null);
+    setUploadPreview(null);
     setShowPersonModal(true);
-    setVisiblePeopleCount(4);
+  };
 
-    if (featurePeople.length === 0) {
-      fetchFeaturePeople();
+  const handleModeSelect = (mode) => {
+    setSynthesisMode(mode);
+    if (mode === 'person') {
+      // Existing person filter reset logic if needed
     }
   };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setUploadFile(file);
+      setUploadPreview(URL.createObjectURL(file));
+    }
+  };
+  // Original modal position calculation logic (now unused due to new handleOpenPersonModal)
+  // const handleOpenPersonModal = (sceneNumber, e) => {
+  //   e.preventDefault();
+  //   e.stopPropagation();
+
+  //   // 1. 버튼 위치 및 크기
+  //   const rect = e.currentTarget.getBoundingClientRect();
+  //   const scrollY = window.scrollY;
+
+  //   const modalWidth = 550;
+  //   const modalHeight = 600;
+
+  //   // 2. 정확히 버튼 중앙에 모달 중앙을 위치시킴 (Viewport 기준)
+  //   let left = rect.left + (rect.width / 2) - (modalWidth / 2);
+  //   let top = rect.top + (rect.height / 2) - (modalHeight / 2);
+
+  //   // 4. 화면 밖으로 나가는 것 방지 (Viewport Constraints)
+  //   // 왼쪽 확인
+  //   if (left < 20) left = 20;
+
+  //   // 오른쪽 확인
+  //   if (left + modalWidth > window.innerWidth - 20) {
+  //     left = window.innerWidth - modalWidth - 20;
+  //   }
+  //   // 위쪽 확인
+  //   if (top < 20) top = 20;
+  //   // 아래쪽 확인
+  //   if (top + modalHeight > window.innerHeight - 20) {
+  //     top = window.innerHeight - modalHeight - 20;
+  //   }
+
+  //   console.log('[handleOpenPersonModal] Clicked Button Rect:', rect);
+  //   console.log('[handleOpenPersonModal] Calculated Position:', { top, left, scrollY: window.scrollY });
+
+  //   setModalPosition({ top, left });
+  //   setTargetSceneNumber(sceneNumber);
+  //   setShowPersonModal(true);
+  //   setVisiblePeopleCount(4);
+
+  //   if (featurePeople.length === 0) {
+  //     fetchFeaturePeople();
+  //   }
+  // };
 
   // 🔥 필터 변경 처리
   const handleFilterChange = (category, value) => {
@@ -1056,53 +1082,85 @@ const Step4 = ({
 
   // 🔥 합성 실행
   const handleSynthesizePerson = async () => {
-    if (!selectedPerson || !targetSceneNumber) return;
+    if (!selectedScene) return;
 
-    const scene = sortedImages.find(img => img.sceneNumber === targetSceneNumber);
-    if (!scene) return;
+    // Validation
+    if (synthesisMode === 'person' && !selectedPerson) return;
+    if ((synthesisMode === 'product' || synthesisMode === 'logo') && !uploadFile) return;
 
     setSynthesisLoading(true);
-    log(`씬 ${targetSceneNumber} 인물 합성 시작 (${selectedPerson.name})...`);
+    log(`씬 ${selectedScene.sceneNumber} ${synthesisMode} 합성 시작...`);
 
     try {
+      let referenceImagePayload = null;
+      let metadata = {};
+
+      if (synthesisMode === 'person') {
+        referenceImagePayload = selectedPerson.url;
+        metadata = {
+          name: selectedPerson.name,
+          age: selectedPerson.age,
+          gender: selectedPerson.gender,
+          nationality: selectedPerson.nationality
+        };
+      } else {
+        // File to Base64
+        const toBase64 = file => new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = error => reject(error);
+        });
+        referenceImagePayload = await toBase64(uploadFile);
+      }
+
       const response = await fetch(`${API_BASE}/api/synthesis-person`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sceneImage: scene.imageUrl || '',
-          personImage: selectedPerson.url,
-          personMetadata: {
-            age: selectedPerson.age,
-            gender: selectedPerson.gender,
-            nationality: selectedPerson.nationality,
-            name: selectedPerson.name
-          },
-          sceneContext: scene.prompt || scene.copy,
-          projectId: currentProject?.id,
-          aspectRatio: formData?.aspectRatioCode // 🔥 Pass Aspect Ratio
-        })
+          sceneImage: selectedScene.imageUrl,
+          personImage: referenceImagePayload,
+          personMetadata: metadata,
+          sceneContext: selectedScene.prompt || selectedScene.copy,
+          projectId: currentProject?.id, // Use currentProject?.id
+          aspectRatio: formData?.aspectRatioCode, // Use formData?.aspectRatioCode
+          synthesisType: synthesisMode // 🔥 Pass synthesis type
+        }),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
-      if (result.success) {
-        // 성공 시 이미지 교체
-        scene.imageUrl = result.imageUrl; // S3 URL
-        scene.videoUrl = null; // 영상 초기화
-        scene.status = 'image_synthesized';
-        scene.prompt = scene.prompt || scene.copy; // Context update
+      if (data.success && data.imageUrl) {
+        // Update Storyboard
+        // Find the style object for the current concept
+        const styleIndex = storyboard.styles.findIndex(s => s.conceptId === selectedConceptId);
+        if (styleIndex !== -1) {
+          const currentStyle = storyboard.styles[styleIndex];
+          const sceneIndex = currentStyle.images.findIndex(s => s.sceneNumber === selectedScene.sceneNumber);
+          if (sceneIndex !== -1) {
+            // Update Image URL and Add Cache Buster
+            currentStyle.images[sceneIndex].imageUrl = `${data.imageUrl}?t=${Date.now()}`;
+            currentStyle.images[sceneIndex].videoUrl = null; // Reset video on image change
+            currentStyle.images[sceneIndex].status = 'image_synthesized';
 
-        if (!modifiedScenes.includes(targetSceneNumber)) {
-          setModifiedScenes(prev => [...prev, targetSceneNumber]);
+            // Mark as modified
+            setModifiedScenes(prev => {
+              if (prev.includes(selectedScene.sceneNumber)) return prev;
+              return [...prev, selectedScene.sceneNumber];
+            });
+          }
         }
 
-        log(`씬 ${targetSceneNumber} 인물 합성 완료: ${result.imageUrl}`);
-        setShowPersonModal(false);
-        setSelectedPerson(null);
+        setForceUpdate(prev => prev + 1); // Force Re-render
+        setShowPersonModal(false); // Close Modal
+        setSelectedPerson(null); // Reset selected person
+        setUploadFile(null); // Reset uploaded file
+        setUploadPreview(null); // Reset upload preview
+        log(`씬 ${selectedScene.sceneNumber} ${synthesisMode} 합성 완료: ${data.imageUrl}`);
 
-        // 프로젝트 저장
+        // Save the updated storyboard to the backend
         await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
@@ -1110,7 +1168,7 @@ const Step4 = ({
         });
 
       } else {
-        throw new Error(result.error || '합성 실패');
+        throw new Error(data.error || '합성 실패');
       }
     } catch (err) {
       log(`합성 오류: ${err.message}`);
@@ -1635,8 +1693,84 @@ const Step4 = ({
               document.body
             )}
 
+            {/* 3-Mode Selection UI */}
+            {!synthesisMode && (
+              <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
+                style={{
+                  top: modalPosition.top,
+                  left: modalPosition.left,
+                  width: '300px',
+                  height: 'auto'
+                }}>
+                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
+                  <h3 className="text-lg font-bold text-white">이미지 합성 유형 선택</h3>
+                  <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
+                </div>
+                <div className="p-4 flex flex-col gap-3">
+                  <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-blue-500 group">
+                    <div className="text-sm font-bold text-white group-hover:text-blue-400">👤 인물 합성 (Person)</div>
+                    <div className="text-xs text-gray-400 mt-1">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
+                  </button>
+                  <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-purple-500 group">
+                    <div className="text-sm font-bold text-white group-hover:text-purple-400">🛍️ 제품 합성 (Product)</div>
+                    <div className="text-xs text-gray-400 mt-1">제품 이미지를 업로드하여 자연스럽게 배치</div>
+                  </button>
+                  <button onClick={() => handleModeSelect('logo')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-green-500 group">
+                    <div className="text-sm font-bold text-white group-hover:text-green-400">🏢 로고 합성 (Logo)</div>
+                    <div className="text-xs text-gray-400 mt-1">로고 이미지를 업로드하여 중앙에 선명하게 삽입</div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Product/Logo Upload UI */}
+            {(synthesisMode === 'product' || synthesisMode === 'logo') && (
+              <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
+                style={{
+                  top: modalPosition.top,
+                  left: modalPosition.left,
+                  width: '400px',
+                  height: 'auto'
+                }}>
+                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
+                  <h3 className="text-lg font-bold text-white">
+                    {synthesisMode === 'product' ? '🛍️ 제품 이미지 업로드' : '🏢 로고 이미지 업로드'}
+                  </h3>
+                  <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
+                </div>
+                <div className="p-6 flex flex-col items-center gap-4">
+                  <div className="w-full aspect-video border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center bg-gray-800/50 hover:bg-gray-800/80 transition-colors cursor-pointer relative overflow-hidden">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                    {uploadPreview ? (
+                      <img src={uploadPreview} alt="Preview" className="w-full h-full object-contain" />
+                    ) : (
+                      <>
+                        <div className="text-4xl mb-2 text-gray-600">+</div>
+                        <span className="text-sm text-gray-400">이미지 파일을 드래그하거나 클릭하여 업로드</span>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleSynthesizePerson}
+                    disabled={!uploadFile || synthesisLoading}
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg disabled:opacity-50 transition-colors"
+                  >
+                    {synthesisLoading ? '합성 진행중...' : '합성 시작하기'}
+                  </button>
+                  <button onClick={() => setSynthesisMode(null)} className="text-xs text-gray-500 hover:text-gray-300 underline">
+                    뒤로 가기
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) - Portal 사용 */}
-            {showPersonModal && createPortal(
+            {synthesisMode === 'person' && createPortal(
               <>
                 <div
                   className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[1px]"
@@ -1657,8 +1791,12 @@ const Step4 = ({
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       👤 인물 선택 <span className="text-xs font-normal text-gray-500">(Seedream)</span>
                     </h3>
-                    <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
+                    <div className="flex gap-2">
+                      <button onClick={() => setSynthesisMode(null)} className="text-xs text-gray-400 hover:text-white px-2 py-1 border border-gray-700 rounded">뒤로</button>
+                      <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
+                    </div>
                   </div>
+
 
                   {/* Body: Left Sidebar + Right Content */}
                   <div className="flex flex-1 overflow-hidden">

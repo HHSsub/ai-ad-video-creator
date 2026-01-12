@@ -73,25 +73,42 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
     try {
         console.log('[safeComposeWithSeedream] 합성 시작 (Freepik v4-edit)');
 
-        // 1. 프롬프트 구성 (Forcing Identity)
-        const meta = compositingInfo.personMetadata || {};
-        const identityDesc = [
-            meta.nationality ? `${meta.nationality}` : '',
-            meta.gender || 'person',
-            meta.age ? `(${meta.age}s)` : ''
-        ].filter(Boolean).join(' ');
+        // 🔥 1. 프롬프트 구성 (User Defined Strict Prompts)
+        const type = compositingInfo.synthesisType || 'person'; // person, product, logo
+        let strictPrompt = "";
+        let subjectPrompt = "";
 
-        // 메타데이터가 있으면 프롬프트 앞단에 배치하여 강제성 부여
-        const subjectPrompt = identityDesc ? `Close up shot of a ${identityDesc}, ` : '';
+        if (type === 'person') {
+            const meta = compositingInfo.personMetadata || {};
+            const identityDesc = [
+                meta.nationality ? `${meta.nationality}` : '',
+                meta.gender || 'person',
+                meta.age ? `(${meta.age}s)` : ''
+            ].filter(Boolean).join(' ');
+
+            // Person Prompt
+            subjectPrompt = identityDesc ? `Close up shot of a ${identityDesc}, ` : '';
+            strictPrompt = "Perfect face and body swap using the uploaded reference image. Seamlessly transfer the identity, facial features, and body structure of the reference person into the source scene. Adapt the fit of the original clothing (e.g., jacket, pants) to naturally match the reference person's gender and physique. Maintain the original pose, lighting, and background details. High fidelity, photorealistic, 8k resolution.";
+
+        } else if (type === 'product') {
+            // Product Prompt
+            strictPrompt = "Seamless product replacement. Replace the original object with the uploaded product image. Maintain 100% fidelity to the uploaded product's texture, color, shape, and branding details. Integrate the new product naturally into the scene by applying the source image's lighting, shadows, and perspective. Photorealistic finish, commercial photography quality.";
+
+        } else if (type === 'logo') {
+            // Logo Prompt
+            strictPrompt = "Insert the uploaded logo in the exact center of the image. Keep the logo's original shape, colors, and aspect ratio strictly unchanged. No distortion, no perspective tilt, no text hallucination. Apply as a clean, high-quality flat overlay with distinct edges. Professional branding style.";
+        }
 
         const basePrompt = compositingInfo.sceneDescription
-            ? `${compositingInfo.sceneDescription}, highly detailed, 8k`
-            : "High quality photo, ultra realistic, seamless composition, 8k";
+            ? `${compositingInfo.sceneDescription}`
+            : "High quality photo, ultra realistic";
 
-        // 최종 프롬프트: "Close up shot of a American Woman (20s), [Scene Desc], featuring the person..."
-        const prompt = `${subjectPrompt}${basePrompt}`;
+        // 최종 프롬프트 조합
+        const finalPrompt = type === 'person'
+            ? `${subjectPrompt}${basePrompt}, ${strictPrompt}`
+            : `${strictPrompt}, ${basePrompt}`;
 
-        // 2. 입력 이미지 구성 (Reference Image for Person)
+        // 2. 입력 이미지 구성 (Reference Image)
         const references = [];
         if (overlayImageData.startsWith('http')) {
             references.push({ image: { url: overlayImageData } });
@@ -103,19 +120,19 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         const url = getTextToImageUrl();
 
         const payload = {
-            prompt: `${prompt}, featuring specific person from reference image, perfect face match, identical facial features, same identity, high fidelity face swap`,
+            prompt: finalPrompt,
             reference_images: references,
             num_images: 1,
             image: { url: baseImageUrl },
-            strength: 0.95, // Prioritize Person > Base Scene
-            guidance_scale: 18.0, // Maximum enforcement of prompt/reference
-            num_inference_steps: 30, // Better quality
-            negative_prompt: "deformed, distorted face, wrong identity, mixed race, different person, blurry, low quality, bad anatomy, ghosting",
+            strength: 0.95, // Prioritize Reference
+            guidance_scale: 18.0, // Maximum enforcement
+            num_inference_steps: 30,
+            negative_prompt: "deformed, distorted, wrong identity, mixed race, different person, blurry, low quality, bad anatomy, ghosting, text, watermark",
             // 🔥 Dynamic Aspect Ratio
             aspect_ratio: compositingInfo?.aspectRatio || undefined
         };
 
-        console.log('[Seedream] 요청 Payload: Img2Img (Base) + Reference (Person)');
+        console.log(`[Seedream] 요청 Payload (${type}): Prompt length ${finalPrompt.length}`);
 
         const result = await safeCallFreepik(url, {
             method: 'POST',

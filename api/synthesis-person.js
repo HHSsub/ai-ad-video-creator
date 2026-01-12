@@ -7,30 +7,30 @@ const router = express.Router();
 
 router.post('/', async (req, res) => {
     try {
-        const { sceneImage, personImage, personMetadata, sceneContext, projectId, aspectRatio } = req.body;
+        const { sceneImage, personImage, personMetadata, sceneContext, projectId, aspectRatio, synthesisType } = req.body;
 
-        console.log('[API] Person Synthesis Request:', {
+        console.log(`[API] Synthesis Request (${synthesisType || 'person'}):`, {
             projectId,
             personName: personMetadata?.name,
             hasSceneImage: !!sceneImage,
-            hasPersonImage: !!personImage,
+            hasRefImage: !!personImage,
             aspectRatio
         });
 
         if (!sceneImage || !personImage) {
             return res.status(400).json({
                 success: false,
-                error: 'sceneImage and personImage are required'
+                error: 'sceneImage and reference image (personImage) are required'
             });
         }
 
         // 1. 합성 실행 (Seedream v4)
-        // compositingInfo 구성
+        // compositingInfo 구성 (합성 타입 전달)
         const compositingInfo = {
             sceneDescription: sceneContext || 'High quality cinematic shot',
-            sceneDescription: sceneContext || 'High quality cinematic shot',
             aspectRatio: aspectRatio || 'widescreen_16_9', // Default fallback
-            personMetadata: personMetadata // 🔥 Pass metadata for prompt engineering
+            personMetadata: personMetadata, // 🔥 Pass metadata for prompt engineering
+            synthesisType: synthesisType || 'person' // 🔥 Default to person
         };
 
         const result = await safeComposeWithSeedream(sceneImage, personImage, compositingInfo);

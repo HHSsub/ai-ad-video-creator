@@ -108,13 +108,21 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-12 13:20 - [FEATURE] Step 4 이미지 합성 고도화 (인물/제품/로고) (Task Z-17)
+- **요청**: 기존 단일 인물 합성 프롬프트에서 벗어나, 인물/제품/로고 3가지 모드로 분기 처리 및 각 모드별 정밀 프롬프트 적용 요청.
+- **수정**:
+  - `src/components/Step4.jsx`: 모달 진입 시 '합성 유형 선택(Person/Product/Logo)' 단계 추가. 제품/로고 선택 시 즉시 이미지 업로드 UI 제공.
+  - `api/seedream-compose.js`: `synthesisType` 파라미터 수신 로직 추가. 각 타입(Person/Product/Logo)에 따라 사용자 지정 'Strict Prompt' (8k, photorealistic, strict fidelity 등) 적용 분기 처리.
+  - `api/synthesis-person.js`: 프론트엔드로부터 `synthesisType`을 받아 `compositingInfo`에 포함하여 전달하도록 수정.
+- **상태**: 구현 완료. .env 키 적용 후 서버 재시작 필요.
+
 ### 2026-01-12 13:05 - [FEATURE] Step 4 한글 프롬프트 번역 로직 프론트엔드 연동 (Task Z-16)
 - **이슈**: `api/translate-proxy.js`는 구현되었으나, `Step4.jsx`에 이를 호출하는 로직이 누락되어 UI에 영문만 표시됨.
 - **수정**: `src/components/Step4.jsx`
   - **State 추가**: `koreanPrompts`, `isTranslating`
   - **Logic 추가**: `useEffect`로 초기 진입 시 영문 프롬프트를 한글로 번역하여 `koreanPrompts`에 저장.
   - **Regeneration**: 사용자가 한글로 수정한 내용을 `translateText`로 영문 변환 후 API 전송하도록 `handleRegenerateWithTranslation` 구현.
-- **결과**: ✅ 기존 프롬프트가 한글로 보이며, 한글로 수정 후 재생성 가능.
+- **결과**: ✅ 기존 프롬프트가 한글로 보이며, 한글로 수정 후 재생성 가능. (단, API Key 누락 시 영문으로 fallback 될 수 있음 -> .env 수정 완료)
 
 
 ### 2026-01-12 12:55 - [CRITICAL] 서버 ReferenceError (변수명 불일치) 수정 (Task Z-15)
