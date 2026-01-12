@@ -21,34 +21,16 @@ export default async function handler(req, res) {
 
         const result = await safeCallGemini(prompt);
 
-        // Gemini 응답이 보통 result.data.candidates[0].content.parts[0].text 형태 (safeCallGemini 구현에 따라 다름)
-        // safeCallGemini returns the text directly based on convention? 
-        // Let's check apiHelpers.js or assume it returns string or object.
-        // Checking safeCallGemini signature in memory: it usually parses response.
+        // 🔥 NO ASSUMPTION: safeCallGemini returns { text: string, ... } as verified in apiHelpers.js
 
-        // Assuming result is the full response object or text. 
-        // To be safe, let's look at apiHelpers usage later. 
-        // For now, I'll assume safeCallGemini returns the standard Gemini response structure or refined text.
-
-        // Wait, I should verify safeCallGemini return type first to be 100% sure. 
-        // But for "Write to File", I can write a general structure and refine.
-
-        // Actually, safeCallGemini in this project usually returns the *text content* directly if it's a helper wrapper?
-        // Let's assume standard response handling inside safeCallGemini.
-
-        let translatedText = '';
-        if (typeof result === 'string') {
-            translatedText = result;
-        } else if (result?.response?.text) {
-            translatedText = result.response.text();
-        } else if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
-            translatedText = result.candidates[0].content.parts[0].text;
-        } else {
-            // Fallback for custom wrapper
-            translatedText = JSON.stringify(result);
+        if (!result || !result.success || !result.text) {
+            console.error('[translate] Gemini response invalid:', result);
+            throw new Error('Translation failed: No text returned');
         }
 
-        // Clean up
+        let translatedText = result.text;
+
+        // Clean up quotes if present
         translatedText = translatedText.replace(/^["']|["']$/g, '').trim();
 
         console.log(`[translate] Result: "${translatedText.substring(0, 50)}..."`);
