@@ -954,13 +954,20 @@ const Step4 = ({
     e.stopPropagation();
 
     // 1. 버튼 위치 및 크기 계산
-    const rect = e.currentTarget.getBoundingClientRect();
+    // 🔥 "정확히 씬 정중앙 가릴만큼" -> 버튼의 부모(씬 카드)를 찾아서 그 중앙에 위치시키기 시도
+    let targetRect = e.currentTarget.getBoundingClientRect();
+    const sceneCard = e.currentTarget.closest('.bg-gray-900/50'); // .scene-card 클래스가 없으면 .group(이미지 컨테이너) 시도
+
+    if (sceneCard) {
+      targetRect = sceneCard.getBoundingClientRect();
+    }
+
     const modalWidth = 320; // Type Selection Modal Width
     const modalHeight = 400; // Approx Height
 
-    // 2. 버튼 정중앙에 위치시키기 (덮어쓰기)
-    let left = rect.left + (rect.width / 2) - (modalWidth / 2);
-    let top = rect.top + (rect.height / 2) - (modalHeight / 2);
+    // 2. 타겟(씬 카드 혹은 버튼) 정중앙에 위치시키기
+    let left = targetRect.left + (targetRect.width / 2) - (modalWidth / 2);
+    let top = targetRect.top + (targetRect.height / 2) - (modalHeight / 2);
 
     // 3. 화면 밖으로 나가는 것 방지 (Viewport Constraints)
     // 왼쪽/오른쪽 확인
@@ -986,7 +993,7 @@ const Step4 = ({
     // Open Modal
     setShowPersonModal(true);
 
-    // 🔥 리스트가 비어있으면 데이터 로드 (복구)
+    // 🔥 리스트가 비어있으면 데이터 로드
     if (featurePeople.length === 0) {
       fetchFeaturePeople();
     }
@@ -1740,82 +1747,91 @@ const Step4 = ({
               document.body
             )}
 
-            {/* 3-Mode Selection UI */}
-            {!synthesisMode && (
-              <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
-                style={{
-                  top: modalPosition.top,
-                  left: modalPosition.left,
-                  width: '300px',
-                  height: 'auto'
-                }}>
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
-                  <h3 className="text-lg font-bold text-white">이미지 합성 유형 선택</h3>
-                  <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
-                </div>
-                <div className="p-4 flex flex-col gap-3">
-                  <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-blue-500 group">
-                    <div className="text-sm font-bold text-white group-hover:text-blue-400">👤 인물 합성 (Person)</div>
-                    <div className="text-xs text-gray-400 mt-1">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
-                  </button>
-                  <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-purple-500 group">
-                    <div className="text-sm font-bold text-white group-hover:text-purple-400">🛍️ 제품 합성 (Product)</div>
-                    <div className="text-xs text-gray-400 mt-1">제품 이미지를 업로드하여 자연스럽게 배치</div>
-                  </button>
-                  <button onClick={() => handleModeSelect('logo')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-green-500 group">
-                    <div className="text-sm font-bold text-white group-hover:text-green-400">🏢 로고 합성 (Logo)</div>
-                    <div className="text-xs text-gray-400 mt-1">로고 이미지를 업로드하여 중앙에 선명하게 삽입</div>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Product/Logo Upload UI */}
-            {(synthesisMode === 'product' || synthesisMode === 'logo') && (
-              <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
-                style={{
-                  top: modalPosition.top,
-                  left: modalPosition.left,
-                  width: '400px',
-                  height: 'auto'
-                }}>
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
-                  <h3 className="text-lg font-bold text-white">
-                    {synthesisMode === 'product' ? '🛍️ 제품 이미지 업로드' : '🏢 로고 이미지 업로드'}
-                  </h3>
-                  <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
-                </div>
-                <div className="p-6 flex flex-col items-center gap-4">
-                  <div className="w-full aspect-video border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center bg-gray-800/50 hover:bg-gray-800/80 transition-colors cursor-pointer relative overflow-hidden">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                    {uploadPreview ? (
-                      <img src={uploadPreview} alt="Preview" className="w-full h-full object-contain" />
-                    ) : (
-                      <>
-                        <div className="text-4xl mb-2 text-gray-600">+</div>
-                        <span className="text-sm text-gray-400">이미지 파일을 드래그하거나 클릭하여 업로드</span>
-                      </>
-                    )}
+            {/* 3-Mode Selection UI - 🔥 POTAL 적용 & 중앙 정렬 */}
+            {showPersonModal && !synthesisMode && createPortal(
+              <>
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowPersonModal(false)} />
+                <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
+                  style={{
+                    top: modalPosition.top,
+                    left: modalPosition.left,
+                    width: '320px',
+                    maxHeight: '90vh'
+                  }}>
+                  <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
+                    <h3 className="text-lg font-bold text-white">이미지 합성 유형 선택</h3>
+                    <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
                   </div>
-                  <button
-                    onClick={handleSynthesizePerson}
-                    disabled={!uploadFile || synthesisLoading}
-                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg disabled:opacity-50 transition-colors"
-                  >
-                    {synthesisLoading ? '합성 진행중...' : '합성 시작하기'}
-                  </button>
-                  <button onClick={() => setSynthesisMode(null)} className="text-xs text-gray-500 hover:text-gray-300 underline">
-                    뒤로 가기
-                  </button>
+                  <div className="p-4 flex flex-col gap-3">
+                    <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-blue-500 group">
+                      <div className="text-sm font-bold text-white group-hover:text-blue-400">👤 인물 합성 (Person)</div>
+                      <div className="text-xs text-gray-400 mt-1">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
+                    </button>
+                    <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-purple-500 group">
+                      <div className="text-sm font-bold text-white group-hover:text-purple-400">🛍️ 제품 합성 (Product)</div>
+                      <div className="text-xs text-gray-400 mt-1">제품 이미지를 업로드하여 자연스럽게 배치</div>
+                    </button>
+                    <button onClick={() => handleModeSelect('logo')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-green-500 group">
+                      <div className="text-sm font-bold text-white group-hover:text-green-400">🏢 로고 합성 (Logo)</div>
+                      <div className="text-xs text-gray-400 mt-1">로고 이미지를 업로드하여 중앙에 선명하게 삽입</div>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>,
+              document.body
             )}
 
+            {/* Product/Logo Upload UI - 🔥 POTAL 적용 & 중앙 정렬 */}
+            {showPersonModal && (synthesisMode === 'product' || synthesisMode === 'logo') && createPortal(
+              <>
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowPersonModal(false)} />
+                <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
+                  style={{
+                    top: modalPosition.top,
+                    left: modalPosition.left,
+                    width: '400px',
+                    maxHeight: '90vh'
+                  }}>
+                  <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
+                    <h3 className="text-lg font-bold text-white">
+                      {synthesisMode === 'product' ? '🛍️ 제품 이미지 업로드' : '🏢 로고 이미지 업로드'}
+                    </h3>
+                    <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
+                  </div>
+                  <div className="p-6 flex flex-col items-center gap-4">
+                    <div className="w-full aspect-video border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center bg-gray-800/50 hover:bg-gray-800/80 transition-colors cursor-pointer relative overflow-hidden">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      {uploadPreview ? (
+                        <img src={uploadPreview} alt="Preview" className="w-full h-full object-contain" />
+                      ) : (
+                        <>
+                          <div className="text-4xl mb-2 text-gray-600">+</div>
+                          <span className="text-sm text-gray-400">이미지 파일을 드래그하거나 클릭하여 업로드</span>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleSynthesizePerson}
+                      disabled={!uploadFile || synthesisLoading}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg disabled:opacity-50 transition-colors"
+                    >
+                      {synthesisLoading ? '합성 진행중...' : '합성 시작하기'}
+                    </button>
+                    <div className="flex gap-4">
+                      <button onClick={() => setSynthesisMode(null)} className="text-xs text-gray-500 hover:text-gray-300 underline">
+                        뒤로 가기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>,
+              document.body
+            )}
             {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) - Portal 사용 */}
             {synthesisMode === 'person' && createPortal(
               <>
