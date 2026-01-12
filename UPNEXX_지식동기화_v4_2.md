@@ -97,6 +97,11 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-12 11:38 - [CRITICAL FIX] 씬 삭제 로직 S3 연동 수정 (Task Z-10)
+- **이슈**: `api/delete-scene.js`가 로컬 파일 삭제를 시도하여 실패함. (미디어는 S3에 저장됨)
+- **수정**: `server/utils/s3-uploader.js`의 `deleteFromS3` 함수를 import하여 S3 객체를 삭제하도록 로직 변경.
+- **교훈**: **S3 미디어 영속화 정책(v4.2)** 준수 필수. 로컬 파일 시스템 사용 금지.
+
 ### 2026-01-12 11:24 - [HOTFIX] 영상 변환 400 에러 및 씬 삭제 영속성 수정 (Task Z-9)
 - **긴급 이슈 1 (Video)**: 단일 씬 영상 변환 시 `HTTP 400: Bad Request` (500 Error) 발생.
   - **원인**: `api/convert-single-scene.js`에서 Kling API로 `duration`을 문자열(`'5'`)로 보내고 있었으나, 엔진 스펙 변경 또는 엄격한 검증으로 정수형(`5`)이 요구됨.

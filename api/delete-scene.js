@@ -1,14 +1,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { URL } from 'url';
+import { deleteFromS3 } from '../server/utils/s3-uploader.js';
 
 const PROJECTS_DIR = path.join(process.cwd(), 'config', 'projects');
-// Assuming local storage is in public/nexxii-storage based on previous context or nexxii-storage URL mapping
-// However, looking at the user request: "https://upnexx.ai/nexxii-storage/projects/project_1766740872345/images/concept_1_scene_5.jpg"
-// If it's a local file system, we need to map this URL to a file path.
-// Common pattern: public/nexxii-storage -> /nexxii-storage
-const STORAGE_ROOT = path.join(process.cwd(), 'public');
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -47,42 +42,21 @@ export default async function handler(req, res) {
         const sceneToDelete = currentImages.find(img => img.sceneNumber === sceneNumber);
 
         if (!sceneToDelete) {
-            // Scene might already be deleted, but we still proceed to clean up if needed or just return current state
             console.warn(`[delete-scene] Scene ${sceneNumber} not found in project ${projectId}, possibly already deleted.`);
         } else {
-            // 🔥 DELETE FILE LOGIC
-            // Try to delete the image file if it exists locally
-            // imageUrl example: "https://upnexx.ai/nexxii-storage/projects/.../image.jpg"
-            // or "/nexxii-storage/projects/.../image.jpg"
-            let filePathToDelete = null;
-
+            // 🔥 S3 DELETE LOGIC (Corrected)
             const targetUrl = imageUrl || sceneToDelete.imageUrl;
 
-            if (targetUrl) {
+            if (targetUrl && targetUrl.includes('nexxii-storage')) {
                 try {
-                    if (targetUrl.startsWith('http')) {
-                        const urlObj = new URL(targetUrl);
-                        // pathname: /nexxii-storage/projects/project_.../image.jpg
-                        // If mapped to public/nexxii-storage: 
-                        // process.cwd() + 'public' + pathname
-                        // BUT, we need to be careful about the mount point.
-                        // Let's assume 'public' contains 'nexxii-storage'.
-                        const relativePath = urlObj.pathname; // /nexxii-storage/...
-                        filePathToDelete = path.join(process.cwd(), 'public', relativePath);
-                    } else if (targetUrl.startsWith('/')) {
-                        filePathToDelete = path.join(process.cwd(), 'public', targetUrl);
-                    }
-
-                    if (filePathToDelete && fs.existsSync(filePathToDelete)) {
-                        fs.unlinkSync(filePathToDelete);
-                        console.log(`[delete-scene] Deleted file: ${filePathToDelete}`);
-                    } else {
-                        console.log(`[delete-scene] File not found or not local: ${filePathToDelete}`);
-                    }
-                } catch (err) {
-                    console.error(`[delete-scene] Failed to delete file: ${err.message}`);
-                    // Continue to delete from JSON even if file deletion fails
+                    console.log(`[delete-scene] S3 삭제 시도: ${targetUrl}`);
+                    await deleteFromS3(targetUrl);
+                    console.log(`[delete-scene] ✅ S3 파일 삭제 완료`);
+                } catch (s3Error) {
+                    console.error(`[delete-scene] ❌ S3 삭제 실패 (무시하고 진행): ${s3Error.message}`);
                 }
+            } else {
+                console.log(`[delete-scene] S3 URL이 아니거나 유효하지 않음: ${targetUrl}`);
             }
         }
 
