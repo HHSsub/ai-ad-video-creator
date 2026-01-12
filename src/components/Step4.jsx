@@ -235,7 +235,7 @@ const Step4 = ({
       return data.translatedText;
     } catch (error) {
       console.error('Translation error:', error);
-      return text; // 실패 시 원본 반환
+      return null; // 실패 시 null 반환 (원본 영문 반환 X -> 재시도 가능하게)
     }
   };
 
@@ -264,7 +264,9 @@ const Step4 = ({
         await Promise.all(toTranslate.map(async (img) => {
           // 이미 번역 요청 중인 상태면 스킵 (koreanPrompts에 '번역 중...' 마킹할 수도 있음)
           const translated = await translateText(img.prompt, 'ko');
-          newTranslations[img.sceneNumber] = translated;
+          if (translated) {
+            newTranslations[img.sceneNumber] = translated;
+          }
         }));
 
         setKoreanPrompts(prev => ({ ...prev, ...newTranslations }));
@@ -956,7 +958,8 @@ const Step4 = ({
     // 1. 버튼 위치 및 크기 계산
     // 🔥 "정확히 씬 정중앙 가릴만큼" -> 버튼의 부모(씬 카드)를 찾아서 그 중앙에 위치시키기 시도
     let targetRect = e.currentTarget.getBoundingClientRect();
-    const sceneCard = e.currentTarget.closest('.bg-gray-900/50'); // .scene-card 클래스가 없으면 .group(이미지 컨테이너) 시도
+    // Fix: Invalid selector syntax error. Use data-attribute for robustness.
+    const sceneCard = e.currentTarget.closest('[data-scene-card="true"]');
 
     if (sceneCard) {
       targetRect = sceneCard.getBoundingClientRect();
@@ -1328,7 +1331,7 @@ const Step4 = ({
               <h3 className="text-lg font-semibold text-white">📋 씬별 스토리보드</h3>
             </div>
             <div className="space-y-6">
-              {sortedImages.map((img) => {
+              {sortedImages.map((img, index) => {
                 const isRegenerating = regeneratingScenes[img.sceneNumber];
                 const isModified = modifiedScenes.includes(img.sceneNumber);
                 const sceneComments = localComments[img.sceneNumber] || [];
@@ -1336,6 +1339,7 @@ const Step4 = ({
                 return (
                   <div
                     key={img.sceneNumber}
+                    data-scene-card="true"
                     className={`bg-gray-900/50 rounded-xl p-6 border ${isModified ? 'border-yellow-600' : 'border-gray-700'
                       }`}
                   >
