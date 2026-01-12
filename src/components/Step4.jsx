@@ -239,111 +239,104 @@ const Step4 = ({
     }
   };
 
-  // 🔥 초기 로드 시 영문 프롬프트 -> 한글 번역 (강제 실행 로직 보강)
+  // 🔥 통합된 번역 및 영구 저장 로직
   useEffect(() => {
-    const fetchTranslations = async () => {
-      // 1. 이미지가 없으면 종료
-      if (!images || images.length === 0) return;
-
-      // 2. 번역 대상 추출: 프롬프트가 있고 아직 번역되지 않은 것
-      // (koreanPrompts 키가 없거나 비어있는 경우)
-      const toTranslate = images.filter(img =>
-        img.prompt &&
-        (!koreanPrompts[img.sceneNumber] || koreanPrompts[img.sceneNumber] === '번역 중...')
-      );
-
-      if (toTranslate.length === 0) return;
-
-      // setIsTranslating(true); // UI 깜빡임 방지 위해 제거 (백그라운드 처리)
-
-      try {
-        console.log(`[Step4] 번역 시작 (${toTranslate.length}개)...`);
-
-        const newTranslations = {};
-
-        // 🔥 Sequential processing to prevent 429 Errors (Gemini Free Tier Limit)
-        // 병렬 처리 제거 -> 순차 처리 + 지연 시간 도입
-        for (const img of toTranslate) {
-          try {
-            // 이미 번역 요청 중인 상태면 스킵 (koreanPrompts에 '번역 중...' 마킹할 수도 있음)
-            const translated = await translateText(img.prompt, 'ko');
-            if (translated) {
-              newTranslations[img.sceneNumber] = translated;
-            }
-            // 3초 대기 (Rate Limit 방지)
-            await new Promise(resolve => setTimeout(resolve, 3000));
-          } catch (e) {
-            console.error(`Translation failed for scene ${img.sceneNumber}`, e);
-          }
+    // 1. 초기 로드 시, 이미 저장된 번역이 있는지 확인하여 상태 복구 (Persistence check)
+    if (images && images.length > 0) {
+      const loadedPrompts = {};
+      images.forEach(img => {
+        if (img.koreanPrompt) {
+          loadedPrompts[img.sceneNumber] = img.koreanPrompt;
         }
+      });
 
-        setKoreanPrompts(prev => ({ ...prev, ...newTranslations }));
-        console.log('[Step4] 번역 완료:', Object.keys(newTranslations));
-      } catch (err) {
-        console.error('프롬프트 번역 실패:', err);
-      } finally {
-        setIsTranslating(false);
-      }
-    };
+      // 기존 상태와 병합 (불필요한 리렌더링 방지)
+      setKoreanPrompts(prev => {
+        const next = { ...prev, ...loadedPrompts };
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
+      });
+    }
 
-    fetchTranslations();
-  }, [images]); // koreanPrompts 의존성 제거하여 무한 루프 방지
-
-  // 🔥 번역 상태 강제 확인 (사용자 요청 대응)
-  useEffect(() => {
-    // 1~2초 뒤에 한번 더 체크하여 누락된 번역이 있으면 시도
-    const timer = setTimeout(() => {
+    // 2. 1.5초 후 누락된 번역 일괄 처리 (Batch)
+    const timer = setTimeout(async () => {
       if (!images || images.length === 0) return;
 
       const missingTranslations = images.filter(img =>
         img.prompt &&
-        !koreanPrompts[img.sceneNumber] &&
-        /[a-zA-Z]/.test(img.prompt) // 영어가 포함되어 있는데 번역본이 없는 경우
+        !img.koreanPrompt && // 이미 저장된 번역이 있으면 스킵
+        !koreanPrompts[img.sceneNumber] && // 현재 메모리에 있으면 스킵
+        /[a-zA-Z]/.test(img.prompt) // 영어가 포함된 경우만
       );
 
       if (missingTranslations.length > 0) {
-        console.log(`[Step4] 누락된 번역 발견 (${missingTranslations.length}개), 배치 번역 시도...`);
+        console.log(`[Step4] 번역 필요한 씬 발견: ${missingTranslations.length}개 -> 배치 번역 시작`);
         setIsTranslating(true);
 
-        // 🔥 Batch Processing Implementation
-        const processBatchTranslation = async () => {
-          try {
-            const textsToTranslate = missingTranslations.map(img => img.prompt);
+        try {
+          const textsToTranslate = missingTranslations.map(img => img.prompt);
 
-            const response = await fetch(`${API_BASE}/api/translate`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ texts: textsToTranslate, targetLang: 'ko' })
+          const response = await fetch(`${API_BASE}/api/translate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ texts: textsToTranslate, targetLang: 'ko' })
+          });
+
+          if (!response.ok) throw new Error('Batch translation request failed');
+
+          const data = await response.json();
+
+          if (data.success && data.translatedTexts && Array.isArray(data.translatedTexts)) {
+            const newTrans = {};
+            const scenesToUpdate = [];
+
+            missingTranslations.forEach((img, index) => {
+              if (data.translatedTexts[index]) {
+                newTrans[img.sceneNumber] = data.translatedTexts[index];
+                scenesToUpdate.push({
+                  sceneNumber: img.sceneNumber,
+                  koreanPrompt: data.translatedTexts[index]
+                });
+              }
             });
 
-            if (!response.ok) throw new Error('Batch translation failed');
+            // A. 로컬 상태 업데이트
+            setKoreanPrompts(prev => ({ ...prev, ...newTrans }));
 
-            const data = await response.json();
+            // B. 백엔드 영구 저장 (Persistence)
+            // storyboard 객체를 직접 수정하여 PATCH 요청
+            const styleIndex = storyboard.styles.findIndex(s => s.conceptId === selectedConceptId);
+            if (styleIndex !== -1) {
+              const updatedStyle = { ...storyboard.styles[styleIndex] };
 
-            if (data.success && data.translatedTexts && Array.isArray(data.translatedTexts)) {
-              const newTrans = {};
-              missingTranslations.forEach((img, index) => {
-                if (data.translatedTexts[index]) {
-                  newTrans[img.sceneNumber] = data.translatedTexts[index];
+              scenesToUpdate.forEach(update => {
+                const sIdx = updatedStyle.images.findIndex(img => img.sceneNumber === update.sceneNumber);
+                if (sIdx !== -1) {
+                  updatedStyle.images[sIdx].koreanPrompt = update.koreanPrompt;
                 }
               });
 
-              setKoreanPrompts(prev => ({ ...prev, ...newTrans }));
-              console.log(`[Step4] 배치 번역 완료: ${Object.keys(newTrans).length}개`);
+              // 전체 스토리보드 업데이트 요청
+              await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
+                body: JSON.stringify({ storyboard, formData })
+              });
+              console.log(`[Step4] 배치 번역 결과 ${scenesToUpdate.length}개 영구 저장 완료`);
             }
-          } catch (e) {
-            console.error('[Step4] Batch translation error:', e);
-          } finally {
-            setIsTranslating(false);
           }
-        };
-
-        processBatchTranslation();
+        } catch (e) {
+          console.error('[Step4] Batch translation error:', e);
+        } finally {
+          setIsTranslating(false);
+        }
+      } else {
+        console.log('[Step4] 모든 씬 번역 완료 상태.');
       }
-    }, 1000); // 1초 지연
+    }, 1500);
 
     return () => clearTimeout(timer);
-  }, [images, koreanPrompts]); // koreanPrompts 변경 감지하여 완료 여부 체크
+  }, [images, selectedConceptId]); // koreanPrompts 의존성 제거 (무한루프 방지)
 
   // 🔥 한글 입력 -> 영문 번역 -> 이미지 재생성 wrapper
   const handleRegenerateWithTranslation = async (sceneNumber) => {
@@ -398,12 +391,24 @@ const Step4 = ({
 
       // 성공 시 이미지 URL 업데이트 (스토리보드 객체 직접 수정 및 강제 리렌더)
       // 주의: 원본 배열을 찾아 수정해야 함
+      console.log(`[Step4] 재생성된 이미지 URL: ${data.imageUrl}`);
+
       const targetImage = images.find(img => img.sceneNumber === sceneNumber);
       if (targetImage) {
-        targetImage.imageUrl = data.imageUrl; // URL 업데이트 (캐시 버스팅은 렌더링 시 처리)
-        // 원본 프롬프트도 업데이트할지 결정해야 하나, 보통 생성된 프롬프트로 바꿈
-        // 하지만 여기선 영문 프롬프트를 원본으로 유지
+        targetImage.imageUrl = `${data.imageUrl}?t=${Date.now()}`;
         targetImage.prompt = englishPrompt;
+
+        // 🔥 백엔드 영구 저장 (Missing Logic Restored)
+        try {
+          await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
+            body: JSON.stringify({ storyboard, formData })
+          });
+          console.log(`[Step4] 씬 ${sceneNumber} 재생성 결과 저장 완료`);
+        } catch (saveErr) {
+          console.error(`[Step4] 씬 ${sceneNumber} 저장 실패:`, saveErr);
+        }
       }
 
       // 한글 프롬프트 상태 업데이트 (입력한 내용 유지)

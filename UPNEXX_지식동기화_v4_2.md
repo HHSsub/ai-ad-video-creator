@@ -127,6 +127,9 @@
   - **Batch Translation**: 기존 순차 번역(Sequential) 방식이 Rate Limit(429)를 유발하여, **한 번의 API 호출로 여러 문장을 번역(Batch Processing)**하도록 `api/translate-proxy.js` 및 `Step4.jsx` 수정.
   - **Data Persistence**: 이미지 재생성(`Regenerate`) 직후 변경 사항이 백엔드에 즉시 저장(`PATCH /projects/:id`)되도록 수정하여 새로고침 시 데이터 증발 방지.
   - **Selector Fix**: `SyntaxError` 유발하던 잘못된 선택자(`.bg-gray-900/50`)를 `data-scene-card` 속성 기반 선택자로 교체하여 모달 먹통 해결.
+- **최종 안정화 (14:00)**:
+  - **Regeneration Persistence**: 이미지 재생성(`Regenerate`) 함수에 누락되었던 백엔드 저장 로직(`fetch PATCH`)을 복구하여, 재생성 후 새로고침 시 이미지가 사라지는("이미지 없음") 문제 해결.
+  - **JSON Parsing Logic**: 배치 번역 API에서 Gemini 응답에 Markdown(` ```json `)이나 잡다한 텍스트가 섞여있을 경우 `JSON.parse` 에러가 발생하는 문제를 해결하기 위해, 정규식으로 순수 배열 부분(`[...]`)만 추출하도록 개선.
 
 
 

@@ -35,7 +35,12 @@ export default async function handler(req, res) {
             throw new Error('Translation failed: No text returned');
         }
 
+        // Clean up markdown code blocks if present
         let resultText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
+        // Also remove possible leading/trailing non-json characters if Gemini chats
+        if (resultText.indexOf('[') !== -1 && resultText.lastIndexOf(']') !== -1) {
+            resultText = resultText.substring(resultText.indexOf('['), resultText.lastIndexOf(']') + 1);
+        }
 
         if (texts) {
             // Batch Response Parsing
