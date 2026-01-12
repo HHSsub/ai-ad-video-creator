@@ -108,7 +108,8 @@ const Step4 = ({
 
     try {
       // 2. 씬 삭제 API 호출 (Atomically handled by backend)
-      const requestUrl = `${API_BASE}/api/delete-scene`;
+      // 2. 씬 삭제 API 호출 (Updated to use projects route for stability)
+      const requestUrl = `${API_BASE}/api/projects/${currentProject?.id}/scenes/delete`;
       console.log(`[Step4] 씬 삭제 요청: ${requestUrl}`);
 
       const delResponse = await fetch(requestUrl, {
@@ -118,16 +119,22 @@ const Step4 = ({
           'x-username': user?.username || 'anonymous'
         },
         body: JSON.stringify({
-          projectId: currentProject?.id,
           conceptId: selectedConceptId,
-          sceneNumber: sceneNumber,
-          imageUrl: sortedImages.find(img => img.sceneNumber === sceneNumber)?.imageUrl // Optional helper
+          sceneNumber: sceneNumber
         })
       });
 
+      // HTML 응답 체크 (404/500 에러 페이지 방지)
+      const contentType = delResponse.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        const text = await delResponse.text();
+        console.error('[Step4] 씬 삭제 실패 (HTML 응답):', text.substring(0, 100));
+        throw new Error(`서버 라우팅 오류 (HTML 응답 수신): ${delResponse.status}`);
+      }
+
       const delResult = await delResponse.json();
 
-      if (!delResult.success) {
+      if (!delResponse.ok || !delResult.success) {
         throw new Error(delResult.error || '씬 삭제 실패');
       }
 

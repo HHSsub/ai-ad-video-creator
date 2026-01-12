@@ -565,4 +565,119 @@ router.delete('/:id/members/:memberId', (req, res) => {
 });
 
 
+
+// 10. 씬 삭제 (POST /api/projects/:id/scenes/delete)
+router.post('/:id/scenes/delete', async (req, res) => {
+  const currentUsername = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+  const { id } = req.params;
+  const { conceptId, sceneNumber } = req.body;
+
+  console.log(`[projects POST /:id/scenes/delete] 프로젝트: ${id}, 씬: ${sceneNumber}, 사용자: ${currentUsername}`);
+
+  if (!conceptId || sceneNumber === undefined) {
+    return res.status(400).json({ success: false, error: 'conceptId와 sceneNumber는 필수입니다' });
+  }
+
+  const projectsData = readJSON(projectsFile);
+  const membersData = readJSON(membersFile);
+
+  if (!projectsData || !membersData) {
+    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
+  }
+
+  // 프로젝트 존재 확인
+  const project = projectsData.projects.find(p => p.id === id);
+  if (!project) {
+    return res.status(404).json({ success: false, error: '프로젝트 없음' });
+  }
+
+  // 권한 확인 (편집 권한 필요)
+  const isSystemUser = ['admin', 'guest', 'anonymous'].includes(currentUsername);
+  const isCreator = project.createdBy === currentUsername;
+  const membership = membersData.members.find(
+    m => m.projectId === id && m.username === currentUsername
+  );
+
+  const canEdit = isSystemUser || isCreator ||
+    (membership && ['owner', 'manager', 'editor'].includes(membership.role));
+
+  if (!canEdit) {
+    return res.status(403).json({ success: false, error: '편집 권한이 없습니다' });
+  }
+
+  try {
+    const storyboard = project.storyboard;
+    if (!storyboard || !storyboard.styles) {
+      return res.status(400).json({ success: false, error: '스토리보드 데이터가 없습니다' });
+    }
+
+    // 해당 컨셉 찾기
+    const styleIndex = storyboard.styles.findIndex(s => s.conceptId == conceptId || s.concept_id == conceptId);
+    if (styleIndex === -1) {
+      return res.status(404).json({ success: false, error: '컨셉을 찾을 수 없습니다' });
+    }
+
+    const currentImages = storyboard.styles[styleIndex].images;
+    const sceneToDelete = currentImages.find(img => img.sceneNumber === sceneNumber);
+
+    if (!sceneToDelete) {
+      console.warn(`[scene delete] 씬 ${sceneNumber}을 찾을 수 없음 (이미 삭제됨?)`);
+    } else {
+      // 🔥 S3 이미지/비디오 삭제
+      const { deleteFromS3 } = await import('../utils/s3-uploader.js');
+
+      // 이미지 삭제
+      if (sceneToDelete.imageUrl && sceneToDelete.imageUrl.includes('nexxii-storage')) {
+        try {
+          await deleteFromS3(sceneToDelete.imageUrl);
+          console.log(`[scene delete] S3 이미지 삭제 완료: ${sceneToDelete.imageUrl}`);
+        } catch (s3Error) {
+          console.error(`[scene delete] S3 이미지 삭제 실패 (무시): ${s3Error.message}`);
+        }
+      }
+
+      // 비디오 삭제
+      if (sceneToDelete.videoUrl && sceneToDelete.videoUrl.includes('nexxii-storage')) {
+        try {
+          await deleteFromS3(sceneToDelete.videoUrl);
+          console.log(`[scene delete] S3 비디오 삭제 완료: ${sceneToDelete.videoUrl}`);
+        } catch (s3Error) {
+          console.error(`[scene delete] S3 비디오 삭제 실패 (무시): ${s3Error.message}`);
+        }
+      }
+    }
+
+    // 씬 제거 및 번호 재정렬
+    const updatedImages = currentImages
+      .filter(img => img.sceneNumber !== sceneNumber)
+      .sort((a, b) => a.sceneNumber - b.sceneNumber)
+      .map((img, index) => ({
+        ...img,
+        sceneNumber: index + 1 // 1부터 다시 번호 매기기
+      }));
+
+    // 스토리보드 업데이트
+    storyboard.styles[styleIndex].images = updatedImages;
+    project.updatedAt = new Date().toISOString();
+
+    // DB 저장
+    if (!writeJSON(projectsFile, projectsData)) {
+      return res.status(500).json({ success: false, error: 'DB 저장 실패' });
+    }
+
+    console.log(`[scene delete] ✅ 씬 삭제 및 저장 완료. 남은 씬: ${updatedImages.length}개`);
+
+    // 전체 스토리보드 반환 (클라이언트 동기화용)
+    res.json({
+      success: true,
+      message: '씬이 삭제되었습니다',
+      storyboard: storyboard
+    });
+
+  } catch (error) {
+    console.error('[scene delete] ❌ 처리 중 오류:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;
