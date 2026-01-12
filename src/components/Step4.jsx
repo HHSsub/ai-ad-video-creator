@@ -100,10 +100,10 @@ const Step4 = ({
 
   // 🔥 초기 진입 시 모든 씬 선택 상태로 초기화
   useEffect(() => {
-    if (images.length > 0 && selectedScenes.length === 0) {
-      setSelectedScenes(images.map(img => img.sceneNumber));
+    if (renumberedImages.length > 0 && selectedScenes.length === 0) {
+      setSelectedScenes(renumberedImages.map(img => img.sceneNumber));
     }
-  }, [images.length]);
+  }, [renumberedImages.length]);
 
   // 🔥 씬 삭제 핸들러
   const handleDeleteScene = async (sceneNumber) => {
@@ -248,10 +248,10 @@ const Step4 = ({
   // 🔥 통합된 번역 및 영구 저장 로직
   useEffect(() => {
     // 1. 초기 로드 시, 이미 저장된 번역이 있는지 확인하여 상태 복구 (Persistence check)
-    if (images && images.length > 0) {
+    if (renumberedImages && renumberedImages.length > 0) {
       const loadedPrompts = {};
-      console.log('[Step4] Images loaded:', images.length);
-      images.forEach(img => {
+      console.log('[Step4] Images loaded:', renumberedImages.length);
+      renumberedImages.forEach(img => {
         // Debug logs
         if (img.koreanPrompt) {
           console.log(`[Step4] Scene ${img.sceneNumber}: Load persisted prompt`, img.koreanPrompt.substring(0, 20));
@@ -271,9 +271,9 @@ const Step4 = ({
 
     // 2. 1.5초 후 누락된 번역 일괄 처리 (Batch)
     const timer = setTimeout(async () => {
-      if (!images || images.length === 0) return;
+      if (!renumberedImages || renumberedImages.length === 0) return;
 
-      const missingTranslations = images.filter(img =>
+      const missingTranslations = renumberedImages.filter(img =>
         img.prompt &&
         !img.koreanPrompt && // 이미 저장된 번역이 있으면 스킵
         !koreanPrompts[img.sceneNumber] && // 현재 메모리에 있으면 스킵
