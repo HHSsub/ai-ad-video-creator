@@ -244,7 +244,7 @@ const AdminPanel = ({ currentUser }) => {
       const id = engineId || `${selectedImageEngine}_${selectedVideoEngine}`;
       const type = promptType || selectedPromptType;
 
-      const response = await fetch(`${API_BASE}/api/prompts/versions?engineId=${id}&promptType=${type}`);
+      const response = await fetch(`${API_BASE}/api/prompts/versions/${id}/${type}`);
       const data = await response.json();
 
       if (data.success) {
@@ -609,7 +609,9 @@ const AdminPanel = ({ currentUser }) => {
   const viewResponseDetail = async (fileName) => {
     try {
       const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
-      const response = await fetch(`${API_BASE}/api/prompts/responses/detail/${engineId}/${selectedPromptType}/${fileName}`);
+      // 🔥 백엔드 라우트 명세와 일치시킴: /api/prompts/response-content/:engineId/:promptType/:responseId
+      const responseId = fileName.replace('.json', '');
+      const response = await fetch(`${API_BASE}/api/prompts/response-content/${engineId}/${selectedPromptType}/${responseId}`);
       const data = await response.json();
 
       if (data.success) {
