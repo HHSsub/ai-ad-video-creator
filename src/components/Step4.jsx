@@ -1471,15 +1471,28 @@ const Step4 = ({
                         <div className="relative aspect-video bg-black rounded-lg overflow-hidden border border-gray-700 group">
                           {img.imageUrl ? (
                             <>
-                              <img
-                                src={`${getImageSrc(img.imageUrl)}?t=${Date.now()}`}
-                                alt={`Scene ${img.sceneNumber}`}
-                                className="w-full h-full object-contain"
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.src = 'https://via.placeholder.com/400x225?text=Image+Load+Error';
-                                }}
-                              />
+                              <div className="relative w-full h-full">
+                                {/* 🔥 Loading Spinner */}
+                                {!imageLoadStates[img.sceneNumber] && (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                                  </div>
+                                )}
+
+                                <img
+                                  src={`${getImageSrc(img.imageUrl)}?t=${Date.now()}`}
+                                  alt={`Scene ${img.sceneNumber}`}
+                                  className={`w-full h-full object-contain transition-opacity duration-300 ${imageLoadStates[img.sceneNumber] ? 'opacity-100' : 'opacity-0'
+                                    }`}
+                                  onLoad={() => handleImageLoad(img.sceneNumber)}
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = 'https://via.placeholder.com/400x225?text=Image+Load+Error';
+                                    handleImageLoad(img.sceneNumber); // 에러나도 로딩 완료 처리
+                                  }}
+                                  onClick={() => handleImagePreview(img.imageUrl, img.prompt)}
+                                />
+                              </div>
                               {/* Overlay for regenerate/convert status */}
                               {isRegenerating || convertingScenes[img.sceneNumber] ? (
                                 <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-10">
