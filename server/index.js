@@ -339,62 +339,65 @@ app.get('/api/prompts/versions', async (req, res) => { // 수정됨: /api/ 추�
 
 app.post('/api/prompts/restore', async (req, res) => {
   try {
-    const { versionId } = req.body;
+    const { versionId, engineId, promptType, versionFile } = req.body;
 
-    if (!versionId) {
+    if (!versionId || !engineId || !promptType) {
       return res.status(400).json({
         success: false,
-        message: '버전 ID가 필요합니다.'
+        message: '필수 데이터(versionId, engineId, promptType)가 누락되었습니다.'
       });
     }
 
-    const publicPath = path.join(process.cwd(), 'public');
-    const versionsPath = path.join(publicPath, 'versions');
-    const metadataPath = path.join(versionsPath, 'versions.json');
+    const PROMPTS_DIR = path.join(process.cwd(), 'public', 'prompts');
+    const engineDir = path.join(PROMPTS_DIR, engineId);
 
-    if (!fs.existsSync(metadataPath)) {
-      return res.status(404).json({
-        success: false,
-        message: '버전 메타데이터를 찾을 수 없습니다.'
-      });
+    let versionsDir;
+    let currentFilePath;
+
+    if (promptType === 'manual') {
+      versionsDir = path.join(engineDir, 'manual', 'versions');
+      currentFilePath = path.join(engineDir, 'manual', 'manual_prompt.txt');
+    } else {
+      versionsDir = path.join(engineDir, 'auto', 'versions');
+      if (promptType === 'auto_product') {
+        currentFilePath = path.join(engineDir, 'auto', 'product_prompt.txt');
+      } else if (promptType === 'auto_service') {
+        currentFilePath = path.join(engineDir, 'auto', 'service_prompt.txt');
+      } else {
+        return res.status(400).json({ success: false, message: '유효하지 않은 promptType입니다.' });
+      }
     }
 
-    const versions = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-    const version = versions.find(v => v.id === versionId);
-
-    if (!version) {
-      return res.status(404).json({
-        success: false,
-        message: '해당 버전을 찾을 수 없습니다.'
-      });
-    }
-
-    const versionFilePath = path.join(versionsPath, version.versionFile);
+    // versionFile이 없으면 versionId.txt로 간주
+    const fileName = versionFile || (versionId.endsWith('.txt') ? versionId : `${versionId}.txt`);
+    const versionFilePath = path.join(versionsDir, fileName);
 
     if (!fs.existsSync(versionFilePath)) {
+      console.error(`[Restore] 버전 파일 없음: ${versionFilePath}`);
       return res.status(404).json({
         success: false,
         message: '버전 파일을 찾을 수 없습니다.'
       });
     }
 
-    const currentFilePath = path.join(publicPath, version.filename);
+    // 현재 파일 백업
     if (fs.existsSync(currentFilePath)) {
       const currentContent = fs.readFileSync(currentFilePath, 'utf-8');
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupPath = path.join(versionsPath, `restore_backup_${timestamp}.txt`);
+      const backupTimestamp = Date.now();
+      const backupPath = path.join(versionsDir, `${promptType}_restore_backup_${backupTimestamp}.txt`);
       fs.writeFileSync(backupPath, currentContent);
     }
 
+    // 복원
     const versionContent = fs.readFileSync(versionFilePath, 'utf-8');
     fs.writeFileSync(currentFilePath, versionContent);
 
-    console.log(`✅ 프롬프트 복원 완료: ${versionId}`);
+    console.log(`✅ 프롬프트 복원 완료: [${engineId}] ${promptType} <- ${fileName}`);
     res.json({
       success: true,
-      message: '프롬프트가 복원되었습니다.'
+      message: '프롬프트가 성공적으로 복원되었습니다.',
+      restoredVersion: fileName
     });
-
   } catch (error) {
     console.error('프롬프트 복원 오류:', error);
     res.status(500).json({
@@ -426,13 +429,21 @@ app.post('/api/prompts/save-response', async (req, res) => {
       });
     }
 
-    const responsesPath = path.join(process.cwd(), 'public', 'gemini_responses');
+    // 🔥 EC2 실측 구조에 대응하기 위해 enginePromptHelper 컨셉 적용
+    const mode = promptKey.includes('manual') ? 'manual' : 'auto';
+    const parts = promptKey.split('_');
+    // promptKey 형식: seedream-v4_kling-v2-5-pro_auto_product
+    // engineId는 마지막 2단어(mode, type)를 제외한 나머지
+    const engineId = parts.length > 2 ? parts.slice(0, parts.length - 2).join('_') : 'unknown';
+
+    const responsesPath = path.join(process.cwd(), 'public', 'prompts', engineId, mode, 'responses');
 
     if (!fs.existsSync(responsesPath)) {
       fs.mkdirSync(responsesPath, { recursive: true });
     }
 
-    const fileName = `${promptKey}_${step}_${timestamp || Date.now()}.json`;
+    // 🔥 EC2 실측 구조와 일치하도록 파일명에 _storyboard_ 추가
+    const fileName = `${promptKey}_storyboard_${step}_${timestamp || Date.now()}.json`;
     const filePath = path.join(responsesPath, fileName);
 
     const responseData = {
@@ -446,7 +457,7 @@ app.post('/api/prompts/save-response', async (req, res) => {
 
     fs.writeFileSync(filePath, JSON.stringify(responseData, null, 2), 'utf-8');
 
-    console.log(`✅ Gemini 응답 저장 완료: ${fileName}`);
+    console.log(`✅ [save-response] Gemini 응답 저장 완료 (엔진격리): ${fileName}`);
     res.json({
       success: true,
       message: 'Gemini 응답이 저장되었습니다.',

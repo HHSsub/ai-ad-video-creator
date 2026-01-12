@@ -120,9 +120,37 @@ const AdminPanel = ({ currentUser }) => {
   }, [prompts]);
 
   useEffect(() => {
+    const fetchVersionContent = async () => {
+      if (!selectedVersion) return;
+
+      if (selectedVersion.isCurrent) {
+        // 🔥 [현재] 선택 시 allPrompts에 저장된 원본 내용으로 복원
+        const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
+        const promptKey = selectedPromptType;
+        if (allPrompts[engineId] && allPrompts[engineId][promptKey]) {
+          setCurrentPrompt(allPrompts[engineId][promptKey]);
+        }
+        return;
+      }
+
+      try {
+        const engineId = `${selectedImageEngine}_${selectedVideoEngine}`;
+        const promptType = selectedPromptType;
+        const response = await fetch(`${API_BASE}/api/prompts/version-content/${engineId}/${promptType}/${selectedVersion.id}`);
+        const data = await response.json();
+
+        if (data.success) {
+          setCurrentPrompt(data.content);
+        }
+      } catch (error) {
+        console.error('버전 내용 로드 실패:', error);
+      }
+    };
+
+    fetchVersionContent();
+
     if (selectedVersion) {
-      const promptKey = selectedVersion.promptKey || getPromptKeyFromVersion(selectedVersion);
-      loadGeminiResponses(promptKey);
+      loadGeminiResponses();
     }
   }, [selectedVersion]);
 

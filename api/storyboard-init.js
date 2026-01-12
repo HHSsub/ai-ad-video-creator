@@ -259,7 +259,8 @@ function saveGeminiResponse(promptKey, step, formData, fullResponse) {
     }
 
     const timestamp = Date.now();
-    const fileName = `${promptKey}_${step}_${timestamp}.json`;
+    // 🔥 EC2 실측 구조와 일치하도록 파일명에 _storyboard_ 추가
+    const fileName = `${promptKey}_storyboard_${step}_${timestamp}.json`;
     const filePath = path.join(responsesPath, fileName);
 
     const responseData = {

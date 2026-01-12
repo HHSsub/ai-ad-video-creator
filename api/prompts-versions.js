@@ -55,18 +55,19 @@ export async function getVersions(req, res) {
 
         // 파일 목록 읽기
         const files = fs.readdirSync(versionsDir)
-            .filter(f => f.endsWith('.txt'))
+            .filter(f => f.startsWith(`${promptType}_`) && f.endsWith('.txt'))
             .map(filename => {
                 const filePath = path.join(versionsDir, filename);
                 const stats = fs.statSync(filePath);
 
-                // 파일명에서 타임스탬프 추출
-                const match = filename.match(/(\d+)\.txt$/);
+                // 파일명에서 타임스탬프 추출 (형식: promptType_timestamp.txt)
+                const match = filename.match(/_(\d+)\.txt$/);
                 const timestamp = match ? parseInt(match[1]) : stats.mtimeMs;
 
                 return {
                     id: filename.replace('.txt', ''),
                     filename: filename,
+                    versionFile: filename, // 🔥 FE restoreVersion에서 요구함
                     timestamp: timestamp,
                     date: new Date(timestamp).toISOString(),
                     size: stats.size
@@ -133,7 +134,7 @@ export async function getResponses(req, res) {
 
         // JSON 파일 목록 읽기
         const files = fs.readdirSync(responsesDir)
-            .filter(f => f.endsWith('.json'))
+            .filter(f => f.startsWith(`${engineId}_${promptType}_`) && f.endsWith('.json')) // 🔥 엔진 및 타입별 정밀 필터링
             .map(filename => {
                 const filePath = path.join(responsesDir, filename);
                 const stats = fs.statSync(filePath);
@@ -222,6 +223,7 @@ export async function getVersionContent(req, res) {
 
         return res.status(200).json({
             success: true,
+            detail: content, // 🔥 AdminPanel에서 detail을 기대할 수 있음 (일관성)
             content: content,
             versionId: versionId
         });
@@ -283,6 +285,7 @@ export async function getResponseContent(req, res) {
 
         return res.status(200).json({
             success: true,
+            detail: data, // 🔥 AdminPanel.jsx #L616에서 data.detail을 기대함
             data: data,
             responseId: responseId
         });

@@ -1,4 +1,21 @@
-# UPNEXX 프로젝트 지식동기화 문서 v4.2 (S3 미디어 영속화판)
+### 2026-01-12 18:00 - [KNOWLEDGE] EC2 실제 경로 구조 및 히스토리 관리 규칙 명시
+- **배경**: AI의 반복적인 경로 망각 문제를 해결하기 위해 실제 EC2 파일 시스템 구조를 동기화함.
+- **히스토리 저장 경로 (`public/prompts/`)**:
+  - **Base**: `public/prompts/{engineId}/{mode}/` (예: `seedream-v4_kling-v2-5-pro/auto/`)
+  - **버전 히스토리**: `versions/` 폴더 내에 저장
+    - Manual: `manual_timestamp.txt`
+    - Auto Product: `auto_product_timestamp.txt`
+    - Auto Service: `auto_service_timestamp.txt`
+  - **응답 로그**: `responses/` 폴더 내에 저장
+    - 형식: `{engineId}_{promptType}_storyboard_unified_{timestamp}.json`
+- **관리 규칙**:
+  - `public/versions`, `public/gemini_responses` 등 글로벌 레거시 경로는 **완전 폐기 및 무시**.
+  - 모든 12가지 엔진 조합별로 위 경로 규칙을 100% 준수하여 격리된 히스토리를 제공해야 함.
+  - 히스토리 조회 시 탭(`manual`, `auto_product`, `auto_service`)에 맞는 파일만 정확히 필터링해야 함.
+
+---
+
+1: # UPNEXX 프로젝트 지식동기화 문서 v4.2 (S3 미디어 영속화판)
 
 **문서 목적**: AI가 코드 작업 시 매번 참조하고 업데이트하여 작업 맥락을 유지  
 **최종 수정**: 2026-01-10 (KST)  
