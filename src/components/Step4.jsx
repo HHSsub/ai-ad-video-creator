@@ -260,14 +260,22 @@ const Step4 = ({
         console.log(`[Step4] 번역 시작 (${toTranslate.length}개)...`);
 
         const newTranslations = {};
-        // 병렬 처리로 속도 향상
-        await Promise.all(toTranslate.map(async (img) => {
-          // 이미 번역 요청 중인 상태면 스킵 (koreanPrompts에 '번역 중...' 마킹할 수도 있음)
-          const translated = await translateText(img.prompt, 'ko');
-          if (translated) {
-            newTranslations[img.sceneNumber] = translated;
+
+        // 🔥 Sequential processing to prevent 429 Errors (Gemini Free Tier Limit)
+        // 병렬 처리 제거 -> 순차 처리 + 지연 시간 도입
+        for (const img of toTranslate) {
+          try {
+            // 이미 번역 요청 중인 상태면 스킵 (koreanPrompts에 '번역 중...' 마킹할 수도 있음)
+            const translated = await translateText(img.prompt, 'ko');
+            if (translated) {
+              newTranslations[img.sceneNumber] = translated;
+            }
+            // 3초 대기 (Rate Limit 방지)
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          } catch (e) {
+            console.error(`Translation failed for scene ${img.sceneNumber}`, e);
           }
-        }));
+        }
 
         setKoreanPrompts(prev => ({ ...prev, ...newTranslations }));
         console.log('[Step4] 번역 완료:', Object.keys(newTranslations));
@@ -280,6 +288,62 @@ const Step4 = ({
 
     fetchTranslations();
   }, [images]); // koreanPrompts 의존성 제거하여 무한 루프 방지
+
+  // 🔥 번역 상태 강제 확인 (사용자 요청 대응)
+  useEffect(() => {
+    // 1~2초 뒤에 한번 더 체크하여 누락된 번역이 있으면 시도
+    const timer = setTimeout(() => {
+      if (!images || images.length === 0) return;
+
+      const missingTranslations = images.filter(img =>
+        img.prompt &&
+        !koreanPrompts[img.sceneNumber] &&
+        /[a-zA-Z]/.test(img.prompt) // 영어가 포함되어 있는데 번역본이 없는 경우
+      );
+
+      if (missingTranslations.length > 0) {
+        console.log(`[Step4] 누락된 번역 발견 (${missingTranslations.length}개), 배치 번역 시도...`);
+        setIsTranslating(true);
+
+        // 🔥 Batch Processing Implementation
+        const processBatchTranslation = async () => {
+          try {
+            const textsToTranslate = missingTranslations.map(img => img.prompt);
+
+            const response = await fetch(`${API_BASE}/api/translate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ texts: textsToTranslate, targetLang: 'ko' })
+            });
+
+            if (!response.ok) throw new Error('Batch translation failed');
+
+            const data = await response.json();
+
+            if (data.success && data.translatedTexts && Array.isArray(data.translatedTexts)) {
+              const newTrans = {};
+              missingTranslations.forEach((img, index) => {
+                if (data.translatedTexts[index]) {
+                  newTrans[img.sceneNumber] = data.translatedTexts[index];
+                }
+              });
+
+              setKoreanPrompts(prev => ({ ...prev, ...newTrans }));
+              console.log(`[Step4] 배치 번역 완료: ${Object.keys(newTrans).length}개`);
+            }
+          } catch (e) {
+            console.error('[Step4] Batch translation error:', e);
+          } finally {
+            setIsTranslating(false);
+          }
+        };
+
+        processBatchTranslation();
+      }
+    }, 1000); // 1초 지연
+
+    return () => clearTimeout(timer);
+  }, [images, koreanPrompts]); // koreanPrompts 변경 감지하여 완료 여부 체크
 
   // 🔥 한글 입력 -> 영문 번역 -> 이미지 재생성 wrapper
   const handleRegenerateWithTranslation = async (sceneNumber) => {

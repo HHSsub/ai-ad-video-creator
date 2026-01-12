@@ -123,7 +123,10 @@
   - **Logic 추가**: `useEffect`로 초기 진입 시 영문 프롬프트를 한글로 번역하여 `koreanPrompts`에 저장.
   - **Regeneration**: 사용자가 한글로 수정한 내용을 `translateText`로 영문 변환 후 API 전송하도록 `handleRegenerateWithTranslation` 구현.
 - **결과**: ✅ 기존 프롬프트가 한글로 보이며, 한글로 수정 후 재생성 가능. (단, API Key 누락 시 영문으로 fallback 될 수 있음 -> .env 수정 완료)
-- **추가 수정 (13:25)**: `useEffect` 의존성 배열 수정 및 번역 강제 실행 로직 보강 (로드 시점 번역 누락 방지).
+- **추가 수정 (13:50)**:
+  - **Batch Translation**: 기존 순차 번역(Sequential) 방식이 Rate Limit(429)를 유발하여, **한 번의 API 호출로 여러 문장을 번역(Batch Processing)**하도록 `api/translate-proxy.js` 및 `Step4.jsx` 수정.
+  - **Data Persistence**: 이미지 재생성(`Regenerate`) 직후 변경 사항이 백엔드에 즉시 저장(`PATCH /projects/:id`)되도록 수정하여 새로고침 시 데이터 증발 방지.
+  - **Selector Fix**: `SyntaxError` 유발하던 잘못된 선택자(`.bg-gray-900/50`)를 `data-scene-card` 속성 기반 선택자로 교체하여 모달 먹통 해결.
 
 
 
