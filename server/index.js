@@ -557,7 +557,8 @@ app.get('/api/prompts/responses/detail/:engineId/:promptType/:fileName', async (
 
     const { getGeminiResponsesDir } = await import('../src/utils/enginePromptHelper.js');
     const mode = promptType.includes('manual') ? 'manual' : 'auto';
-    const responsesPath = getGeminiResponsesDir(mode);
+    // 🔥 파라미터로 받은 engineId를 전달하여 정확한 경로 획득
+    const responsesPath = getGeminiResponsesDir(mode, null, engineId);
     const filePath = path.join(responsesPath, fileName);
 
     console.log(`[responses/detail] 파일 경로: ${filePath}`);

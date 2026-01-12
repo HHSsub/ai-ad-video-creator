@@ -55,14 +55,18 @@ export async function getVersions(req, res) {
 
         // 파일 목록 읽기
         const files = fs.readdirSync(versionsDir)
-            .filter(f => f.startsWith(`${promptType}_`) && f.endsWith('.txt'))
+            .filter(f => {
+                // 엄격한 형식 체크: {promptType}_{숫자타입스탬프}.txt
+                const regex = new RegExp(`^${promptType}_(\\d+)\\.txt$`);
+                return regex.test(f);
+            })
             .map(filename => {
                 const filePath = path.join(versionsDir, filename);
                 const stats = fs.statSync(filePath);
 
-                // 파일명에서 타임스탬프 추출 (형식: promptType_timestamp.txt)
+                // 파일명에서 타임스탬프 추출
                 const match = filename.match(/_(\d+)\.txt$/);
-                const timestamp = match ? parseInt(match[1]) : stats.mtimeMs;
+                const timestamp = parseInt(match[1]);
 
                 return {
                     id: filename.replace('.txt', ''),

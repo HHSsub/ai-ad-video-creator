@@ -50,8 +50,8 @@ export function generateEngineId() {
  *       └── manual/
  *           └── manual_prompt.txt
  */
-export function getPromptFilePath(mode, videoPurpose = null) {
-  const engineId = generateEngineId();
+export function getPromptFilePath(mode, videoPurpose = null, providedEngineId = null) {
+  const engineId = providedEngineId || generateEngineId();
   const baseDir = path.join(PROMPTS_DIR, 'prompts', engineId);
 
   // 디렉토리 생성 (없으면)
@@ -87,8 +87,8 @@ export function getPromptFilePath(mode, videoPurpose = null) {
  * 프롬프트 버전 파일 경로
  * /public/prompts/{engineId}/{mode}/versions/
  */
-export function getPromptVersionsDir(mode, videoPurpose = null) {
-  const engineId = generateEngineId();
+export function getPromptVersionsDir(mode, videoPurpose = null, providedEngineId = null) {
+  const engineId = providedEngineId || generateEngineId();
   const baseDir = path.join(PROMPTS_DIR, 'prompts', engineId);
 
   if (mode === 'manual') {
@@ -112,8 +112,8 @@ export function getPromptVersionsDir(mode, videoPurpose = null) {
  * Gemini 응답 저장 경로
  * /public/prompts/{engineId}/{mode}/responses/
  */
-export function getGeminiResponsesDir(mode, videoPurpose = null) {
-  const engineId = generateEngineId();
+export function getGeminiResponsesDir(mode, videoPurpose = null, providedEngineId = null) {
+  const engineId = providedEngineId || generateEngineId();
   const baseDir = path.join(PROMPTS_DIR, 'prompts', engineId);
 
   if (mode === 'manual') {

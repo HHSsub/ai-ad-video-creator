@@ -640,6 +640,11 @@ const AdminPanel = ({ currentUser }) => {
       // 🔥 백엔드 라우트 명세와 일치시킴: /api/prompts/response-content/:engineId/:promptType/:responseId
       const responseId = fileName.replace('.json', '');
       const response = await fetch(`${API_BASE}/api/prompts/response-content/${engineId}/${selectedPromptType}/${responseId}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.success) {
@@ -784,7 +789,7 @@ const AdminPanel = ({ currentUser }) => {
                       >
                         <div className="flex justify-between items-center mb-1">
                           <span className={`text-[11px] font-bold ${v.isCurrent ? 'text-green-400' : 'text-gray-300'}`}>
-                            {v.isCurrent ? '⚡ CURRENT' : v.filename.split('_').pop().replace('.txt', '')}
+                            {v.isCurrent ? '⚡ CURRENT' : `v ${formatDateTime(v.timestamp).split(' ').slice(1).join(' ')}`}
                           </span>
                           {!v.isCurrent && (
                             <button
