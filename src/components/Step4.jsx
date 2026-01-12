@@ -40,6 +40,8 @@ const Step4 = ({
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
   const [modifiedScenes, setModifiedScenes] = useState([]);
+  const [koreanPrompts, setKoreanPrompts] = useState({}); // 🔥 번역된 한국어 프롬프트 저장
+  const [isTranslating, setIsTranslating] = useState(false); // 번역 진행 상태
 
   // 🔥 추가: 멤버 초대 모달 상태
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -208,6 +210,135 @@ const Step4 = ({
       return videoUrl; // 이미 절대 경로(또는 /nexxii 포함)라면 그대로 반환
     }
     return videoUrl;
+  };
+
+  // 🔥 번역 API 호출 헬퍼
+  const translateText = async (text, targetLang = 'ko') => {
+    try {
+      const response = await fetch(`${API_BASE}/api/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          text,
+          targetLang
+        })
+      });
+
+      if (!response.ok) throw new Error('Translation failed');
+      const data = await response.json();
+      return data.translatedText;
+    } catch (error) {
+      console.error('Translation error:', error);
+      return text; // 실패 시 원본 반환
+    }
+  };
+
+  // 🔥 초기 로드 시 영문 프롬프트 -> 한글 번역
+  useEffect(() => {
+    const fetchTranslations = async () => {
+      if (images.length === 0) return;
+
+      // 이미 번역된 씬은 건너뛰기 (최적화)
+      const toTranslate = images.filter(img => img.prompt && !koreanPrompts[img.sceneNumber]);
+      if (toTranslate.length === 0) return;
+
+      setIsTranslating(true);
+      try {
+        const newTranslations = {};
+        // 병렬 처리로 속도 향상
+        await Promise.all(toTranslate.map(async (img) => {
+          const translated = await translateText(img.prompt, 'ko');
+          newTranslations[img.sceneNumber] = translated;
+        }));
+
+        setKoreanPrompts(prev => ({ ...prev, ...newTranslations }));
+      } catch (err) {
+        console.error('프롬프트 번역 실패:', err);
+      } finally {
+        setIsTranslating(false);
+      }
+    };
+
+    fetchTranslations();
+  }, [images, koreanPrompts]);
+
+  // 🔥 한글 입력 -> 영문 번역 -> 이미지 재생성 wrapper
+  const handleRegenerateWithTranslation = async (sceneNumber) => {
+    if (!permissions.regenerate) {
+      setError('이미지 재생성 권한이 없습니다.');
+      return;
+    }
+
+    const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
+    if (!scene) return;
+
+    // 현재 입력창에 있는 값 (한글일 수 있음)
+    const currentInput = getEditedPrompt(sceneNumber, 'prompt', koreanPrompts[sceneNumber] || scene.prompt);
+
+    setIsTranslating(true);
+    log(`씬 ${sceneNumber} 프롬프트 번역 및 재생성 시작...`);
+
+    try {
+      // 1. 한글 -> 영문 번역
+      const englishPrompt = await translateText(currentInput, 'en');
+      log(`번역 완료: ${currentInput.substring(0, 20)}... -> ${englishPrompt.substring(0, 20)}...`);
+
+      // 2. 번역된 영문 프롬프트로 재생성 요청 (기존 핸들러 로직 일부 차용)
+      setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: true }));
+      setError(null);
+
+      const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          imagePrompt: {
+            prompt: englishPrompt, // 번역된 영문 프롬프트 사용
+            aspect_ratio: formData?.aspectRatioCode || 'widescreen_16_9',
+            guidance_scale: 2.5,
+            seed: Math.floor(Math.random() * 1000000)
+          },
+          sceneNumber: sceneNumber,
+          conceptId: selectedConceptId,
+          projectId: currentProject?.id || null
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Image generation failed');
+      }
+
+      const data = await response.json();
+
+      // 성공 시 이미지 URL 업데이트 (스토리보드 객체 직접 수정 및 강제 리렌더)
+      // 주의: 원본 배열을 찾아 수정해야 함
+      const targetImage = images.find(img => img.sceneNumber === sceneNumber);
+      if (targetImage) {
+        targetImage.imageUrl = data.imageUrl; // URL 업데이트 (캐시 버스팅은 렌더링 시 처리)
+        // 원본 프롬프트도 업데이트할지 결정해야 하나, 보통 생성된 프롬프트로 바꿈
+        // 하지만 여기선 영문 프롬프트를 원본으로 유지
+        targetImage.prompt = englishPrompt;
+      }
+
+      // 한글 프롬프트 상태 업데이트 (입력한 내용 유지)
+      setKoreanPrompts(prev => ({ ...prev, [sceneNumber]: currentInput }));
+
+      setForceUpdate(prev => prev + 1);
+      log(`씬 ${sceneNumber} 이미지 재생성 완료`);
+
+    } catch (err) {
+      console.error('재생성 실패:', err);
+      setError(`재생성 실패: ${err.message}`);
+    } finally {
+      setIsTranslating(false);
+      setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: false }));
+    }
   };
 
   useEffect(() => {
@@ -1207,29 +1338,29 @@ const Step4 = ({
 
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-1">
-                            🔒 기존 프롬프트
+                            🔒 기존 프롬프트 (한글 번역됨)
                           </label>
                           <textarea
-                            value={img.prompt || ''}
+                            value={koreanPrompts[img.sceneNumber] || img.prompt || '번역 중...'}
                             readOnly
                             disabled
                             className="w-full h-20 p-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 text-sm resize-none mb-3"
                           />
 
                           <label className="block text-sm font-medium text-gray-400 mb-1">
-                            ✏️ 프롬프트 수정
+                            ✏️ 프롬프트 수정 (한글 입력 가능)
                           </label>
                           <textarea
-                            value={getEditedPrompt(img.sceneNumber, 'prompt', img.prompt || '')}
+                            value={getEditedPrompt(img.sceneNumber, 'prompt', koreanPrompts[img.sceneNumber] || img.prompt || '')}
                             onChange={(e) => handlePromptChange(img.sceneNumber, 'prompt', e.target.value)}
                             disabled={!permissions.editPrompt || isRegenerating}
                             className="w-full h-24 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm resize-none focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed mb-2"
-                            placeholder="수정할 프롬프트를 입력하세요..."
+                            placeholder="수정할 프롬프트를 한글로 입력하세요..."
                           />
                           <div className="space-y-3">
                             {permissions.editPrompt && (
                               <button
-                                onClick={() => handleRegenerateImage(img.sceneNumber)}
+                                onClick={() => handleRegenerateWithTranslation(img.sceneNumber)}
                                 disabled={isRegenerating}
                                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm"
                               >

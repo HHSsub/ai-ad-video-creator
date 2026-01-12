@@ -108,6 +108,21 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-12 13:05 - [FEATURE] Step 4 한글 프롬프트 번역 로직 프론트엔드 연동 (Task Z-16)
+- **이슈**: `api/translate-proxy.js`는 구현되었으나, `Step4.jsx`에 이를 호출하는 로직이 누락되어 UI에 영문만 표시됨.
+- **수정**: `src/components/Step4.jsx`
+  - **State 추가**: `koreanPrompts`, `isTranslating`
+  - **Logic 추가**: `useEffect`로 초기 진입 시 영문 프롬프트를 한글로 번역하여 `koreanPrompts`에 저장.
+  - **Regeneration**: 사용자가 한글로 수정한 내용을 `translateText`로 영문 변환 후 API 전송하도록 `handleRegenerateWithTranslation` 구현.
+- **결과**: ✅ 기존 프롬프트가 한글로 보이며, 한글로 수정 후 재생성 가능.
+
+
+### 2026-01-12 12:55 - [CRITICAL] 서버 ReferenceError (변수명 불일치) 수정 (Task Z-15)
+- **이슈**: 서버 재시작 후 `ReferenceError: convertSingleScene is not defined` 발생하며 502 에러 지속.
+- **원인**: `server/index.js`에서 import 이름은 `convertSingleSceneHandler`인데, 라우트 등록 시 `convertSingleScene` 변수명을 사용하여 정의되지 않은 변수 참조 발생.
+- **해결**: 라우트 등록 변수명을 `convertSingleSceneHandler`로 수정하여 일치시킴.
+- **결과**: ✅ ReferenceError 해결, 서버 정상 구동 확인.
+
 ### 2026-01-12 12:45 - [CRITICAL] 서버 크래시(502) 및 번역기 오류 수정 (Task Z-14)
 - **이슈 1**: 로그인 불가 및 502 Bad Gateway 발생.
   - **원인**: `server/index.js`에서 `translateProxyHandler`를 중복 import하여 `SyntaxError: Identifier has already been declared` 발생.
