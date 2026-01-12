@@ -82,9 +82,15 @@ const Step4 = ({
   // 🔥 forceUpdate를 의존성에 추가하여 리렌더링 유도
   const images = selectedStyle?.images || [];
 
+  // 🔥 씬 번호 강제 순차 재할당 (백엔드 데이터가 잘못되어도 UI는 항상 1,2,3...)
+  const renumberedImages = images.map((img, index) => ({
+    ...img,
+    sceneNumber: index + 1 // 강제로 순차 번호 할당
+  }));
+
   const finalVideo = storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId);
 
-  const sortedImages = [...images].sort((a, b) => a.sceneNumber - b.sceneNumber);
+  const sortedImages = [...renumberedImages].sort((a, b) => a.sceneNumber - b.sceneNumber);
 
   const log = (msg) => {
     const timestamp = new Date().toLocaleTimeString();
