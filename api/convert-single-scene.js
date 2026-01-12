@@ -87,6 +87,8 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    console.log('!!! [convert-single-scene] HANDLER INVOKED (v2026-01-12) !!!'); // 🔥 DEBUG CODE RUNNING
+
     // timeout 증가
     res.setTimeout(300000); // 5분
 
