@@ -247,7 +247,21 @@ const Step4 = ({
     return editingPrompts[sceneNumber]?.[field] ?? originalValue;
   };
 
-  const handleAddComment = (sceneNumber) => {
+  // 🔥 초기 진입 시 코멘트 로드
+  useEffect(() => {
+    if (images.length > 0) {
+      const initialComments = {};
+      images.forEach(img => {
+        if (img.comments && Array.isArray(img.comments)) {
+          initialComments[img.sceneNumber] = img.comments;
+        }
+      });
+      setLocalComments(initialComments);
+    }
+  }, [images]); // images가 변경될 때마다(초기 로드 포함) 코멘트 동기화
+
+
+  const handleAddComment = async (sceneNumber) => {
     if (!permissions.comment) {
       setError('코멘트 작성 권한이 없습니다.');
       return;
@@ -263,13 +277,41 @@ const Step4 = ({
       timestamp: new Date().toISOString()
     };
 
+    // 1. 로컬 상태 즉시 업데이트 (UI 반응성)
     setLocalComments(prev => ({
       ...prev,
       [sceneNumber]: [...(prev[sceneNumber] || []), comment]
     }));
 
     setNewComment(prev => ({ ...prev, [sceneNumber]: '' }));
-    log(`씬 ${sceneNumber}에 코멘트 추가: ${comment.text}`);
+
+    // 2. 스토리보드 객체 업데이트 (참조 수정)
+    const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
+    if (!scene) return;
+
+    if (!scene.comments) scene.comments = [];
+    scene.comments.push(comment);
+
+    // 3. 백엔드 저장 (PATCH)
+    try {
+      log(`씬 ${sceneNumber} 코멘트 저장 중...`);
+      await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-username': user?.username || 'anonymous'
+        },
+        body: JSON.stringify({
+          storyboard: storyboard, // 변경된 코멘트가 포함된 전체 스토리보드 저장
+          formData: formData
+        })
+      });
+      log(`씬 ${sceneNumber} 코멘트 저장 완료`);
+    } catch (saveErr) {
+      console.error('코멘트 저장 실패:', saveErr);
+      setError('코멘트 저장 실패 (네트워크 오류)');
+      // 실패 시 롤백 로직이 필요할 수 있으나, 현재는 에러만 표시
+    }
   };
 
   const handleRegenerateImage = async (sceneNumber) => {
