@@ -135,8 +135,16 @@ export default async function handler(req, res) {
                 else targetDuration = parseInt(supportedDurations[0], 10);
             }
         } else {
-            // If no restrictions, keep requested (but protect against null)
-            targetDuration = duration || 5;
+            // 🔥 Fallback when supportedDurations is missing (Common in current engines.json)
+            // Check if we have a default duration in params (e.g., "6" for Hailuo)
+            const defDur = defaultParams.duration ? parseInt(defaultParams.duration, 10) : 5;
+
+            if (duration !== defDur && defDur > 0) {
+                console.warn(`[convert-single-scene] Config missing supportedDurations. Enforcing default duration ${defDur} (Requested: ${duration})`);
+                targetDuration = defDur;
+            } else {
+                targetDuration = duration || 5;
+            }
         }
 
         // 🔥 CRITICAL: Parameter Sanitization
