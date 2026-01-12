@@ -116,9 +116,9 @@ export default async function handler(req, res) {
         // Clamp prompt
         if (finalPrompt.length > 2000) finalPrompt = finalPrompt.slice(0, 1900);
 
-        // 🔥 CRITICAL: Duration Type Casting (Must be String '5')
-        // User Requirement: Always request '5's from Kling. Trimming handles the rest (e.g. 2s).
-        const klingDuration = '5';
+        // 🔥 CRITICAL: Duration Type Casting (Must be Integer 5)
+        // User Requirement: Always request 5s from Kling. Trimming handles the rest (e.g. 2s).
+        const klingDuration = 5;
 
         const payload = {
             ...defaultParams, // 🔥 engines.json의 기본 파라미터 적용 (cfg_scale 등)
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
             image: imageUrl,
             prompt: finalPrompt,
             negative_prompt: defaultParams.negative_prompt || "blurry, distorted, low quality, morphing, glitch",
-            duration: klingDuration // 🔥 '5' or '10'
+            duration: klingDuration // 🔥 integer 5 or 10
         };
 
         // Undefined/null 제거

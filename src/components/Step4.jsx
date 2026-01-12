@@ -107,41 +107,50 @@ const Step4 = ({
     }
 
     try {
-      // 2. 씬 삭제 및 재정렬 (메모리 상 수정)
-      // styles.images 배열 직접 수정
-      const styleIndex = storyboard.styles.findIndex(s => s.conceptId === selectedConceptId);
-      if (styleIndex === -1) throw new Error('스타일을 찾을 수 없습니다.');
-
-      const currentImages = storyboard.styles[styleIndex].images;
-      const updatedImages = currentImages
-        .filter(img => img.sceneNumber !== sceneNumber)
-        .sort((a, b) => a.sceneNumber - b.sceneNumber)
-        .map((img, index) => ({
-          ...img,
-          sceneNumber: index + 1 // 재번호 부여 (1부터 시작)
-        }));
-
-      storyboard.styles[styleIndex].images = updatedImages;
-
-      // 3. 프로젝트 저장 (영구 반영)
-      await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
-        method: 'PATCH',
+      // 2. 씬 삭제 API 호출 (Atomically handled by backend)
+      const delResponse = await fetch(`${API_BASE}/api/delete-scene`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-username': user?.username || 'anonymous'
         },
         body: JSON.stringify({
-          storyboard: storyboard,
-          formData: formData
+          projectId: currentProject?.id,
+          conceptId: selectedConceptId,
+          sceneNumber: sceneNumber,
+          imageUrl: sortedImages.find(img => img.sceneNumber === sceneNumber)?.imageUrl // Optional helper
         })
       });
 
-      // 4. 상태 업데이트
+      const delResult = await delResponse.json();
+
+      if (!delResult.success) {
+        throw new Error(delResult.error || '씬 삭제 실패');
+      }
+
+      // 3. 상태 업데이트 (Backend Source of Truth)
+      // 부모 컴포넌트(Step4Consumer)나 상위에서 storyboard를 관리한다면 onComplete로 전파하거나
+      // 여기서는 prop으로 받은 storyboard를 직접 수정하는 것이 아니라,
+      // 리턴받은 updatedStoryboard를 사용하여 로컬 상태를 강제로 갱신해야 함.
+      // 하지만 현재 구조상 storyboard prop을 직접 mutate하고 forceUpdate를 쓰는 패턴이므로
+      // 백엔드에서 받은 최신 storyboard로 로컬 storyboard 객체 내용을 덮어씌움.
+
+      // Update the reference object (since props are read-only but objects are mutable reference)
+      // Better strategy: Call a refresh callback if available, or mutate carefully matching backend state.
+
+      const newImages = delResult.storyboard.styles.find(s => s.conceptId == selectedConceptId || s.concept_id == selectedConceptId).images;
+
+      // Mutate the prop object (Legacy pattern used in this file)
+      const styleIndex = storyboard.styles.findIndex(s => s.conceptId === selectedConceptId);
+      if (styleIndex !== -1) {
+        storyboard.styles[styleIndex].images = newImages;
+      }
+
       setForceUpdate(prev => prev + 1); // 리렌더링 트리거
-      setSelectedScenes(updatedImages.map(img => img.sceneNumber)); // 선택 상태 리셋
+      setSelectedScenes(newImages.map(img => img.sceneNumber)); // 선택 상태 리셋
       setModifiedScenes([]); // 수정 상태 리셋
 
-      log(`씬 ${sceneNumber} 삭제 및 재정렬 완료 (총 ${updatedImages.length}개)`);
+      log(`씬 ${sceneNumber} 삭제 완료 (총 ${newImages.length}개)`);
 
     } catch (err) {
       console.error('씬 삭제 실패:', err);

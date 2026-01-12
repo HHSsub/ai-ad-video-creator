@@ -28,6 +28,7 @@ import generateVideo from '../api/generate-video.js';
 import videoStatus from '../api/video-status.js';
 import compileVideos from '../api/compile-videos.js';
 import convertSingleScene from '../api/convert-single-scene.js'; // 싱글 씨인 변환
+import deleteScene from '../api/delete-scene.js'; // 🔥 씬 삭제 API 추가
 import debug from '../api/debug.js';
 import applyBgm from '../api/apply-bgm.js';
 import loadMoodList from '../api/load-mood-list.js';
@@ -733,6 +734,7 @@ app.use('/api/storyboard-manual-inject', storyboardManualInject); // 🔥 수동
 app.use('/api/storyboard-render-image', storyboardRenderImage); // 수정됨: /api/ 추가
 app.use('/api/image-to-video', imageToVideo); // 수정됨: /api/ 추가
 app.use('/api/convert-single-scene', convertSingleScene); // 🔥 싱글 씬 변환
+app.use('/api/delete-scene', deleteScene); // 🔥 씬 삭제 API 등록
 app.use('/api/generate-video', generateVideo); // 수정됨: /api/ 추가
 app.use('/api/video-status', videoStatus);
 app.use('/api/compile-videos', compileVideos); // 수정됨: /api/ 추가

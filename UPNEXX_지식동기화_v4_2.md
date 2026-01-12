@@ -97,6 +97,17 @@
 
 ## 📝 작업 히스토리 (최신순)
 
+### 2026-01-12 11:24 - [HOTFIX] 영상 변환 400 에러 및 씬 삭제 영속성 수정 (Task Z-9)
+- **긴급 이슈 1 (Video)**: 단일 씬 영상 변환 시 `HTTP 400: Bad Request` (500 Error) 발생.
+  - **원인**: `api/convert-single-scene.js`에서 Kling API로 `duration`을 문자열(`'5'`)로 보내고 있었으나, 엔진 스펙 변경 또는 엄격한 검증으로 정수형(`5`)이 요구됨.
+  - **해결**: Payload 구성 시 `duration: 5` (Integer)로 타입 캐스팅 수정.
+- **긴급 이슈 2 (Deletion)**: "씬 삭제" 후 새로고침하면 씬이 부활함.
+  - **원인**: Frontend(`Step4.jsx`)에서 상태만 변경하고 백엔드 파일 삭제 로직이 없었으며, `PATCH /projects` 요청이 비동기 타이밍 문제로 제대로 반영되지 않음.
+  - **해결**:
+    1. **Backend**: `api/delete-scene.js` 신규 생성. 파일 시스템 삭제(`fs.unlink`)와 JSON 데이터 업데이트를 Atomic하게 수행.
+    2. **Frontend**: `handleDeleteScene`에서 `PATCH` 대신 `api/delete-scene` 호출로 변경. 응답받은 최신 `storyboard`로 상태 동기화.
+- **결과**: ✅ 400 에러 없이 영상 변환 시작 확인, 씬 삭제 시 파일까지 영구 삭제됨.
+
 ### 2026-01-11 17:35 - [HOTFIX] ReferenceError (Missing State) 런타임 에러 수정 (Task Z-7)
 - **문제**: `Step4` 진입 시 `Uncaught ReferenceError: imageLoadStates is not defined` 발생.
 - **원인**: 이전 리팩토링 과정에서 `useState` 선언부 일부(`imageLoadStates`, `selectedPerson`, `synthesisLoading`, `recommendedVideo`)가 누락됨.
