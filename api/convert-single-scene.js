@@ -127,22 +127,37 @@ export default async function handler(req, res) {
             const strDuration = String(duration);
             if (!supportedDurations.includes(strDuration)) {
                 console.warn(`[convert-single-scene] Requested duration ${duration} not supported by ${engineConfig.displayName}. Supported: ${supportedDurations.join(', ')}`);
-                // Fallback to default
-                targetDuration = parseInt(defaultDuration, 10);
+                // Fallback to default, prefer 6 if available for Hailuo
+                if (supportedDurations.includes("6")) targetDuration = 6;
+                else if (supportedDurations.includes("5")) targetDuration = 5;
+                else targetDuration = parseInt(supportedDurations[0], 10);
             }
         } else {
             // If no restrictions, keep requested (but protect against null)
             targetDuration = duration || 5;
         }
 
+        // 🔥 CRITICAL: Parameter Sanitization
+        // Only include parameters defined in engines.json defaults + essential fields
         const payload = {
-            ...defaultParams, // 🔥 engines.json의 기본 파라미터 적용 (cfg_scale 등)
-            webhook_url: null,
             image: imageUrl,
-            prompt: finalPrompt,
-            negative_prompt: defaultParams.negative_prompt || "blurry, distorted, low quality, morphing, glitch",
             duration: targetDuration // 🔥 Dynamic Duration
         };
+
+        // Add prompt if defined/needed
+        if (finalPrompt) payload.prompt = finalPrompt;
+
+        // Add extra params from defaults ONLY if they exist in defaults (e.g. negative_prompt, cfg_scale)
+        // This prevents sending 'negative_prompt' to engines that don't support it (like Hailuo)
+        Object.keys(defaultParams).forEach(key => {
+            if (key !== 'duration' && key !== 'prompt') { // duration/prompt handled above
+                payload[key] = defaultParams[key];
+            }
+        });
+
+        // Ensure webhook is null (if API requires it explicit, usually better to omit if undefined)
+        // payload.webhook_url = null; // Removed to be safe
+
 
         // Undefined/null 제거
         Object.keys(payload).forEach(key => {
