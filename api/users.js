@@ -1,6 +1,8 @@
-import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import bcrypt from 'bcrypt';
 
 const router = express.Router();
@@ -272,7 +274,7 @@ router.put('/', async (req, res) => {
   }
 });
 
-router.delete('/', (req, res) => {
+router.delete('/', async (req, res) => {
   try {
     console.log('[users DELETE] 요청 받음');
     const users = loadUsers();
@@ -311,6 +313,64 @@ router.delete('/', (req, res) => {
       });
     }
 
+    // 🔥 사용자 종속 프로젝트 자동 삭제 (S3 및 로컬)
+    try {
+      const projectsFile = path.join(process.cwd(), 'config', 'projects.json');
+      const membersFile = path.join(process.cwd(), 'config', 'project-members.json');
+
+      if (fs.existsSync(projectsFile) && fs.existsSync(membersFile)) {
+        const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        const membersData = JSON.parse(fs.readFileSync(membersFile, 'utf8'));
+
+        // 해당 사용자가 owner이거나 생성한 프로젝트들 찾기
+        const userProjects = projectsData.projects.filter(p => p.createdBy === username);
+
+        if (userProjects.length > 0) {
+          console.log(`[users DELETE] ${username}의 프로젝트 ${userProjects.length}개 삭제 시작...`);
+
+          const { deleteFolderFromS3 } = await import('../server/utils/s3-uploader.js');
+
+          for (const project of userProjects) {
+            const projectId = project.id;
+
+            // 1. S3 폴더 삭제 (즉시 삭제)
+            try {
+              const s3Prefix = `nexxii-storage/projects/${projectId}/`;
+              await deleteFolderFromS3(s3Prefix);
+              console.log(`[users DELETE] S3 삭제 완료: ${s3Prefix}`);
+            } catch (s3Err) {
+              console.warn(`[users DELETE] S3 삭제 실패 (무시): ${s3Err.message}`);
+            }
+
+            // 2. 로컬 프로젝트 폴더 삭제
+            try {
+              const localFolder = path.join(process.cwd(), 'projects', projectId);
+              if (fs.existsSync(localFolder)) {
+                fs.rmSync(localFolder, { recursive: true, force: true });
+                console.log(`[users DELETE] 로컬 폴더 삭제 완료: ${localFolder}`);
+              }
+            } catch (localErr) {
+              console.warn(`[users DELETE] 로컬 폴더 삭제 실패 (무시): ${localErr.message}`);
+            }
+
+            // 3. projects.json에서 제거
+            projectsData.projects = projectsData.projects.filter(p => p.id !== projectId);
+
+            // 4. project-members.json에서 해당 프로젝트 관련 모든 멤버 정보 제거
+            membersData.members = membersData.members.filter(m => m.projectId !== projectId);
+          }
+
+          // 업데이트된 데이터 저장
+          fs.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2), 'utf8');
+          fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2), 'utf8');
+          console.log(`[users DELETE] 프로젝트 JSON 업데이트 완료`);
+        }
+      }
+    } catch (cleanupErr) {
+      console.error('[users DELETE] 프로젝트 정리 중 오류 발생:', cleanupErr);
+      // 사용자 삭제는 계속 진행
+    }
+
     delete users[username];
 
     const saved = saveUsers(users);
@@ -323,7 +383,7 @@ router.delete('/', (req, res) => {
 
     res.json({
       success: true,
-      message: '사용자가 삭제되었습니다.'
+      message: '사용자와 종속 프로젝트가 모두 삭제되었습니다.'
     });
   } catch (error) {
     console.error('[users DELETE] ❌ 오류:', error);

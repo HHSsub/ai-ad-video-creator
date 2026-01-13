@@ -5,7 +5,33 @@ import { safeCallGemini } from '../src/utils/apiHelpers.js';
 import sessionStore from '../server/utils/sessionStore.js';
 import { checkUsageLimit, incrementUsage } from './users.js'; // 🔥 Use single source of truth
 import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
-import { getPromptFilePath, getGeminiResponsesDir } from '../src/utils/enginePromptHelper.js';
+import { getPromptFilePath, getGeminiResponsesDir, getPromptVersionsDir } from '../src/utils/enginePromptHelper.js';
+
+// 🔥 v4.3: 최신 프롬프트 버전 타임스탬프 획득
+async function getLatestPromptTimestamp(mode, videoPurpose) {
+  try {
+    const vDir = getPromptVersionsDir(mode === 'manual' ? 'manual' : 'auto', videoPurpose);
+    if (!fs.existsSync(vDir)) return null;
+
+    const files = fs.readdirSync(vDir);
+    const promptType = (mode === 'manual') ? 'manual' :
+      (videoPurpose === 'product' || videoPurpose === 'conversion' || videoPurpose === 'education') ? 'auto_product' : 'auto_service';
+
+    const regex = new RegExp(`^${promptType}_(\\d+)\\.txt$`);
+    const timestamps = files
+      .map(f => {
+        const match = f.match(regex);
+        return match ? parseInt(match[1]) : null;
+      })
+      .filter(t => t !== null)
+      .sort((a, b) => b - a);
+
+    return timestamps.length > 0 ? timestamps[0] : null;
+  } catch (err) {
+    console.error('[storyboard-init] 최신 버전 타임스탬프 획득 실패:', err);
+    return null;
+  }
+}
 
 /**
  * Section 3 (Audio & Editing Guide) 파싱
@@ -803,6 +829,39 @@ async function processStoryboardAsync(body, username, sessionId) {
     };
     console.log("[DEBUG] RECEIVED userdescription:", userdescription);
 
+    // 🔥 v4.3: 필수 변수 런타임 주입 (사용자 프롬프트 가이드 강조)
+    let runtimeInjection = '\n\n[INPUT: CLIENT BRIEF]\nAnalyze the following input variables:\n';
+    let isInjectionNeeded = false;
+
+    // 필수 체크 변수 구성
+    const mandatoryTags = mode === 'manual'
+      ? ['videoLength', 'aspectRatioCode', 'videoPurpose', 'userdescription']
+      : ['videoPurpose', 'videoLength', 'aspectRatioCode', 'brandName', 'coreTarget', 'coreDifferentiation'];
+
+    mandatoryTags.forEach(tag => {
+      const tagExists = promptTemplate.includes(`{${tag}}`);
+      if (!tagExists) {
+        isInjectionNeeded = true;
+      }
+      // Brief 섹션 구성
+      if (mode === 'manual') {
+        const labelMap = {
+          videoLength: 'Video Length',
+          aspectRatioCode: 'Aspect Ratio',
+          videoPurpose: 'Purpose',
+          userdescription: 'Description'
+        };
+        runtimeInjection += `${labelMap[tag] || tag}: {${tag}}\n`;
+      } else {
+        runtimeInjection += `${tag} : {${tag}}\n`;
+      }
+    });
+
+    if (isInjectionNeeded) {
+      console.warn(`[storyboard-init] ⚠️ 프롬프트 템플릿 내 필수 변수 누락 감지. 런타임 주입을 실행합니다.`);
+      promptTemplate += runtimeInjection;
+    }
+
     for (const [key, value] of Object.entries(promptVariables)) {
       const placeholder = new RegExp(`\\{${key}\\}`, 'g');
       promptTemplate = promptTemplate.replace(placeholder, value);
@@ -853,7 +912,12 @@ async function processStoryboardAsync(body, username, sessionId) {
 
     // 🔥 sessionId가 있을 때만 저장 진행 (undefined 방지)
     if (sessionId) {
-      saveGeminiResponse(promptKey, 'storyboard_unified', body, fullOutput);
+      // v4.3: 사용된 프롬프트 버전 타임스탬프도 함께 기록
+      const promptVersionTimestamp = await getLatestPromptTimestamp(mode, videoPurpose);
+      saveGeminiResponse(promptKey, 'storyboard_unified', {
+        ...body,
+        promptVersionTimestamp // 🔥 응답-프롬프트 종속성 핵심 데이터
+      }, fullOutput);
     } else {
       console.warn('[storyboard-init] sessionId가 없어 응답 저장을 건너뜁니다.');
     }

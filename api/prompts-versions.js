@@ -136,6 +136,15 @@ export async function getResponses(req, res) {
             });
         }
 
+        const { versionId } = req.query; // 🔥 v4.3: 쿼리에서 versionId 가져오기
+        let targetTimestamp = null;
+        if (versionId) {
+            const match = versionId.match(/_(\d+)$/);
+            if (match) {
+                targetTimestamp = parseInt(match[1]);
+            }
+        }
+
         // JSON 파일 목록 읽기
         const files = fs.readdirSync(responsesDir)
             .filter(f => f.startsWith(`${engineId}_${promptType}_`) && f.endsWith('.json')) // 🔥 엔진 및 타입별 정밀 필터링
@@ -147,10 +156,17 @@ export async function getResponses(req, res) {
                     const content = fs.readFileSync(filePath, 'utf8');
                     const data = JSON.parse(content);
 
+                    // 🔥 v4.3: 필터링 로직 - versionId가 있으면 해당 타임스탬프와 일치해야 함
+                    const promptVersionTimestamp = data.formData?.promptVersionTimestamp || null;
+                    if (targetTimestamp && promptVersionTimestamp !== targetTimestamp) {
+                        return null;
+                    }
+
                     return {
                         id: filename.replace('.json', ''),
                         fileName: filename,
                         timestamp: data.timestamp || stats.mtimeMs,
+                        promptVersionTimestamp: promptVersionTimestamp, // 🔥 버전 종속성 정보
                         date: data.savedAt || new Date(stats.mtimeMs).toISOString(),
                         formData: data.formData || {},
                         promptKey: data.promptKey || '',

@@ -89,7 +89,7 @@ router.post('/', (req, res) => {
 
   // 새 프로젝트 생성
   const newProject = {
-    id: `project_${Date.now()}`,
+    id: `${username}_${Date.now()}`,
     name,
     description: description || '',
     createdBy: username,

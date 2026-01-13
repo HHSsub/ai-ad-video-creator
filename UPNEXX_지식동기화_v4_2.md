@@ -1,3 +1,16 @@
+### 2026-01-13 10:40 - [FEATURE] 사용자 삭제 시 S3 자동 정리 및 프로젝트 ID 체계 개선
+- **배경**: 사용자 계정 삭제 시 불필요한 S3 데이터가 잔류하는 문제를 해결하고, 프로젝트 ID를 통한 관리 편의성을 높임.
+- **주요 변경 사항**:
+  - **S3 자동 삭제**: `api/users.js`의 사용자 삭제 로직에 해당 사용자의 모든 프로젝트 S3 폴더(`nexxii-storage/projects/{projectId}/`) 및 로컬 폴더를 자동 삭제하는 기능 추가.
+  - **S3 유틸리티 확장**: `server/utils/s3-uploader.js`에 `deleteFolderFromS3(prefix)` 유틸리티 함수 구현 (ListObjectsV2 + DeleteObjects 일괄 처리).
+  - **프로젝트 ID 명명 규칙**: `server/routes/projects.js` 수정. 새 프로젝트 생성 시 ID 형식을 `project_{timestamp}`에서 `{username}_{timestamp}`로 변경.
+  - **ID 가시성 개선**: `src/components/ProjectDashboard.jsx`에서 관리자뿐만 아니라 모든 일반 사용자가 본인의 프로젝트 ID를 확인하고 복사할 수 있도록 UI 수정.
+- **관리 규칙**:
+  - 사용자 삭제 시 관련 프로젝트의 모든 미디어(이미지, 영상)는 S3에서 즉시 영구 삭제됨.
+  - 프로젝트 ID는 소유자 식별을 위해 반드시 `{username}_` 접두사를 포함해야 함.
+
+---
+
 ### 2026-01-12 18:00 - [KNOWLEDGE] EC2 실제 경로 구조 및 히스토리 관리 규칙 명시
 - **배경**: AI의 반복적인 경로 망각 문제를 해결하기 위해 실제 EC2 파일 시스템 구조를 동기화함.
 - **히스토리 저장 경로 (`public/prompts/`)**:

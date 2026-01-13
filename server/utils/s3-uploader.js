@@ -1,4 +1,4 @@
-import { S3Client, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import fetch from 'node-fetch';
 import fs from 'fs';
@@ -146,6 +146,54 @@ export async function listS3Files(prefix) {
         }));
     } catch (error) {
         console.error(`[S3] ❌ 목록 조회 실패:`, error.message);
+        throw error;
+    }
+}
+
+/**
+ * S3 폴더(Prefix) 내의 모든 객체 삭제
+ * @param {string} prefix - 폴더 경로 (예: 'nexxii-storage/projects/projectId/')
+ * @returns {Promise<void>}
+ */
+export async function deleteFolderFromS3(prefix) {
+    if (!prefix) return;
+
+    console.log(`[S3] 폴더 삭제 시작: ${prefix}`);
+
+    try {
+        let continuationToken;
+
+        do {
+            // 1. 해당 폴더 내의 객체들 목록 조회 (한 번에 최대 1000개)
+            const listCommand = new ListObjectsV2Command({
+                Bucket: BUCKET_NAME,
+                Prefix: prefix,
+                ContinuationToken: continuationToken
+            });
+
+            const listResponse = await s3Client.send(listCommand);
+            const objects = listResponse.Contents || [];
+
+            if (objects.length > 0) {
+                // 2. 일괄 삭제 요청 생성
+                const deleteCommand = new DeleteObjectsCommand({
+                    Bucket: BUCKET_NAME,
+                    Delete: {
+                        Objects: objects.map(obj => ({ Key: obj.Key })),
+                        Quiet: true
+                    }
+                });
+
+                await s3Client.send(deleteCommand);
+                console.log(`[S3] 객체 ${objects.length}개 삭제 완료 (Prefix: ${prefix})`);
+            }
+
+            continuationToken = listResponse.NextContinuationToken;
+        } while (continuationToken);
+
+        console.log(`[S3] ✅ 폴더 삭제 완료: ${prefix}`);
+    } catch (error) {
+        console.error(`[S3] ❌ 폴더 삭제 실패:`, error.message);
         throw error;
     }
 }
