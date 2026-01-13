@@ -1,4 +1,4 @@
-import { S3Client, DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { S3Client, DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import fetch from 'node-fetch';
 import fs from 'fs';
@@ -108,7 +108,8 @@ export async function deleteFromS3(s3Url) {
     console.log(`[S3] 삭제 시작: ${s3Url}`);
 
     try {
-        const s3Key = s3Url.replace(`${CDN_BASE_URL}/`, '');
+        // 🔥 v4.3: URL에서 S3 Key 추출 시 'https://upnexx.ai/'만 제거하여 'nexxii-storage/' 접두어 유지
+        const s3Key = s3Url.replace('https://upnexx.ai/', '');
 
         await s3Client.send(new DeleteObjectCommand({
             Bucket: BUCKET_NAME,
@@ -152,22 +153,27 @@ export async function listS3Files(prefix) {
 
 /**
  * S3 폴더(Prefix) 내의 모든 객체 삭제
- * @param {string} prefix - 폴더 경로 (예: 'nexxii-storage/projects/projectId/')
+ * @param {string} prefix - 폴더 경로 (예: 'projects/projectId/')
  * @returns {Promise<void>}
  */
 export async function deleteFolderFromS3(prefix) {
     if (!prefix) return;
 
-    console.log(`[S3] 폴더 삭제 시작: ${prefix}`);
+    // 🔥 v4.3: 접두어가 nexxii-storage/로 시작하지 않으면 추가 (전체 삭제 보장)
+    let s3Prefix = prefix;
+    if (!s3Prefix.startsWith('nexxii-storage/')) {
+        s3Prefix = `nexxii-storage/${s3Prefix}`;
+    }
+
+    console.log(`[S3] 폴더 삭제 시작: ${s3Prefix}`);
 
     try {
         let continuationToken;
 
         do {
-            // 1. 해당 폴더 내의 객체들 목록 조회 (한 번에 최대 1000개)
             const listCommand = new ListObjectsV2Command({
                 Bucket: BUCKET_NAME,
-                Prefix: prefix,
+                Prefix: s3Prefix,
                 ContinuationToken: continuationToken
             });
 
@@ -175,7 +181,6 @@ export async function deleteFolderFromS3(prefix) {
             const objects = listResponse.Contents || [];
 
             if (objects.length > 0) {
-                // 2. 일괄 삭제 요청 생성
                 const deleteCommand = new DeleteObjectsCommand({
                     Bucket: BUCKET_NAME,
                     Delete: {
@@ -185,15 +190,39 @@ export async function deleteFolderFromS3(prefix) {
                 });
 
                 await s3Client.send(deleteCommand);
-                console.log(`[S3] 객체 ${objects.length}개 삭제 완료 (Prefix: ${prefix})`);
+                console.log(`[S3] 객체 ${objects.length}개 삭제 완료 (Prefix: ${s3Prefix})`);
             }
 
             continuationToken = listResponse.NextContinuationToken;
         } while (continuationToken);
 
-        console.log(`[S3] ✅ 폴더 삭제 완료: ${prefix}`);
+        console.log(`[S3] ✅ 폴더 삭제 완료: ${s3Prefix}`);
     } catch (error) {
         console.error(`[S3] ❌ 폴더 삭제 실패:`, error.message);
+        throw error;
+    }
+}
+
+/**
+ * S3 프로젝트용 가상 폴더(Placeholder) 생성
+ * @param {string} projectId - 프로젝트 ID
+ * @returns {Promise<void>}
+ */
+export async function createS3FolderPlaceholder(projectId) {
+    if (!projectId) return;
+
+    const s3Key = `nexxii-storage/projects/${projectId}/`;
+    console.log(`[S3] 폴더 플레이스홀더 생성 시작: ${s3Key}`);
+
+    try {
+        await s3Client.send(new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            Body: '', // 빈 내용
+        }));
+        console.log(`[S3] ✅ 폴더 플레이스홀더 생성 완료: ${s3Key}`);
+    } catch (error) {
+        console.error(`[S3] ❌ 폴더 플레이스홀더 생성 실패:`, error.message);
         throw error;
     }
 }

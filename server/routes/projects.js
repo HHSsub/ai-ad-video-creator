@@ -11,6 +11,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createS3FolderPlaceholder } from '../utils/s3-uploader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,11 +71,12 @@ router.get('/', (req, res) => {
 });
 
 // 2. 프로젝트 생성 (POST /api/projects)
-router.post('/', (req, res) => {
-  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+// 🔥 v4.3: 프로젝트 생성 시 S3 가상 폴더(Placeholder) 즉시 생성하여 관리자 탭 가시성 보장
+router.post('/', async (req, res) => {
   const { name, description } = req.body;
+  const username = req.headers['x-user-id'] || req.headers['x-username'] || 'anonymous';
 
-  console.log(`[projects POST /] 사용자: ${username}, 이름: ${name}`);
+  console.log(`[projects POST /] 프로젝트 생성 요청: name=${name}, user=${username}`);
 
   if (!name) {
     return res.status(400).json({ error: '프로젝트 이름 필수' });
@@ -111,6 +113,11 @@ router.post('/', (req, res) => {
   if (!writeJSON(projectsFile, projectsData) || !writeJSON(membersFile, membersData)) {
     return res.status(500).json({ error: 'DB 저장 실패' });
   }
+
+  // 🔥 S3 가상 폴더 생성 (비동기, 성공 여부와 관계없이 응답은 보냄)
+  createS3FolderPlaceholder(newProject.id).catch(err => {
+    console.error(`[projects POST] S3 플레이스홀더 생성 실패 (무시 가능):`, err.message);
+  });
 
   console.log(`[projects POST /] ✅ 프로젝트 생성 완료: ${newProject.id}`);
   res.json({ project: newProject });
