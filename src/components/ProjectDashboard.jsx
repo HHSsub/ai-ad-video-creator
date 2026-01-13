@@ -179,7 +179,8 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
 
   // 🔥 G-2: 프로젝트 상태 계산
   const getProjectStatus = (project) => {
-    if (!project.storyboard) {
+    // 🔥 G-Fix: 스타일이 없으면 아직 시작 전임
+    if (!project.storyboard || !project.storyboard.styles || project.storyboard.styles.length === 0) {
       return { text: '시작 전', color: 'gray', step: null };
     }
 
