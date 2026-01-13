@@ -429,7 +429,8 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        url: result.imageUrl,
+        imageUrl: result.imageUrl, // 🔥 필드명 통일 (Step4.jsx 호환)
+        url: result.imageUrl, // 하위 호환 유지
         processingTime: processingTime,
         method: result.method,
         fallback: false,
@@ -485,6 +486,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       success: false,
+      imageUrl: fallbackUrl, // 🔥 필드명 통일
       url: fallbackUrl,
       fallback: true,
       error: error.message || String(error),

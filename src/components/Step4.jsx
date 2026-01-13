@@ -411,7 +411,13 @@ const Step4 = ({
       if (styleIndex !== -1) {
         const targetImage = storyboard.styles[styleIndex].images.find(img => String(img.sceneNumber) === String(sceneNumber));
         if (targetImage) {
-          targetImage.imageUrl = `${data.imageUrl}?t=${Date.now()}`;
+          const newUrl = data.imageUrl || data.url;
+          if (!newUrl) {
+            console.error('[Step4] ❌ 이미지 생성 성공했으나 URL이 비어있음:', data);
+            throw new Error('서버 응답오류: 이미지 URL이 없습니다.');
+          }
+
+          targetImage.imageUrl = `${newUrl}${newUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
           targetImage.prompt = englishPrompt;
           targetImage.koreanPrompt = currentInput;
           targetImage.status = 'regenerated';

@@ -31,14 +31,13 @@ const Step3 = ({
     console.log(`[Step3] ${msg}`);
   };
 
-  // 🔥 CRITICAL: storyboard 업데이트 감지 시 이미지 강제 새로고침
+  // 🔥 CRITICAL: storyboard 업데이트 감지 시 (데이터가 비어있다가 들어온 경우만 최초 1회 또는 강제 필요시)
   useEffect(() => {
-    if (storyboard?.styles && storyboard.styles.length > 0) {
-      console.log('[Step3] 🔥 Storyboard 업데이트 감지! 이미지 강제 새로고침');
+    if (storyboard?.styles && storyboard.styles.length > 0 && !selectedId) {
+      console.log('[Step3] 📸 초기 데이터 로드 완료');
       setRefreshTimestamp(Date.now());
-      setImageLoadStates({}); // 로딩 상태 초기화
     }
-  }, [storyboard]);
+  }, [storyboard, selectedId]);
 
   // 🔥 v4.1: 이미지 URL 헬퍼 (캐시 방지)
   const getImageSrc = (imageUrl) => {
