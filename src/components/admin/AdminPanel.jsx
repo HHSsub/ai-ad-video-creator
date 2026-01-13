@@ -747,18 +747,7 @@ const AdminPanel = ({ currentUser }) => {
           ))}
         </div>
 
-        {/* 전역 메시지 표시 */}
-        {message.text && (
-          <div className={`mb-6 p-4 rounded-lg whitespace-pre-wrap flex justify-between items-center ${message.type === 'success'
-            ? 'bg-green-900/30 text-green-300 border border-green-800'
-            : message.type === 'info'
-              ? 'bg-blue-900/30 text-blue-300 border border-blue-800'
-              : 'bg-red-900/30 text-red-300 border border-red-800'
-            }`}>
-            <span>{message.text}</span>
-            <button onClick={() => setMessage({ type: '', text: '' })} className="text-current opacity-50 hover:opacity-100">✕</button>
-          </div>
-        )}
+        {/* 전역 메시지 표시 (기존 상단 삭제 - 아래로 이동) */}
 
         {/* 1. 프롬프트 관리 탭 */}
         {activeMainTab === 'prompts' && (
