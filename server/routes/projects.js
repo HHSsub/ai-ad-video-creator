@@ -1,10 +1,9 @@
 // ============================================================
 // 파일: server/routes/projects.js
 // 수정 내용:
-// 1. PATCH 권한 확인 로직을 완화 (guest, anonymous 사용자 허용)
-// 2. 로그 추가로 디버깅 용이하게
-// 3. x-username 헤더도 함께 확인
-// 4. 🔥 storyboard 저장 시 상세 로그 추가 (2025-11-24)
+// 1. 개별 프로젝트 JSON 파일 사용 (config/projects/*.json)
+// 2. Race Condition 방지를 위한 프로젝트별 쓰기 락(Queue) 구현
+// 3. x-username 헤더 기반 프로젝트 필터링 및 권한 관리
 // ============================================================
 
 import express from 'express';
@@ -12,665 +11,267 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createS3FolderPlaceholder } from '../utils/s3-uploader.js';
+import { runInProjectQueue } from '../utils/project-lock.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
-const projectsFile = path.join(__dirname, '../../config/projects.json');
+const PROJECTS_DIR = path.join(__dirname, '../../config/projects');
 const membersFile = path.join(__dirname, '../../config/project-members.json');
 
+// 프로젝트 디렉토리 보장
+if (!fs.existsSync(PROJECTS_DIR)) {
+  fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+}
+
+// 🔥 Race Condition 방지는 전역 유틸리티(runInProjectQueue)로 이관됨
+
 // JSON 파일 읽기 헬퍼
-function readJSON(filePath) {
+function readProjectFile(projectId) {
+  const filePath = path.join(PROJECTS_DIR, `${projectId}.json`);
+  if (!fs.existsSync(filePath)) return null;
   try {
-    if (!fs.existsSync(filePath)) {
-      console.error(`❌ 파일 없음: ${filePath}`);
-      return null;
-    }
     const data = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    console.error(`❌ JSON 읽기 실패: ${filePath}`, error.message);
+    console.error(`❌ 프로젝트 파일 읽기 실패: ${projectId}`, error.message);
     return null;
   }
 }
 
 // JSON 파일 쓰기 헬퍼
-function writeJSON(filePath, data) {
+function writeProjectFile(projectId, data) {
+  const filePath = path.join(PROJECTS_DIR, `${projectId}.json`);
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
     return true;
   } catch (error) {
-    console.error(`❌ JSON 쓰기 실패: ${filePath}`, error.message);
+    console.error(`❌ 프로젝트 파일 쓰기 실패: ${projectId}`, error.message);
     return false;
+  }
+}
+
+// 멤버 파일 읽기 헬퍼
+function readMembers() {
+  try {
+    if (!fs.existsSync(membersFile)) return { members: [] };
+    return JSON.parse(fs.readFileSync(membersFile, 'utf8'));
+  } catch (error) {
+    console.error(`❌ 멤버 파일 읽기 실패`, error.message);
+    return { members: [] };
   }
 }
 
 // 1. 프로젝트 목록 조회 (GET /api/projects)
 router.get('/', (req, res) => {
   const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
-
   console.log(`[projects GET /] 사용자: ${username}`);
 
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ error: 'DB 읽기 실패' });
-  }
-
-  // 사용자가 소속된 프로젝트 필터링
-  const userProjects = projectsData.projects.filter(project => {
-    const membership = membersData.members.find(
-      m => m.projectId === project.id && m.username === username
-    );
-    return membership !== undefined;
-  });
-
-  res.json({ projects: userProjects });
-});
-
-// 2. 프로젝트 생성 (POST /api/projects)
-// 🔥 v4.3: 프로젝트 생성 시 S3 가상 폴더(Placeholder) 즉시 생성하여 관리자 탭 가시성 보장
-router.post('/', async (req, res) => {
-  const { name, description } = req.body;
-  const username = req.headers['x-user-id'] || req.headers['x-username'] || 'anonymous';
-
-  console.log(`[projects POST /] 프로젝트 생성 요청: name=${name}, user=${username}`);
-
-  if (!name) {
-    return res.status(400).json({ error: '프로젝트 이름 필수' });
-  }
-
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ error: 'DB 읽기 실패' });
-  }
-
-  // 새 프로젝트 생성
-  const newProject = {
-    id: `${username}_${Date.now()}`,
-    name,
-    description: description || '',
-    createdBy: username,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  projectsData.projects.push(newProject);
-
-  // 생성자를 owner로 추가
-  membersData.members.push({
-    id: `member_${Date.now()}`,
-    projectId: newProject.id,
-    username,
-    role: 'owner',
-    addedAt: new Date().toISOString()
-  });
-
-  if (!writeJSON(projectsFile, projectsData) || !writeJSON(membersFile, membersData)) {
-    return res.status(500).json({ error: 'DB 저장 실패' });
-  }
-
-  // 🔥 S3 가상 폴더 생성 (비동기, 성공 여부와 관계없이 응답은 보냄)
-  createS3FolderPlaceholder(newProject.id).catch(err => {
-    console.error(`[projects POST] S3 플레이스홀더 생성 실패 (무시 가능):`, err.message);
-  });
-
-  console.log(`[projects POST /] ✅ 프로젝트 생성 완료: ${newProject.id}`);
-  res.json({ project: newProject });
-});
-
-// 🔥 3. 프로젝트 업데이트 - 모드 및 스토리보드 저장 (PATCH /api/projects/:id)
-router.patch('/:id', (req, res) => {
   try {
-    const { id } = req.params;
-    const { mode, status, name, description, formData, storyboard } = req.body;
-    const username = req.headers['x-user-id'] || req.headers['x-username'] || 'anonymous';
+    const membersData = readMembers();
+    const files = fs.readdirSync(PROJECTS_DIR).filter(f => f.endsWith('.json'));
 
-    console.log(`[projects PATCH /:id] 요청 시작`);
-    console.log(`  - 프로젝트 ID: ${id}`);
-    console.log(`  - 모드: ${mode}`);
-    console.log(`  - 사용자: ${username}`);
-    console.log(`  - storyboard 포함: ${!!storyboard}`); // 🔥 추가
-    console.log(`  - 헤더 x-user-id: ${req.headers['x-user-id']}`);
-    console.log(`  - 헤더 x-username: ${req.headers['x-username']}`);
+    const userProjects = [];
 
-    const projectsData = readJSON(projectsFile);
-    const membersData = readJSON(membersFile);
+    for (const file of files) {
+      const projectId = file.replace('.json', '');
+      const projectData = readProjectFile(projectId);
+      if (!projectData) continue;
 
-    if (!projectsData) {
-      console.error(`[projects PATCH] ❌ projects.json 읽기 실패`);
-      return res.status(500).json({ success: false, error: 'projects.json 읽기 실패' });
-    }
+      const isCreator = projectData.createdBy === username;
+      const membership = membersData.members.find(
+        m => m.projectId === projectId && m.username === username
+      );
+      const isSystemAdmin = username === 'admin';
 
-    if (!membersData) {
-      console.error(`[projects PATCH] ❌ project-members.json 읽기 실패`);
-      return res.status(500).json({ success: false, error: 'project-members.json 읽기 실패' });
-    }
-
-    const projectIndex = projectsData.projects.findIndex(p => p.id === id);
-    console.log(`[projects PATCH] 프로젝트 인덱스: ${projectIndex}`);
-
-    if (projectIndex === -1) {
-      console.error(`[projects PATCH] ❌ 프로젝트 없음: ${id}`);
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-
-    const project = projectsData.projects[projectIndex];
-
-    // 🔥 권한 확인 (완화된 버전)
-    const isSystemUser = ['guest', 'anonymous', 'admin'].includes(username);
-    const isCreator = project.createdBy === username;
-    const membership = membersData.members.find(
-      m => m.projectId === id && m.username === username
-    );
-    const isMember = membership && ['owner', 'editor', 'manager'].includes(membership.role);
-
-    console.log(`[projects PATCH] 권한 확인:`);
-    console.log(`  - isSystemUser: ${isSystemUser}`);
-    console.log(`  - isCreator: ${isCreator} (createdBy: ${project.createdBy})`);
-    console.log(`  - isMember: ${isMember}`);
-
-    if (!isSystemUser && !isCreator && !isMember) {
-      console.error(`[projects PATCH] ❌ 권한 없음`);
-      return res.status(403).json({ success: false, error: 'Permission denied' });
-    }
-
-    // 업데이트
-    if (mode !== undefined) {
-      project.mode = mode;
-      console.log(`[projects PATCH] 모드 설정: ${mode}`);
-    }
-    if (status !== undefined) project.status = status;
-    if (name !== undefined) project.name = name;
-    if (description !== undefined) project.description = description;
-
-    if (formData !== undefined) {
-      project.formData = formData;
-      console.log(`[projects PATCH] formData 저장됨`); // 🔥 추가
-    }
-
-    // 🔥 storyboard 저장 로직 (상세 로그 추가)
-    if (storyboard !== undefined) {
-      project.storyboard = storyboard;
-      console.log(`[projects PATCH] ✅ storyboard 저장됨:`, {
-        stylesCount: storyboard.styles?.length || 0,
-        finalVideosCount: storyboard.finalVideos?.length || 0,
-        timestamp: storyboard.timestamp,
-        success: storyboard.success
-      });
-
-      // 🔥 finalVideos의 videoUrl 확인 로그
-      if (storyboard.finalVideos && storyboard.finalVideos.length > 0) {
-        console.log(`[projects PATCH] finalVideos 상세:`);
-        storyboard.finalVideos.forEach((video, idx) => {
-          console.log(`  [${idx + 1}] conceptId: ${video.conceptId}, conceptName: ${video.conceptName}`);
-          console.log(`      videoUrl: ${video.videoUrl}`);
+      if (isSystemAdmin || isCreator || membership) {
+        userProjects.push({
+          id: projectData.id,
+          name: projectData.name,
+          description: projectData.description,
+          createdBy: projectData.createdBy,
+          createdAt: projectData.createdAt,
+          updatedAt: projectData.updatedAt,
+          mode: projectData.mode || 'manual' // 목록용 최소 데이터
         });
       }
     }
 
-    project.updatedAt = new Date().toISOString();
+    // 최신순 정렬
+    userProjects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    projectsData.projects[projectIndex] = project;
-
-    if (!writeJSON(projectsFile, projectsData)) {
-      console.error(`[projects PATCH] ❌ projects.json 쓰기 실패`);
-      return res.status(500).json({ success: false, error: 'DB 저장 실패' });
-    }
-
-    console.log(`[projects PATCH] ✅ 프로젝트 업데이트 완료: ${id}, mode: ${project.mode}`);
-
-    res.json({ success: true, project: project });
+    res.json({ projects: userProjects });
   } catch (error) {
-    console.error('[projects PATCH] ❌ 예외 발생:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[projects GET /] 오류:', error);
+    res.status(500).json({ error: '목록 조회 실패' });
   }
+});
+
+// 2. 프로젝트 생성 (POST /api/projects)
+router.post('/', async (req, res) => {
+  const { name, description } = req.body;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+  const projectId = `project_${Date.now()}`;
+
+  if (!name) return res.status(400).json({ error: '프로젝트 이름 필수' });
+
+  const newProject = {
+    id: projectId,
+    name,
+    description: description || '',
+    createdBy: username,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    mode: 'manual',
+    formData: {},
+    storyboard: { styles: [] }
+  };
+
+  if (writeProjectFile(projectId, newProject)) {
+    // 멤버십 추가
+    const membersData = readMembers();
+    membersData.members.push({
+      id: `member_${Date.now()}`,
+      projectId: projectId,
+      username,
+      role: 'owner',
+      addedAt: new Date().toISOString()
+    });
+    fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
+
+    // S3 가상 폴더 생성 (비동기)
+    createS3FolderPlaceholder(projectId).catch(err => {
+      console.error(`[projects POST] S3 폴더 생성 실패 (무시):`, err.message);
+    });
+
+    res.json({ project: newProject });
+  } else {
+    res.status(500).json({ error: '저장 실패' });
+  }
+});
+
+// 3. 프로젝트 업데이트 (PATCH /api/projects/:id)
+router.patch('/:id', async (req, res) => {
+  const { id } = req.params;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+
+  await runInProjectQueue(id, async () => {
+    try {
+      const project = readProjectFile(id);
+      if (!project) return res.status(404).json({ error: 'Project not found' });
+
+      // 권한 체크
+      const membersData = readMembers();
+      const isCreator = project.createdBy === username;
+      const membership = membersData.members.find(m => m.projectId === id && m.username === username);
+      const isOwnerOrEditor = membership && ['owner', 'editor'].includes(membership.role);
+      const isAdmin = username === 'admin';
+
+      if (!isAdmin && !isCreator && !isOwnerOrEditor) {
+        return res.status(403).json({ error: 'Permission denied' });
+      }
+
+      const { mode, status, name, description, formData, storyboard, storyboardUpdate } = req.body;
+
+      if (mode !== undefined) project.mode = mode;
+      if (status !== undefined) project.status = status;
+      if (name !== undefined) project.name = name;
+      if (description !== undefined) project.description = description;
+      if (formData !== undefined) project.formData = formData;
+
+      // 🔥 Full Storyboard Update (Legacy/Bulk)
+      if (storyboard !== undefined) {
+        project.storyboard = storyboard;
+        console.log(`[projects PATCH] ✅ 전체 storyboard 저장 (ID: ${id})`);
+      }
+
+      // 🔥 Granular Storyboard Update (Partial - Race Condition 방지)
+      if (storyboardUpdate) {
+        const { conceptId, sceneNumber, updates } = storyboardUpdate;
+        const styleIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
+        if (styleIndex !== -1) {
+          const images = project.storyboard.styles[styleIndex].images;
+          const imgIndex = images.findIndex(img => String(img.sceneNumber) === String(sceneNumber));
+          if (imgIndex !== -1) {
+            // 필드별 병합 업데이트
+            Object.assign(images[imgIndex], updates);
+            console.log(`[projects PATCH] ✅ 씬 부분 업데이트 완료: Project ${id}, Concept ${conceptId}, Scene ${sceneNumber}`);
+          }
+        }
+      }
+
+      project.updatedAt = new Date().toISOString();
+
+      if (writeProjectFile(id, project)) {
+        res.json({ success: true, project });
+      } else {
+        res.status(500).json({ error: '저장 실패' });
+      }
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 // 4. 프로젝트 상세 조회 (GET /api/projects/:id)
 router.get('/:id', (req, res) => {
-  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
   const { id } = req.params;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
 
-  console.log(`[projects GET /:id] 프로젝트: ${id}, 사용자: ${username}`);
+  const project = readProjectFile(id);
+  if (!project) return res.status(404).json({ error: '프로젝트 없음' });
 
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ error: 'DB 읽기 실패' });
-  }
-
-  const project = projectsData.projects.find(p => p.id === id);
-
-  if (!project) {
-    return res.status(404).json({ error: '프로젝트 없음' });
-  }
-
-  // 🔥 권한 확인 완화
-  const isSystemUser = ['guest', 'anonymous', 'admin'].includes(username);
+  // 간단 권한 체크
+  const membersData = readMembers();
   const isCreator = project.createdBy === username;
-  const membership = membersData.members.find(
-    m => m.projectId === id && m.username === username
-  );
+  const membership = membersData.members.find(m => m.projectId === id && m.username === username);
+  const isAdmin = username === 'admin';
 
-  if (!isSystemUser && !isCreator && !membership) {
+  if (!isAdmin && !isCreator && !membership) {
     return res.status(403).json({ error: '접근 권한 없음' });
   }
 
   res.json({ project });
 });
 
-// 5. 프로젝트 수정 (PUT /api/projects/:id)
-router.put('/:id', (req, res) => {
-  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
-  const { id } = req.params;
-  const { name, description } = req.body;
-
-  console.log(`[projects PUT /:id] 프로젝트: ${id}, 사용자: ${username}`);
-
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ error: 'DB 읽기 실패' });
-  }
-
-  const projectIndex = projectsData.projects.findIndex(p => p.id === id);
-
-  if (projectIndex === -1) {
-    return res.status(404).json({ error: '프로젝트 없음' });
-  }
-
-  const project = projectsData.projects[projectIndex];
-
-  // owner 권한 확인 (완화)
-  const isSystemUser = ['guest', 'anonymous', 'admin'].includes(username);
-  const isCreator = project.createdBy === username;
-  const membership = membersData.members.find(
-    m => m.projectId === id && m.username === username && m.role === 'owner'
-  );
-
-  if (!isSystemUser && !isCreator && !membership) {
-    return res.status(403).json({ error: 'owner 권한 필요' });
-  }
-
-  // 프로젝트 수정
-  if (name) projectsData.projects[projectIndex].name = name;
-  if (description !== undefined) projectsData.projects[projectIndex].description = description;
-  projectsData.projects[projectIndex].updatedAt = new Date().toISOString();
-
-  if (!writeJSON(projectsFile, projectsData)) {
-    return res.status(500).json({ error: 'DB 저장 실패' });
-  }
-
-  res.json({ project: projectsData.projects[projectIndex] });
-});
-
 // 6. 프로젝트 삭제 (DELETE /api/projects/:id)
 router.delete('/:id', async (req, res) => {
-  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
   const { id } = req.params;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
 
-  console.log(`[projects DELETE /:id] 프로젝트: ${id}, 사용자: ${username}`);
+  const project = readProjectFile(id);
+  if (!project) return res.status(404).json({ error: '프로젝트 없음' });
 
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ error: 'DB 읽기 실패' });
-  }
-
-  const projectIndex = projectsData.projects.findIndex(p => p.id === id);
-
-  if (projectIndex === -1) {
-    return res.status(404).json({ error: '프로젝트 없음' });
-  }
-
-  const project = projectsData.projects[projectIndex];
-
-  // owner 권한 확인 (완화)
-  const isSystemUser = ['admin'].includes(username);
+  const membersData = readMembers();
   const isCreator = project.createdBy === username;
-  const membership = membersData.members.find(
-    m => m.projectId === id && m.username === username && m.role === 'owner'
-  );
+  const membership = membersData.members.find(m => m.projectId === id && m.username === username && m.role === 'owner');
+  const isAdmin = username === 'admin';
 
-  if (!isSystemUser && !isCreator && !membership) {
-    return res.status(403).json({ error: 'owner 권한 필요' });
+  if (!isAdmin && !isCreator && !membership) {
+    return res.status(403).json({ error: 'Owner 권한 필요' });
   }
 
-  // 🔥 S3 파일 및 폴더 전체 삭제
   try {
+    // S3 삭제
     const { deleteFolderFromS3 } = await import('../utils/s3-uploader.js');
-    const s3Prefix = `projects/${id}/`;
-
-    console.log(`[projects DELETE] S3 프로젝트 폴더 삭제 시작: ${s3Prefix}`);
-    await deleteFolderFromS3(s3Prefix);
-    console.log(`[projects DELETE] ✅ S3 프로젝트 폴더 삭제 완료: ${s3Prefix}`);
-
-  } catch (importError) {
-    console.warn(`[projects DELETE] S3 삭제 중 오류 발생 (무시): ${importError.message}`);
-  }
-
-  // 🔥 로컬 프로젝트 폴더 삭제 (projects/[project_id]/)
-  try {
-    const projectFolder = path.join(__dirname, '../../projects', id);
-    if (fs.existsSync(projectFolder)) {
-      fs.rmSync(projectFolder, { recursive: true, force: true });
-      console.log(`[projects DELETE] 🛠️ 로컬 폴더 삭제 완료: ${projectFolder}`);
-    } else {
-      console.log(`[projects DELETE] 로컬 폴더 없음 (스킵): ${projectFolder}`);
-    }
-  } catch (folderError) {
-    console.error(`[projects DELETE] 로컬 폴더 삭제 실패 (무시): ${folderError.message}`);
-  }
-
-  // 프로젝트 삭제
-  projectsData.projects.splice(projectIndex, 1);
-
-  // 관련 멤버도 삭제
-  membersData.members = membersData.members.filter(m => m.projectId !== id);
-
-  if (!writeJSON(projectsFile, projectsData) || !writeJSON(membersFile, membersData)) {
-    return res.status(500).json({ error: 'DB 저장 실패' });
-  }
-
-  console.log(`[projects DELETE] ✅ 프로젝트 완전 삭제 완료: ${id}`);
-  res.json({ success: true, message: '프로젝트 삭제됨' });
-});
-
-
-const usersFile = path.join(__dirname, '../../config/users.json');
-
-// 7. 프로젝트 멤버 목록 조회 (GET /api/projects/:id/members)
-router.get('/:id/members', (req, res) => {
-  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
-  const { id } = req.params;
-
-  console.log(`[projects GET /:id/members] 프로젝트: ${id}, 요청자: ${username}`);
-
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
-  }
-
-  const project = projectsData.projects.find(p => p.id === id);
-  if (!project) {
-    return res.status(404).json({ success: false, error: '프로젝트 없음' });
-  }
-
-  // 해당 프로젝트의 멤버 목록
-  const projectMembers = membersData.members.filter(m => m.projectId === id);
-
-  console.log(`[projects GET /:id/members] ✅ 멤버 ${projectMembers.length}명 조회`);
-  res.json({ success: true, members: projectMembers });
-});
-
-// 8. 프로젝트 멤버 초대 (POST /api/projects/:id/members)
-router.post('/:id/members', (req, res) => {
-  const currentUsername = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
-  const { id } = req.params;
-  const { username, role } = req.body;
-
-  console.log(`[projects POST /:id/members] 프로젝트: ${id}, 초대자: ${currentUsername}`);
-  console.log(`  - 초대할 사용자: ${username}, 역할: ${role}`);
-
-  // 필수 파라미터 확인
-  if (!username || !role) {
-    return res.status(400).json({ success: false, error: 'username과 role은 필수입니다' });
-  }
-
-  // 유효한 역할인지 확인
-  const validRoles = ['viewer', 'commenter', 'editor', 'manager', 'owner'];
-  if (!validRoles.includes(role)) {
-    return res.status(400).json({ success: false, error: `유효하지 않은 역할입니다. (${validRoles.join(', ')})` });
-  }
-
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-  const usersData = readJSON(usersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
-  }
-
-  // 프로젝트 존재 확인
-  const project = projectsData.projects.find(p => p.id === id);
-  if (!project) {
-    return res.status(404).json({ success: false, error: '프로젝트 없음' });
-  }
-
-  // 권한 확인: owner 또는 manager만 초대 가능
-  const currentMembership = membersData.members.find(
-    m => m.projectId === id && m.username === currentUsername
-  );
-  const isSystemUser = ['admin'].includes(currentUsername);
-  const isCreator = project.createdBy === currentUsername;
-  const canInvite = isSystemUser || isCreator ||
-    (currentMembership && ['owner', 'manager'].includes(currentMembership.role));
-
-  if (!canInvite) {
-    return res.status(403).json({ success: false, error: '멤버 초대 권한이 없습니다' });
-  }
-
-  // 🔥 사용자 존재 확인 (users.json에서)
-  if (!usersData || !usersData[username]) {
-    console.log(`[projects POST /:id/members] ❌ 존재하지 않는 계정: ${username}`);
-    return res.status(404).json({ success: false, error: '존재하지 않는 계정입니다' });
-  }
-
-  // 이미 멤버인지 확인
-  const existingMember = membersData.members.find(
-    m => m.projectId === id && m.username === username
-  );
-  if (existingMember) {
-    return res.status(400).json({ success: false, error: '이미 프로젝트 멤버입니다' });
-  }
-
-  // 멤버 추가
-  const newMember = {
-    id: `member_${Date.now()}`,
-    projectId: id,
-    username: username,
-    role: role,
-    addedAt: new Date().toISOString(),
-    addedBy: currentUsername
-  };
-
-  membersData.members.push(newMember);
-
-  if (!writeJSON(membersFile, membersData)) {
-    return res.status(500).json({ success: false, error: 'DB 저장 실패' });
-  }
-
-  console.log(`[projects POST /:id/members] ✅ 멤버 초대 완료: ${username} (${role})`);
-  res.json({ success: true, member: newMember });
-});
-
-// 9. 프로젝트 멤버 삭제 (DELETE /api/projects/:id/members/:memberId)
-router.delete('/:id/members/:memberId', (req, res) => {
-  const currentUsername = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
-  const { id, memberId } = req.params;
-
-  console.log(`[projects DELETE /:id/members/:memberId] 프로젝트: ${id}, 멤버ID: ${memberId}`);
-
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
-  }
-
-  // 프로젝트 존재 확인
-  const project = projectsData.projects.find(p => p.id === id);
-  if (!project) {
-    return res.status(404).json({ success: false, error: '프로젝트 없음' });
-  }
-
-  // 권한 확인: owner 또는 manager만 삭제 가능
-  const currentMembership = membersData.members.find(
-    m => m.projectId === id && m.username === currentUsername
-  );
-  const isSystemUser = ['admin'].includes(currentUsername);
-  const isCreator = project.createdBy === currentUsername;
-  const canRemove = isSystemUser || isCreator ||
-    (currentMembership && ['owner', 'manager'].includes(currentMembership.role));
-
-  if (!canRemove) {
-    return res.status(403).json({ success: false, error: '멤버 삭제 권한이 없습니다' });
-  }
-
-  // 삭제할 멤버 찾기
-  const memberIndex = membersData.members.findIndex(
-    m => m.id === memberId && m.projectId === id
-  );
-
-  if (memberIndex === -1) {
-    return res.status(404).json({ success: false, error: '멤버를 찾을 수 없습니다' });
-  }
-
-  // owner는 삭제 불가 (프로젝트당 최소 1명의 owner 필요)
-  const memberToDelete = membersData.members[memberIndex];
-  if (memberToDelete.role === 'owner') {
-    const ownerCount = membersData.members.filter(
-      m => m.projectId === id && m.role === 'owner'
-    ).length;
-    if (ownerCount <= 1) {
-      return res.status(400).json({ success: false, error: '프로젝트에는 최소 1명의 owner가 필요합니다' });
-    }
-  }
-
-  // 멤버 삭제
-  membersData.members.splice(memberIndex, 1);
-
-  if (!writeJSON(membersFile, membersData)) {
-    return res.status(500).json({ success: false, error: 'DB 저장 실패' });
-  }
-
-  console.log(`[projects DELETE /:id/members/:memberId] ✅ 멤버 삭제 완료: ${memberToDelete.username}`);
-  res.json({ success: true, message: '멤버가 삭제되었습니다' });
-});
-
-
-
-// 10. 씬 삭제 (POST /api/projects/:id/scenes/delete)
-router.post('/:id/scenes/delete', async (req, res) => {
-  const currentUsername = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
-  const { id } = req.params;
-  const { conceptId, sceneNumber } = req.body;
-
-  console.log(`[projects POST /:id/scenes/delete] 프로젝트: ${id}, 씬: ${sceneNumber}, 사용자: ${currentUsername}`);
-
-  if (!conceptId || sceneNumber === undefined) {
-    return res.status(400).json({ success: false, error: 'conceptId와 sceneNumber는 필수입니다' });
-  }
-
-  const projectsData = readJSON(projectsFile);
-  const membersData = readJSON(membersFile);
-
-  if (!projectsData || !membersData) {
-    return res.status(500).json({ success: false, error: 'DB 읽기 실패' });
-  }
-
-  // 프로젝트 존재 확인
-  const project = projectsData.projects.find(p => p.id === id);
-  if (!project) {
-    return res.status(404).json({ success: false, error: '프로젝트 없음' });
-  }
-
-  // 권한 확인 (편집 권한 필요)
-  const isSystemUser = ['admin', 'guest', 'anonymous'].includes(currentUsername);
-  const isCreator = project.createdBy === currentUsername;
-  const membership = membersData.members.find(
-    m => m.projectId === id && m.username === currentUsername
-  );
-
-  const canEdit = isSystemUser || isCreator ||
-    (membership && ['owner', 'manager', 'editor'].includes(membership.role));
-
-  if (!canEdit) {
-    return res.status(403).json({ success: false, error: '편집 권한이 없습니다' });
-  }
-
-  try {
-    const storyboard = project.storyboard;
-    if (!storyboard || !storyboard.styles) {
-      return res.status(400).json({ success: false, error: '스토리보드 데이터가 없습니다' });
-    }
-
-    // 해당 컨셉 찾기
-    const styleIndex = storyboard.styles.findIndex(s => s.conceptId == conceptId || s.concept_id == conceptId);
-    if (styleIndex === -1) {
-      return res.status(404).json({ success: false, error: '컨셉을 찾을 수 없습니다' });
-    }
-
-    const currentImages = storyboard.styles[styleIndex].images;
-    const sceneToDelete = currentImages.find(img => img.sceneNumber === sceneNumber);
-
-    if (!sceneToDelete) {
-      console.warn(`[scene delete] 씬 ${sceneNumber}을 찾을 수 없음 (이미 삭제됨?)`);
-    } else {
-      // 🔥 S3 이미지/비디오 삭제
-      const { deleteFromS3 } = await import('../utils/s3-uploader.js');
-
-      // 이미지 삭제
-      if (sceneToDelete.imageUrl && sceneToDelete.imageUrl.includes('nexxii-storage')) {
-        try {
-          await deleteFromS3(sceneToDelete.imageUrl);
-          console.log(`[scene delete] S3 이미지 삭제 완료: ${sceneToDelete.imageUrl}`);
-        } catch (s3Error) {
-          console.error(`[scene delete] S3 이미지 삭제 실패 (무시): ${s3Error.message}`);
-        }
-      }
-
-      // 비디오 삭제
-      if (sceneToDelete.videoUrl && sceneToDelete.videoUrl.includes('nexxii-storage')) {
-        try {
-          await deleteFromS3(sceneToDelete.videoUrl);
-          console.log(`[scene delete] S3 비디오 삭제 완료: ${sceneToDelete.videoUrl}`);
-        } catch (s3Error) {
-          console.error(`[scene delete] S3 비디오 삭제 실패 (무시): ${s3Error.message}`);
-        }
-      }
-    }
-
-    // 씬 제거 및 번호 재정렬
-    const updatedImages = currentImages
-      .filter(img => img.sceneNumber !== sceneNumber)
-      .sort((a, b) => a.sceneNumber - b.sceneNumber)
-      .map((img, index) => ({
-        ...img,
-        sceneNumber: index + 1 // 1부터 다시 번호 매기기
-      }));
-
-    // 스토리보드 업데이트
-    storyboard.styles[styleIndex].images = updatedImages;
-    project.updatedAt = new Date().toISOString();
-
-    // DB 저장
-    if (!writeJSON(projectsFile, projectsData)) {
-      return res.status(500).json({ success: false, error: 'DB 저장 실패' });
-    }
-
-    console.log(`[scene delete] ✅ 씬 삭제 및 저장 완료. 남은 씬: ${updatedImages.length}개`);
-
-    // 전체 스토리보드 반환 (클라이언트 동기화용)
-    res.json({
-      success: true,
-      message: '씬이 삭제되었습니다',
-      storyboard: storyboard
-    });
-
-  } catch (error) {
-    console.error('[scene delete] ❌ 처리 중 오류:', error);
-    res.status(500).json({ success: false, error: error.message });
+    await deleteFolderFromS3(`projects/${id}/`).catch(() => { });
+
+    // 로컬 작업 폴더 삭제
+    const localPath = path.join(__dirname, '../../projects', id);
+    if (fs.existsSync(localPath)) fs.rmSync(localPath, { recursive: true, force: true });
+
+    // 개별 JSON 삭제
+    const filePath = path.join(PROJECTS_DIR, `${id}.json`);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    // 멤버십 삭제
+    membersData.members = membersData.members.filter(m => m.projectId !== id);
+    fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
+
+    res.json({ success: true, message: 'Deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

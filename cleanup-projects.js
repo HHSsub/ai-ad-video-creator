@@ -7,7 +7,7 @@ import { S3Client, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/cl
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const projectsFile = path.join(__dirname, 'config', 'projects.json');
+const projectsDir = path.join(__dirname, 'config', 'projects');
 
 // S3 클라이언트 설정
 const s3Client = new S3Client({ region: 'ap-northeast-2' });
@@ -16,18 +16,17 @@ const S3_PREFIX = 'nexxii-storage/projects/';
 
 console.log('🧹 S3 프로젝트 파일 정리 시작...\n');
 
-// 1. projects.json 읽기
-let projectsData;
+// 1. config/projects/ 아래의 프로젝트 ID들 수집
+let validProjectIds = new Set();
 try {
-    const data = fs.readFileSync(projectsFile, 'utf8');
-    projectsData = JSON.parse(data);
-    console.log(`✅ projects.json 로드: ${projectsData.projects.length}개 프로젝트`);
+    const files = fs.readdirSync(projectsDir).filter(f => f.endsWith('.json'));
+    files.forEach(f => validProjectIds.add(f.replace('.json', '')));
+    console.log(`✅ 개별 프로젝트 파일 로드: ${validProjectIds.size}개 프로젝트`);
 } catch (error) {
-    console.error('❌ projects.json 읽기 실패:', error.message);
+    console.error('❌ 프로젝트 디렉토리 읽기 실패:', error.message);
     process.exit(1);
 }
 
-const validProjectIds = new Set(projectsData.projects.map(p => p.id));
 console.log(`📋 유효한 프로젝트 ID: ${Array.from(validProjectIds).slice(0, 3).join(', ')}... (총 ${validProjectIds.size}개)\n`);
 
 async function cleanupS3() {

@@ -9,34 +9,28 @@ const __dirname = path.dirname(__filename);
 // 삭제할 프로젝트 ID
 const PROJECT_ID_TO_DELETE = 'project_1766647607444';
 
-const projectsFile = path.join(__dirname, 'config', 'projects.json');
+const projectsDir = path.join(__dirname, 'config', 'projects');
+const projectFile = path.join(projectsDir, `${PROJECT_ID_TO_DELETE}.json`);
 const membersFile = path.join(__dirname, 'config', 'project-members.json');
 
 console.log(`🗑️ 프로젝트 삭제 시작: ${PROJECT_ID_TO_DELETE}\n`);
 
 try {
-    // 1. projects.json 읽기
-    const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
-    const initialCount = projectsData.projects.length;
-
-    // 2. 해당 프로젝트 찾기
-    const projectIndex = projectsData.projects.findIndex(p => p.id === PROJECT_ID_TO_DELETE);
-
-    if (projectIndex === -1) {
-        console.log('❌ 프로젝트를 찾을 수 없습니다.');
+    // 1. 개별 프로젝트 파일 읽기
+    if (!fs.existsSync(projectFile)) {
+        console.log('❌ 프로젝트 파일을 찾을 수 없습니다:', projectFile);
         process.exit(1);
     }
+    const project = JSON.parse(fs.readFileSync(projectFile, 'utf8'));
 
-    const project = projectsData.projects[projectIndex];
     console.log(`✅ 프로젝트 발견:`);
     console.log(`  - 이름: ${project.name}`);
     console.log(`  - 생성자: ${project.createdBy}`);
     console.log(`  - 생성일: ${project.createdAt}\n`);
 
-    // 3. projects.json에서 삭제
-    projectsData.projects.splice(projectIndex, 1);
-    fs.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2), 'utf8');
-    console.log(`✅ projects.json 업데이트 완료 (${initialCount}개 → ${projectsData.projects.length}개)\n`);
+    // 2. 개별 JSON 삭제
+    fs.unlinkSync(projectFile);
+    console.log(`✅ 프로젝트 JSON 파일 삭제 완료: ${projectFile}\n`);
 
     // 4. project-members.json에서 관련 멤버 삭제
     const membersData = JSON.parse(fs.readFileSync(membersFile, 'utf8'));

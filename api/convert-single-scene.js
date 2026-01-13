@@ -7,6 +7,7 @@ import { spawn } from 'child_process';
 import { uploadVideoToS3 } from '../server/utils/s3-uploader.js';
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
 import { getImageToVideoUrl, getImageToVideoStatusUrl, getImageToVideoEngine } from '../src/utils/engineConfigLoader.js'; // 🔥 Restore dynamic loader
+import { runInProjectQueue } from '../server/utils/project-lock.js';
 
 const POLLING_TIMEOUT = 300000; // 5분 (비디오 생성은 오래 걸림)
 const POLLING_INTERVAL = 5000; // 5초 간격
@@ -207,23 +208,20 @@ export default async function handler(req, res) {
         const taskId = createResult.data.task_id;
         console.log(`[convert-single-scene] Task Created: ${taskId} (Async Handoff)`);
 
-        // 🔥 Persist Processing Status to DB Immediately
-        // This ensures status is saved even if user refreshes page
-        const projectsFile = path.join(process.cwd(), 'config', 'projects.json');
-        if (fs.existsSync(projectsFile)) {
-            try {
-                const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
-                // 🔥 Defensive check: Ensure projectId and conceptId are compared as strings
-                const projectIndex = projectsData.projects.findIndex(p => String(p.id) === String(projectId));
+        // 🔥 Persist Processing Status to Individual DB File Immediately
+        const projectsDir = path.join(process.cwd(), 'config', 'projects');
+        const projectFile = path.join(projectsDir, `${projectId}.json`);
 
-                if (projectIndex !== -1) {
-                    const project = projectsData.projects[projectIndex];
+        if (fs.existsSync(projectFile)) {
+            await runInProjectQueue(projectId, async () => {
+                try {
+                    const projectData = JSON.parse(fs.readFileSync(projectFile, 'utf8'));
+
                     // 🔥 Defensive check: conceptId might be string or number
-                    const conceptIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
+                    const conceptIndex = projectData.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
 
                     if (conceptIndex !== -1) {
-                        const images = project.storyboard.styles[conceptIndex].images;
-                        // 🔥 Defensive check: sceneNumber might be string or number
+                        const images = projectData.storyboard.styles[conceptIndex].images;
                         const imgIndex = images.findIndex(img => String(img.sceneNumber) === String(sceneNumber));
 
                         if (imgIndex !== -1) {
@@ -231,17 +229,19 @@ export default async function handler(req, res) {
                             images[imgIndex].videoStatus = 'processing';
                             images[imgIndex].taskId = taskId;
                             images[imgIndex].videoUrl = null; // Reset previous video if any
+                            projectData.updatedAt = new Date().toISOString();
 
-                            // Save DB
-                            fs.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2));
-                            console.log(`[convert-single-scene] ✅ Persisted processing status for scene ${sceneNumber} to DB`);
+                            // Save Individual Project DB
+                            fs.writeFileSync(projectFile, JSON.stringify(projectData, null, 2), 'utf8');
+                            console.log(`[convert-single-scene] ✅ Persisted processing status for scene ${sceneNumber} to ${projectId}.json`);
                         }
                     }
+                } catch (dbErr) {
+                    console.error('[convert-single-scene] ⚠️ Failed to persist status to Project DB:', dbErr);
                 }
-            } catch (dbErr) {
-                console.error('[convert-single-scene] ⚠️ Failed to persist status to DB:', dbErr);
-                // Don't fail the request, just log
-            }
+            });
+        } else {
+            console.warn(`[convert-single-scene] ⚠️ Project file not found: ${projectFile}`);
         }
 
         return res.json({

@@ -1,3 +1,25 @@
+### 2026-01-13 12:30 - [CRITICAL] 프로젝트 영속성 및 레이스 컨디션 문제 해결
+- **이슈 1 (Persistence)**: 프로젝트 삭제 및 데이터 업데이트가 `projects.json`에 반영되지 않던 문제를 개별 파일 방식(`config/projects/{id}.json`)으로 전면 전환하여 해결.
+- **이슈 2 (Race Condition)**: 여러 API가 동시에 파일을 수정할 때 데이터가 유실되던 문제를 `project-lock.js` 공유 락 도입 및 `PATCH` API의 부분 업데이트(`storyboardUpdate`) 기능 추가로 해결.
+- **주요 수정 사항**:
+  - `server/routes/projects.js`: 부분 업데이트 로직 및 공유 락 적용.
+  - `api/convert-single-scene.js`, `api/check-video-status.js`: 개별 프로젝트 파일 업데이트로 통일.
+  - `api/users.js`, `api/storage-browse.js`: 사용자/폴더 삭제 시 개별 파일 연동 삭제.
+  - `Step4.jsx`: 전체 객체 덮어쓰기 대신 `storyboardUpdate`를 통한 안전한 저장.
+- **상태**: **[완료]** 모든 레거시 참조 제거 및 전수 조사 완료.
+
+---
+
+### 2026-01-13 12:05 - [CRITICAL] 프로젝트 영속성(Persistence) 이슈 및 Kling 2.5 최종 조율
+- **이슈 1 (Persistence)**: 영상 변환 성공 및 이미지 재생성 후 새로고침 시 데이터가 이전 상태로 롤백되는 현상 발생. `Step4.jsx`의 PATCH 요청이 `projects.json`에 정확히 반영되지 않거나, 비동기 폴링 중 덮어쓰기 발생 가능성 조사 중.
+- **이슈 2 (Mapping)**: 사용자 데이터(EC2 `users.json`)와의 정합성 및 Kling 2.5 파라미터(특히 `duration` 문자열 타입) 최종 확인.
+- **해결 방안**:
+  - `Step4.jsx`에서 모든 상태 변경 시 즉시 백엔드 동기화 강화 및 `projects.json` 직접 쓰기 로직 검토.
+  - 비동기 폴링 완료 후 S3 URL을 `projects.json`에 직접 박제하는 로직 강화.
+- **상태**: 분석 및 수정 중.
+
+---
+
 ### 2026-01-13 11:55 - [TECHNICAL] Kling 2.5 안정화 및 프롬프트 영속성 아키텍처 개선
 - **이슈 3 (Reverted)**: 이미지 재생성 시 기존 프롬프트가 유지되는 "최초 프롬프트 고정" 기능은 사용자 요청으로 인해 철회(취소). 기존 방식(수정 시 함께 업데이트)으로 원복 완료.
 - **해결 방안**:

@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { uploadVideoToS3 } from '../server/utils/s3-uploader.js';
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
 import { getImageToVideoStatusUrl } from '../src/utils/engineConfigLoader.js';
+import { runInProjectQueue } from '../server/utils/project-lock.js';
 
 // 🔥 FFmpeg 실행 (Helper)
 function runFFmpeg(args, label = 'ffmpeg', workingDir = null) {
@@ -125,40 +126,39 @@ export default async function handler(req, res) {
 
             console.log(`[check-video-status] Final Processed URL: ${s3Url}`);
 
-            // 🔥 Persist Processing Status to DB Immediately (Validation / Completion)
-            const projectsFile = path.join(process.cwd(), 'config', 'projects.json');
-            if (fs.existsSync(projectsFile)) {
-                try {
-                    const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
-                    // 🔥 Defensive check: Ensure IDs are compared as strings
-                    const projectIndex = projectsData.projects.findIndex(p => String(p.id) === String(projectId));
+            // 🔥 Persist Processing Status to Individual DB File Immediately
+            const projectsDir = path.join(process.cwd(), 'config', 'projects');
+            const projectFile = path.join(projectsDir, `${projectId}.json`);
 
-                    if (projectIndex !== -1) {
-                        const project = projectsData.projects[projectIndex];
+            if (fs.existsSync(projectFile)) {
+                await runInProjectQueue(projectId, async () => {
+                    try {
+                        const projectData = JSON.parse(fs.readFileSync(projectFile, 'utf8'));
+
                         // 🔥 Defensive check: conceptId might be string or number
-                        const conceptIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
+                        const conceptIndex = projectData.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
 
                         if (conceptIndex !== -1) {
-                            const images = project.storyboard.styles[conceptIndex].images;
-                            // 🔥 Defensive check: sceneNumber might be string or number
+                            const images = projectData.storyboard.styles[conceptIndex].images;
                             const imgIndex = images.findIndex(img => String(img.sceneNumber) === String(sceneNumber));
 
                             if (imgIndex !== -1) {
                                 // Update Status & URL
                                 images[imgIndex].videoStatus = 'completed';
                                 images[imgIndex].videoUrl = s3Url;
-                                images[imgIndex].status = 'video_done'; // Ensure consistency
-                                images[imgIndex].taskId = null; // Clear taskId on completion
+                                images[imgIndex].status = 'video_done';
+                                images[imgIndex].taskId = null;
+                                projectData.updatedAt = new Date().toISOString();
 
-                                // Save DB
-                                fs.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2));
-                                console.log(`[check-video-status] ✅ Persisted completion status and URL for scene ${sceneNumber} to DB`);
+                                // Save Individual Project DB
+                                fs.writeFileSync(projectFile, JSON.stringify(projectData, null, 2), 'utf8');
+                                console.log(`[check-video-status] ✅ Persisted completion status to ${projectId}.json`);
                             }
                         }
+                    } catch (dbErr) {
+                        console.error('[check-video-status] ⚠️ Failed to persist to Project DB:', dbErr);
                     }
-                } catch (dbErr) {
-                    console.error('[check-video-status] ⚠️ Failed to persist completion to DB:', dbErr);
-                }
+                });
             }
 
             return res.status(200).json({

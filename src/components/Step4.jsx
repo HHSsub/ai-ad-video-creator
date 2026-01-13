@@ -417,12 +417,24 @@ const Step4 = ({
           targetImage.status = 'regenerated';
           targetImage.videoUrl = null; // Reset video on image change
 
-          // 🔥 백엔드 영구 저장 (Full Persistence)
+          // 🔥 백엔드 영구 저장 (Partial Update로 레이스 컨디션 방지)
           try {
             await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
-              body: JSON.stringify({ storyboard, formData })
+              body: JSON.stringify({
+                storyboardUpdate: {
+                  conceptId: selectedConceptId,
+                  sceneNumber: sceneNumber,
+                  updates: {
+                    imageUrl: targetImage.imageUrl,
+                    prompt: englishPrompt,
+                    koreanPrompt: currentInput,
+                    status: 'regenerated',
+                    videoUrl: null
+                  }
+                }
+              })
             });
           } catch (saveErr) {
             console.error(`[Step4] 씬 ${sceneNumber} 저장 실패:`, saveErr);
@@ -693,7 +705,7 @@ const Step4 = ({
               setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
               setModifiedScenes(prev => [...prev, sceneNumber]);
 
-              // 🔥 중요: Async Polling 완료 후 즉시 저장 (유실 방지)
+              // 🔥 중요: Async Polling 완료 후 즉시 부분 업데이트 (레이스 컨디션 방지)
               try {
                 await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
                   method: 'PATCH',
@@ -702,13 +714,21 @@ const Step4 = ({
                     'x-username': user?.username || 'anonymous'
                   },
                   body: JSON.stringify({
-                    storyboard: storyboard, // Updated storyboard with videoUrl
-                    formData: formData
+                    storyboardUpdate: {
+                      conceptId: selectedConceptId,
+                      sceneNumber: sceneNumber,
+                      updates: {
+                        videoUrl: statusData.videoUrl,
+                        status: 'video_done',
+                        videoStatus: 'completed',
+                        taskId: null
+                      }
+                    }
                   })
                 });
-                log(`씬 ${sceneNumber} 변환 결과 저장 완료`);
+                log(`씬 ${sceneNumber} 변환 결과 저장 완료 (Partial)`);
               } catch (saveErr) {
-                console.error('프로젝트 저장 실패:', saveErr);
+                console.error('프로젝트 부분 저장 실패:', saveErr);
                 log('⚠️ 프로젝트 저장 실패 (새로고침 시 유실될 수 있음)');
               }
             } else if (statusData.status === 'processing') {

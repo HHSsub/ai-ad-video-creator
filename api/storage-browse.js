@@ -1,6 +1,9 @@
 // api/storage-browse.js - AWS S3 Browser API
 import { s3Client, BUCKET_NAME } from '../src/utils/awsConfig.js';
 import { ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { runInProjectQueue } from '../server/utils/project-lock.js';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Format bytes to human-readable string
@@ -205,35 +208,34 @@ export default async function handler(req, res) {
 
             console.log(`[storage-browse] ✅ 폴더 삭제 완료: ${prefix} (${deletedCount}개 파일)`);
 
-            // 🔥 프로젝트 DB 레코드도 삭제
+            // 🔥 프로젝트 DB 레코드(개별 JSON) 및 멤버십 삭제
             if (projectId) {
                 try {
-                    const fs = await import('fs');
-                    const path = await import('path');
-                    const projectsFile = path.default.join(process.cwd(), 'config', 'projects.json');
-                    const membersFile = path.default.join(process.cwd(), 'config', 'project-members.json');
+                    const projectsDir = path.join(process.cwd(), 'config', 'projects');
+                    const projectFile = path.join(projectsDir, `${projectId}.json`);
+                    const membersFile = path.join(process.cwd(), 'config', 'project-members.json');
 
-                    // projects.json 읽기
-                    const projectsData = JSON.parse(fs.default.readFileSync(projectsFile, 'utf8'));
-                    const membersData = JSON.parse(fs.default.readFileSync(membersFile, 'utf8'));
+                    // 1. 개별 프로젝트 파일 삭제
+                    if (fs.existsSync(projectFile)) {
+                        fs.unlinkSync(projectFile);
+                        console.log(`[storage-browse] 🗑️ 개별 프로젝트 JSON 삭제 완료: ${projectId}`);
+                    }
 
-                    // 프로젝트 찾기 및 삭제
-                    const projectIndex = projectsData.projects.findIndex(p => p.id === projectId);
-                    if (projectIndex !== -1) {
-                        projectsData.projects.splice(projectIndex, 1);
-                        fs.default.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2));
-                        console.log(`[storage-browse] 🗑️ 프로젝트 DB 삭제: ${projectId}`);
+                    // 2. 멤버십 삭제
+                    if (fs.existsSync(membersFile)) {
+                        await runInProjectQueue(projectId, async () => {
+                            const membersData = JSON.parse(fs.readFileSync(membersFile, 'utf8'));
+                            const initialCount = membersData.members.length;
+                            membersData.members = membersData.members.filter(m => m.projectId !== projectId);
 
-                        // 멤버도 삭제
-                        membersData.members = membersData.members.filter(m => m.projectId !== projectId);
-                        fs.default.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
-                        console.log(`[storage-browse] 🗑️ 프로젝트 멤버 삭제 완료`);
-                    } else {
-                        console.log(`[storage-browse] ⚠️ 프로젝트 DB에 없음: ${projectId}`);
+                            if (initialCount !== membersData.members.length) {
+                                fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2), 'utf8');
+                                console.log(`[storage-browse] 🗑️ 프로젝트 멤버 삭제 완료`);
+                            }
+                        });
                     }
                 } catch (dbError) {
                     console.error(`[storage-browse] ❌ 프로젝트 DB 삭제 실패:`, dbError);
-                    // DB 삭제 실패해도 S3 삭제는 성공했으므로 계속 진행
                 }
             }
 
