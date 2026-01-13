@@ -69,6 +69,9 @@ import promptsAllHandler from '../api/prompts-all.js';
 // 🔥 프롬프트 버전 및 응답 조회 API
 import { getVersions, getResponses, getVersionContent, getResponseContent } from '../api/prompts-versions.js';
 
+// 🔥 프롬프트 유효성 검증 API
+import promptsValidateRouter from '../api/prompts-validate.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -768,6 +771,7 @@ app.use('/api/debug', debug); // 수정됨: /api/ 추가
 app.use('/api/apply-bgm', applyBgm); // 수정됨: /api/ 추가
 app.use('/api/bgm-stream', bgmStream); // 수정됨: /api/ 추가
 app.use('/api/nanobanana-compose', nanobanaCompose); // 수정됨: /api/ 추가
+app.use('/api/prompts/validate', promptsValidateRouter);
 
 // 🔥 저장소 관리 API
 app.use('/api/storage/info', storageInfoHandler);

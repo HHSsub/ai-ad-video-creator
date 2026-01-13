@@ -381,6 +381,53 @@ const AdminPanel = ({ currentUser }) => {
     }
   };
 
+  const validatePrompt = async () => {
+    if (!currentPrompt) {
+      showMessage('error', '검증할 프롬프트 내용이 없습니다.');
+      return;
+    }
+
+    setSaving(true); // Reusing saving state for loading
+    try {
+      const response = await fetch(`${API_BASE}/api/prompts/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: currentPrompt,
+          mode: selectedPromptType.includes('manual') ? 'manual' : 'auto'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        let msg = '✅ 프롬프트 유효성 검증 통과!';
+        if (data.warnings) {
+          msg += '\n\n⚠️ 주의 사항:\n' + data.warnings.map(w => `- ${w}`).join('\n');
+          showMessage('info', msg);
+        } else {
+          showMessage('success', msg);
+        }
+      } else {
+        let errorMsg = '❌ 유효성 검증 실패\n\n';
+        if (data.errors) {
+          errorMsg += '🚩 오류:\n' + data.errors.map(e => `- ${e}`).join('\n');
+        }
+        if (data.warnings) {
+          errorMsg += '\n\n⚠️ 주의 (참고):\n' + data.warnings.map(w => `- ${w}`).join('\n');
+        }
+        showMessage('error', errorMsg);
+      }
+    } catch (error) {
+      console.error('검증 오류:', error);
+      showMessage('error', `❌ 검증 실패: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const testPrompt = async () => {
     setTestMode(true);
     setMessage({ type: '', text: '' });
@@ -829,6 +876,13 @@ const AdminPanel = ({ currentUser }) => {
                       ))}
                     </div>
                     <div className="flex gap-2">
+                      <button
+                        onClick={validatePrompt}
+                        disabled={saving}
+                        className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all disabled:opacity-50"
+                      >
+                        {saving ? 'VALIDATING...' : '🔍 유효성 검증'}
+                      </button>
                       <button
                         onClick={testPrompt}
                         disabled={testMode}
