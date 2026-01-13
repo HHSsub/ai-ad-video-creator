@@ -228,14 +228,13 @@ export async function createS3FolderPlaceholder(projectId) {
 }
 
 /**
-         * 버퍼 데이터 S3 업로드
-         * @param {Buffer} buffer - 파일 데이터
-         * @param {string} projectId - 프로젝트 ID
-         * @param {string} filename - 저장할 파일명
-         * @param {string} contentType - MIME 타입 (기본: image/jpeg)
-         * @returns {Promise<string>} S3 URL
-         */
-// ... existing code ...
+ * 버퍼 데이터 S3 업로드
+ * @param {Buffer} buffer - 파일 데이터
+ * @param {string} projectId - 프로젝트 ID
+ * @param {string} filename - 저장할 파일명
+ * @param {string} contentType - MIME 타입 (기본: image/jpeg)
+ * @returns {Promise<string>} S3 URL
+ */
 export async function uploadBufferToS3(buffer, projectId, filename, contentType = 'image/jpeg') {
     const s3Key = `nexxii-storage/projects/${projectId}/images/${filename}`;
 

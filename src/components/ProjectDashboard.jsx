@@ -14,9 +14,10 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // 프로젝트 이름 변경 상태
+  // 프로젝트 이름 및 설명 변경 상태
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [editingProjectName, setEditingProjectName] = useState('');
+  const [editingProjectDesc, setEditingProjectDesc] = useState('');
 
   // 정렬 상태
   const [sortBy, setSortBy] = useState('date-desc'); // date-desc, date-asc, name-asc, name-desc
@@ -123,18 +124,20 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
     }
   };
 
-  // 🔥 프로젝트 이름 변경
+  // 🔥 프로젝트 편집 시작
   const handleStartEdit = (project) => {
     setEditingProjectId(project.id);
     setEditingProjectName(project.name);
+    setEditingProjectDesc(project.description || '');
   };
 
   const handleCancelEdit = () => {
     setEditingProjectId(null);
     setEditingProjectName('');
+    setEditingProjectDesc('');
   };
 
-  const handleSaveName = async (projectId) => {
+  const handleSaveEdit = async (projectId) => {
     if (!editingProjectName.trim()) {
       alert('프로젝트 이름을 입력하세요');
       return;
@@ -148,20 +151,22 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
           'x-username': user?.username || 'anonymous'
         },
         body: JSON.stringify({
-          name: editingProjectName.trim()
+          name: editingProjectName.trim(),
+          description: editingProjectDesc.trim()
         })
       });
 
       if (!response.ok) {
-        throw new Error(`이름 변경 실패: ${response.status}`);
+        throw new Error(`프로젝트 수정 실패: ${response.status}`);
       }
 
       await fetchProjects();
       setEditingProjectId(null);
       setEditingProjectName('');
+      setEditingProjectDesc('');
     } catch (err) {
-      console.error('프로젝트 이름 변경 에러:', err);
-      alert(`이름 변경 실패: ${err.message}`);
+      console.error('프로젝트 수정 에러:', err);
+      alert(`프로젝트 수정 실패: ${err.message}`);
     }
   };
 
@@ -413,43 +418,65 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                 </div>
               </div>
 
-              {/* 프로젝트 이름 (편집 모드) */}
+              {/* 프로젝트 이름 및 설명 (편집 모드) */}
               {editingProjectId === project.id ? (
                 <div onClick={(e) => e.stopPropagation()} style={{ marginBottom: '12px' }}>
-                  <input
-                    type="text"
-                    value={editingProjectName}
-                    onChange={(e) => setEditingProjectName(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      fontSize: '16px',
-                      fontWeight: '600',
-                      border: '2px solid #3b82f6',
-                      borderRadius: '6px',
-                      backgroundColor: '#1f2937',
-                      color: 'white',
-                      outline: 'none'
-                    }}
-                    autoFocus
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') handleSaveName(project.id);
-                      if (e.key === 'Escape') handleCancelEdit();
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>프로젝트 이름</label>
+                    <input
+                      type="text"
+                      value={editingProjectName}
+                      onChange={(e) => setEditingProjectName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        border: '2px solid #3b82f6',
+                        borderRadius: '6px',
+                        backgroundColor: '#1f2937',
+                        color: 'white',
+                        outline: 'none'
+                      }}
+                      autoFocus
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') handleSaveEdit(project.id);
+                        if (e.key === 'Escape') handleCancelEdit();
+                      }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>프로젝트 설명</label>
+                    <textarea
+                      value={editingProjectDesc}
+                      onChange={(e) => setEditingProjectDesc(e.target.value)}
+                      placeholder="프로젝트 설명을 입력하세요"
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        fontSize: '14px',
+                        border: '1px solid #4b5563',
+                        borderRadius: '6px',
+                        backgroundColor: '#1f2937',
+                        color: 'white',
+                        outline: 'none',
+                        minHeight: '80px',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     <button
-                      onClick={() => handleSaveName(project.id)}
+                      onClick={() => handleSaveEdit(project.id)}
                       style={{
                         flex: 1,
-                        padding: '6px 12px',
+                        padding: '8px 12px',
                         background: '#3b82f6',
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer',
-                        fontSize: '13px',
-                        fontWeight: '500'
+                        fontWeight: '600'
                       }}
                     >
                       저장
@@ -458,14 +485,12 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                       onClick={handleCancelEdit}
                       style={{
                         flex: 1,
-                        padding: '6px 12px',
-                        background: '#374151',
+                        padding: '8px 12px',
+                        background: '#4b5563',
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontWeight: '500'
+                        cursor: 'pointer'
                       }}
                     >
                       취소
