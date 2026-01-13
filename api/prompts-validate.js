@@ -40,8 +40,8 @@ router.post('/', (req, res) => {
 
     // 2. 출력 구조 지시어 검증
     if (mode === 'manual') {
-        if (!/(Section\s*2|Cinematic\s*Storyboard|Manual\s*Storyboard)/i.test(prompt)) {
-            warnings.push('[구조 미비] "Section 2" 또는 "Cinematic Storyboard"와 같은 섹션 구분 지시어가 없습니다. (파서가 내용을 찾지 못할 수 있음)');
+        if (!/(Section\s*2|Cinematic\s*Storyboard|Manual\s*Storyboard|Production\s*Guide|Frame-by-Frame)/i.test(prompt)) {
+            warnings.push('[구조 미비] "Section 2", "Cinematic Storyboard" 또는 "Production Guide"와 같은 섹션 구분 지시어가 없습니다. (파서가 내용을 찾지 못할 수 있음)');
         }
     } else {
         if (!/#+\s*(\d+|\[Number\])\.\s*컨셉:/i.test(prompt)) {
@@ -62,9 +62,9 @@ router.post('/', (req, res) => {
         warnings.push('[순서 모호] 씬마다 3개의 JSON(이미지, 모션, 카피)을 순서대로 출력하라는 지시가 부족합니다.');
     }
 
-    const sceneHeaderPattern = /S#\s*\d+/i;
+    const sceneHeaderPattern = /(?:S#|Scene|Sequence|Frame)\s*(\d+|#)/i;
     if (!sceneHeaderPattern.test(prompt)) {
-        errors.push('[구분자 누락] "S#1" 또는 "S#번호"와 같은 씬 구분자 형식이 프롬프트 지침에 포함되어야 합니다.');
+        errors.push('[구분자 누락] "S#1", "Sequence 1", "Frame 1"과 같은 씬 구분자 형식이 프롬프트 지침에 포함되어야 합니다.');
     }
 
     if (errors.length > 0) {

@@ -314,7 +314,8 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
     let conceptMatches = [];
 
     if (mode === 'manual') {
-      const manualConceptPattern = /(Section\s*2|Cinematic|Storyboard)/i;
+      // Manual 모드: 다양한 섹션 헤더(Production Guide, Frame-by-Frame 등) 지원 확장
+      const manualConceptPattern = /(Section\s*2|Cinematic|Storyboard|Production\s*Guide|Frame-by-Frame)/i;
       const match = text.match(manualConceptPattern);
       if (match) {
         conceptMatches = [{
@@ -354,10 +355,11 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
 
       let scenePattern;
       if (mode === 'manual') {
-        scenePattern = /S#(\d+)\s*\(([^)]+)\)/g;
+        // S#, Scene, Sequence, Frame 등 다양한 씬 구분자 지원
+        scenePattern = /(?:S#|Scene|Sequence|Frame)\s*(\d+).*?\(([^)]+)\)/gi;
       } else {
-        // # 개수에 상관없이(0개 이상) "S#N (타임코드)" 형식을 인식하도록 개선
-        scenePattern = /#*\s*S#(\d+)\s*\(([^)]+)\)/g;
+        // Auto 모드: #* S#N (Time) 또는 #* Sequence N (Time) 등 지원
+        scenePattern = /#*\s*(?:S#|Scene|Sequence|Frame)\s*(\d+).*?\(([^)]+)\)/gi;
       }
 
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
