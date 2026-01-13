@@ -337,43 +337,17 @@ router.delete('/:id', async (req, res) => {
     return res.status(403).json({ error: 'owner 권한 필요' });
   }
 
-  // 🔥 S3 파일 삭제 (선택적)
+  // 🔥 S3 파일 및 폴더 전체 삭제
   try {
-    const { deleteFromS3 } = await import('../utils/s3-uploader.js');
+    const { deleteFolderFromS3 } = await import('../utils/s3-uploader.js');
+    const s3Prefix = `projects/${id}/`;
 
-    // finalVideos의 S3 URL 삭제
-    if (project.storyboard?.finalVideos) {
-      for (const video of project.storyboard.finalVideos) {
-        if (video.videoUrl && video.videoUrl.startsWith('https://upnexx.ai/nexxii-storage')) {
-          try {
-            await deleteFromS3(video.videoUrl);
-            console.log(`[projects DELETE] S3 파일 삭제: ${video.videoUrl}`);
-          } catch (s3Error) {
-            console.warn(`[projects DELETE] S3 삭제 실패 (무시): ${s3Error.message}`);
-          }
-        }
-      }
-    }
+    console.log(`[projects DELETE] S3 프로젝트 폴더 삭제 시작: ${s3Prefix}`);
+    await deleteFolderFromS3(s3Prefix);
+    console.log(`[projects DELETE] ✅ S3 프로젝트 폴더 삭제 완료: ${s3Prefix}`);
 
-    // styles의 이미지 URL 삭제
-    if (project.storyboard?.styles) {
-      for (const style of project.storyboard.styles) {
-        if (style.images) {
-          for (const image of style.images) {
-            if (image.imageUrl && image.imageUrl.startsWith('https://upnexx.ai/nexxii-storage')) {
-              try {
-                await deleteFromS3(image.imageUrl);
-                console.log(`[projects DELETE] S3 이미지 삭제: ${image.imageUrl}`);
-              } catch (s3Error) {
-                console.warn(`[projects DELETE] S3 삭제 실패 (무시): ${s3Error.message}`);
-              }
-            }
-          }
-        }
-      }
-    }
   } catch (importError) {
-    console.warn(`[projects DELETE] S3 삭제 모듈 로드 실패 (무시): ${importError.message}`);
+    console.warn(`[projects DELETE] S3 삭제 중 오류 발생 (무시): ${importError.message}`);
   }
 
   // 🔥 로컬 프로젝트 폴더 삭제 (projects/[project_id]/)

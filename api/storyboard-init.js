@@ -1206,7 +1206,7 @@ export default async function handler(req, res) {
   const username = req.headers['x-username'] || 'anonymous';
   const sessionId = req.body.sessionId || `session_${Date.now()}_${username}`;
 
-  // 🔥 추가: 세션 즉시 생성
+  // 🔥 추가: 세션 즉시 생성 및 상태 체크
   let session = sessionStore.getSession(sessionId);
   if (!session) {
     console.log(`[storyboard-init] 🆕 세션 생성: ${sessionId}`);
@@ -1216,7 +1216,25 @@ export default async function handler(req, res) {
       startedAt: Date.now()
     });
   } else {
-    console.log(`[storyboard-init] ✅ 기존 세션 확인: ${sessionId}`);
+    console.log(`[storyboard-init] ✅ 기존 세션 확인: ${sessionId} (상태: ${session.status})`);
+
+    // 🔥 이미 완료되었거나 진행 중인 경우 중복 실행 방지
+    if (session.status === 'completed' || session.status === 'in_progress') {
+      console.log(`[storyboard-init] ⏭️ 이미 ${session.status} 상태인 세션입니다. 백그라운드 프로세스를 다시 시작하지 않습니다.`);
+      return res.status(200).json({
+        success: true,
+        sessionId: sessionId,
+        status: session.status,
+        message: '기존 세션이 이미 진행 중이거나 완료되었습니다.'
+      });
+    }
+
+    // 에러 상태였거나 다른 경우라면 재시도 허용 (세션 초기화 후 재시작)
+    sessionStore.updateSession(sessionId, {
+      status: 'in_progress',
+      error: null,
+      progress: { phase: 'INIT', percentage: 0, currentStep: '프로세스 재시작 중...' }
+    });
   }
 
   res.status(202).json({

@@ -597,7 +597,9 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
       log('⏱️ 대기시간은 약 10분 내외입니다');
       log('☕ 잠시만 기다려주세요...');
 
-      const sessionId = `session_${Date.now()}_${user?.username || 'anonymous'}`;
+      const sessionId = currentProject?.id
+        ? `session_${currentProject.id}_${user?.username || 'admin'}`
+        : `session_${Date.now()}_${user?.username || 'anonymous'}`;
 
       try {
         await fetch(`${API_BASE}/api/session/start`, {
@@ -656,9 +658,13 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
 
       log(`📡 서버 응답 상태: ${initResponse.status} ${initResponse.statusText}`);
 
-      if (initResponse.status === 202) {
+      if (initResponse.status === 202 || initResponse.status === 200) {
         const data = await initResponse.json();
-        log(`✅ 작업 시작됨. 세션 ID: ${data.sessionId}`);
+        if (initResponse.status === 200) {
+          log(`ℹ️ 이미 진행 중이거나 완료된 세션입니다. (${data.status})`);
+        } else {
+          log(`✅ 작업 시작됨. 세션 ID: ${data.sessionId}`);
+        }
         pollAndGenerateImages(data.sessionId);
         return;
       }
