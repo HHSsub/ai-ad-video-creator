@@ -280,14 +280,37 @@ export async function safeCallGemini(prompt, options = {}) {
         if (isRetryableError(error) && modelAttempt < maxRetries - 1) {
           let delay = exponentialBackoffDelay(modelAttempt);
 
-          // 🔥 429 Retry-After 메시지 파싱 (Google Gemini)
-          const retryAfterMatch = error.message.match(/Please retry in ([0-9.]+)s/);
-          if (retryAfterMatch && retryAfterMatch[1]) {
-            const waitSeconds = parseFloat(retryAfterMatch[1]);
-            delay = Math.ceil(waitSeconds * 1000) + 2000; // 2초 여유 추가
-            console.log(`[${label}] 🛑 Rate Limit 감지: ${waitSeconds}초 대기 요청됨 -> ${delay}ms 대기 설정`);
+          // 🔥 에러 구분: Quota Exceeded vs Rate Limit
+          const isQuotaError = error.message.includes('quota') ||
+            error.message.includes('check your plan') ||
+            error.message.includes('billing');
+
+          const isRateLimit = error.message.includes('429') ||
+            error.message.includes('Rate Limit') ||
+            error.message.includes('Too Many Requests');
+
+          // 1. Quota Exceeded (일일 할당량 초과): 대기 없이 즉시 다음 키로 전환
+          if (isQuotaError) {
+            console.log(`[${label}] 🛑 Quota Exceeded 감지: 대기 없이 즉시 다음 키 시도 (남은 시도: ${maxRetries - modelAttempt - 1}회)`);
+            continue; // delay 없이 즉시 다음 루프(다음 키 선택)로 진행
           }
 
+          // 2. Rate Limit (순간적인 RPM 초과): 잠시 대기 후 재시도 (사용자 요청: 재시도)
+          if (isRateLimit) {
+            // Retry-After 파싱
+            const retryAfterMatch = error.message.match(/Please retry in ([0-9.]+)s/);
+            if (retryAfterMatch && retryAfterMatch[1]) {
+              const waitSeconds = parseFloat(retryAfterMatch[1]);
+              delay = Math.ceil(waitSeconds * 1000) + 2000; // 2초 여유
+              console.log(`[${label}] ⚠️ Rate Limit(RPM) 감지: ${waitSeconds}초 대기 요청됨 -> ${delay}ms 후 재시도`);
+            } else {
+              console.log(`[${label}] ⚠️ Rate Limit(RPM) 감지: ${delay}ms 후 재시도`);
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+
+          // 일반적인 재시도 (네트워크 에러 등)
           console.log(`[${label}] ⏳ ${delay}ms (${(delay / 1000).toFixed(1)}초) 후 재시도... (모델: ${currentModel}, 남은 시도: ${maxRetries - modelAttempt - 1}회)`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;

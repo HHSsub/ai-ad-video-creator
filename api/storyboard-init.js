@@ -397,7 +397,31 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
               copy: copyJSON
             };
           } catch (e) {
-            console.error(`JSON 파싱 실패 (씬 ${sceneNum}):`, e.message);
+            console.error(`JSON 파싱 실패 (씬 ${sceneNum}) - 정규식 블록 파싱 에러, Nuclear Parser 시도:`, e.message);
+
+            // 🔥 정규식 블록 파싱 실패 시 Nuclear Parser로 폴백
+            const anyJsons = extractAnyJSON(sceneText);
+            if (anyJsons.length >= 3) {
+              try {
+                const imagePromptJSON = JSON.parse(anyJsons[0]);
+                const motionPromptJSON = JSON.parse(anyJsons[1]);
+                const copyJSON = JSON.parse(anyJsons[2]);
+
+                conceptData[`scene_${sceneNum}`] = {
+                  title: `Scene ${sceneNum}`,
+                  timecode: timecode,
+                  visual_description: visualDescription,
+                  image_prompt: imagePromptJSON,
+                  motion_prompt: motionPromptJSON,
+                  copy: copyJSON
+                };
+                console.log(`[parseUnifiedConceptJSON] ☢️ Nuclear Parser로 씬 ${sceneNum} 복구 성공 (Fallback)`);
+              } catch (nuclearError) {
+                console.error(`[parseUnifiedConceptJSON] Nuclear Parser 복구조차 실패 (씬 ${sceneNum}):`, nuclearError.message);
+              }
+            } else {
+              console.error(`[parseUnifiedConceptJSON] Nuclear Parser 복구 실패 - JSON 블록 부족 (Found: ${anyJsons.length})`);
+            }
           }
         } else {
           // 🔥 Fallback: 정규식 실패 시 Nuclear parser 시도

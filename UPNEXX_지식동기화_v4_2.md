@@ -7,6 +7,11 @@
   - **Auto Start**: `Step2.jsx`의 자동 시작 지연(`setTimeout`)을 사용자 요청에 따라 **완전 제거 (즉시 시작)**.
   - **State Logic**: `App.jsx`에서 `styles.length` 체크를 추가하여 신규 프로젝트를 '기존 작업'으로 오판하지 않도록 수정.
   - **Visual Tag**: `ProjectDashboard.jsx`의 `getProjectStatus` 함수를 수정하여 데이터가 없는 프로젝트는 **"시작 전"**으로 표시.
+  - **Auto Navigation**: 프로젝트 생성 후 대시보드 대신 **"모드 선택"** 화면으로 자동 진입 (사용자 선호 반영).
+  - **Zero Scene Fix**: Gemini 응답 파싱 실패("씬 개수: 0개") 시 **Nuclear Parser**로 자동 폴백하여 데이터 복구.
+  - **Smart Retry**: 
+    - **Quota Exceeded** (할당량 초과): 대기 없이 **즉시 다음 API 키**로 전환.
+    - **Rate Limit** (RPM 과부하): `Retry-After` 시간만큼 **대기 후 재시도** (일시적 오류 대응).
   - **Rollback**: Step 3(컨셉 선택) 자동 스킵 로직은 사용자 요청에 의해 원복됨.
 - **상태**: **[완료]** 프로젝트 생성부터 실행, 상태 표시까지 전체 워크플로우 무결성 확보.
 
