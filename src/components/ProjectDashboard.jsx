@@ -755,21 +755,25 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
         )
       }
       {/* 멤버 목록 모달 */}
-      <MemberListModal
-        isOpen={showMemberModal}
-        onClose={() => setShowMemberModal(false)}
-        projectId={targetProjectId}
-        currentUser={user?.username || 'anonymous'}
-        isAdmin={user?.username === 'admin'}
-      />
+      {targetProjectId && (
+        <MemberListModal
+          isOpen={showMemberModal}
+          onClose={() => setShowMemberModal(false)}
+          projectId={targetProjectId}
+          currentUser={user?.username || 'anonymous'}
+          isAdmin={user?.username === 'admin'}
+        />
+      )}
 
       {/* 멤버 초대 모달 */}
-      <InviteMemberModal
-        isOpen={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        projectId={targetProjectId}
-        currentUser={user?.username || 'anonymous'}
-      />
+      {targetProjectId && (
+        <InviteMemberModal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          projectId={targetProjectId}
+          currentUser={user?.username || 'anonymous'}
+        />
+      )}
     </div >
   );
 };

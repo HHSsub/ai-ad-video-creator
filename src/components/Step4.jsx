@@ -42,6 +42,7 @@ const Step4 = ({
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
   const [modifiedScenes, setModifiedScenes] = useState([]);
+  const [koreanPrompts, setKoreanPrompts] = useState({}); // 🔥 복구: 번역된 한국어 프롬프트 저장
   const [isTranslating, setIsTranslating] = useState(false); // 번역 진행 상태
 
   // 🔥 추가: 멤버 관리 모달 상태
@@ -2139,22 +2140,26 @@ const Step4 = ({
           </div>
         </div>
       </div>
-      {/* 멤버 목록 모달 추가 */}
-      <MemberListModal
-        isOpen={showMemberModal}
-        onClose={() => setShowMemberModal(false)}
-        projectId={currentProject?.id}
-        currentUser={user?.username || 'anonymous'}
-        isAdmin={user?.username === 'admin'}
-      />
+      {/* 멤버 목록 모달 추가 (ID 가드) */}
+      {currentProject?.id && (
+        <MemberListModal
+          isOpen={showMemberModal}
+          onClose={() => setShowMemberModal(false)}
+          projectId={currentProject.id}
+          currentUser={user?.username || 'anonymous'}
+          isAdmin={user?.username === 'admin'}
+        />
+      )}
 
-      {/* 멤버 초대 모달 추가 */}
-      <InviteMemberModal
-        isOpen={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        projectId={currentProject?.id}
-        currentUser={user?.username || 'anonymous'}
-      />
+      {/* 멤버 초대 모달 추가 (ID 가드) */}
+      {currentProject?.id && (
+        <InviteMemberModal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          projectId={currentProject.id}
+          currentUser={user?.username || 'anonymous'}
+        />
+      )}
     </div>
   );
 };
