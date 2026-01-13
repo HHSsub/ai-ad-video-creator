@@ -150,7 +150,9 @@ const AdminPanel = ({ currentUser }) => {
     fetchVersionContent();
 
     if (selectedVersion) {
-      loadGeminiResponses();
+      // 🔥 버전 선택 시 해당 버전의 응답 로그만 필터링하여 로드
+      const versionIdToFilter = selectedVersion.isCurrent ? null : selectedVersion.id;
+      loadGeminiResponses(null, null, versionIdToFilter);
     }
   }, [selectedVersion]);
 
@@ -299,16 +301,25 @@ const AdminPanel = ({ currentUser }) => {
     }
   };
 
-  const loadGeminiResponses = async (engineId, promptType) => {
+  const loadGeminiResponses = async (engineId, promptType, versionId) => {
     try {
       const id = engineId || `${selectedImageEngine}_${selectedVideoEngine}`;
       const type = promptType || selectedPromptType;
 
-      const response = await fetch(`${API_BASE}/api/prompts/responses/${id}/${type}`);
+      // 🔥 버전 종속성 필터링 (versionId가 있으면 쿼리로 전달)
+      let url = `${API_BASE}/api/prompts/responses/${id}/${type}`;
+      if (versionId) {
+        url += `?versionId=${versionId}`;
+      }
+
+      console.log(`[AdminPanel] Gemini 응답 로드 요청: ${url}`);
+      const response = await fetch(url);
       const data = await response.json();
 
       if (data.success) {
+        // 🔥 빈 배열이어도 그대로 반영 (필터링 결과가 없을 수 있음)
         setGeminiResponses(data.responses || []);
+        console.log(`[AdminPanel] 응답 로드 완료: ${data.responses?.length || 0}개`);
       } else {
         setGeminiResponses([]);
       }
