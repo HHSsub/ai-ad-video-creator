@@ -799,6 +799,34 @@ const AdminPanel = ({ currentUser }) => {
               </div>
             </div>
 
+            {/* 🔥 이동됨: 유효성 검증 및 전역 메시지 표시 영역 */}
+            {message.text && (
+              <div className={`mb-6 p-5 rounded-xl whitespace-pre-wrap flex justify-between items-start shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300 ${message.type === 'success'
+                ? 'bg-green-950/40 text-green-300 border border-green-500/50'
+                : message.type === 'info'
+                  ? 'bg-blue-950/40 text-blue-300 border border-blue-500/50'
+                  : 'bg-red-950/40 text-red-300 border border-red-500/50'
+                }`}>
+                <div className="flex gap-3">
+                  <span className="text-xl">
+                    {message.type === 'success' ? '✅' : message.type === 'info' ? 'ℹ️' : '❌'}
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-bold text-sm uppercase tracking-tight">
+                      {message.type === 'success' ? '성공' : message.type === 'info' ? '안내' : '검증 실패 / 오류'}
+                    </span>
+                    <span className="text-sm leading-relaxed">{message.text}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMessage({ type: '', text: '' })}
+                  className="p-1 hover:bg-white/10 rounded-md transition-colors"
+                >
+                  <svg className="w-5 h-5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            )}
+
             {/* 메인 편집 영역 (3단 구성) */}
             <div className="grid grid-cols-12 gap-6">
               {/* 좌측: 버전 히스토리 */}
