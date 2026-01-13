@@ -42,11 +42,11 @@ const Step4 = ({
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
   const [modifiedScenes, setModifiedScenes] = useState([]);
-  const [koreanPrompts, setKoreanPrompts] = useState({}); // 🔥 번역된 한국어 프롬프트 저장
   const [isTranslating, setIsTranslating] = useState(false); // 번역 진행 상태
 
-  // 🔥 추가: 멤버 목록 모달 상태
+  // 🔥 추가: 멤버 관리 모달 상태
   const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // 🔥 인물 합성 관련 상태
   const [showPersonModal, setShowPersonModal] = useState(false);

@@ -432,12 +432,9 @@
 }
 
 .card-menu {
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.project-card:hover .card-menu {
   opacity: 1;
+  display: flex;
+  gap: 8px;
 }
 
 .menu-btn {

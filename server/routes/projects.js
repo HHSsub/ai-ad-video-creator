@@ -94,7 +94,9 @@ router.get('/', (req, res) => {
           createdAt: projectData.createdAt,
           updatedAt: projectData.updatedAt,
           status: projectData.status,
-          mode: projectData.mode || 'manual'
+          mode: projectData.mode || 'manual',
+          lastStep: projectData.lastStep,
+          storyboard: projectData.storyboard
         });
       }
     }

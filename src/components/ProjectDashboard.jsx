@@ -182,11 +182,11 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
       return { text: '시작 전', color: 'gray', step: null };
     }
 
-    if (project.storyboard.finalVideos && project.storyboard.finalVideos.length > 0) {
+    if (project.storyboard?.finalVideos && project.storyboard.finalVideos.length > 0) {
       return { text: '영상 완성', color: 'green', step: 4 };
     }
 
-    if (project.storyboard.imageSetMode) {
+    if (project.storyboard?.imageSetMode) {
       return { text: '이미지 생성 완료', color: 'blue', step: 3 };
     }
 
