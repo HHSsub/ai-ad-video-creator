@@ -243,16 +243,38 @@ router.get('/:id/members', (req, res) => {
   const { id } = req.params;
   const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
 
-  // 권한 체크 (참여 중인 멤버만 조회 가능)
+  const project = readProjectFile(id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  // 멤버 데이터 조회
   const membersData = readMembers();
-  const membership = membersData.members.find(m => m.projectId === id && m.username === username);
+  const projectMembers = membersData.members.filter(m => m.projectId === id);
+
+  // 권한 체크
+  // 1. Admin은 통과
+  // 2. Creator는 통과
+  // 3. 멤버십이 있는 경우 통과
+  const isCreator = project.createdBy === username;
+  const membership = projectMembers.find(m => m.username === username);
   const isAdmin = username === 'admin';
 
-  if (!isAdmin && !membership) {
-    return res.status(403).json({ error: 'Permission denied' });
+  if (!isAdmin && !isCreator && !membership) {
+    return res.status(403).json({ error: 'Permission denied', user: username });
   }
 
-  const projectMembers = membersData.members.filter(m => m.projectId === id);
+  // Owner(Creator)가 멤버 목록에 없으면 가상으로 추가하여 반환 (화면 표시용)
+  const ownerExists = projectMembers.some(m => m.username === project.createdBy);
+  if (!ownerExists && project.createdBy) {
+    projectMembers.unshift({
+      id: 'owner_virtual',
+      projectId: id,
+      username: project.createdBy,
+      role: 'owner',
+      addedAt: project.createdAt,
+      isVirtual: true
+    });
+  }
+
   res.json({ members: projectMembers });
 });
 
@@ -264,10 +286,15 @@ router.patch('/:id/members/:memberId', (req, res) => {
 
   const membersData = readMembers();
   const requester = membersData.members.find(m => m.projectId === id && m.username === username);
+
+  // Project Owner Logic: Check against actual project file creator or 'owner' role
+  const project = readProjectFile(id);
+  const isCreator = project && project.createdBy === username;
   const isAdmin = username === 'admin';
 
   // 권한 체크: Admin 또는 Project Owner만 변경 가능
-  if (!isAdmin && (!requester || requester.role !== 'owner')) {
+  // requester.role === 'owner' 체크도 포함
+  if (!isAdmin && !isCreator && (!requester || requester.role !== 'owner')) {
     return res.status(403).json({ error: 'Only Owners or Admins can change roles' });
   }
 
@@ -311,6 +338,57 @@ router.delete('/:id/members/:memberId', (req, res) => {
   fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
   res.json({ success: true });
 });
+
+// 4-4. 프로젝트 멤버 초대 (POST /api/projects/:id/members) - 🔥 누락된 라우트 추가
+router.post('/:id/members', (req, res) => {
+  const { id } = req.params;
+  const { username: inviteeUsername, role } = req.body;
+  const requester = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+
+  const project = readProjectFile(id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+
+  const membersData = readMembers();
+
+  // 권한 체크: Requester가 Creator, Admin, 또는 Owner/Manager 권한을 가진 멤버여야 함
+  const isCreator = project.createdBy === requester;
+  const isAdmin = requester === 'admin';
+  const requesterMembership = membersData.members.find(m => m.projectId === id && m.username === requester);
+  const hasManagePermission = requesterMembership && ['owner', 'manager'].includes(requesterMembership.role);
+
+  if (!isAdmin && !isCreator && !hasManagePermission) {
+    return res.status(403).json({ error: '초대 권한이 없습니다. (Project Owner 또는 Manager만 가능)' });
+  }
+
+  if (!inviteeUsername) return res.status(400).json({ error: '사용자명(username)이 필요합니다.' });
+
+  // 이미 멤버인지 확인
+  const existingMember = membersData.members.find(m => m.projectId === id && m.username === inviteeUsername);
+  if (existingMember) {
+    return res.status(400).json({ error: '이미 프로젝트 멤버입니다.' });
+  }
+
+  // 생성자가 본인을 초대하는 경우 (사실 불필요하지만 방어코드)
+  if (project.createdBy === inviteeUsername) {
+    return res.status(400).json({ error: '프로젝트 소유자는 이미 멤버입니다.' });
+  }
+
+  const newMember = {
+    id: `mem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    projectId: id,
+    username: inviteeUsername,
+    role: role || 'viewer',
+    addedBy: requester,
+    addedAt: new Date().toISOString()
+  };
+
+  membersData.members.push(newMember);
+  fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
+
+  res.json({ success: true, member: newMember });
+});
+
+
 
 // 5. 🏠 씬 삭제 (POST /api/projects/:id/scenes/delete)
 router.post('/:id/scenes/delete', async (req, res) => {
