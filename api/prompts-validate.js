@@ -28,24 +28,34 @@ router.post('/', (req, res) => {
 
     // 2. 출력 구조 지시어 검증 (정규식 기반 권고)
     if (mode === 'manual') {
-        if (!/Section\s*2|Cinematic\s*Storyboard/i.test(prompt)) {
-            warnings.push('Manual 모드에서는 "Section 2" 또는 "Cinematic Storyboard" 헤더를 명시하는 것이 좋습니다.');
+        if (!/Section\s*2|Cinematic\s*Storyboard|Manual\s*Storyboard/i.test(prompt)) {
+            warnings.push('Manual 모드 헤더(Section 2 또는 Manual Storyboard 등) 지시어가 보이지 않습니다.');
         }
     } else {
-        if (!/###\s*\d+\.\s*컨셉:/i.test(prompt)) {
-            errors.push('Auto 모드 출력 포맷 지시어 "### N. 컨셉:" 형식이 누락되었습니다.');
+        // # 개수에 상관없이 "# N. 컨셉:" 형식 허용
+        if (!/#+\s*\d+\.\s*컨셉:/i.test(prompt)) {
+            errors.push('Auto 모드 필수 지시어 "# N. 컨셉:" 형식이 누락되었습니다.');
         }
     }
 
-    // 3. JSON 블록 구조 및 순서 검증 지시어 확인
-    const jsonOrderPattern = /image_prompt.*motion_prompt.*copy/is;
-    if (!jsonOrderPattern.test(prompt)) {
-        warnings.push('출력 JSON 블록 순서(image_prompt -> motion_prompt -> copy)에 대한 명시적 지시가 부족합니다.');
+    // 3. JSON 블록 구조 및 순서 검증
+    // 키워드가 직접 없더라도 JSON 블록 3개가 순서대로 지시되어 있는지 확인
+    const jsonSequencePatterns = [
+        /image_prompt.*motion_prompt.*copy/is,
+        /Visual.*Motion.*Copy/is,
+        /JSON.*JSON.*JSON/is,
+        /이미지.*모션.*카피/is
+    ];
+
+    const hasJsonInstruction = jsonSequencePatterns.some(p => p.test(prompt));
+    if (!hasJsonInstruction) {
+        warnings.push('씬별 3개 JSON 블록(이미지, 모션, 카피) 출력 순서에 대한 지시가 불분명합니다.');
     }
 
-    const sceneHeaderPattern = /S#\d+\s*\(/i;
+    // 씬 헤더: "S#1", "#### S#1", "S# 1" 등 유연하게 허용
+    const sceneHeaderPattern = /S#\s*\d+/i;
     if (!sceneHeaderPattern.test(prompt)) {
-        errors.push('씬 헤더 형식 "S#N (타임코드)"에 대한 지시가 누락되었습니다.');
+        errors.push('씬 구분자 "S#N" 형식이 프롬프트 내에 명시되어야 합니다.');
     }
 
     if (errors.length > 0) {

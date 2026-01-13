@@ -326,7 +326,8 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
         }];
       }
     } else {
-      const conceptPattern = /###\s*(\d+)\.\s*컨셉:\s*(.+)/g;
+      // # 개수에 상관없이(1개 이상) "N. 컨셉:" 형식을 인식하도록 개선
+      const conceptPattern = /#+\s*(\d+)\.\s*컨셉:\s*(.+)/g;
       conceptMatches = [...text.matchAll(conceptPattern)];
     }
 
@@ -355,7 +356,8 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
       if (mode === 'manual') {
         scenePattern = /S#(\d+)\s*\(([^)]+)\)/g;
       } else {
-        scenePattern = /###\s*S#(\d+)\s*\(([^)]+)\)/g;
+        // # 개수에 상관없이(0개 이상) "S#N (타임코드)" 형식을 인식하도록 개선
+        scenePattern = /#*\s*S#(\d+)\s*\(([^)]+)\)/g;
       }
 
       const sceneMatches = [...conceptText.matchAll(scenePattern)];
