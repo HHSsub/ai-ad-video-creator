@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '';
+const API_BASE = '/nexxii';
 
 const ROLE_OPTIONS = [
     { value: 'viewer', label: 'Viewer' },

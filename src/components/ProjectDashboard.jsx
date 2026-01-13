@@ -5,7 +5,7 @@ import { forceScrollTop } from '../forceScrollTop';
 import InviteMemberModal from './InviteMemberModal';
 import MemberListModal from './MemberListModal';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = '/nexxii';
 
 const ProjectDashboard = ({ user, onSelectProject }) => {
   const [projects, setProjects] = useState([]);
