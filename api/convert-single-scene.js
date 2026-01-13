@@ -110,13 +110,15 @@ export default async function handler(req, res) {
 
         // 프롬프트 구성 (Scene Description + Motion)
         let finalPrompt = prompt || 'Cinematic shot, high quality';
-        if (motionPrompt && motionPrompt.description) {
-            finalPrompt += `, ${motionPrompt.description}`;
+        // 🔥 Motion Prompt Fix: Support both .prompt and .description
+        if (motionPrompt) {
+            const motionInfo = motionPrompt.prompt || motionPrompt.description;
+            if (motionInfo) finalPrompt += `, ${motionInfo}`;
         }
         finalPrompt += ", high quality, 4k, fluid motion, physically accurate";
 
-        // Clamp prompt
-        if (finalPrompt.length > 2000) finalPrompt = finalPrompt.slice(0, 1900);
+        // Clamp prompt (Kling supports ~1000-2000, 1000 is safer)
+        if (finalPrompt.length > 1000) finalPrompt = finalPrompt.slice(0, 990);
 
         // 🔥 CRITICAL: Duration Handling (Dynamic)
         // Check supported durations from config, fallback to engine default
@@ -151,7 +153,7 @@ export default async function handler(req, res) {
         // Only include parameters defined in engines.json defaults + essential fields
         const payload = {
             image: imageUrl,
-            duration: targetDuration // 🔥 Dynamic Duration
+            duration: String(targetDuration) // 🔥 MUST be String for Kling/Hailuo
         };
 
         // Add prompt if defined/needed
@@ -211,15 +213,18 @@ export default async function handler(req, res) {
         if (fs.existsSync(projectsFile)) {
             try {
                 const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
-                const projectIndex = projectsData.projects.findIndex(p => p.id === projectId);
+                // 🔥 Defensive check: Ensure projectId and conceptId are compared as strings
+                const projectIndex = projectsData.projects.findIndex(p => String(p.id) === String(projectId));
 
                 if (projectIndex !== -1) {
                     const project = projectsData.projects[projectIndex];
-                    const conceptIndex = project.storyboard.styles.findIndex(s => s.conceptId === Number(conceptId));
+                    // 🔥 Defensive check: conceptId might be string or number
+                    const conceptIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
 
                     if (conceptIndex !== -1) {
                         const images = project.storyboard.styles[conceptIndex].images;
-                        const imgIndex = images.findIndex(img => img.sceneNumber === Number(sceneNumber));
+                        // 🔥 Defensive check: sceneNumber might be string or number
+                        const imgIndex = images.findIndex(img => String(img.sceneNumber) === String(sceneNumber));
 
                         if (imgIndex !== -1) {
                             // Update Status

@@ -258,14 +258,9 @@ const Step4 = ({
     // 1. 초기 로드 시, 이미 저장된 번역이 있는지 확인하여 상태 복구 (Persistence check)
     if (renumberedImages && renumberedImages.length > 0) {
       const loadedPrompts = {};
-      console.log('[Step4] Images loaded:', renumberedImages.length);
       renumberedImages.forEach(img => {
-        // Debug logs
         if (img.koreanPrompt) {
-          console.log(`[Step4] Scene ${img.sceneNumber}: Load persisted prompt`, img.koreanPrompt.substring(0, 20));
           loadedPrompts[img.sceneNumber] = img.koreanPrompt;
-        } else {
-          console.log(`[Step4] Scene ${img.sceneNumber}: No persisted prompt`);
         }
       });
 
@@ -329,7 +324,7 @@ const Step4 = ({
               const updatedStyle = { ...storyboard.styles[styleIndex] };
 
               scenesToUpdate.forEach(update => {
-                const sIdx = updatedStyle.images.findIndex(img => img.sceneNumber === update.sceneNumber);
+                const sIdx = updatedStyle.images.findIndex(img => String(img.sceneNumber) === String(update.sceneNumber));
                 if (sIdx !== -1) {
                   updatedStyle.images[sIdx].koreanPrompt = update.koreanPrompt;
                 }
@@ -412,23 +407,26 @@ const Step4 = ({
       // 성공 시 이미지 URL 업데이트 (스토리보드 객체 직접 수정 및 강제 리렌더)
       console.log(`[Step4] 재생성된 이미지 URL: ${data.imageUrl}`);
 
-      const targetImage = images.find(img => img.sceneNumber === sceneNumber);
-      if (targetImage) {
-        targetImage.imageUrl = `${data.imageUrl}?t=${Date.now()}`;
-        targetImage.prompt = englishPrompt;
-        targetImage.koreanPrompt = currentInput; // 🔥 한글 프롬프트도 업데이트 (재번역 방지)
-        targetImage.status = 'regenerated';
+      const styleIndex = storyboard.styles.findIndex(s => String(s.conceptId) === String(selectedConceptId));
+      if (styleIndex !== -1) {
+        const targetImage = storyboard.styles[styleIndex].images.find(img => String(img.sceneNumber) === String(sceneNumber));
+        if (targetImage) {
+          targetImage.imageUrl = `${data.imageUrl}?t=${Date.now()}`;
+          targetImage.prompt = englishPrompt;
+          targetImage.koreanPrompt = currentInput;
+          targetImage.status = 'regenerated';
+          targetImage.videoUrl = null; // Reset video on image change
 
-        // 🔥 백엔드 영구 저장 (Full Persistence)
-        try {
-          await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
-            body: JSON.stringify({ storyboard, formData })
-          });
-          console.log(`[Step4] 씬 ${sceneNumber} 재생성 결과(한글포함) 저장 완료`);
-        } catch (saveErr) {
-          console.error(`[Step4] 씬 ${sceneNumber} 저장 실패:`, saveErr);
+          // 🔥 백엔드 영구 저장 (Full Persistence)
+          try {
+            await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
+              body: JSON.stringify({ storyboard, formData })
+            });
+          } catch (saveErr) {
+            console.error(`[Step4] 씬 ${sceneNumber} 저장 실패:`, saveErr);
+          }
         }
       }
 
@@ -592,40 +590,32 @@ const Step4 = ({
       console.log(`[Step4] 씬 ${sceneNumber} 이미지 재생성 응답:`, result);
 
       // 🔥 수정: 응답 필드명 확인 (url 또는 imageUrl)
-      // 🔥 수정: 응답 필드명 확인 (url 또는 imageUrl)
       if (result.success && (result.url || result.imageUrl)) {
-        const newImageUrl = result.url || result.imageUrl;
-        scene.imageUrl = newImageUrl;
-        scene.prompt = editedPrompt;
-        scene.videoUrl = null;
-        scene.status = 'image_done';
+        const styleIndex = storyboard.styles.findIndex(s => String(s.conceptId) === String(selectedConceptId));
+        if (styleIndex !== -1) {
+          const targetImage = storyboard.styles[styleIndex].images.find(img => String(img.sceneNumber) === String(sceneNumber));
+          if (targetImage) {
+            const newImageUrl = result.url || result.imageUrl;
+            targetImage.imageUrl = newImageUrl;
+            targetImage.prompt = editedPrompt;
+            targetImage.videoUrl = null;
+            targetImage.status = 'image_done';
 
-        if (!modifiedScenes.includes(sceneNumber)) {
-          setModifiedScenes(prev => [...prev, sceneNumber]);
+            log(`씬 ${sceneNumber} 이미지 재생성 완료: ${newImageUrl}`);
+
+            // 🔥 중요: 변경된 스토리보드를 프로젝트에 저장 (영구 반영)
+            try {
+              await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
+                body: JSON.stringify({ storyboard, formData })
+              });
+              log('프로젝트 데이터 저장 완료 (URL 갱신)');
+            } catch (saveErr) {
+              console.error('프로젝트 저장 실패:', saveErr);
+            }
+          }
         }
-
-        log(`씬 ${sceneNumber} 이미지 재생성 완료: ${newImageUrl}`);
-
-        // 🔥 중요: 변경된 스토리보드를 프로젝트에 저장 (영구 반영)
-        try {
-          // storyboard 객체는 참조로 수정되었으므로 그대로 사용
-          await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-username': user?.username || 'anonymous'
-            },
-            body: JSON.stringify({
-              storyboard: storyboard, // 참조된 전체 스토리보드 저장
-              formData: formData
-            })
-          });
-          log('프로젝트 데이터 저장 완료 (URL 갱신)');
-        } catch (saveErr) {
-          console.error('프로젝트 저장 실패:', saveErr);
-          log('⚠️ 프로젝트 저장 실패 (새로고침 시 유실될 수 있음)');
-        }
-
       } else {
         throw new Error(result.message || result.error || '이미지 재생성 실패');
       }
@@ -1562,7 +1552,7 @@ const Step4 = ({
                           <textarea
                             value={
                               koreanPrompts[img.sceneNumber] ||
-                              (img.koreanPrompt) ||
+                              img.koreanPrompt ||
                               (/[a-zA-Z]/.test(img.prompt) ? '번역 중...' : img.prompt)
                             }
                             readOnly

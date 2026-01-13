@@ -130,15 +130,18 @@ export default async function handler(req, res) {
             if (fs.existsSync(projectsFile)) {
                 try {
                     const projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
-                    const projectIndex = projectsData.projects.findIndex(p => p.id === projectId);
+                    // 🔥 Defensive check: Ensure IDs are compared as strings
+                    const projectIndex = projectsData.projects.findIndex(p => String(p.id) === String(projectId));
 
                     if (projectIndex !== -1) {
                         const project = projectsData.projects[projectIndex];
-                        const conceptIndex = project.storyboard.styles.findIndex(s => s.conceptId === Number(conceptId));
+                        // 🔥 Defensive check: conceptId might be string or number
+                        const conceptIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
 
                         if (conceptIndex !== -1) {
                             const images = project.storyboard.styles[conceptIndex].images;
-                            const imgIndex = images.findIndex(img => img.sceneNumber === Number(sceneNumber));
+                            // 🔥 Defensive check: sceneNumber might be string or number
+                            const imgIndex = images.findIndex(img => String(img.sceneNumber) === String(sceneNumber));
 
                             if (imgIndex !== -1) {
                                 // Update Status & URL
