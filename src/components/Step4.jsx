@@ -2,6 +2,8 @@
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import { forceScrollTop } from '../forceScrollTop';
+import MemberListModal from './MemberListModal';
+import InviteMemberModal from './InviteMemberModal';
 
 // 🔥 API_BASE를 /nexxii로 강제 (프로덕션/로컬 모두 호환)
 const API_BASE = '/nexxii';
@@ -43,12 +45,8 @@ const Step4 = ({
   const [koreanPrompts, setKoreanPrompts] = useState({}); // 🔥 번역된 한국어 프롬프트 저장
   const [isTranslating, setIsTranslating] = useState(false); // 번역 진행 상태
 
-  // 🔥 추가: 멤버 초대 모달 상태
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteUsername, setInviteUsername] = useState('');
-  const [inviteRole, setInviteRole] = useState('viewer');
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteError, setInviteError] = useState(null);
+  // 🔥 추가: 멤버 목록 모달 상태
+  const [showMemberModal, setShowMemberModal] = useState(false);
 
   // 🔥 인물 합성 관련 상태
   const [showPersonModal, setShowPersonModal] = useState(false);
@@ -1396,14 +1394,22 @@ const Step4 = ({
                 )}
               </div>
             </div>
-            {permissions.invite && (
+            <div className="flex gap-2">
               <button
-                onClick={handleOpenInviteModal}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm"
+                onClick={() => setShowMemberModal(true)}
+                className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors text-sm flex items-center gap-1"
               >
-                👥 멤버 초대
+                <span>👥</span> 멤버 목록
               </button>
-            )}
+              {permissions.invite && (
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm flex items-center gap-1"
+                >
+                  <span>➕</span> 멤버 초대
+                </button>
+              )}
+            </div>
           </div>
 
           {error && (
@@ -2133,6 +2139,22 @@ const Step4 = ({
           </div>
         </div>
       </div>
+      {/* 멤버 목록 모달 추가 */}
+      <MemberListModal
+        isOpen={showMemberModal}
+        onClose={() => setShowMemberModal(false)}
+        projectId={currentProject?.id}
+        currentUser={user?.username || 'anonymous'}
+        isAdmin={user?.username === 'admin'}
+      />
+
+      {/* 멤버 초대 모달 추가 */}
+      <InviteMemberModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        projectId={currentProject?.id}
+        currentUser={user?.username || 'anonymous'}
+      />
     </div>
   );
 };

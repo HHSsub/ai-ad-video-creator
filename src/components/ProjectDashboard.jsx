@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './ProjectDashboard.css';
 import { forceScrollTop } from '../forceScrollTop';
+import InviteMemberModal from './InviteMemberModal';
+import MemberListModal from './MemberListModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -22,6 +24,10 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
   // 정렬 상태
   const [sortBy, setSortBy] = useState('date-desc'); // date-desc, date-asc, name-asc, name-desc
   const [viewMode, setViewMode] = useState('grid'); // grid, list
+
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [targetProjectId, setTargetProjectId] = useState(null);
 
   useEffect(() => {
     forceScrollTop();
@@ -415,6 +421,84 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
                       <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
+
+                  {/* 멤버 목록 버튼 */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setTargetProjectId(project.id);
+                      setShowMemberModal(true);
+                    }}
+                    title="멤버 목록"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      color: '#6b7280'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#10b98120';
+                      e.currentTarget.style.color = '#10b981';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#6b7280';
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                  </button>
+
+                  {/* 멤버 초대 버튼 */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setTargetProjectId(project.id);
+                      setShowInviteModal(true);
+                    }}
+                    title="멤버 초대"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      color: '#6b7280'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#8b5cf620';
+                      e.currentTarget.style.color = '#8b5cf6';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#6b7280';
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="8.5" cy="7" r="4"></circle>
+                      <line x1="20" y1="8" x2="20" y2="14"></line>
+                      <line x1="17" y1="11" x2="23" y2="11"></line>
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -670,6 +754,22 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
           </div>
         )
       }
+      {/* 멤버 목록 모달 */}
+      <MemberListModal
+        isOpen={showMemberModal}
+        onClose={() => setShowMemberModal(false)}
+        projectId={targetProjectId}
+        currentUser={user?.username || 'anonymous'}
+        isAdmin={user?.username === 'admin'}
+      />
+
+      {/* 멤버 초대 모달 */}
+      <InviteMemberModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        projectId={targetProjectId}
+        currentUser={user?.username || 'anonymous'}
+      />
     </div >
   );
 };

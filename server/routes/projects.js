@@ -236,6 +236,80 @@ router.get('/:id', (req, res) => {
   res.json({ project });
 });
 
+// 4-1. 프로젝트 멤버 조회 (GET /api/projects/:id/members)
+router.get('/:id/members', (req, res) => {
+  const { id } = req.params;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+
+  // 권한 체크 (참여 중인 멤버만 조회 가능)
+  const membersData = readMembers();
+  const membership = membersData.members.find(m => m.projectId === id && m.username === username);
+  const isAdmin = username === 'admin';
+
+  if (!isAdmin && !membership) {
+    return res.status(403).json({ error: 'Permission denied' });
+  }
+
+  const projectMembers = membersData.members.filter(m => m.projectId === id);
+  res.json({ members: projectMembers });
+});
+
+// 4-2. 프로젝트 멤버 권한 변경 (PATCH /api/projects/:id/members/:memberId)
+router.patch('/:id/members/:memberId', (req, res) => {
+  const { id, memberId } = req.params;
+  const { role } = req.body;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+
+  const membersData = readMembers();
+  const requester = membersData.members.find(m => m.projectId === id && m.username === username);
+  const isAdmin = username === 'admin';
+
+  // 권한 체크: Admin 또는 Project Owner만 변경 가능
+  if (!isAdmin && (!requester || requester.role !== 'owner')) {
+    return res.status(403).json({ error: 'Only Owners or Admins can change roles' });
+  }
+
+  const memberIndex = membersData.members.findIndex(m => m.id === memberId && m.projectId === id);
+  if (memberIndex === -1) return res.status(404).json({ error: 'Member not found' });
+
+  // 🔥 Owner의 권한은 누구도 변경 불가
+  if (membersData.members[memberIndex].role === 'owner') {
+    return res.status(403).json({ error: 'Owner role cannot be changed' });
+  }
+
+  membersData.members[memberIndex].role = role;
+  membersData.members[memberIndex].updatedAt = new Date().toISOString();
+
+  fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
+  res.json({ success: true, member: membersData.members[memberIndex] });
+});
+
+// 4-3. 프로젝트 멤버 삭제 (DELETE /api/projects/:id/members/:memberId)
+router.delete('/:id/members/:memberId', (req, res) => {
+  const { id, memberId } = req.params;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+
+  const membersData = readMembers();
+  const requester = membersData.members.find(m => m.projectId === id && m.username === username);
+  const isAdmin = username === 'admin';
+
+  if (!isAdmin && (!requester || requester.role !== 'owner')) {
+    return res.status(403).json({ error: 'Only Owners or Admins can remove members' });
+  }
+
+  const member = membersData.members.find(m => m.id === memberId && m.projectId === id);
+  if (!member) return res.status(404).json({ error: 'Member not found' });
+
+  // 🔥 Owner는 삭제 불가
+  if (member.role === 'owner') {
+    return res.status(403).json({ error: 'Owner cannot be removed' });
+  }
+
+  membersData.members = membersData.members.filter(m => m.id !== memberId);
+  fs.writeFileSync(membersFile, JSON.stringify(membersData, null, 2));
+  res.json({ success: true });
+});
+
 // 5. 🏠 씬 삭제 (POST /api/projects/:id/scenes/delete)
 router.post('/:id/scenes/delete', async (req, res) => {
   const { id } = req.params;
@@ -260,6 +334,10 @@ router.post('/:id/scenes/delete', async (req, res) => {
 
       if (!isAdmin && !isCreator && !isOwnerOrEditor) {
         return res.status(403).json({ error: 'Permission denied' });
+      }
+
+      if (!project.storyboard || !project.storyboard.styles) {
+        return res.status(400).json({ error: 'Invalid project structure: storyboard or styles missing' });
       }
 
       const styleIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
