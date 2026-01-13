@@ -236,6 +236,59 @@ router.get('/:id', (req, res) => {
   res.json({ project });
 });
 
+// 5. 🏠 씬 삭제 (POST /api/projects/:id/scenes/delete)
+router.post('/:id/scenes/delete', async (req, res) => {
+  const { id } = req.params;
+  const { conceptId, sceneNumber } = req.body;
+  const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
+
+  if (!conceptId || !sceneNumber) {
+    return res.status(400).json({ error: 'Missing parameters' });
+  }
+
+  await runInProjectQueue(id, async () => {
+    try {
+      const project = readProjectFile(id);
+      if (!project) return res.status(404).json({ error: 'Project not found' });
+
+      // 권한 체크 (Owner/Editor/Admin 가능)
+      const membersData = readMembers();
+      const isCreator = project.createdBy === username;
+      const membership = membersData.members.find(m => m.projectId === id && m.username === username);
+      const isOwnerOrEditor = membership && ['owner', 'editor'].includes(membership.role);
+      const isAdmin = username === 'admin';
+
+      if (!isAdmin && !isCreator && !isOwnerOrEditor) {
+        return res.status(403).json({ error: 'Permission denied' });
+      }
+
+      const styleIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
+      if (styleIndex !== -1) {
+        const images = project.storyboard.styles[styleIndex].images;
+        const initialCount = images.length;
+
+        // 씬 삭제
+        project.storyboard.styles[styleIndex].images = images.filter(img => String(img.sceneNumber) !== String(sceneNumber));
+
+        if (initialCount !== project.storyboard.styles[styleIndex].images.length) {
+          project.updatedAt = new Date().toISOString();
+          if (writeProjectFile(id, project)) {
+            console.log(`[projects DELETE SCENE] ✅ Project ${id}, Concept ${conceptId}, Scene ${sceneNumber} deleted`);
+            return res.json({ success: true, project });
+          }
+        } else {
+          return res.status(404).json({ error: 'Scene not found in concept' });
+        }
+      } else {
+        return res.status(404).json({ error: 'Style not found' });
+      }
+    } catch (err) {
+      console.error('[projects DELETE SCENE] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+});
+
 // 6. 프로젝트 삭제 (DELETE /api/projects/:id)
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
