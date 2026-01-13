@@ -17,8 +17,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
-const PROJECTS_DIR = path.join(__dirname, '../../config/projects');
-const membersFile = path.join(__dirname, '../../config/project-members.json');
+const PROJECTS_DIR = path.join(process.cwd(), 'config', 'projects');
+const membersFile = path.join(process.cwd(), 'config', 'project-members.json');
 
 // 프로젝트 디렉토리 보장
 if (!fs.existsSync(PROJECTS_DIR)) {
@@ -79,21 +79,22 @@ router.get('/', (req, res) => {
       const projectData = readProjectFile(projectId);
       if (!projectData) continue;
 
-      const isCreator = projectData.createdBy === username;
+      const isCreator = String(projectData.createdBy) === String(username);
       const membership = membersData.members.find(
-        m => m.projectId === projectId && m.username === username
+        m => String(m.projectId) === String(projectId) && String(m.username) === String(username)
       );
-      const isSystemAdmin = username === 'admin';
+      const isSystemAdmin = String(username) === 'admin';
 
       if (isSystemAdmin || isCreator || membership) {
         userProjects.push({
-          id: projectData.id,
-          name: projectData.name,
-          description: projectData.description,
+          id: projectData.id || projectId,
+          name: projectData.name || 'Untitled Project',
+          description: projectData.description || '',
           createdBy: projectData.createdBy,
           createdAt: projectData.createdAt,
           updatedAt: projectData.updatedAt,
-          mode: projectData.mode || 'manual' // 목록용 최소 데이터
+          status: projectData.status,
+          mode: projectData.mode || 'manual'
         });
       }
     }
