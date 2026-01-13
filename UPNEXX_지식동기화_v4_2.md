@@ -1,3 +1,14 @@
+### 2026-01-13 13:30 - [HOTFIX] 멤버 초대 기능 복구, API 경로 통일 및 S3 저장소 동적화
+- **이슈 1 (Member Invite & Permission)**: `ghost` 등 신규 사용자가 프로젝트 생성 후 멤버 초대가 불가능하고, `Owner`가 멤버 목록에서 누락되는 현상 및 404 HTML 에러(`Unexpected token <`) 발생.
+- **이슈 2 (Storage Info)**: S3 `projects/` 폴더 삭제 후에도 "저장소 관리" 화면에 해당 폴더가 계속 표시됨 (하드코딩 문제).
+- **해결 방안**:
+  - **Backend Route**: `server/routes/projects.js`에 누락된 `POST /:id/members` 라우트 추가 및 `project.createdBy` 기반 권한 체크 로직 보강. `GET` 요청 시 Owner 자동 주입.
+  - **API Path**: `ProjectDashboard.jsx`, `InviteMemberModal.jsx`, `MemberListModal.jsx`의 `API_BASE`를 `/nexxii`로 통일하여 404 오류 원천 차단.
+  - **Dynamic Storage Info**: `api/storage-info.js`의 하드코딩된 폴더 목록을 제거하고, `ListObjectsV2` 결과를 기반으로 최상위 폴더를 동적으로 집계하도록 로직 전면 수정.
+- **상태**: **[완료]** 모든 UI 및 기능 정상화 확인.
+
+---
+
 ### 2026-01-13 12:30 - [CRITICAL] 프로젝트 영속성 및 레이스 컨디션 문제 해결
 - **이슈 1 (Persistence)**: 프로젝트 삭제 및 데이터 업데이트가 `projects.json`에 반영되지 않던 문제를 개별 파일 방식(`config/projects/{id}.json`)으로 전면 전환하여 해결.
 - **이슈 2 (Race Condition)**: 여러 API가 동시에 파일을 수정할 때 데이터가 유실되던 문제를 `project-lock.js` 공유 락 도입 및 `PATCH` API의 부분 업데이트(`storyboardUpdate`) 기능 추가로 해결.

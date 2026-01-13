@@ -74,12 +74,7 @@ export default async function handler(req, res) {
         let totalBytes = 0;
         let objectCount = 0;
 
-        // Specific folders to track
-        const folderStats = {
-            'nexad-recommendations/': 0,
-            'nexxii-storage/': 0,
-            'projects/': 0
-        };
+        const folderStats = {};
 
         while (isTruncated) {
             const command = new ListObjectsV2Command({
@@ -95,12 +90,19 @@ export default async function handler(req, res) {
                     totalBytes += size;
                     objectCount++;
 
-                    // Track specific folder usage
-                    for (const folder of Object.keys(folderStats)) {
-                        if (item.Key?.startsWith(folder)) {
-                            folderStats[folder] += size;
-                        }
+                    // Dynamic folder tracking
+                    const parts = item.Key.split('/');
+                    let folderName;
+
+                    if (parts.length > 1) {
+                        // It is in a folder
+                        folderName = parts[0] + '/';
+                    } else {
+                        // It is a file at root
+                        folderName = '(root)';
                     }
+
+                    folderStats[folderName] = (folderStats[folderName] || 0) + size;
                 }
             }
 
