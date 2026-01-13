@@ -17,6 +17,18 @@ async function renameS3Folder(oldId, newId) {
     const oldPrefix = `nexxii-storage/projects/${oldId}/`;
     const newPrefix = `nexxii-storage/projects/${newId}/`;
 
+    // Check if old folder has any objects
+    const checkCommand = new ListObjectsV2Command({
+        Bucket: BUCKET_NAME,
+        Prefix: oldPrefix,
+        MaxKeys: 1
+    });
+    const checkResponse = await s3Client.send(checkCommand);
+    if (!checkResponse.Contents || checkResponse.Contents.length === 0) {
+        // No old folder found, skipping S3 move
+        return;
+    }
+
     console.log(`[S3] Moving objects from ${oldPrefix} to ${newPrefix}...`);
 
     let continuationToken;
@@ -38,11 +50,11 @@ async function renameS3Folder(oldId, newId) {
                     const oldKey = obj.Key;
                     const newKey = oldKey.replace(oldPrefix, newPrefix);
 
+                    // ACL: 'public-read' REMOVED due to bucket restrictions
                     await s3Client.send(new CopyObjectCommand({
                         Bucket: BUCKET_NAME,
                         CopySource: `${BUCKET_NAME}/${oldKey}`, // Source must be URL-encoded? No, typically Bucket/Key
-                        Key: newKey,
-                        ACL: 'public-read' // Ensure public read
+                        Key: newKey
                     }));
                 }
 
@@ -72,8 +84,8 @@ async function migrate() {
         return;
     }
 
-    const files = fs.readdirSync(PROJECTS_DIR).filter(f => f.startsWith('project_') && f.endsWith('.json'));
-    console.log(`Found ${files.length} projects to migrate.`);
+    const files = fs.readdirSync(PROJECTS_DIR).filter(f => f.endsWith('.json'));
+    console.log(`Scanning ${files.length} projects...`);
 
     // Load members
     let membersData = { members: [] };
@@ -82,59 +94,98 @@ async function migrate() {
     }
 
     for (const file of files) {
-        const oldId = file.replace('.json', '');
-        const oldPath = path.join(PROJECTS_DIR, file);
-
+        const currentId = file.replace('.json', '');
+        const currentPath = path.join(PROJECTS_DIR, file);
+        let data;
         try {
-            const data = JSON.parse(fs.readFileSync(oldPath, 'utf8'));
-            const owner = (data.createdBy || 'anonymous').replace(/[^a-zA-Z0-9]/g, '_');
-            const parts = oldId.split('_');
-            const timestamp = parts.length > 1 ? parts[1] : Date.now();
+            data = JSON.parse(fs.readFileSync(currentPath, 'utf8'));
+        } catch (e) {
+            console.error(`Skipping invalid JSON: ${file}`);
+            continue;
+        }
 
+        const owner = (data.createdBy || 'anonymous').replace(/[^a-zA-Z0-9]/g, '_');
+
+        // Scenario A: File is still named "project_..."
+        if (currentId.startsWith('project_')) {
+            const parts = currentId.split('_');
+            const timestamp = parts.length > 1 ? parts[1] : Date.now();
             const newId = `${owner}_${timestamp}`;
 
-            if (fs.existsSync(path.join(PROJECTS_DIR, `${newId}.json`))) {
-                console.warn(`Target file ${newId}.json already exists. Skipping.`);
-                continue;
-            }
+            console.log(`\n-----------------------------------`);
+            console.log(`Scenario A: Full Migration Needed`);
+            console.log(`Old ID: ${currentId} -> New ID: ${newId}`);
 
-            console.log(`Migrating: ${oldId} -> ${newId} (Owner: ${owner})`);
+            // 1. S3 Move
+            await renameS3Folder(currentId, newId);
 
-            // 1. S3 Migration
-            await renameS3Folder(oldId, newId);
-
-            // 2. Content Update (Replace IDs in stringified JSON)
+            // 2. Update Content
             data.id = newId;
             let contentStr = JSON.stringify(data, null, 2);
-            // Global replace of old ID in paths (S3 URLs, etc)
-            // Need to be careful. projects/project_123 -> projects/user_123
-            const regex = new RegExp(`projects/${oldId}`, 'g');
+            const regex = new RegExp(`projects/${currentId}`, 'g');
             contentStr = contentStr.replace(regex, `projects/${newId}`);
 
             // 3. Write New File
             fs.writeFileSync(path.join(PROJECTS_DIR, `${newId}.json`), contentStr, 'utf8');
 
             // 4. Update Members
-            let membersUpdated = false;
             membersData.members.forEach(m => {
-                if (m.projectId === oldId) {
-                    m.projectId = newId;
-                    membersUpdated = true;
-                }
+                if (m.projectId === currentId) m.projectId = newId;
             });
 
             // 5. Delete Old File
-            fs.unlinkSync(oldPath);
-            console.log(`✅ Migrated local file and deleted old one.`);
+            fs.unlinkSync(currentPath);
+            console.log(`✅ Local file migrated.`);
 
-        } catch (err) {
-            console.error(`❌ Failed to migrate ${oldId}:`, err);
+        }
+        // Scenario B: File is already renamed ("admin_..."), check if S3 is lagging
+        else {
+            // Check if there is a corresponding "project_" folder in S3
+            const parts = currentId.split('_');
+            const timestamp = parts[parts.length - 1]; // Assume last part is timestamp
+
+            // Reconstruct potential old ID
+            const potentialOldId = `project_${timestamp}`;
+
+            if (potentialOldId !== currentId) {
+                // Check S3 for potentialOldId
+                const oldPrefix = `nexxii-storage/projects/${potentialOldId}/`;
+                const checkCommand = new ListObjectsV2Command({
+                    Bucket: BUCKET_NAME,
+                    Prefix: oldPrefix,
+                    MaxKeys: 1
+                });
+
+                try {
+                    const checkResponse = await s3Client.send(checkCommand);
+                    if (checkResponse.Contents && checkResponse.Contents.length > 0) {
+                        console.log(`\n-----------------------------------`);
+                        console.log(`Scenario B: Split-Brain Repair Needed`);
+                        console.log(`Local already correct (${currentId}), but S3 has old folder (${potentialOldId})`);
+
+                        // Move S3 only
+                        await renameS3Folder(potentialOldId, currentId);
+
+                        // Update content references (replace old S3 URLs in current file)
+                        let contentStr = JSON.stringify(data, null, 2);
+                        if (contentStr.includes(`projects/${potentialOldId}`)) {
+                            const regex = new RegExp(`projects/${potentialOldId}`, 'g');
+                            contentStr = contentStr.replace(regex, `projects/${currentId}`);
+                            fs.writeFileSync(currentPath, contentStr, 'utf8');
+                            console.log(`✅ Updated S3 URLs in local file.`);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore S3 errors (maybe bucket access issue?)
+                    console.warn(`[S3] Could not check for old S3 folder ${potentialOldId}:`, e.message);
+                }
+            }
         }
     }
 
     // Save members
     fs.writeFileSync(MEMBERS_FILE, JSON.stringify(membersData, null, 2));
-    console.log('Migration complete.');
+    console.log('\nMigration/Repair complete.');
 }
 
 migrate().catch(console.error);
