@@ -12,6 +12,9 @@
   - **Smart Retry**: 
     - **Quota Exceeded** (할당량 초과): 대기 없이 **즉시 다음 API 키**로 전환.
     - **Rate Limit** (RPM 과부하): `Retry-After` 시간만큼 **대기 후 재시도** (일시적 오류 대응).
+  - **Admin Log Fix**: 
+    - **Separate Logs**: Product/Service/Manual 프롬프트별 응답 로그 **완벽 분리**.
+    - **Version Sync**: 프롬프트 버전 히스토리 클릭 시, **해당 버전으로 생성된 응답만** 필터링하여 표시.
   - **Rollback**: Step 3(컨셉 선택) 자동 스킵 로직은 사용자 요청에 의해 원복됨.
 - **상태**: **[완료]** 프로젝트 생성부터 실행, 상태 표시까지 전체 워크플로우 무결성 확보.
 
@@ -70,7 +73,7 @@
 - **주요 변경 사항**:
   - **S3 자동 삭제**: `api/users.js`의 사용자 삭제 로직에 해당 사용자의 모든 프로젝트 S3 폴더(`nexxii-storage/projects/{projectId}/`) 및 로컬 폴더를 자동 삭제하는 기능 추가.
   - **S3 유틸리티 확장**: `server/utils/s3-uploader.js`에 `deleteFolderFromS3(prefix)` 유틸리티 함수 구현 (ListObjectsV2 + DeleteObjects 일괄 처리).
-  - **프로젝트 ID 명명 규칙**: `server/routes/projects.js` 수정. 새 프로젝트 생성 시 ID 형식을 `project_{timestamp}`에서 `{username}_{timestamp}`로 변경.
+  - **프로젝트 ID 명명 규칙**: `server/routes/projects.js` 수정. 새 프로젝트 생성 시 ID 형식을 `project_{timestamp}`에서 `{username}_{timestamp}`로 변경 (사용자 요청 준수).
   - **ID 가시성 개선**: `src/components/ProjectDashboard.jsx`에서 관리자뿐만 아니라 모든 일반 사용자가 본인의 프로젝트 ID를 확인하고 복사할 수 있도록 UI 수정.
 - **관리 규칙**:
   - 사용자 삭제 시 관련 프로젝트의 모든 미디어(이미지, 영상)는 S3에서 즉시 영구 삭제됨.

@@ -115,7 +115,9 @@ router.get('/', (req, res) => {
 router.post('/', async (req, res) => {
   const { name, description } = req.body;
   const username = req.headers['x-username'] || req.headers['x-user-id'] || 'anonymous';
-  const projectId = `project_${Date.now()}`;
+  // 🔥 사용자 이름 기반 랜덤 ID 생성 (사용자 요청 반영: {username}_{timestamp})
+  const safeUsername = username.replace(/[^a-zA-Z0-9]/g, '_'); // 특수문자 제거
+  const projectId = `${safeUsername}_${Date.now()}`;
 
   if (!name) return res.status(400).json({ error: '프로젝트 이름 필수' });
 
