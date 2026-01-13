@@ -1,10 +1,14 @@
-### 2026-01-13 14:00 - [HOTFIX] 워크플로우 최적화 (프로젝트 생성 및 스텝 자동 이동)
+### 2026-01-13 15:30 - [HOTFIX] 워크플로우 정상화, 자동 시작 및 상태 표시 오류 수정
 - **이슈 1 (Project Creation)**: 프로젝트 생성 직후 상세 화면으로 자동 리다이렉트되어, 사용자가 생성 여부를 목록에서 확인하기 어려움.
-- **이슈 2 (Step Skip)**: Manual 모드 또는 단일 컨셉 생성 시 불필요하게 '컨셉 선택(Step 3)' 단계로 진입하여 "삭제된 페이지"로 오인됨.
+- **이슈 2 (Frozen Screen)**: Step 1(정보입력) 완료 후 Step 2로 이동했으나 광고 생성이 자동으로 시작되지 않고 멈춰있는 현상.
+- **이슈 3 (False Status)**: 신규 생성된 빈 프로젝트가 대시보드에서 "진행 중 Step 2"로 잘못 표시됨.
 - **해결 방안**:
   - **Create Action**: `ProjectDashboard.jsx`에서 `handleCreateProject` 후 `onSelectProject` 호출 제거 (목록 유지).
-  - **Auto Skip**: `App.jsx`에서 `Step2` 완료 핸들러 수정. 생성된 컨셉이 1개이거나 Manual 모드인 경우, 자동으로 해당 컨셉을 선택(PATCH)하고 `Step4`로 직행.
-- **상태**: **[완료]** 사용자 경험(UX) 개선 및 워크플로우 단순화.
+  - **Auto Start**: `Step2.jsx`의 자동 시작 지연(`setTimeout`)을 사용자 요청에 따라 **완전 제거 (즉시 시작)**.
+  - **State Logic**: `App.jsx`에서 `styles.length` 체크를 추가하여 신규 프로젝트를 '기존 작업'으로 오판하지 않도록 수정.
+  - **Visual Tag**: `ProjectDashboard.jsx`의 `getProjectStatus` 함수를 수정하여 데이터가 없는 프로젝트는 **"시작 전"**으로 표시.
+  - **Rollback**: Step 3(컨셉 선택) 자동 스킵 로직은 사용자 요청에 의해 원복됨.
+- **상태**: **[완료]** 프로젝트 생성부터 실행, 상태 표시까지 전체 워크플로우 무결성 확보.
 
 ---
 

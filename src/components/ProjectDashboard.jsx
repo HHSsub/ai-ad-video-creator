@@ -95,8 +95,8 @@ const ProjectDashboard = ({ user, onSelectProject }) => {
       setNewProjectName('');
       setNewProjectDesc('');
 
-      // 🔥 생성 후 바로 진입하지 않고 목록 유지 (사용자 요청)
-      // onSelectProject(data.project);
+      // 🔥 생성 후 바로 진입 (사용자 요청: 모드 선택 화면으로 이동)
+      onSelectProject(data.project);
     } catch (err) {
       console.error('프로젝트 생성 에러:', err);
       alert(`프로젝트 생성 실패: ${err.message}`);
