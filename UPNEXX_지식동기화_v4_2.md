@@ -1,3 +1,13 @@
+### 2026-01-13 14:00 - [HOTFIX] 워크플로우 최적화 (프로젝트 생성 및 스텝 자동 이동)
+- **이슈 1 (Project Creation)**: 프로젝트 생성 직후 상세 화면으로 자동 리다이렉트되어, 사용자가 생성 여부를 목록에서 확인하기 어려움.
+- **이슈 2 (Step Skip)**: Manual 모드 또는 단일 컨셉 생성 시 불필요하게 '컨셉 선택(Step 3)' 단계로 진입하여 "삭제된 페이지"로 오인됨.
+- **해결 방안**:
+  - **Create Action**: `ProjectDashboard.jsx`에서 `handleCreateProject` 후 `onSelectProject` 호출 제거 (목록 유지).
+  - **Auto Skip**: `App.jsx`에서 `Step2` 완료 핸들러 수정. 생성된 컨셉이 1개이거나 Manual 모드인 경우, 자동으로 해당 컨셉을 선택(PATCH)하고 `Step4`로 직행.
+- **상태**: **[완료]** 사용자 경험(UX) 개선 및 워크플로우 단순화.
+
+---
+
 ### 2026-01-13 13:30 - [HOTFIX] 멤버 초대 기능 복구, API 경로 통일 및 S3 저장소 동적화
 - **이슈 1 (Member Invite & Permission)**: `ghost` 등 신규 사용자가 프로젝트 생성 후 멤버 초대가 불가능하고, `Owner`가 멤버 목록에서 누락되는 현상 및 404 HTML 에러(`Unexpected token <`) 발생.
 - **이슈 2 (Storage Info)**: S3 `projects/` 폴더 삭제 후에도 "저장소 관리" 화면에 해당 폴더가 계속 표시됨 (하드코딩 문제).

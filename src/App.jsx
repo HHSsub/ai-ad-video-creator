@@ -235,8 +235,11 @@ function App() {
       if (response.ok) {
         const data = await response.json();
 
-        // 🔥 v4.1 워크플로우: finalVideos 우선 체크
-        if (data.project.storyboard && data.project.storyboard.styles) {
+        // 🔥 v4.1 워크플로우: 기존 작업이 있는지 확인 (styles 배열 길이 체크 필수)
+        if (data.project.storyboard &&
+          data.project.storyboard.styles &&
+          data.project.storyboard.styles.length > 0) {
+
           console.log('[App] ✅ 기존 작업 발견');
           setStoryboard(data.project.storyboard);
           setFormData(data.project.formData || {});
@@ -263,6 +266,8 @@ function App() {
           setCurrentView('step4');
           setStep(4);
           return;
+        } else {
+          console.log('[App] ℹ️ 신규 프로젝트 또는 빈 프로젝트입니다.');
         }
       }
     } catch (error) {

@@ -17,6 +17,7 @@ env
 
 # 🔥 사용자 정보 보안 (절대 커밋하지 않음)
 # config/projects.json
+config/projects/*
 config/users.json
 config/runtime-admin-settings.json
 config/runtime-field-config.json

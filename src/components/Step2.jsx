@@ -171,18 +171,16 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
     if (shouldAutoStart === 'true') {
       sessionStorage.removeItem('autoStartStep2');
 
-      // 0.5초 후 자동 실행 (컴포넌트 마운트 대기)
-      setTimeout(() => {
-        if (formData.mode === 'admin') {
-          // Admin 모드: Gemini 호출 생략, 직접 이미지 생성
-          if (formData.geminiResponse) {
-            handleManualSubmit(formData.geminiResponse);
-          }
-        } else {
-          // Auto/Manual 모드: 일반 생성 시작
-          handleGenerateStoryboard();
+      // 사용자 요청: 즉시 시작 (지연 제거)
+      console.log('🚀 Step2: 자동 실행 즉시 시작!');
+
+      if (formData.mode === 'admin') {
+        if (formData.geminiResponse) {
+          handleManualSubmit(formData.geminiResponse);
         }
-      }, 500);
+      } else {
+        handleGenerateStoryboard();
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -547,7 +545,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             setTimeout(() => {
               if (onNext) {
                 console.log('🎯 Step2 → Step3 자동 이동 (이미지 세트 모드)');
-                onNext();
+                onNext(result);
               }
             }, 2000);
           } else {
@@ -559,7 +557,7 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             setIsLoading(false);
 
             setTimeout(() => {
-              if (onNext) onNext();
+              if (onNext) onNext(result);
             }, 2000);
           }
 
