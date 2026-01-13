@@ -218,7 +218,7 @@ export async function createS3FolderPlaceholder(projectId) {
         await s3Client.send(new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: s3Key,
-            Body: '', // 빈 내용
+            Body: Buffer.from(''), // 빈 내용 (Buffer로 명시하여 Content-Length 0 보장)
         }));
         console.log(`[S3] ✅ 폴더 플레이스홀더 생성 완료: ${s3Key}`);
     } catch (error) {
