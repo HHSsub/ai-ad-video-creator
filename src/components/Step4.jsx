@@ -1395,17 +1395,20 @@ const Step4 = ({
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
+            {/* 멤버 관리 버튼 그룹 */}
+            <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
               <button
                 onClick={() => setShowMemberModal(true)}
-                className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors text-sm flex items-center gap-1"
+                className="px-3 py-1.5 hover:bg-gray-700 text-green-400 rounded-md transition-colors text-xs flex items-center gap-1.5 border-r border-gray-700"
+                title="멤버 목록 보기"
               >
                 <span>👥</span> 멤버 목록
               </button>
               {permissions.invite && (
                 <button
                   onClick={() => setShowInviteModal(true)}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors text-sm flex items-center gap-1"
+                  className="px-3 py-1.5 hover:bg-gray-700 text-purple-400 rounded-md transition-colors text-xs flex items-center gap-1.5"
+                  title="새 멤버 초대"
                 >
                   <span>➕</span> 멤버 초대
                 </button>
@@ -1815,75 +1818,6 @@ const Step4 = ({
               </div>
             )}
 
-            {/* 🔥 추가: 멤버 초대 모달 - Portal & Top Center */}
-            {showInviteModal && createPortal(
-              <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 pt-32" onClick={handleCloseInviteModal}>
-                <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
-                  <h3 className="text-xl font-bold text-white mb-4">👥 멤버 초대</h3>
-
-                  {inviteError && (
-                    <div className="bg-red-900/30 border border-red-800 text-red-300 p-3 mb-4 rounded-lg text-sm">
-                      {inviteError}
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        사용자명 (계정 ID)
-                      </label>
-                      <input
-                        type="text"
-                        value={inviteUsername}
-                        onChange={(e) => setInviteUsername(e.target.value)}
-                        placeholder="예: guest, test1"
-                        className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                        disabled={inviteLoading}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        시스템에 등록된 사용자만 초대할 수 있습니다.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        역할 선택
-                      </label>
-                      <select
-                        value={inviteRole}
-                        onChange={(e) => setInviteRole(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                        disabled={inviteLoading}
-                      >
-                        {ROLE_OPTIONS.map((role) => (
-                          <option key={role.value} value={role.value}>
-                            {role.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 mt-6">
-                    <button
-                      onClick={handleCloseInviteModal}
-                      className="flex-1 px-4 py-3 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
-                      disabled={inviteLoading}
-                    >
-                      취소
-                    </button>
-                    <button
-                      onClick={handleInviteMember}
-                      disabled={inviteLoading || !inviteUsername.trim()}
-                      className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-                    >
-                      {inviteLoading ? '초대 중...' : '초대하기'}
-                    </button>
-                  </div>
-                </div>
-              </div>,
-              document.body
-            )}
 
             {/* 3-Mode Selection UI - 🔥 POTAL 적용 & 중앙 정렬 */}
             {showPersonModal && !synthesisMode && createPortal(
