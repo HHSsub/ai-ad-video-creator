@@ -124,8 +124,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             reference_images: references,
             num_images: 1,
             image: { url: baseImageUrl },
-            strength: 0.95, // Prioritize Reference
-            guidance_scale: 18.0, // Maximum enforcement
+            strength: 0.65, // Balance between Reference and Original Scene
+            guidance_scale: 15.0, // High adherence to prompt but better blending
             num_inference_steps: 30,
             negative_prompt: "deformed, distorted, wrong identity, mixed race, different person, blurry, low quality, bad anatomy, ghosting, text, watermark",
             // 🔥 Dynamic Aspect Ratio

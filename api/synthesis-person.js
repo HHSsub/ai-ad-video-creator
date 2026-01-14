@@ -27,7 +27,7 @@ router.post('/', async (req, res) => {
         // 1. 합성 실행 (Seedream v4)
         // compositingInfo 구성 (합성 타입 전달)
         const compositingInfo = {
-            sceneDescription: sceneContext || 'High quality cinematic shot',
+            sceneDescription: sceneContext || '',
             aspectRatio: aspectRatio || 'widescreen_16_9', // Default fallback
             personMetadata: personMetadata, // 🔥 Pass metadata for prompt engineering
             synthesisType: synthesisType || 'person' // 🔥 Default to person
