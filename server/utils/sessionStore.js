@@ -16,7 +16,7 @@ class SessionStore {
         this.loadSessions();
 
         // 주기적으로 만료된 세션 정리 (파일 저장 포함)
-        setInterval(() => this.cleanupExpiredSessions(), 300000); // 5분마다
+        setInterval(() => this.cleanupExpiredSessions(), 3600000); // 60분마다
     }
 
     loadSessions() {
