@@ -133,14 +133,23 @@ const Step4 = ({
       }
 
       const currentImages = storyboard.styles[styleIndex].images;
-      const newImages = currentImages.filter(img => String(img.sceneNumber) !== String(sceneNumber));
+      // 🔥 Fix: Filter by unique 'originalSceneNumber' (DB ID) if available, fallback to sceneNumber
+      // The parameter 'sceneNumber' passed here is actually the ID from the delete button.
+      const newImages = currentImages.filter(img =>
+        String(img.originalSceneNumber || img.sceneNumber) !== String(sceneNumber)
+      );
 
       if (currentImages.length === newImages.length) {
-        throw new Error('Scene not found in current list'); // 이미 없거나 타입 불일치
+        // Double check: if failed, try visual number just in case
+        console.warn('ID filter failed, trying visual match...');
+        const retryImages = currentImages.filter(img => String(img.sceneNumber) !== String(sceneNumber));
+        if (currentImages.length === retryImages.length) {
+          throw new Error('Scene not found in current list (ID mismatch)');
+        }
+        storyboard.styles[styleIndex].images = retryImages;
+      } else {
+        storyboard.styles[styleIndex].images = newImages;
       }
-
-      // 로컬 스토리보드 우선 업데이트 (화면 반영)
-      storyboard.styles[styleIndex].images = newImages;
 
       // 3. 백엔드에 전체 스토리보드 업데이트 요청 (PATCH)
       // 별도의 /delete 엔드포인트 대신, 검증된 메인 저장 파이프라인 사용
