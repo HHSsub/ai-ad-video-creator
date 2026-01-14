@@ -104,11 +104,18 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             : "High quality photo, ultra realistic";
 
         // 🔥 CRITICAL FIX: Sanitize prompt for LOGO mode
-        // Remove camera brands that cause logo hallucinations (e.g. "ARRI", "Sony", "Canon")
+        // Remove camera brands and "Product/Packshot" terms that cause hallucinations
         if (type === 'logo') {
-            // 🔥 Context Restoration: Do NOT replace prompt with generic "background scene". 
-            // Keep the sanitized original prompt so AI knows the context (e.g. "People eating").
-            basePrompt = basePrompt.replace(/ARRI|Alexa|Canon|Sony|Nikon|Red|shot on|camera|advertisement|text|font|typography/gi, "");
+            // 1. Remove "Transition" instructions (Video prompts often have "followed by...")
+            // We only want the current scene context.
+            const transitionSplit = basePrompt.split(/followed by|transition to|then|next scene/i);
+            basePrompt = transitionSplit[0];
+
+            // 2. Remove specific hallucination triggers
+            basePrompt = basePrompt.replace(/ARRI|Alexa|Canon|Sony|Nikon|Red|shot on|camera|advertisement|text|font|typography|packshot|product shot|white background|studio lighting|earbuds|headphones|charging case/gi, "");
+
+            // 3. Limit length to avoid overwhelming the Logo instruction
+            if (basePrompt.length > 200) basePrompt = basePrompt.substring(0, 200);
         }
 
         // 최종 프롬프트 조합
@@ -142,10 +149,10 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.35; // 🔥 Sweet Spot: 0.2 was too invisible, 0.7 destroyed bg. 0.35 allows logo insertion.
-            guidanceScale = 12.5; // 🔥 High Guidance: FORCE the "Insert Logo" instruction to be obeyed strictly.
+            strength = 0.35; // Kept at 0.35 (Proven good for visibility vs preservation if prompt is clean)
+            guidanceScale = 7.5; // 🔥 Lowered from 12.5 to prevent Text Prompt (e.g. "Earbuds") from overriding Reference Image
             // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
-            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated";
+            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object";
         }
 
         const payload = {
