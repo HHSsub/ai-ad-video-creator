@@ -95,9 +95,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strictPrompt = "Seamless product replacement. Replace the original object with the uploaded product image. Maintain 100% fidelity to the uploaded product's texture, color, shape, and branding details. Integrate the new product naturally into the scene by applying the source image's lighting, shadows, and perspective. Photorealistic finish, commercial photography quality.";
 
         } else if (type === 'logo') {
-            // Logo Prompt
-            // 🔥 Removing the word "logo" to prevent AI from writing the text "LOGO"
-            strictPrompt = "Directly overlay the provided brand graphics. COPY AND PASTE STYLE. Strictly maintain the original geometry, spelling, and colors of the reference image(excluding non-logo color,background color). Do not blend, do not artisticize. The graphics must be clearly visible and legible. No distortion.";
+            // Logo Prompt (User Mandated "Pixel Perfect" Strategy)
+            strictPrompt = "EXACTLY replicate the reference image's brand graphics: identical shape, exact colors, precise geometry, original spelling and letterforms. Place this perfect copy floating distinctly ON TOP of the background image without any blending, distortion, recoloring, or stylistic changes. Maintain pixel-perfect fidelity to the uploaded reference as a non-integrated overlay. Photorealistic composition, sharp edges, no transparency effects.";
         }
 
         let basePrompt = compositingInfo.sceneDescription
@@ -107,16 +106,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // 🔥 CRITICAL FIX: Sanitize prompt for LOGO mode
         // Remove camera brands and "Product/Packshot" terms that cause hallucinations
         if (type === 'logo') {
-            // 1. Remove "Transition" instructions (Video prompts often have "followed by...")
-            // We only want the current scene context.
-            const transitionSplit = basePrompt.split(/followed by|transition to|then|next scene/i);
-            basePrompt = transitionSplit[0];
-
-            // 2. Remove specific hallucination triggers
-            basePrompt = basePrompt.replace(/ARRI|Alexa|Canon|Sony|Nikon|Red|shot on|camera|advertisement|text|font|typography|packshot|product shot|white background|studio lighting|earbuds|headphones|charging case/gi, "");
-
-            // 3. Limit length to avoid overwhelming the Logo instruction
-            if (basePrompt.length > 200) basePrompt = basePrompt.substring(0, 200);
+            // For Logo Strategy v3 (Pure Overlay), we mostly ignore basePrompt in the final assembly,
+            // but we keep this block just in case we revert or mix.
         }
 
         // 최종 프롬프트 조합
@@ -124,7 +115,9 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // We minimize the basePrompt to just context.
         const finalPrompt = type === 'person'
             ? `${subjectPrompt}${basePrompt}, ${strictPrompt}`
-            : `${strictPrompt}, ${basePrompt}`;
+            : type === 'logo'
+                ? `${strictPrompt}` // 🔥 Pure Overlay: Ignore scene description to prevent blending/hallucination
+                : `${strictPrompt}, ${basePrompt}`;
 
         // 2. 입력 이미지 구성 (Reference Image)
         const references = [];
@@ -150,10 +143,10 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.30; // Reduced to 0.30 for safety
-            guidanceScale = 2.5; // 🔥 CRITICAL: Dropped to 2.5. Prevents "Write LOGO" behavior. Forces visual transfer.
+            strength = 0.30; // User requested 0.25~0.35. Set to 0.30.
+            guidanceScale = 18.0; // 🔥 Increased to 18.0 as requested for Maximum Fidelity.
             // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
-            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object, text, typography, logo";
+            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object, text, typography, logo, blending, transparency, relighting, recreation, deformation, color shift, text error";
         }
 
         const payload = {
@@ -163,7 +156,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             image: { url: baseImageUrl },
             strength: strength,
             guidance_scale: guidanceScale,
-            num_inference_steps: 30,
+            num_inference_steps: 40, // 🔥 Increased to 40 as requested
             negative_prompt: negativePrompt,
             // 🔥 Dynamic Aspect Ratio
             aspect_ratio: compositingInfo?.aspectRatio || undefined
