@@ -77,7 +77,7 @@ const Step4 = ({
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
 
   const styles = storyboard?.styles || [];
-  const selectedStyle = styles.find(s => s.concept_id === selectedConceptId || s.conceptId === selectedConceptId);
+  const selectedStyle = styles.find(s => String(s.concept_id) === String(selectedConceptId) || String(s.conceptId) === String(selectedConceptId));
   // 🔥 forceUpdate를 의존성에 추가하여 리렌더링 유도
   const images = selectedStyle?.images || [];
 
@@ -1322,7 +1322,7 @@ const Step4 = ({
         }
         if (styleIndex !== -1) {
           const currentStyle = storyboard.styles[styleIndex];
-          const sceneIndex = currentStyle.images.findIndex(s => s.sceneNumber === selectedScene.sceneNumber);
+          const sceneIndex = currentStyle.images.findIndex(s => String(s.sceneNumber) === String(selectedScene.sceneNumber));
           if (sceneIndex !== -1) {
             // Update Image URL and Add Cache Buster
             currentStyle.images[sceneIndex].imageUrl = `${data.imageUrl}?t=${Date.now()}`;
