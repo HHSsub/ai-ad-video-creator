@@ -646,14 +646,28 @@ const Step4 = ({
   };
 
   // 🔥 E-1: 씬별 영상 변환
+  // 🔥 E-1: 씬별 영상 변환
   const handleConvertSingleScene = async (sceneNumber) => {
     if (!permissions.regenerate) {
       setError('영상 변환 권한이 없습니다.');
       return;
     }
 
-    const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
-    if (!scene || !scene.imageUrl) {
+    // 🔥 Fix: Find the REAL reference in the storyboard object, not the shallow copy from renumberedImages
+    const styleIndex = storyboard.styles.findIndex(s =>
+      String(s.conceptId) === String(selectedConceptId) ||
+      String(s.concept_id) === String(selectedConceptId)
+    );
+
+    if (styleIndex === -1) {
+      console.error(`[Step4] Critical Error: Concept ${selectedConceptId} not found in storyboard`);
+      return;
+    }
+
+    const realStyle = storyboard.styles[styleIndex];
+    const realScene = realStyle.images.find(img => String(img.sceneNumber) === String(sceneNumber));
+
+    if (!realScene || !realScene.imageUrl) {
       setError(`씬 ${sceneNumber}: 이미지가 없습니다.`);
       return;
     }
@@ -667,15 +681,14 @@ const Step4 = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageUrl: scene.imageUrl,
+          imageUrl: realScene.imageUrl,
           sceneNumber: sceneNumber,
           projectId: currentProject?.id,
           conceptId: selectedConceptId,
-          prompt: scene.prompt, // 🔥 AI Video Prompt
-          motionPrompt: scene.motionPrompt, // 🔥 Detailed Motion Guide
+          prompt: realScene.prompt, // 🔥 AI Video Prompt
+          motionPrompt: realScene.motionPrompt, // 🔥 Detailed Motion Guide
           // 🔥 Auto vs Manual Duration Logic
-          // If scene has specific duration (Manual), use it. Else calculate average (Auto).
-          duration: scene.duration ? scene.duration : (Math.round(formData.videoLength / sortedImages.length) || 5)
+          duration: realScene.duration ? realScene.duration : (Math.round(formData.videoLength / sortedImages.length) || 5)
         })
       });
 
@@ -695,7 +708,7 @@ const Step4 = ({
               body: JSON.stringify({
                 taskId: result.taskId,
                 sceneNumber,
-                targetDuration: result.targetDuration, // Pass target for trimming
+                targetDuration: result.targetDuration,
                 projectId: currentProject?.id,
                 conceptId: selectedConceptId
               })
@@ -703,12 +716,14 @@ const Step4 = ({
             const statusData = await statusRes.json();
 
             if (statusData.status === 'completed' && statusData.videoUrl) {
-              // Success
-              scene.videoUrl = statusData.videoUrl;
-              scene.status = 'video_done';
+              // Success - Update Real Reference
+              realScene.videoUrl = statusData.videoUrl;
+              realScene.status = 'video_done';
+
               log(`씬 ${sceneNumber} 영상 변환 완료: ${statusData.videoUrl}`);
               setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
               setModifiedScenes(prev => [...prev, sceneNumber]);
+              setForceUpdate(prev => prev + 1); // 🔥 Update UI
 
               // 🔥 중요: Async Polling 완료 후 즉시 부분 업데이트 (레이스 컨디션 방지)
               try {
@@ -755,9 +770,11 @@ const Step4 = ({
       }
 
       if (result.success && result.videoUrl) {
-        scene.videoUrl = result.videoUrl;
-        scene.status = 'video_done';
+        realScene.videoUrl = result.videoUrl;
+        realScene.status = 'video_done';
+
         log(`씬 ${sceneNumber} 영상 변환 완료: ${result.videoUrl}`);
+        setForceUpdate(prev => prev + 1); // 🔥 Update UI
 
         // 🔥 중요: 영상 변환 즉시 프로젝트 저장 (새로고침 시 방지)
         try {
@@ -786,8 +803,6 @@ const Step4 = ({
       log(`씬 ${sceneNumber} 변환 오류: ${err.message}`);
       setConvertingScenes(prev => ({ ...prev, [sceneNumber]: false }));
     }
-    // 🔥 Finally 제거: Polling 시에는 상태를 유지해야 함.
-    // Polling 흐름에서는 내부적으로 false 처리함.
   };
 
   // 🔥 E-2: 일괄 영상 변환
@@ -1918,7 +1933,7 @@ const Step4 = ({
                   className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[1px]"
                   onClick={() => setShowPersonModal(false)}
                 />
-
+                아
                 <div
                   className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
                   style={{
