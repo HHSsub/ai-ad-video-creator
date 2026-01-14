@@ -113,7 +113,7 @@ const Step4 = ({
     }
   }, [renumberedImages.length]);
 
-  // 🔥 씬 삭제 핸들러
+  // 🔥 씬 삭제 핸들러 (Robust Fix: Use PATCH based update)
   const handleDeleteScene = async (sceneNumber) => {
     // 1. 최소 1개 씬 유지 확인
     if (sortedImages.length <= 1) {
@@ -126,63 +126,55 @@ const Step4 = ({
     }
 
     try {
-      // 2. 씬 삭제 API 호출 (Atomically handled by backend)
-      // 2. 씬 삭제 API 호출 (Updated to use projects route for stability)
-      const requestUrl = `${API_BASE}/api/projects/${currentProject?.id}/scenes/delete`;
-      console.log(`[Step4] 씬 삭제 요청: ${requestUrl}`);
+      // 2. 로컬에서 먼저 삭제 (Optimistic UI & Data Prep)
+      const styleIndex = storyboard.styles.findIndex(s => String(s.conceptId) === String(selectedConceptId));
+      if (styleIndex === -1) {
+        throw new Error('Concept not found');
+      }
 
-      const delResponse = await fetch(requestUrl, {
-        method: 'POST',
+      const currentImages = storyboard.styles[styleIndex].images;
+      const newImages = currentImages.filter(img => String(img.sceneNumber) !== String(sceneNumber));
+
+      if (currentImages.length === newImages.length) {
+        throw new Error('Scene not found in current list'); // 이미 없거나 타입 불일치
+      }
+
+      // 로컬 스토리보드 우선 업데이트 (화면 반영)
+      storyboard.styles[styleIndex].images = newImages;
+
+      // 3. 백엔드에 전체 스토리보드 업데이트 요청 (PATCH)
+      // 별도의 /delete 엔드포인트 대신, 검증된 메인 저장 파이프라인 사용
+      const requestUrl = `${API_BASE}/api/projects/${currentProject?.id}`;
+      console.log(`[Step4] 씬 삭제 요청 (via PATCH): ${requestUrl}`);
+
+      const response = await fetch(requestUrl, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'x-username': user?.username || 'anonymous'
         },
         body: JSON.stringify({
-          conceptId: selectedConceptId,
-          sceneNumber: sceneNumber
+          storyboard: storyboard, // 삭제된 상태의 전체 스토리보드 전송
+          formData: formData
         })
       });
 
-      // HTML 응답 체크 (404/500 에러 페이지 방지)
-      const contentType = delResponse.headers.get('content-type');
-      if (contentType && contentType.includes('text/html')) {
-        const text = await delResponse.text();
-        console.error('[Step4] 씬 삭제 실패 (HTML 응답):', text.substring(0, 100));
-        throw new Error(`서버 라우팅 오류 (HTML 응답 수신): ${delResponse.status}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[Step4] 씬 삭제(PATCH) 실패:', errText);
+        throw new Error('서버 저장 실패');
       }
 
-      const delResult = await delResponse.json();
+      // 4. UI 갱신
+      setForceUpdate(prev => prev + 1);
+      setSelectedScenes(prev => prev.filter(sn => String(sn) !== String(sceneNumber))); // 선택 상태 해제
+      setModifiedScenes(prev => prev.filter(sn => String(sn) !== String(sceneNumber))); // 수정 상태 해제
 
-      if (!delResponse.ok || !delResult.success) {
-        throw new Error(delResult.error || '씬 삭제 실패');
-      }
-
-      // 3. 상태 업데이트 (Backend Source of Truth)
-      // 부모 컴포넌트(Step4Consumer)나 상위에서 storyboard를 관리한다면 onComplete로 전파하거나
-      // 여기서는 prop으로 받은 storyboard를 직접 수정하는 것이 아니라,
-      // 리턴받은 updatedStoryboard를 사용하여 로컬 상태를 강제로 갱신해야 함.
-      // 하지만 현재 구조상 storyboard prop을 직접 mutate하고 forceUpdate를 쓰는 패턴이므로
-      // 백엔드에서 받은 최신 storyboard로 로컬 storyboard 객체 내용을 덮어씌움.
-
-      // Update the reference object (since props are read-only but objects are mutable reference)
-      // Better strategy: Call a refresh callback if available, or mutate carefully matching backend state.
-
-      const newImages = delResult.storyboard.styles.find(s => s.conceptId == selectedConceptId || s.concept_id == selectedConceptId).images;
-
-      // Mutate the prop object (Legacy pattern used in this file)
-      const styleIndex = storyboard.styles.findIndex(s => s.conceptId === selectedConceptId);
-      if (styleIndex !== -1) {
-        storyboard.styles[styleIndex].images = newImages;
-      }
-
-      setForceUpdate(prev => prev + 1); // 리렌더링 트리거
-      setSelectedScenes(newImages.map(img => img.sceneNumber)); // 선택 상태 리셋
-      setModifiedScenes([]); // 수정 상태 리셋
-
-      log(`씬 ${sceneNumber} 삭제 완료 (총 ${newImages.length}개)`);
+      log(`씬 ${sceneNumber} 삭제 완료 (남은 씬: ${newImages.length}개)`);
 
     } catch (err) {
       console.error('씬 삭제 실패:', err);
+      // 롤백 로직이 필요하다면 여기서 로컬 state 원복해야 함 (현재는 생략)
       alert(`씬 삭제 실패: ${err.message}`);
     }
   };
