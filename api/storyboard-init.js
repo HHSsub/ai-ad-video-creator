@@ -355,8 +355,9 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
 
       let scenePattern;
       if (mode === 'manual') {
-        // S#, Scene, Sequence, Frame 등 다양한 씬 구분자 지원
-        scenePattern = /(?:S#|Scene|Sequence|Frame)\s*(\d+).*?\(([^)]+)\)/gi;
+        // 🔥 FIXED: [Sequence #1 - Frame #1] (0-2s) 형식 지원
+        // \[? = 선택적 여는 대괄호, #? = 선택적 #, [^\(]* = ( 전까지 모든 문자 (Frame #1] 같은 부분)
+        scenePattern = /\[?(?:S#|Scene|Sequence|Frame)\s*#?(\d+)[^\(]*\(([^)]+)\)/gi;
       } else {
         // Auto 모드: #* S#N (Time) 또는 #* Sequence N (Time) 등 지원
         scenePattern = /#*\s*(?:S#|Scene|Sequence|Frame)\s*(\d+).*?\(([^)]+)\)/gi;
