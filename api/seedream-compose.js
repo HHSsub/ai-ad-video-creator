@@ -96,7 +96,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
 
         } else if (type === 'logo') {
             // Logo Prompt
-            strictPrompt = "Directly overlay the uploaded logo image. COPY AND PASTE STYLE. Strictly maintain the logo's original geometry, spelling, and colors. Do not blend, do not artisticize. The logo must be clearly visible and legible. No distortion.";
+            // 🔥 Removing the word "logo" to prevent AI from writing the text "LOGO"
+            strictPrompt = "Directly overlay the provided brand graphics. COPY AND PASTE STYLE. Strictly maintain the original geometry, spelling, and colors of the reference image(excluding non-logo color,background color). Do not blend, do not artisticize. The graphics must be clearly visible and legible. No distortion.";
         }
 
         let basePrompt = compositingInfo.sceneDescription
@@ -149,10 +150,10 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.35; // Kept at 0.35 (Proven good for visibility vs preservation if prompt is clean)
-            guidanceScale = 7.5; // 🔥 Lowered from 12.5 to prevent Text Prompt (e.g. "Earbuds") from overriding Reference Image
+            strength = 0.30; // Reduced to 0.30 for safety
+            guidanceScale = 2.5; // 🔥 CRITICAL: Dropped to 2.5. Prevents "Write LOGO" behavior. Forces visual transfer.
             // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
-            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object";
+            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object, text, typography, logo";
         }
 
         const payload = {
