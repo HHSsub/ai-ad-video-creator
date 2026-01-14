@@ -119,13 +119,28 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
 
         const url = getTextToImageUrl();
 
+        // 🔥 Dynamic Parameters based on Strategy
+        let strength = 0.65;
+        let guidanceScale = 15.0;
+
+        if (type === 'person') {
+            strength = 0.65; // Balanced for person swap
+            guidanceScale = 15.0;
+        } else if (type === 'product') {
+            strength = 0.60; // Lower strength to preserve scene structure
+            guidanceScale = 15.0;
+        } else if (type === 'logo') {
+            strength = 0.55; // Minimal change to background, just insert logo
+            guidanceScale = 17.0; // Very high adherence to logo reference
+        }
+
         const payload = {
             prompt: finalPrompt,
             reference_images: references,
             num_images: 1,
             image: { url: baseImageUrl },
-            strength: 0.65, // Balance between Reference and Original Scene
-            guidance_scale: 15.0, // High adherence to prompt but better blending
+            strength: strength,
+            guidance_scale: guidanceScale,
             num_inference_steps: 30,
             negative_prompt: "deformed, distorted, wrong identity, mixed race, different person, blurry, low quality, bad anatomy, ghosting, text, watermark",
             // 🔥 Dynamic Aspect Ratio
