@@ -89,6 +89,7 @@ const Step4 = ({
       console.log(`  씬 리넘버링: ${img.sceneNumber} -> ${newNum}`);
       return {
         ...img,
+        originalSceneNumber: img.sceneNumber, // 🔥 Preserve Original DB ID
         sceneNumber: newNum
       };
     });
@@ -665,7 +666,9 @@ const Step4 = ({
     }
 
     const realStyle = storyboard.styles[styleIndex];
-    const realScene = realStyle.images.find(img => String(img.sceneNumber) === String(sceneNumber));
+    // 🔥 Use originalSceneNumber if available (from renumberedImages), to match backend ID
+    const targetSceneNumber = scene.originalSceneNumber || sceneNumber;
+    const realScene = realStyle.images.find(img => String(img.sceneNumber) === String(targetSceneNumber));
 
     if (!realScene || !realScene.imageUrl) {
       setError(`씬 ${sceneNumber}: 이미지가 없습니다.`);
@@ -1322,7 +1325,7 @@ const Step4 = ({
         }
         if (styleIndex !== -1) {
           const currentStyle = storyboard.styles[styleIndex];
-          const sceneIndex = currentStyle.images.findIndex(s => String(s.sceneNumber) === String(selectedScene.sceneNumber));
+          const sceneIndex = currentStyle.images.findIndex(s => String(s.sceneNumber) === String(selectedScene.originalSceneNumber || selectedScene.sceneNumber));
           if (sceneIndex !== -1) {
             // Update Image URL and Add Cache Buster
             currentStyle.images[sceneIndex].imageUrl = `${data.imageUrl}?t=${Date.now()}`;
