@@ -106,8 +106,18 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // 🔥 CRITICAL FIX: Sanitize prompt for LOGO mode
         // Remove camera brands and "Product/Packshot" terms that cause hallucinations
         if (type === 'logo') {
-            // For Logo Strategy v3 (Pure Overlay), we mostly ignore basePrompt in the final assembly,
-            // but we keep this block just in case we revert or mix.
+            // 1. Remove "Transition" instructions (Video prompts often have "followed by...")
+            const transitionSplit = basePrompt.split(/followed by|transition to|then|next scene/i);
+            basePrompt = transitionSplit[0];
+
+            // 2. Remove specific hallucination triggers
+            basePrompt = basePrompt.replace(/ARRI|Alexa|Canon|Sony|Nikon|Red|shot on|camera|advertisement|text|font|typography|packshot|product shot|white background|studio lighting|earbuds|headphones|charging case|logo/gi, "");
+
+            // 3. Limit length to avoid overwhelming the Logo instruction
+            if (basePrompt.length > 100) basePrompt = basePrompt.substring(0, 100);
+
+            // 4. Add safety prefix
+            basePrompt = `Preserve the original scene: ${basePrompt}`;
         }
 
         // 최종 프롬프트 조합
@@ -116,7 +126,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         const finalPrompt = type === 'person'
             ? `${subjectPrompt}${basePrompt}, ${strictPrompt}`
             : type === 'logo'
-                ? `${strictPrompt}` // 🔥 Pure Overlay: Ignore scene description to prevent blending/hallucination
+                ? `${basePrompt}. ${strictPrompt}` // 🔥 CRITICAL FIX: Re-enable scene context to prevent random generation
                 : `${strictPrompt}, ${basePrompt}`;
 
         // 2. 입력 이미지 구성 (Reference Image)
@@ -162,7 +172,23 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             aspect_ratio: compositingInfo?.aspectRatio || undefined
         };
 
-        console.log(`[Seedream] 요청 Payload (${type}): Prompt length ${finalPrompt.length}`);
+        // 🔥 COMPREHENSIVE DEBUG LOGGING
+        console.log(`\n========================================`);
+        console.log(`[Seedream Compose] 합성 요청 시작`);
+        console.log(`========================================`);
+        console.log(`📍 씬 정보:`);
+        console.log(`   - Scene Number: ${compositingInfo?.sceneNumber || 'N/A'}`);
+        console.log(`   - Scene Context: ${compositingInfo?.sceneDescription?.substring(0, 100) || 'N/A'}...`);
+        console.log(`🎨 합성 타입: ${type.toUpperCase()}`);
+        console.log(`📝 최종 프롬프트 (${finalPrompt.length}자):`);
+        console.log(`   "${finalPrompt.substring(0, 200)}..."`);
+        console.log(`⚙️  파라미터:`);
+        console.log(`   - Strength: ${strength} (${(1 - strength) * 100}% 원본 보존)`);
+        console.log(`   - Guidance Scale: ${guidanceScale}`);
+        console.log(`   - Inference Steps: ${payload.num_inference_steps}`);
+        console.log(`🚫 Negative Prompt: ${negativePrompt.substring(0, 100)}...`);
+        console.log(`🖼️  참조 이미지 개수: ${references.length}`);
+        console.log(`========================================\n`);
 
         const result = await safeCallFreepik(url, {
             method: 'POST',
