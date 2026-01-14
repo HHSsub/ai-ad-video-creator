@@ -1351,11 +1351,21 @@ const Step4 = ({
         setUploadPreview(null); // Reset upload preview
         log(`씬 ${selectedScene.sceneNumber} ${synthesisMode} 합성 완료: ${data.imageUrl}`);
 
-        // Save the updated storyboard to the backend
+        // Save the updated storyboard to the backend (Partial Update for safety)
         await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
-          body: JSON.stringify({ storyboard, formData })
+          body: JSON.stringify({
+            storyboardUpdate: {
+              conceptId: selectedConceptId,
+              sceneNumber: selectedScene.originalSceneNumber || selectedScene.sceneNumber, // 🔥 Robust ID
+              updates: {
+                imageUrl: data.imageUrl, // S3 URL is unique, no cache buster needed for DB
+                videoUrl: null,
+                status: 'image_synthesized'
+              }
+            }
+          })
         });
 
       } else {
