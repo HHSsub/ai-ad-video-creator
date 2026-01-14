@@ -99,11 +99,21 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strictPrompt = "Insert the uploaded logo in the exact center of the image. Keep the logo's original shape, colors, and aspect ratio strictly unchanged. No distortion, no perspective tilt, no text hallucination. Apply as a clean, high-quality flat overlay with distinct edges. Professional branding style.";
         }
 
-        const basePrompt = compositingInfo.sceneDescription
+        let basePrompt = compositingInfo.sceneDescription
             ? `${compositingInfo.sceneDescription}`
             : "High quality photo, ultra realistic";
 
+        // 🔥 CRITICAL FIX: Sanitize prompt for LOGO mode
+        // Remove camera brands that cause logo hallucinations (e.g. "ARRI", "Sony", "Canon")
+        if (type === 'logo') {
+            basePrompt = basePrompt.replace(/ARRI|Alexa|Canon|Sony|Nikon|Red|shot on|camera|advertisement|text|font|typography/gi, "");
+            // Reduce prompt influence further
+            basePrompt = "background scene, high quality";
+        }
+
         // 최종 프롬프트 조합
+        // For Logo, we want strict adherence to the strictPrompt and Reference Image. 
+        // We minimize the basePrompt to just context.
         const finalPrompt = type === 'person'
             ? `${subjectPrompt}${basePrompt}, ${strictPrompt}`
             : `${strictPrompt}, ${basePrompt}`;
