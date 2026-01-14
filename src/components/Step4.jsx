@@ -666,8 +666,12 @@ const Step4 = ({
     }
 
     const realStyle = storyboard.styles[styleIndex];
-    // 🔥 Use originalSceneNumber if available (from renumberedImages), to match backend ID
-    const targetSceneNumber = scene.originalSceneNumber || sceneNumber;
+
+    // 🔥 Fix: 'scene' is not defined here. We must find it from renumberedImages using the display 'sceneNumber'.
+    const displayScene = renumberedImages.find(img => img.sceneNumber === sceneNumber);
+    // Use originalSceneNumber if available, otherwise fallback to sceneNumber
+    const targetSceneNumber = displayScene?.originalSceneNumber || sceneNumber;
+
     const realScene = realStyle.images.find(img => String(img.sceneNumber) === String(targetSceneNumber));
 
     if (!realScene || !realScene.imageUrl) {
