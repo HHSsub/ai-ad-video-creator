@@ -344,32 +344,42 @@ const Step4 = ({
     return () => clearTimeout(timer);
   }, [images, selectedConceptId]); // koreanPrompts 의존성 제거 (무한루프 방지)
 
-  // 🔥 한글 입력 -> 영문 번역 -> 이미지 재생성 wrapper
-  const handleRegenerateWithTranslation = async (sceneNumber) => {
+  // 🔥 한글 입력 -> 영문 번역 -> 이미지 재생성 wrapper (Robust ID Fix)
+  const handleRegenerateWithTranslation = async (visualSceneNumber) => {
     if (!permissions.regenerate) {
       setError('이미지 재생성 권한이 없습니다.');
       return;
     }
 
-    const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
-    if (!scene) return;
+    // 1. 시각적 번호로 실제 대상 씬 찾기 (ID Lookup)
+    const visualScene = sortedImages.find(img => String(img.sceneNumber) === String(visualSceneNumber));
+
+    if (!visualScene) {
+      console.error(`[Regen] Scene not found for visual number: ${visualSceneNumber}`);
+      return;
+    }
+
+    const targetSceneId = visualScene.originalSceneNumber; // 🔥 Real DB ID
+    console.log(`[Regen] Request for Visual #${visualSceneNumber} -> Original ID: ${targetSceneId}`);
 
     // 현재 입력창에 있는 값 (한글일 수 있음)
-    const currentInput = getEditedPrompt(sceneNumber, 'prompt', koreanPrompts[sceneNumber] || scene.prompt);
+    const currentInput = getEditedPrompt(visualSceneNumber, 'prompt', koreanPrompts[visualSceneNumber] || visualScene.prompt);
 
-    // 🔥 1. 즉시 재생성 상태로 변경 (UI 반응성 개선)
-    setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: true }));
+    // 2. UI 상태 업데이트
+    setRegeneratingScenes(prev => ({ ...prev, [visualSceneNumber]: true }));
     setError(null);
     setIsTranslating(true);
 
-    log(`씬 ${sceneNumber} 프롬프트 번역 및 재생성 시작...`);
+    log(`씬 ${visualSceneNumber} (ID:${targetSceneId}) 프롬프트 번역 및 재생성 시작...`);
 
     try {
-      // 2. 한글 -> 영문 번역
+      // 3. 한글 -> 영문 번역
       const englishPrompt = await translateText(currentInput, 'en');
       log(`번역 완료: ${currentInput.substring(0, 20)}... -> ${englishPrompt.substring(0, 20)}...`);
 
-      // 3. 번역된 영문 프롬프트로 재생성 요청
+      // 4. 번역된 영문 프롬프트로 재생성 요청 (Backend needs Original ID? Or just prompt?)
+      // We send targetSceneId (Original ID) if backend expects it, or pass sceneNumber if purely for logging.
+      // But critical part is updating the correct image in step 5.
       const response = await fetch(`${API_BASE}/api/storyboard-render-image`, {
         method: 'POST',
         headers: {
@@ -378,12 +388,12 @@ const Step4 = ({
         },
         body: JSON.stringify({
           imagePrompt: {
-            prompt: englishPrompt, // 번역된 영문 프롬프트 사용
+            prompt: englishPrompt,
             aspect_ratio: formData?.aspectRatioCode || 'widescreen_16_9',
             guidance_scale: 2.5,
             seed: Math.floor(Math.random() * 1000000)
           },
-          sceneNumber: sceneNumber,
+          sceneNumber: targetSceneId, // 🔥 Pass Real ID to Backend
           conceptId: selectedConceptId,
           projectId: currentProject?.id || null
         })
@@ -396,26 +406,27 @@ const Step4 = ({
 
       const data = await response.json();
 
-      // 성공 시 이미지 URL 업데이트 (스토리보드 객체 직접 수정 및 강제 리렌더)
       console.log(`[Step4] 재생성된 이미지 URL: ${data.imageUrl}`);
 
+      // 5. 스토리보드 객체 업데이트 (Using Real ID)
       const styleIndex = storyboard.styles.findIndex(s => String(s.conceptId) === String(selectedConceptId));
       if (styleIndex !== -1) {
-        const targetImage = storyboard.styles[styleIndex].images.find(img => String(img.sceneNumber) === String(sceneNumber));
+        const targetImage = storyboard.styles[styleIndex].images.find(img => String(img.sceneNumber) === String(targetSceneId)); // 🔥 Correct Lookup
+
         if (targetImage) {
           const newUrl = data.imageUrl || data.url;
           if (!newUrl) {
-            console.error('[Step4] ❌ 이미지 생성 성공했으나 URL이 비어있음:', data);
             throw new Error('서버 응답오류: 이미지 URL이 없습니다.');
           }
 
+          // 로컬 상태 즉시 반영
           targetImage.imageUrl = `${newUrl}${newUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
           targetImage.prompt = englishPrompt;
           targetImage.koreanPrompt = currentInput;
           targetImage.status = 'regenerated';
-          targetImage.videoUrl = null; // Reset video on image change
+          targetImage.videoUrl = null;
 
-          // 🔥 백엔드 영구 저장 (Partial Update로 레이스 컨디션 방지)
+          // 🔥 백엔드 영구 저장 (Robust PATCH)
           try {
             await fetch(`${API_BASE}/api/projects/${currentProject.id}`, {
               method: 'PATCH',
@@ -423,7 +434,7 @@ const Step4 = ({
               body: JSON.stringify({
                 storyboardUpdate: {
                   conceptId: selectedConceptId,
-                  sceneNumber: sceneNumber,
+                  sceneNumber: targetSceneId, // 🔥 Use Real ID for Update
                   updates: {
                     imageUrl: targetImage.imageUrl,
                     prompt: englishPrompt,
@@ -434,24 +445,27 @@ const Step4 = ({
                 }
               })
             });
+            console.log(`[Regen] 씬 ${visualSceneNumber} (ID:${targetSceneId}) 저장 성공`);
           } catch (saveErr) {
-            console.error(`[Step4] 씬 ${sceneNumber} 저장 실패:`, saveErr);
+            console.error(`[Step4] 씬 저장 실패:`, saveErr);
           }
+        } else {
+          console.error(`[Regen] Target image not found in storyboard for ID: ${targetSceneId}`);
         }
       }
 
-      // 한글 프롬프트 상태 업데이트 (입력한 내용 유지)
-      setKoreanPrompts(prev => ({ ...prev, [sceneNumber]: currentInput }));
+      // 한글 프롬프트 상태 업데이트
+      setKoreanPrompts(prev => ({ ...prev, [visualSceneNumber]: currentInput }));
 
       setForceUpdate(prev => prev + 1);
-      log(`씬 ${sceneNumber} 이미지 재생성 완료`);
+      log(`씬 ${visualSceneNumber} 이미지 재생성 완료`);
 
     } catch (err) {
       console.error('재생성 실패:', err);
       setError(`재생성 실패: ${err.message}`);
     } finally {
       setIsTranslating(false);
-      setRegeneratingScenes(prev => ({ ...prev, [sceneNumber]: false }));
+      setRegeneratingScenes(prev => ({ ...prev, [visualSceneNumber]: false }));
     }
   };
 
