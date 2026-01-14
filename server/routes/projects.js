@@ -197,11 +197,16 @@ router.patch('/:id', async (req, res) => {
         const styleIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
         if (styleIndex !== -1) {
           const images = project.storyboard.styles[styleIndex].images;
-          const imgIndex = images.findIndex(img => String(img.sceneNumber) === String(sceneNumber));
+          // 🔥 Fix: Search by originalSceneNumber (DB ID) if available, fallback to sceneNumber
+          const imgIndex = images.findIndex(img =>
+            String(img.originalSceneNumber || img.sceneNumber) === String(sceneNumber)
+          );
           if (imgIndex !== -1) {
             // 필드별 병합 업데이트
             Object.assign(images[imgIndex], updates);
             console.log(`[projects PATCH] ✅ 씬 부분 업데이트 완료: Project ${id}, Concept ${conceptId}, Scene ${sceneNumber}`);
+          } else {
+            console.warn(`[projects PATCH] ⚠️ 씬을 찾을 수 없음: Project ${id}, Concept ${conceptId}, Scene ${sceneNumber}`);
           }
         }
       }
