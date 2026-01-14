@@ -1296,8 +1296,15 @@ const Step4 = ({
 
       if (data.success && data.imageUrl) {
         // Update Storyboard
-        // Find the style object for the current concept
-        const styleIndex = storyboard.styles.findIndex(s => s.conceptId === selectedConceptId);
+        // Find the style object for the current concept (Robust Match)
+        const styleIndex = storyboard.styles.findIndex(s =>
+          String(s.conceptId) === String(selectedConceptId) ||
+          String(s.concept_id) === String(selectedConceptId)
+        );
+
+        if (styleIndex === -1) {
+          console.error(`[Step4] Critical Error: Concept ${selectedConceptId} not found in storyboard styles`, storyboard.styles);
+        }
         if (styleIndex !== -1) {
           const currentStyle = storyboard.styles[styleIndex];
           const sceneIndex = currentStyle.images.findIndex(s => s.sceneNumber === selectedScene.sceneNumber);
@@ -1905,7 +1912,7 @@ const Step4 = ({
               document.body
             )}
             {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) - Portal 사용 */}
-            {synthesisMode === 'person' && createPortal(
+            {showPersonModal && synthesisMode === 'person' && createPortal(
               <>
                 <div
                   className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[1px]"
