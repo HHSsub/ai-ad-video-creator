@@ -1520,7 +1520,7 @@ const Step4 = ({
                                 )}
 
                                 <img
-                                  src={`${getImageSrc(img.imageUrl)}?t=${Date.now()}`}
+                                  src={getImageSrc(img.imageUrl)}
                                   alt={`Scene ${img.sceneNumber}`}
                                   className={`w-full h-full object-contain transition-opacity duration-300 ${imageLoadStates[img.sceneNumber] ? 'opacity-100' : 'opacity-0'
                                     }`}
