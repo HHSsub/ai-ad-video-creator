@@ -142,8 +142,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.70; // 🔥 Slightly reduced to keep scene context
-            guidanceScale = 15.0; // 🔥 LOWERED from 20 to 7.5 to Stop Text Hallucinations & Use Reference Image
+            strength = 0.45; // 🔥 Drastically lowered to PRESERVE original scene (User Complaint: "Background destroyed")
+            guidanceScale = 5.0; // 🔥 Minimized to prevent "Fake Logo" hallucinations. Relies on Reference Image.
             // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
             negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated";
         }
