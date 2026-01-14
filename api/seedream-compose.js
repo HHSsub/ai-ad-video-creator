@@ -96,7 +96,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
 
         } else if (type === 'logo') {
             // Logo Prompt
-            strictPrompt = "Insert the uploaded logo in the exact center of the image. Keep the logo's original shape, colors, and aspect ratio strictly unchanged. No distortion, no perspective tilt, no text hallucination. Apply as a clean, high-quality flat overlay with distinct edges. Professional branding style.";
+            strictPrompt = "Directly overlay the uploaded logo image. COPY AND PASTE STYLE. Strictly maintain the logo's original geometry, spelling, and colors. Do not blend, do not artisticize. The logo must be clearly visible and legible. No distortion.";
         }
 
         let basePrompt = compositingInfo.sceneDescription
@@ -142,8 +142,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.20; // 🔥 Only 20% change allowed. Keeps 80% of original pixels (People/Background).
-            guidanceScale = 3.0; // 🔥 Minimal text influence. Forces usage of Reference Image for Logo.
+            strength = 0.35; // 🔥 Sweet Spot: 0.2 was too invisible, 0.7 destroyed bg. 0.35 allows logo insertion.
+            guidanceScale = 12.5; // 🔥 High Guidance: FORCE the "Insert Logo" instruction to be obeyed strictly.
             // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
             negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated";
         }
