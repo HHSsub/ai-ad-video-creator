@@ -1510,10 +1510,10 @@ const Step4 = ({
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* 🔥 씬 삭제 버튼 */}
+                        {/* 🔥 씬 삭제 버튼 (Use Stable ID) */}
                         {permissions.editPrompt && (
                           <button
-                            onClick={() => handleDeleteScene(img.sceneNumber)}
+                            onClick={() => handleDeleteScene(img.originalSceneNumber)}
                             className="flex items-center gap-1 px-2 py-1 bg-red-900/30 hover:bg-red-900/60 text-red-400 hover:text-red-300 rounded transition-colors text-xs border border-red-900/50"
                             title="이 씬을 영구 삭제합니다"
                           >
