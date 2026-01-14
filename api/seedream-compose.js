@@ -122,16 +122,20 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // 🔥 Dynamic Parameters based on Strategy
         let strength = 0.65;
         let guidanceScale = 15.0;
+        // Default Negative Prompt
+        let negativePrompt = "deformed, distorted, wrong identity, mixed race, different person, blurry, low quality, bad anatomy, ghosting, text, watermark";
 
         if (type === 'person') {
-            strength = 0.65; // Balanced for person swap
+            strength = 0.65;
             guidanceScale = 15.0;
         } else if (type === 'product') {
-            strength = 0.60; // Lower strength to preserve scene structure
+            strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.55; // Minimal change to background, just insert logo
-            guidanceScale = 17.0; // Very high adherence to logo reference
+            strength = 0.55;
+            guidanceScale = 17.0;
+            // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
+            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated";
         }
 
         const payload = {
@@ -142,7 +146,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength: strength,
             guidance_scale: guidanceScale,
             num_inference_steps: 30,
-            negative_prompt: "deformed, distorted, wrong identity, mixed race, different person, blurry, low quality, bad anatomy, ghosting, text, watermark",
+            negative_prompt: negativePrompt,
             // 🔥 Dynamic Aspect Ratio
             aspect_ratio: compositingInfo?.aspectRatio || undefined
         };
