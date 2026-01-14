@@ -147,7 +147,14 @@ export async function getResponses(req, res) {
 
         // JSON 파일 목록 읽기
         const files = fs.readdirSync(responsesDir)
-            .filter(f => f.startsWith(`${engineId}_${promptType}_`) && f.endsWith('.json')) // 🔥 엔진 및 타입별 정밀 필터링
+            .filter(f => {
+                // 🔥 완화된 필터링: engineId와 promptType 포함 여부만 체크
+                // 파일명 예: seedream-v4_kling-v2-5-pro_auto_product_storyboard_storyboard_unified_1768365941115.json
+                const isJson = f.endsWith('.json');
+                const hasEngineId = f.includes(engineId);
+                const hasPromptType = f.includes(promptType);
+                return isJson && hasEngineId && hasPromptType;
+            })
             .map(filename => {
                 const filePath = path.join(responsesDir, filename);
                 const stats = fs.statSync(filePath);
