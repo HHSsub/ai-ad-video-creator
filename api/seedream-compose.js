@@ -106,9 +106,9 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // 🔥 CRITICAL FIX: Sanitize prompt for LOGO mode
         // Remove camera brands that cause logo hallucinations (e.g. "ARRI", "Sony", "Canon")
         if (type === 'logo') {
+            // 🔥 Context Restoration: Do NOT replace prompt with generic "background scene". 
+            // Keep the sanitized original prompt so AI knows the context (e.g. "People eating").
             basePrompt = basePrompt.replace(/ARRI|Alexa|Canon|Sony|Nikon|Red|shot on|camera|advertisement|text|font|typography/gi, "");
-            // Reduce prompt influence further
-            basePrompt = "background scene, high quality";
         }
 
         // 최종 프롬프트 조합
@@ -142,8 +142,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.45; // 🔥 Drastically lowered to PRESERVE original scene (User Complaint: "Background destroyed")
-            guidanceScale = 5.0; // 🔥 Minimized to prevent "Fake Logo" hallucinations. Relies on Reference Image.
+            strength = 0.30; // 🔥 Only 30% change allowed. Keeps 70% of original pixels (People/Background).
+            guidanceScale = 3.5; // 🔥 Minimal text influence. Forces usage of Reference Image for Logo.
             // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
             negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated";
         }
