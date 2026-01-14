@@ -93,7 +93,7 @@ const Step4 = ({
       };
     });
     return result;
-  }, [images]);
+  }, [images, forceUpdate]);
 
   const finalVideo = storyboard?.finalVideos?.find(v => v.conceptId === selectedConceptId);
 
