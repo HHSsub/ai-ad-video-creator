@@ -1307,7 +1307,8 @@ const Step4 = ({
           sceneImage: selectedScene.imageUrl,
           personImage: referenceImagePayload,
           personMetadata: metadata,
-          sceneContext: selectedScene.prompt || selectedScene.copy,
+          // 🔥 Use getEditedPrompt to ensure we send the User's LATEST edit, not stale DB data
+          sceneContext: getEditedPrompt(selectedScene.sceneNumber, 'prompt', selectedScene.prompt) || selectedScene.copy,
           projectId: currentProject?.id, // Use currentProject?.id
           aspectRatio: formData?.aspectRatioCode, // Use formData?.aspectRatioCode
           synthesisType: synthesisMode // 🔥 Pass synthesis type
