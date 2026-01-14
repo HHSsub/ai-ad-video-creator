@@ -97,7 +97,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         } else if (type === 'logo') {
             // Logo Prompt
             // 🔥 Removing the word "logo" to prevent AI from writing the text "LOGO"
-            strictPrompt = "Directly overlay the provided brand graphics. COPY AND PASTE STYLE. Strictly maintain the original geometry, spelling, and colors of the reference image(excluding non-logo color,background color). Do not blend, do not artisticize. The graphics must be clearly visible and legible. No distortion.";
+            strictPrompt = "Overlay the provided brand graphics ON TOP OF the existing background. COPY AND PASTE STYLE. Strictly maintain the original geometry, spelling, and colors of the reference image. The graphics must be distinct and floating on top. Do not blend into the scene.";
         }
 
         let basePrompt = compositingInfo.sceneDescription
@@ -124,7 +124,9 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // We minimize the basePrompt to just context.
         const finalPrompt = type === 'person'
             ? `${subjectPrompt}${basePrompt}, ${strictPrompt}`
-            : `${strictPrompt}, ${basePrompt}`;
+            : type === 'logo'
+                ? `${strictPrompt}` // 🔥 Pure Overlay: Ignore scene description to prevent blending/hallucination
+                : `${strictPrompt}, ${basePrompt}`;
 
         // 2. 입력 이미지 구성 (Reference Image)
         const references = [];
@@ -150,10 +152,10 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.60;
             guidanceScale = 15.0;
         } else if (type === 'logo') {
-            strength = 0.30; // Reduced to 0.30 for safety
-            guidanceScale = 2.5; // 🔥 CRITICAL: Dropped to 2.5. Prevents "Write LOGO" behavior. Forces visual transfer.
+            strength = 0.40; // Increased to 0.40 to ensure logo visibility (0.30 was too faint)
+            guidanceScale = 12.0; // 🔥 Increased to 12.0 to force structure relative to Reference Image.
             // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
-            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object, text, typography, logo";
+            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object, text, typography, logo, blending, transparency";
         }
 
         const payload = {
