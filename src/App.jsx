@@ -224,9 +224,9 @@ function App() {
   const handleSelectProject = async (project) => {
     setCurrentProject(project);
 
-    // 프로젝트 데이터 로드
+    // 프로젝트 데이터 로드 (🔥 Cache Busting Added)
     try {
-      const response = await fetch(`/nexxii/api/projects/${project.id}`, {
+      const response = await fetch(`/nexxii/api/projects/${project.id}?t=${Date.now()}`, {
         headers: {
           'x-username': user?.username || 'anonymous'
         }
