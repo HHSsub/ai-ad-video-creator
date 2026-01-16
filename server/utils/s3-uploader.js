@@ -31,7 +31,9 @@ export async function uploadImageToS3(imageUrl, projectId, conceptId, sceneNumbe
         console.log(`[S3] 다운로드 완료: ${(buffer.byteLength / 1024).toFixed(2)} KB`);
 
         // 2. S3 키 생성 (nexxii-storage 접두어 필수)
-        const s3Key = `nexxii-storage/projects/${projectId}/images/concept_${conceptId}_scene_${sceneNumber}.jpg`;
+        // 🔥 Add timestamp to force new file on each regeneration (cache busting)
+        const timestamp = Date.now();
+        const s3Key = `nexxii-storage/projects/${projectId}/images/concept_${conceptId}_scene_${sceneNumber}_${timestamp}.jpg`;
 
         // 3. S3 업로드
         const upload = new Upload({
