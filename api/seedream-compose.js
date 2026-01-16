@@ -73,7 +73,10 @@ async function isolateSubject(buffer) {
 
         // 2. Feathering (Blur Alpha Channel to soften edges)
         // Extract Alpha -> Blur -> Recombine
-        const alpha = await sharp(transparentBuffer).extractChannel('alpha').toBuffer();
+        const alpha = await sharp(transparentBuffer)
+            .extractChannel('alpha')
+            .raw() // Force RAW buffer for next step
+            .toBuffer();
         const blurredAlpha = await sharp(alpha, {
             raw: { width: info.width, height: info.height, channels: 1 }
         })
@@ -165,7 +168,11 @@ async function eraseOriginalObject(baseBuffer, layoutConfig, baseMeta, compositi
 
 async function generateDilatedMask(overlayBuffer, left, top, baseMeta) {
     // 1. Extract Alpha
-    const alpha = await sharp(overlayBuffer).ensureAlpha().extractChannel('alpha').toBuffer();
+    const alpha = await sharp(overlayBuffer)
+        .ensureAlpha()
+        .extractChannel('alpha')
+        .raw() // Force RAW buffer for next step
+        .toBuffer();
     const overlayMeta = await sharp(overlayBuffer).metadata();
 
     // 2. Dilate (Blur expands white into black)
