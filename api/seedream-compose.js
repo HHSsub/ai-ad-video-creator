@@ -150,8 +150,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.65;
             guidanceScale = 15.0;
         } else if (type === 'product') {
-            strength = 0.75; // Balance: Limit background damage while forcing object change
-            guidanceScale = 20.0; // 🔥 MAX ADHERENCE to "Seamless replacement"
+            strength = 0.92; // 🔥 Aggressive Replacement: User reports 0.75 still preserves original object too much
+            guidanceScale = 20.0;
         } else if (type === 'logo') {
             // 🔥 FIXED: Strength 0.05 was too low to Insert new pixels. 
             // 0.40 allows inserting the logo while keeping 60% of original coherence.

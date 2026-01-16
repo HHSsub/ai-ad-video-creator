@@ -1918,7 +1918,8 @@ const Step4 = ({
                     top: modalPosition.top,
                     left: modalPosition.left,
                     width: '320px',
-                    maxHeight: '90vh'
+                    maxHeight: '90vh',
+                    marginLeft: '115px' // 🔥 Center 320px in 550px space: (550-320)/2 = 115
                   }}>
                   <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                     <h3 className="text-lg font-bold text-white">이미지 합성 유형 선택</h3>
@@ -1952,7 +1953,8 @@ const Step4 = ({
                     top: modalPosition.top,
                     left: modalPosition.left,
                     width: '400px',
-                    maxHeight: '90vh'
+                    maxHeight: '90vh',
+                    marginLeft: '75px' // 🔥 Center 400px in 550px space: (550-400)/2 = 75
                   }}>
                   <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                     <h3 className="text-lg font-bold text-white">
