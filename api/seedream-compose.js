@@ -227,8 +227,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.15; // User Mandate
             guidanceScale = 12.0; // User Mandate
 
-            // Strict Fidelity Prompt
-            finalPrompt = `Maintain the original product's detail and shape perfectly, only adjust the lighting and shadows to match the background. ${baseDescription}`;
+            // Strict Fidelity Prompt (Visual Only - No Text Context)
+            finalPrompt = "High fidelity reproduction of the reference product image. Isolate the object and apply realistic lighting and shadows cast by the environment in the base image. Do not alter the object's texture, color, or text.";
 
             negativePrompt = "distortion, shape change, new object, text, watermark, logo, hallucination, painting, cartoon, drawing, low quality";
         }

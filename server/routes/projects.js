@@ -194,20 +194,33 @@ router.patch('/:id', async (req, res) => {
       // 🔥 Granular Storyboard Update (Partial - Race Condition 방지)
       if (storyboardUpdate) {
         const { conceptId, sceneNumber, updates } = storyboardUpdate;
+        console.log(`[projects PATCH] 🛠️ 부분 업데이트 요청 received: Concept=${conceptId}, Scene=${sceneNumber}`, updates);
+
         const styleIndex = project.storyboard.styles.findIndex(s => String(s.conceptId) === String(conceptId));
+
         if (styleIndex !== -1) {
           const images = project.storyboard.styles[styleIndex].images;
-          // 🔥 Fix: Search by originalSceneNumber (DB ID) if available, fallback to sceneNumber
-          const imgIndex = images.findIndex(img =>
-            String(img.originalSceneNumber || img.sceneNumber) === String(sceneNumber)
-          );
+
+          // 🔥 Fix: Search by originalSceneNumber (DB ID) OR sceneNumber (Visual ID)
+          // Also logging strictly to identify why it fails
+          let imgIndex = images.findIndex(img => String(img.originalSceneNumber) === String(sceneNumber));
+
+          if (imgIndex === -1) {
+            // Fallback: Check visual scene number
+            imgIndex = images.findIndex(img => String(img.sceneNumber) === String(sceneNumber));
+          }
+
           if (imgIndex !== -1) {
             // 필드별 병합 업데이트
             Object.assign(images[imgIndex], updates);
             console.log(`[projects PATCH] ✅ 씬 부분 업데이트 완료: Project ${id}, Concept ${conceptId}, Scene ${sceneNumber}`);
           } else {
             console.warn(`[projects PATCH] ⚠️ 씬을 찾을 수 없음: Project ${id}, Concept ${conceptId}, Scene ${sceneNumber}`);
+            console.warn(`[projects PATCH]   Available Scenes: ${images.map(i => `Scene:${i.sceneNumber}/Orig:${i.originalSceneNumber}`).join(', ')}`);
           }
+        } else {
+          console.warn(`[projects PATCH] ⚠️ 스타일(컨셉)을 찾을 수 없음: Project ${id}, Concept ${conceptId}`);
+          console.warn(`[projects PATCH]   Available Styles: ${project.storyboard.styles.map(s => s.conceptId).join(', ')}`);
         }
       }
 
