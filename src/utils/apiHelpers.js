@@ -393,8 +393,10 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
       const processingTime = Date.now() - requestStartTime;
 
       if (!response.ok) {
-        const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const responseBody = await response.text();
+        const error = new Error(`HTTP ${response.status}: ${response.statusText} - ${responseBody}`);
         error.status = response.status;
+        console.error(`[${label}] ❌ HTTP Error Body:`, responseBody);
 
         apiKeyManager.markKeyError('freepik', keyIndex, error.message);
 
