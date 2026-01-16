@@ -150,13 +150,15 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             strength = 0.65;
             guidanceScale = 15.0;
         } else if (type === 'product') {
-            strength = 0.60;
-            guidanceScale = 15.0;
+            strength = 0.75; // Balance: Limit background damage while forcing object change
+            guidanceScale = 20.0; // 🔥 MAX ADHERENCE to "Seamless replacement"
         } else if (type === 'logo') {
-            strength = 0.05; // 🔥 EMERGENCY: 95% preservation, only 5% modification
-            guidanceScale = 3.0; // 🔥 EMERGENCY: Minimal AI interpretation, let reference image dominate
-            // 🔥 Remove 'text' and 'watermark' from negative prompt for Logo
-            negativePrompt = "deformed, distorted, blurry, low quality, ghosting, pixelated, white box, product, object, blending, transparency, relighting, recreation, deformation, color shift, text error, background change, person change, scene reconstruction";
+            // 🔥 FIXED: Strength 0.05 was too low to Insert new pixels. 
+            // 0.40 allows inserting the logo while keeping 60% of original coherence.
+            strength = 0.40;
+            guidanceScale = 20.0; // 🔥 HARD LIMIT: Force "Pixel Perfect" copy
+            // 🔥 Strict Negative Prompt
+            negativePrompt = "hallucination, text, letters, typography, new design, variation, distortion, rendering, 3d, shadow, wall texture, background change, creative, artistic";
         }
 
         const payload = {
