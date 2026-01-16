@@ -1,5 +1,6 @@
 // api/seedream-compose.js - Freepik Seedream Integration with Hybrid Composition (Stamp & Blend)
 // Refactored: Sharp Pre-processing + AI Harmonization + Context Aware Positioning
+// EMERGENCY UPDATE: STRICT PRODUCT FIDELITY (Strength 0.12 + No Distortion)
 
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
 import { getTextToImageUrl, getTextToImageStatusUrl } from '../src/utils/engineConfigLoader.js';
@@ -86,7 +87,9 @@ async function stampImage(baseSource, overlaySource, type, compositingInfo) {
             if (typeof targetCoordinates.x === 'number') targetX = targetCoordinates.x;
             if (typeof targetCoordinates.y === 'number') targetY = targetCoordinates.y;
             if (typeof targetCoordinates.w === 'number') scaleFactor = targetCoordinates.w;
-            // Height ratio (h) is usually auto-calculated by aspect ratio, but logic could be added if needed
+        } else if (type === 'product' && !sceneDescription) {
+            // 🔥 WARNING for User's demand: Coordinate missing
+            console.warn('[Stamp] WARNING: Product composition requested without Explicit Coordinates or Context. Applying Fallback (Center-Bottom).');
         }
 
         console.log(`[Stamp] Final Layout: X=${targetX.toFixed(2)}, Y=${targetY.toFixed(2)}, Scale=${scaleFactor.toFixed(2)}`);
@@ -172,7 +175,7 @@ async function pollSeedreamStatus(taskId) {
  */
 export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, compositingInfo) {
     try {
-        console.log('[safeComposeWithSeedream] Hybrid Composition v2 Start');
+        console.log('[safeComposeWithSeedream] Hybrid Composition v3 (Strict Fidelity) Start');
         const type = compositingInfo.synthesisType || 'person'; // person, product, logo
 
         let finalImagePayload = {};
@@ -184,8 +187,9 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
 
         let baseDescription = compositingInfo.sceneDescription || "High quality photo";
 
-        if (type === 'logo') {
-            baseDescription = baseDescription.replace(/ARRI|Alexa|Canon|camera|advertisement|text|font|typography|logo/gi, "");
+        // Remove hallucinogenic keywords
+        if (type === 'logo' || type === 'product') {
+            baseDescription = baseDescription.replace(/ARRI|Alexa|Canon|camera|advertisement|text|font|typography|logo|packshot|product shot/gi, "");
             if (baseDescription.length > 100) baseDescription = baseDescription.substring(0, 100);
         }
 
@@ -198,25 +202,29 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
 
             references = [];
             strength = 0.20; // Shape preservation
-            guidanceScale = 12.0;
+            guidanceScale = 15.0; // Strict adherence
 
             finalPrompt = `${baseDescription}. seamless integration of the logo, natural lighting, photorealistic, 8k. Do not distort text.`;
             negativePrompt = "text distortion, font change, hallucination, new letters, 3d render, blurry";
         }
 
         // ===================================
-        // 🚀 TYPE B: PRODUCT (Stamp + Shadow AI)
+        // 🚀 TYPE B: PRODUCT (Stamp + Shadow AI ONLY)
         // ===================================
         else if (type === 'product') {
             const stampedBase64 = await stampImage(baseImageUrl, overlayImageData, 'product', compositingInfo);
             finalImagePayload = { base64: stampedBase64 };
 
             references = [];
-            strength = 0.35; // Shadow generation
-            guidanceScale = 15.0;
+            // 🔥 EMERGENCY FIX: Strength lowered to 0.12 (from 0.35)
+            // This ensures NO RE-GENERATION of the object, only slight blending with background noise/lighting.
+            strength = 0.12;
+            guidanceScale = 20.0; // 🔥 Force strict adherence to the input image (stamped)
 
-            finalPrompt = `Product photography, ${baseDescription}. Natural lighting integration, drop shadow, seamless blending, photorealistic.`;
-            negativePrompt = "floating object, bad perspective, wrong lighting, product distortion, cartoon";
+            // 🔥 USER MANDATED PROMPT
+            finalPrompt = `Maintain the original product's detail and shape perfectly, only adjust the lighting and shadows to match the background. ${baseDescription}`;
+
+            negativePrompt = "distortion, shape change, new object, text, watermark, logo, hallucination, painting, cartoon, drawing, low quality";
         }
 
         // ===================================
