@@ -1682,7 +1682,7 @@ const Step4 = ({
                                 disabled={isRegenerating}
                                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm"
                               >
-                                {isRegenerating ? '이미지 생성 중...' : '🔄 이미지 재생성 (새로운 변형)'}
+                                {isRegenerating ? '이미지 생성 중...' : '🔄 이미지 재생성'}
                               </button>
                             )}
 
