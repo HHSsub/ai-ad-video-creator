@@ -327,7 +327,8 @@ export default async function handler(req, res) {
             const compositingInfo = {
               videoPurpose: 'product_placement',
               compositingContext: 'INTEGRATE_PRODUCT_INTO_SCENE',
-              sceneDescription: currentPrompt.replace(/\[.*?\]/g, '').trim() // 태그 제거한 설명
+              sceneDescription: currentPrompt.replace(/\[.*?\]/g, '').trim(),
+              aspectRatio: imagePrompt.aspect_ratio // 🔥 Critical Fix: Maintain Ratio // 태그 제거한 설명
             };
 
             const compResult = await safeComposeWithSeedream(result.imageUrl, req.body.productImageUrl, compositingInfo);
@@ -388,7 +389,8 @@ export default async function handler(req, res) {
             const compositingInfo = {
               videoPurpose: 'person_integration',
               compositingContext: 'INTEGRATE_PERSON_INTO_SCENE',
-              sceneDescription: currentPrompt
+              sceneDescription: currentPrompt,
+              aspectRatio: imagePrompt.aspect_ratio // 🔥 Critical Fix: Maintain Ratio
             };
 
             const compResult = await safeComposeWithSeedream(result.imageUrl, personUrl, compositingInfo);

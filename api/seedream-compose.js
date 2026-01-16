@@ -215,13 +215,19 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             const stampedBase64 = await stampImage(baseImageUrl, overlayImageData, 'product', compositingInfo);
             finalImagePayload = { base64: stampedBase64 };
 
-            references = [];
-            // 🔥 EMERGENCY FIX: Strength lowered to 0.12 (from 0.35)
-            // This ensures NO RE-GENERATION of the object, only slight blending with background noise/lighting.
-            strength = 0.12;
-            guidanceScale = 20.0; // 🔥 Force strict adherence to the input image (stamped)
+            // 🔥 RE-ENABLE REFERENCE (Urgent User Fix)
+            // Must pass the original overlay as reference to prevent hallucination
+            if (overlayImageData.startsWith('http')) {
+                references.push({ image: { url: overlayImageData } });
+            } else {
+                const base64Clean = overlayImageData.replace(/^data:image\/\w+;base64,/, "");
+                references.push({ image: { base64: base64Clean } });
+            }
 
-            // 🔥 USER MANDATED PROMPT
+            strength = 0.15; // User Mandate
+            guidanceScale = 12.0; // User Mandate
+
+            // Strict Fidelity Prompt
             finalPrompt = `Maintain the original product's detail and shape perfectly, only adjust the lighting and shadows to match the background. ${baseDescription}`;
 
             negativePrompt = "distortion, shape change, new object, text, watermark, logo, hallucination, painting, cartoon, drawing, low quality";
@@ -267,6 +273,8 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             negative_prompt: negativePrompt,
             aspect_ratio: compositingInfo?.aspectRatio || undefined
         };
+
+        console.log(`[Hybrid Compose] Ratio: ${payload.aspect_ratio || 'Default'}, Strength: ${strength}, Prompt: "${finalPrompt.substring(0, 50)}..."`);
 
         const result = await safeCallFreepik(url, {
             method: 'POST',
