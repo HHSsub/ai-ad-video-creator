@@ -182,8 +182,9 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         const negativePrompt = "morphing, structural change, altering identity, changing colors, distorted labels, hallucination, blurry, low quality, stylized, cartoon, painting, different object type, logo change, artistic interpretation.";
 
         // [REF-REQ-3C] Hyperparameter Enforcement
-        const strength = 0.05; // Strict range 0.05-0.10. Start with lower bound for max fidelity.
-        const guidanceScale = 25.0; // Strict adherence force.
+        // [REF-REQ-3C] Hyperparameter Enforcement
+        const strength = 0.1; // Adjusted to safe lower bound (User range: 0.05-0.10)
+        const guidanceScale = 20.0; // API Max Limit (User wanted 25, but API caps at 20)
         const numInferenceSteps = 50; // Max quality.
 
         // Step A: Sharp Stamping (Anchor)
