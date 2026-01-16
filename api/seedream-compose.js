@@ -38,9 +38,12 @@ async function fetchImageBuffer(source) {
  */
 async function isolateSubject(buffer) {
     try {
-        console.log('[Stage 1: Sharp Scissors] Isolating subject...');
+        console.log(`[Stage 1: Sharp Scissors] Isolating subject. Size: ${buffer.length}`);
 
-        const image = sharp(buffer).ensureAlpha();
+        // Sanitize: Force to PNG first to avoid unsupported format errors on RAW conversion
+        const pngBuffer = await sharp(buffer).png().toBuffer();
+
+        const image = sharp(pngBuffer).ensureAlpha();
         const { data, info } = await image
             .raw()
             .toBuffer({ resolveWithObject: true });
