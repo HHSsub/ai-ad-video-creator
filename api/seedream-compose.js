@@ -1,14 +1,15 @@
 // api/seedream-compose.js - Freepik Seedream Integration with Hybrid Composition (Stamp & Blend)
-// Refactored: Sharp Pre-processing + AI Harmonization + Context Aware Positioning
-// EMERGENCY UPDATE: STRICT PRODUCT FIDELITY (Strength 0.12 + No Distortion)
+// Refactored: Universal High-Fidelity Composition Engine
+// Strategy: Hybrid Anchor-Blend (Sharp Stamping + AI Relighting)
+// V5.0 - Universal "Anti-Hallucination" Update
 
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
 import { getTextToImageUrl, getTextToImageStatusUrl } from '../src/utils/engineConfigLoader.js';
 import sharp from 'sharp';
 import fetch from 'node-fetch';
 
-const POLLING_TIMEOUT = 180000; // 3분 타임아웃
-const POLLING_INTERVAL = 3000; // 3초 간격 폴링
+const POLLING_TIMEOUT = 180000; // 3 minutes timeout
+const POLLING_INTERVAL = 3000; // 3 seconds interval
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -22,6 +23,7 @@ async function fetchImageBuffer(source) {
     if (source.startsWith('http')) {
         const res = await fetch(source);
         if (!res.ok) throw new Error(`Failed to fetch image: ${res.statusText}`);
+        // [REF-REQ-3A] Replace buffer() with arrayBuffer()
         const arrayBuffer = await res.arrayBuffer();
         return Buffer.from(arrayBuffer);
     } else {
@@ -32,11 +34,8 @@ async function fetchImageBuffer(source) {
 }
 
 /**
- * 선-합성 (Stamp) 함수 - Context-Aware Positioning
- * @param {string} baseSource - 배경 이미지
- * @param {string} overlaySource - 오버레이 이미지
- * @param {string} type - 'logo' | 'product'
- * @param {object} compositingInfo - 위치/크기 정보 및 맥락
+ * Step A: Pixel Anchor (Sharp Stamping)
+ * Physically pastes the product onto the background to ensure shape/text fidelity.
  */
 async function stampImage(baseSource, overlaySource, type, compositingInfo) {
     try {
@@ -47,76 +46,69 @@ async function stampImage(baseSource, overlaySource, type, compositingInfo) {
         const baseImage = sharp(baseBuffer);
         const baseMeta = await baseImage.metadata();
 
-        // 1. 초기화 (Defaults)
-        // 좌표는 0.0 ~ 1.0 비율 (중심점 기준)
-        let targetX = 0.5; // Center
-        let targetY = 0.5; // Center
-        let scaleFactor = 0.35; // Default Width Ratio
+        // 1. Defaults (Center)
+        let targetX = 0.5;
+        let targetY = 0.5;
+        let scaleFactor = 0.35; // Standard Product Size
 
         const { targetCoordinates, sceneDescription } = compositingInfo || {};
         const prompt = (sceneDescription || "").toLowerCase();
 
-        // 2. 전략별 기본값 설정 (Type Strategy)
+        // 2. Strategy Defaults (can be overridden by context)
         if (type === 'logo') {
-            targetY = 0.15; // 상단 헤더 (안전 구역)
-            scaleFactor = 0.20; // 로고는 작게
-        } else if (type === 'product') {
-            targetY = 0.75; // 하단 테이블/바닥 영역
-            scaleFactor = 0.35; // 제품은 적당한 크기
+            targetY = 0.15; // Header area for logos
+            scaleFactor = 0.20;
+        } else {
+            // Universal Product/Object placement default: Lower Center
+            targetY = 0.70;
+            scaleFactor = 0.40;
         }
 
-        // 3. 문맥 분석 (Context Parsing)
-        // 크기 보정
+        // 3. Context Parsing (Simple NLP for positioning)
+        // Zoom/Scale
         if (prompt.includes('close up') || prompt.includes('macro') || prompt.includes('zoom')) scaleFactor *= 1.3;
         if (prompt.includes('wide shot') || prompt.includes('far') || prompt.includes('distant')) scaleFactor *= 0.7;
 
-        // 위치 보정
+        // X-Axis
         if (prompt.includes('left')) targetX = 0.25;
         if (prompt.includes('right')) targetX = 0.75;
-
-        // Vertical 보정은 신중하게 (Product는 바닥 유지)
-        if (prompt.includes('top') || prompt.includes('upper') || prompt.includes('ceiling')) targetY = 0.20;
-        // 'Bottom' is usually the default for product, but explicit query reinforces it
-        if (prompt.includes('bottom') || prompt.includes('lower') || prompt.includes('floor')) targetY = 0.80;
-
-        // 정중앙 명시
         if (prompt.includes('center') || prompt.includes('middle')) targetX = 0.5;
 
-        // 4. 명시적 좌표 오버라이드 (Explicit Override)
+        // Y-Axis
+        if (prompt.includes('top') || prompt.includes('upper') || prompt.includes('ceiling')) targetY = 0.25;
+        if (prompt.includes('bottom') || prompt.includes('lower') || prompt.includes('floor') || prompt.includes('table')) targetY = 0.75;
+
+        // 4. Explicit Overrides (Priority)
         if (targetCoordinates) {
             console.log('[Stamp] Using explicit coordinates:', targetCoordinates);
             if (typeof targetCoordinates.x === 'number') targetX = targetCoordinates.x;
             if (typeof targetCoordinates.y === 'number') targetY = targetCoordinates.y;
             if (typeof targetCoordinates.w === 'number') scaleFactor = targetCoordinates.w;
-        } else if (type === 'product' && !sceneDescription) {
-            // 🔥 WARNING for User's demand: Coordinate missing
-            console.warn('[Stamp] WARNING: Product composition requested without Explicit Coordinates or Context. Applying Fallback (Center-Bottom).');
         }
 
         console.log(`[Stamp] Final Layout: X=${targetX.toFixed(2)}, Y=${targetY.toFixed(2)}, Scale=${scaleFactor.toFixed(2)}`);
 
-        // 5. 물리적 계산 (Pixel Calculation)
+        // 5. Pixel Calculation
         const targetWidthPx = Math.round(baseMeta.width * scaleFactor);
 
-        // 리사이징
+        // Resize Overlay
         const overlayResized = await sharp(overlayBuffer)
-            .resize({ width: targetWidthPx }) // height auto (maintain aspect ratio)
+            .resize({ width: targetWidthPx }) // Auto height
             .toBuffer();
 
         const overlayMeta = await sharp(overlayResized).metadata();
 
-        // 위치 계산 (Center Origin -> Top-Left Origin)
+        // Calculate Top-Left Origin from Center Ratio
         let left = Math.round((baseMeta.width * targetX) - (overlayMeta.width / 2));
         let top = Math.round((baseMeta.height * targetY) - (overlayMeta.height / 2));
 
-        // 경계 검사 (Bounds Check)
-        // 이미지가 화면 밖으로 나가지 않도록 Clamp
+        // Bounds Clamp
         left = Math.max(0, Math.min(left, baseMeta.width - overlayMeta.width));
         top = Math.max(0, Math.min(top, baseMeta.height - overlayMeta.height));
 
         console.log(`[Stamp] Pixel Position: left=${left}, top=${top}, width=${targetWidthPx}`);
 
-        // 6. 합성 (Composite)
+        // 6. Execute Composite
         const resultBuffer = await baseImage
             .composite([{ input: overlayResized, left, top }])
             .toBuffer();
@@ -150,132 +142,80 @@ async function pollSeedreamStatus(taskId) {
                 if (status === 'COMPLETED') {
                     if (generated && generated.length > 0) {
                         const finalUrl = typeof generated[0] === 'string' ? generated[0] : generated[0].url;
-                        console.log(`[Seedream] 합성 완료. URL: ${finalUrl}`);
+                        console.log(`[Seedream] Synthesis Complete. URL: ${finalUrl}`);
                         if (!finalUrl) throw new Error('URL extraction failed from generated result');
                         return finalUrl;
                     }
-                    throw new Error('상태는 완료되었으나 생성된 이미지가 없습니다.');
+                    throw new Error('Status completed but no image generated.');
                 } else if (status === 'FAILED') {
-                    throw new Error('이미지 합성 태스크 실패 (Freepik 쪽 오류)');
+                    throw new Error('Image synthesis task failed (Freepik side).');
                 }
                 await sleep(POLLING_INTERVAL);
             } else {
-                throw new Error('상태 확인 응답이 올바르지 않습니다.');
+                throw new Error('Invalid status response.');
             }
         } catch (err) {
-            console.error(`[Seedream] 폴링 중 오류: ${err.message}`);
+            console.error(`[Seedream] Polling error: ${err.message}`);
             if (Date.now() - startTime > POLLING_TIMEOUT) throw err;
             await sleep(POLLING_INTERVAL);
         }
     }
-    throw new Error(`이미지 합성 시간 초과 (${POLLING_TIMEOUT}ms)`);
+    throw new Error(`Synthesis timeout (${POLLING_TIMEOUT}ms)`);
 }
 
 /**
- * Seedream v4-edit을 이용한 이미지 합성 함수 (Hybrid Engineering Optimized)
+ * safeComposeWithSeedream
+ * The Universal Engine for 100% Fidelity Composition
  */
 export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, compositingInfo) {
     try {
-        console.log('[safeComposeWithSeedream] Hybrid Composition v3 (Strict Fidelity) Start');
-        const type = compositingInfo.synthesisType || 'person'; // person, product, logo
+        console.log('[safeComposeWithSeedream] Starting Universal High-Fidelity Composition');
 
-        let finalImagePayload = {};
+        const type = compositingInfo.synthesisType || 'product'; // Default to product
+        const baseDescription = compositingInfo.sceneDescription || "A professional studio scene";
+
+        // [REF-REQ-3B] Dynamic Prompting
+        // "A professional high-fidelity photo. The exact object from the reference image must be maintained with 100% visual identity, including its original shape, texture, color, and branding. Place this object into the scene: ${baseDescription}. Apply realistic environmental lighting and cast natural contact shadows to match the background perfectly. NO alterations to the object itself."
+
+        const finalPrompt = `A professional high-fidelity photo. The exact object from the reference image must be maintained with 100% visual identity, including its original shape, texture, color, and branding. Place this object into the scene: ${baseDescription}. Apply realistic environmental lighting and cast natural contact shadows to match the background perfectly. NO alterations to the object itself.`;
+
+        const negativePrompt = "morphing, structural change, altering identity, changing colors, distorted labels, hallucination, blurry, low quality, stylized, cartoon, painting, different object type, logo change, artistic interpretation.";
+
+        // [REF-REQ-3C] Hyperparameter Enforcement
+        const strength = 0.05; // Strict range 0.05-0.10. Start with lower bound for max fidelity.
+        const guidanceScale = 25.0; // Strict adherence force.
+        const numInferenceSteps = 50; // Max quality.
+
+        // Step A: Sharp Stamping (Anchor)
+        const stampedBase64 = await stampImage(baseImageUrl, overlayImageData, type, compositingInfo);
+
+        // Prepare References
+        // [REF-REQ-4.3] Reference images must contain the original high-res product
         let references = [];
-        let finalPrompt = "";
-        let negativePrompt = "";
-        let strength = 0.5;
-        let guidanceScale = 15.0;
-
-        let baseDescription = compositingInfo.sceneDescription || "High quality photo";
-
-        // Remove hallucinogenic keywords
-        if (type === 'logo' || type === 'product') {
-            baseDescription = baseDescription.replace(/ARRI|Alexa|Canon|camera|advertisement|text|font|typography|logo|packshot|product shot/gi, "");
-            if (baseDescription.length > 100) baseDescription = baseDescription.substring(0, 100);
+        if (overlayImageData.startsWith('http')) {
+            references.push({ image: { url: overlayImageData } });
+        } else {
+            const base64Clean = overlayImageData.replace(/^data:image\/\w+;base64,/, "");
+            references.push({ image: { base64: base64Clean } });
         }
 
-        // ===================================
-        // 🚀 TYPE A: LOGO (Stamp + Minimal AI)
-        // ===================================
-        if (type === 'logo') {
-            const stampedBase64 = await stampImage(baseImageUrl, overlayImageData, 'logo', compositingInfo);
-            finalImagePayload = { base64: stampedBase64 };
-
-            references = [];
-            strength = 0.20; // Shape preservation
-            guidanceScale = 15.0; // Strict adherence
-
-            finalPrompt = `${baseDescription}. seamless integration of the logo, natural lighting, photorealistic, 8k. Do not distort text.`;
-            negativePrompt = "text distortion, font change, hallucination, new letters, 3d render, blurry";
-        }
-
-        // ===================================
-        // 🚀 TYPE B: PRODUCT (Stamp + Shadow AI ONLY)
-        // ===================================
-        else if (type === 'product') {
-            const stampedBase64 = await stampImage(baseImageUrl, overlayImageData, 'product', compositingInfo);
-            finalImagePayload = { base64: stampedBase64 };
-
-            // 🔥 RE-ENABLE REFERENCE (Urgent User Fix)
-            // Must pass the original overlay as reference to prevent hallucination
-            if (overlayImageData.startsWith('http')) {
-                references.push({ image: { url: overlayImageData } });
-            } else {
-                const base64Clean = overlayImageData.replace(/^data:image\/\w+;base64,/, "");
-                references.push({ image: { base64: base64Clean } });
-            }
-
-            strength = 0.10; // User Mandate (Lowered to 0.10)
-            guidanceScale = 20.0; // User Mandate (Boosted to 20.0)
-
-            // Strict Fidelity Prompt with Context
-            finalPrompt = `A high-fidelity photo of the product from the reference image, placed perfectly into the scene: ${baseDescription}. Maintain the exact shape, color, and label of the product. Do not morph, do not change the item type. Adjust only natural environmental lighting and shadows to match the background seamlessly.`;
-
-            negativePrompt = "different object, box, battery, square, morphing, changing product type, changing color, changing label, blurry, low quality, distortion, text change";
-        }
-
-        // ===================================
-        // 🚀 TYPE C: PERSON (Classic Reference)
-        // ===================================
-        else {
-            finalImagePayload = { url: baseImageUrl };
-
-            if (overlayImageData.startsWith('http')) {
-                references.push({ image: { url: overlayImageData } });
-            } else {
-                const base64Clean = overlayImageData.replace(/^data:image\/\w+;base64,/, "");
-                references.push({ image: { base64: base64Clean } });
-            }
-
-            strength = 0.65;
-            guidanceScale = 15.0;
-
-            const meta = compositingInfo.personMetadata || {};
-            const identityTags = [
-                meta.nationality ? `${meta.nationality}` : '',
-                meta.gender || 'person',
-                meta.age ? `(${meta.age}s)` : ''
-            ].filter(Boolean).join(' ');
-
-            const subjectPrompt = identityTags ? `Close up shot of a ${identityTags}, ` : '';
-            finalPrompt = `${subjectPrompt}${baseDescription}. Perfect face swap, seamless identity transfer, maintain pose. 8k.`;
-            negativePrompt = "wrong gender, different age, distorted face, bad anatomy";
-        }
-
+        // Payload Construction
         const url = getTextToImageUrl();
         const payload = {
             prompt: finalPrompt,
-            reference_images: references.length > 0 ? references : undefined,
+            negative_prompt: negativePrompt,
+            reference_images: references, // Lock identity with original
             num_images: 1,
-            image: finalImagePayload,
+            image: { base64: stampedBase64 }, // Anchor with stamped image
             strength: strength,
             guidance_scale: guidanceScale,
-            num_inference_steps: 40,
-            negative_prompt: negativePrompt,
+            num_inference_steps: numInferenceSteps,
             aspect_ratio: compositingInfo?.aspectRatio || undefined
         };
 
-        console.log(`[Hybrid Compose] Ratio: ${payload.aspect_ratio || 'Default'}, Strength: ${strength}, Prompt: "${finalPrompt.substring(0, 50)}..."`);
+        // [REF-REQ-5] Log for debugging
+        console.log(`[Universal Engine] Prompt: "${finalPrompt}"`);
+        console.log(`[Universal Engine] Settings: Strength=${strength}, Guidance=${guidanceScale}, Steps=${numInferenceSteps}`);
 
         const result = await safeCallFreepik(url, {
             method: 'POST',
@@ -286,24 +226,27 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
             body: JSON.stringify(payload)
         }, 'seedream-compose', 'start-task');
 
+        // [REF-REQ-5] Error Handling
         if (!result || !result.data || !result.data.task_id) {
-            throw new Error('Seedream ID not returned');
+            console.error('[Seedream Error] Payload was:', JSON.stringify(payload, null, 2));
+            throw new Error('[Seedream Error] Failed to initiate task - check API payload.');
         }
 
         const taskId = result.data.task_id;
-        console.log(`[Seedream] Task ID: ${taskId}, Polling...`);
+        console.log(`[Seedream] Task Initiated: ${taskId}`);
 
+        // Polling
         await sleep(3000);
         const finalImageUrl = await pollSeedreamStatus(taskId);
 
         return {
             success: true,
             imageUrl: finalImageUrl,
-            engine: 'seedream-v4-hybrid'
+            engine: 'seedream-v5-universal'
         };
 
     } catch (err) {
-        console.error('[safeComposeWithSeedream] Error:', err);
+        console.error('[safeComposeWithSeedream] Critical Error:', err);
         throw err;
     }
 }
