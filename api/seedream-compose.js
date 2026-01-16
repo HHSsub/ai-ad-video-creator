@@ -61,8 +61,8 @@ async function isolateSubject(buffer) {
         }
 
         if (!modified) {
-            console.log('[Stage 1] No background detected.');
-            return buffer;
+            console.log('[Stage 1] No background detected. Converting to RGBA.');
+            return await sharp(buffer).ensureAlpha().png().toBuffer();
         }
 
         const transparentBuffer = await sharp(data, {
@@ -165,7 +165,7 @@ async function eraseOriginalObject(baseBuffer, layoutConfig, baseMeta, compositi
 
 async function generateDilatedMask(overlayBuffer, left, top, baseMeta) {
     // 1. Extract Alpha
-    const alpha = await sharp(overlayBuffer).extractChannel('alpha').toBuffer();
+    const alpha = await sharp(overlayBuffer).ensureAlpha().extractChannel('alpha').toBuffer();
     const overlayMeta = await sharp(overlayBuffer).metadata();
 
     // 2. Dilate (Blur expands white into black)
@@ -287,6 +287,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // 📍 Stage 3: Layer Composition (Physical Placement)
         const overlayResized = await sharp(cleanOverlay)
             .resize({ width: layoutConfig.targetWidthPx })
+            .png()
             .toBuffer();
         const overlayMeta = await sharp(overlayResized).metadata();
 
