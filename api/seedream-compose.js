@@ -40,11 +40,9 @@ async function isolateSubject(buffer) {
     try {
         console.log(`[Stage 1: Sharp Scissors] Isolating subject. Size: ${buffer.length}`);
 
-        // Sanitize: Force to PNG first to avoid unsupported format errors on RAW conversion
-        const pngBuffer = await sharp(buffer).png().toBuffer();
-
-        const image = sharp(pngBuffer).ensureAlpha();
-        const { data, info } = await image
+        const { data, info } = await sharp(buffer)
+            .png() // Force decode/encode to PNG first
+            .ensureAlpha()
             .raw()
             .toBuffer({ resolveWithObject: true });
 
@@ -184,6 +182,7 @@ async function generateDilatedMask(overlayBuffer, left, top, baseMeta) {
     })
         .blur(15) // Dilation strength
         .threshold(10) // Binarize
+        .png() // Force valid image format for composite input
         .toBuffer();
 
     // 3. Place on Canvas
