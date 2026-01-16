@@ -22,7 +22,8 @@ async function fetchImageBuffer(source) {
     if (source.startsWith('http')) {
         const res = await fetch(source);
         if (!res.ok) throw new Error(`Failed to fetch image: ${res.statusText}`);
-        return await res.buffer();
+        const arrayBuffer = await res.arrayBuffer();
+        return Buffer.from(arrayBuffer);
     } else {
         // Base64 Case
         const base64Clean = source.replace(/^data:image\/\w+;base64,/, "");
@@ -224,13 +225,13 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
                 references.push({ image: { base64: base64Clean } });
             }
 
-            strength = 0.15; // User Mandate
-            guidanceScale = 12.0; // User Mandate
+            strength = 0.10; // User Mandate (Lowered to 0.10)
+            guidanceScale = 20.0; // User Mandate (Boosted to 20.0)
 
-            // Strict Fidelity Prompt (Visual Only - No Text Context)
-            finalPrompt = "High fidelity reproduction of the reference product image. Isolate the object and apply realistic lighting and shadows cast by the environment in the base image. Do not alter the object's texture, color, or text.";
+            // Strict Fidelity Prompt with Context
+            finalPrompt = `A high-fidelity photo of the product from the reference image, placed perfectly into the scene: ${baseDescription}. Maintain the exact shape, color, and label of the product. Do not morph, do not change the item type. Adjust only natural environmental lighting and shadows to match the background seamlessly.`;
 
-            negativePrompt = "distortion, shape change, new object, text, watermark, logo, hallucination, painting, cartoon, drawing, low quality";
+            negativePrompt = "different object, box, battery, square, morphing, changing product type, changing color, changing label, blurry, low quality, distortion, text change";
         }
 
         // ===================================
