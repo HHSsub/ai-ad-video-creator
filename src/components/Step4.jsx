@@ -647,11 +647,23 @@ const Step4 = ({
             log(`씬 ${sceneNumber} 이미지 재생성 완료: ${newImageUrl}`);
 
             // 🔥 중요: 변경된 스토리보드를 프로젝트에 저장 (영구 반영)
+            // 🔥 FIXED: Use storyboardUpdate for partial update (safer and works correctly)
             try {
               await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'x-username': user?.username || 'anonymous' },
-                body: JSON.stringify({ storyboard, formData })
+                body: JSON.stringify({
+                  storyboardUpdate: {
+                    conceptId: selectedConceptId,
+                    sceneNumber: scene.originalSceneNumber || sceneNumber,
+                    updates: {
+                      imageUrl: newImageUrl, // S3 URL without cache buster for DB
+                      prompt: editedPrompt,
+                      videoUrl: null,
+                      status: 'image_done'
+                    }
+                  }
+                })
               });
               log('프로젝트 데이터 저장 완료 (URL 갱신)');
             } catch (saveErr) {
@@ -1297,6 +1309,10 @@ const Step4 = ({
     if (synthesisMode === 'person' && !selectedPerson) return;
     if ((synthesisMode === 'product' || synthesisMode === 'logo') && !uploadFile) return;
 
+    // 🔥 IMPROVED UX: Close modal immediately and show loading on scene card
+    setShowPersonModal(false);
+    setImageLoadStates(prev => ({ ...prev, [selectedScene.sceneNumber]: false })); // Show loading spinner
+
     setSynthesisLoading(true);
     log(`씬 ${selectedScene.sceneNumber} ${synthesisMode} 합성 시작...`);
 
@@ -1371,7 +1387,7 @@ const Step4 = ({
         }
 
         setForceUpdate(prev => prev + 1); // Force Re-render
-        setShowPersonModal(false); // Close Modal
+        setImageLoadStates(prev => ({ ...prev, [selectedScene.sceneNumber]: true })); // 🔥 Show new image
         setSelectedPerson(null); // Reset selected person
         setUploadFile(null); // Reset uploaded file
         setUploadPreview(null); // Reset upload preview
