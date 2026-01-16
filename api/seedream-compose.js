@@ -1,7 +1,7 @@
 // api/seedream-compose.js - Freepik Seedream Integration with Hybrid Composition (Stamp & Blend)
 // Refactored: Universal High-Fidelity Composition Engine
 // Strategy: TRIPLE-LOCK Force-Compose (Anchor -> AI-Relight -> Over-Stamp)
-// V6.0 - Strict Fidelity Enforcement with S3 Integration
+// V7.0 - "White Box" Artifact Fix (Transparent Composition + Auto-Alpha)
 
 import { safeCallFreepik } from '../src/utils/apiHelpers.js';
 import { getTextToImageUrl, getTextToImageStatusUrl } from '../src/utils/engineConfigLoader.js';
@@ -24,13 +24,65 @@ async function fetchImageBuffer(source) {
     if (source.startsWith('http')) {
         const res = await fetch(source);
         if (!res.ok) throw new Error(`Failed to fetch image: ${res.statusText}`);
-        // [REF-REQ-3A] Replace buffer() with arrayBuffer()
         const arrayBuffer = await res.arrayBuffer();
         return Buffer.from(arrayBuffer);
     } else {
         // Base64 Case
         const base64Clean = source.replace(/^data:image\/\w+;base64,/, "");
         return Buffer.from(base64Clean, 'base64');
+    }
+}
+
+/**
+ * [CRITICAL] Removes White/Solid Backgrounds from Product Images
+ * Uses Sharp thresholding to isolate valid pixels.
+ */
+async function removeWhiteBackground(buffer) {
+    try {
+        console.log('[Alpha-Isolation] Removing white background...');
+
+        const image = sharp(buffer).ensureAlpha();
+        const { data, info } = await image
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+
+        // Manual Pixel Manipulation
+        // If (R>230 && G>230 && B>230) -> Alpha 0
+        const threshold = 230;
+        const pixelParams = 4; // RGBA
+
+        let modified = false;
+
+        for (let i = 0; i < data.length; i += pixelParams) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            if (r > threshold && g > threshold && b > threshold) {
+                data[i + 3] = 0; // Set Alpha to 0
+                modified = true;
+            }
+        }
+
+        if (!modified) {
+            console.log('[Alpha-Isolation] No white pixels detected/removed.');
+            return buffer;
+        }
+
+        const transparentBuffer = await sharp(data, {
+            raw: {
+                width: info.width,
+                height: info.height,
+                channels: 4
+            }
+        }).png().toBuffer();
+
+        console.log('[Alpha-Isolation] White background removed successfully.');
+        return transparentBuffer;
+
+    } catch (err) {
+        console.warn('[Alpha-Isolation] Failed to remove BG, using original:', err);
+        return buffer;
     }
 }
 
@@ -73,18 +125,12 @@ function calculateLayout(baseMeta, overlayMeta, type, compositingInfo) {
     }
 
     const targetWidthPx = Math.round(baseMeta.width * scaleFactor);
-    // Calculated Top-Left Origin (unscaled overlay dimensions needed to be resized first for ratio calc, 
-    // but here we just need relative percentages relative to base)
-
-    // We need accurate dimensions after resize to center properly.
-    // So this function needs to be split or doing pure ratio logic.
-    // Let's refactor stampImage to return the layout info for reuse.
 
     return { targetX, targetY, scaleFactor, targetWidthPx };
 }
 
 /**
- * Step A: Pixel Anchor (Sharp Stamping)
+ * Step A: Pixel Anchor (Transparent Stamping)
  * Physically pastes the product onto the background.
  * Returns both the base64 image AND the layout config for the Triple-Lock Step C.
  */
@@ -92,12 +138,15 @@ async function stampImageWithLayout(baseSource, overlaySource, type, compositing
     try {
         console.log(`[Stamp] Starting Context-Aware Stamping for type: ${type}`);
         const baseBuffer = await fetchImageBuffer(baseSource);
-        const overlayBuffer = await fetchImageBuffer(overlaySource);
+        const overlayBufferRaw = await fetchImageBuffer(overlaySource);
+
+        // 🔥 CRITICAL Step 1: Remove White Background
+        const overlayBuffer = await removeWhiteBackground(overlayBufferRaw);
 
         const baseImage = sharp(baseBuffer);
         const baseMeta = await baseImage.metadata();
 
-        const layout = calculateLayout(baseMeta, {}, type, compositingInfo); // Overlay meta not needed for pure ratio yet
+        const layout = calculateLayout(baseMeta, {}, type, compositingInfo);
 
         // Resize Overlay
         const overlayResized = await sharp(overlayBuffer)
@@ -116,9 +165,9 @@ async function stampImageWithLayout(baseSource, overlaySource, type, compositing
 
         console.log(`[Stamp] Pixel Position: left=${left}, top=${top}, width=${layout.targetWidthPx}`);
 
-        // Execute Composite
+        // 🔥 CRITICAL Step 2: Composite with blend 'over' (Respects alpha)
         const resultBuffer = await baseImage
-            .composite([{ input: overlayResized, left, top }])
+            .composite([{ input: overlayResized, left, top, blend: 'over' }])
             .toBuffer();
 
         return {
@@ -134,7 +183,7 @@ async function stampImageWithLayout(baseSource, overlaySource, type, compositing
 
 /**
  * Step C: Over-Stamp (Triple-Lock)
- * Pastes the ORIGINAL overlay (resized) onto the AI generated result
+ * Pastes the ORIGINAL overlay (resized & transparent) onto the AI generated result
  * to guarantee pixel-perfect fidelity.
  */
 async function overStampImage(aiResultUrl, layoutConfig) {
@@ -145,17 +194,14 @@ async function overStampImage(aiResultUrl, layoutConfig) {
         const aiBuffer = await fetchImageBuffer(aiResultUrl);
         const aiImage = sharp(aiBuffer);
 
-        // 2. Composite Original Overlay (Resized) back on top
-        // Using "atop" or default overlay. Default is fine as we want 100% opacity of product.
-        // Optional: Feather edges? sharp doesn't have easy feathering without masks. 
-        // User requested: "경계선만 1~2px 정도 AI 결과물과 블렌딩" -> This requires complex masking.
-        // For now, standard composite ensures "100% Identity" as requested in primary instruction.
-
+        // 2. Composite Transparent Overlay back on top
+        // 🔥 CRITICAL Step 3: Blend 'over' with the CLEAN transparent overlay
         const finalBuffer = await aiImage
             .composite([{
                 input: layoutConfig.overlayBuffer,
                 left: layoutConfig.left,
-                top: layoutConfig.top
+                top: layoutConfig.top,
+                blend: 'over'
             }])
             .toBuffer();
 
@@ -215,21 +261,21 @@ async function pollSeedreamStatus(taskId) {
  */
 export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, compositingInfo) {
     try {
-        console.log('[safeComposeWithSeedream] Starting Triple-Lock Force-Composition');
+        console.log('[safeComposeWithSeedream] Starting Triple-Lock Force-Composition (V7 Transparent)');
 
         const type = compositingInfo.synthesisType || 'product';
         const baseDescription = compositingInfo.sceneDescription || "A professional studio scene";
 
         // Prompt Logic
         const finalPrompt = `A professional high-fidelity photo. The exact object from the reference image must be maintained with 100% visual identity, including its original shape, texture, color, and branding. Place this object into the scene: ${baseDescription}. Apply realistic environmental lighting and cast natural contact shadows to match the background perfectly. NO alterations to the object itself.`;
-        const negativePrompt = "morphing, structural change, altering identity, changing colors, distorted labels, hallucination, blurry, low quality, stylized, cartoon, painting, different object type, logo change, artistic interpretation.";
+        const negativePrompt = "white box, square artifact, morphing, structural change, altering identity, changing colors, distorted labels, hallucination, blurry, low quality, stylized, cartoon, painting, different object type, logo change, artistic interpretation.";
 
         // Hyperparameters (Strict)
         const strength = 0.1;
         const guidanceScale = 20.0;
         const numInferenceSteps = 50;
 
-        // [Triple-Lock Step A] Anchor
+        // [Triple-Lock Step A] Anchor with Transparency
         const { base64: stampedBase64, layout } = await stampImageWithLayout(baseImageUrl, overlayImageData, type, compositingInfo);
 
         // Prepare References
@@ -279,25 +325,23 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         await sleep(3000);
         const generatedImageUrl = await pollSeedreamStatus(taskId);
 
-        // [Triple-Lock Step C] Over-Stamp (Post-Process)
+        // [Triple-Lock Step C] Over-Stamp with Transparency
         const finalBuffer = await overStampImage(generatedImageUrl, layout);
         const finalBase64 = finalBuffer.toString('base64');
         const finalDataUri = `data:image/jpeg;base64,${finalBase64}`;
 
-        // [Triple-Lock Step D] S3 Upload for Persistence
-        // synthesis-person.js expects a URL. Returning a Data URI is risky for large images.
-        // We upload to S3 immediately to provide a robust URL.
-        const projectId = compositingInfo.projectId || 'temp_project'; // Fallback if missing
+        // [Triple-Lock Step D] S3 Upload
+        const projectId = compositingInfo.projectId || 'temp_project';
         const timestamp = Date.now();
-        const s3Key = `nexxii-storage/projects/${projectId}/images/triple_lock_result_${timestamp}.jpg`;
+        const s3Key = `nexxii-storage/projects/${projectId}/images/triple_lock_v7_${timestamp}.jpg`;
 
         console.log(`[Triple-Lock] Uploading Final Result to S3: ${s3Key}`);
         const uploadResult = await uploadBase64ToS3(finalDataUri, s3Key);
 
         return {
             success: true,
-            imageUrl: uploadResult.url, // Returns S3 URL ("https://upnexx.ai/...")
-            engine: 'seedream-v6-triple-lock'
+            imageUrl: uploadResult.url,
+            engine: 'seedream-v7-transparent'
         };
 
     } catch (err) {
