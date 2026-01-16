@@ -97,12 +97,20 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         // 1. 누끼 (Scissors)
         const cleanOverlay = await isolateSubject(overlayBufferRaw);
 
-        // 2. 레이아웃 계산
+        // 2. 레이아웃 계산 (Safety: Ensure Overlay fits inside Base)
         const scale = compositingInfo.targetCoordinates?.w || 0.4;
         const targetWidth = Math.round(baseMeta.width * scale);
 
+        // 🔥 CRITICAL FIX: Constrain Height to prevent "Image to composite must have same dimensions or smaller"
+        // If background is Horizontal (16:9) and product is Tall, strict width-based scaling causes height overflow.
+        const maxHeight = Math.round(baseMeta.height * 0.9);
+
         const overlayResized = await sharp(cleanOverlay)
-            .resize({ width: targetWidth })
+            .resize({
+                width: targetWidth,
+                height: maxHeight,
+                fit: 'inside'
+            })
             .png()
             .toBuffer();
         const ovMeta = await sharp(overlayResized).metadata();
