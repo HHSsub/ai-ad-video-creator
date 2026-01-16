@@ -1129,22 +1129,31 @@ const Step4 = ({
       targetRect = sceneCard.getBoundingClientRect();
     }
 
-    const modalWidth = 320; // Type Selection Modal Width
-    const modalHeight = 400; // Approx Height
+    // 2. 타겟(버튼) 기준 위쪽에 위치시키기 -> 🔥 FIXED: Contextual Positioning (Above Button)
+    // User Requirement: "씬별로 합성창이 매번... 버튼의 위치를 덮는다는 감각으로 위쪽에"
+    const modalWidth = 550; // Max width
+    const modalHeight = 600; // Max height
 
-    // 2. 타겟(씬 카드 혹은 버튼) 정중앙에 위치시키기
+    // Horizontal: Center on Button
     let left = targetRect.left + (targetRect.width / 2) - (modalWidth / 2);
-    let top = targetRect.top + (targetRect.height / 2) - (modalHeight / 2);
+
+    // Vertical: Position ABOVE the button (button top - modal height - margin)
+    let top = targetRect.top - modalHeight - 10;
 
     // 3. 화면 밖으로 나가는 것 방지 (Viewport Constraints)
-    // 왼쪽/오른쪽 확인
+    // 왼쪽/오른쪽: 화면 벗어나지 않게
     if (left < 10) left = 10;
-    if (left + modalWidth > window.innerWidth - 10) {
-      left = window.innerWidth - modalWidth - 10;
+    if (left + modalWidth > window.innerWidth - 10) left = window.innerWidth - modalWidth - 10;
+
+    // 위/아래: 위로 너무 올라가면(짤리면) -> 화면 최상단에 붙임 (어쩔 수 없음)
+    // 혹은 아래 공간이 더 많으면 아래로 내릴 수도 있지만, User는 "위쪽"을 선호함.
+    if (top < 10) {
+      top = 10; // Force to top if fits no where else
+      // 만약 위쪽 공간이 너무 없어서 침범하면, 어쩔수없이 버튼을 덮거나 아래로 내려야 할 수도 있음.
+      // 하지만 현재 로직은 Visibility 최우선.
     }
 
-    // 위/아래 확인
-    if (top < 10) top = 10;
+    // 아래쪽 확인 (혹시 위로 보냈는데도 너무 커서 아래로 뚫으면)
     if (top + modalHeight > window.innerHeight - 10) {
       top = window.innerHeight - modalHeight - 10;
     }
@@ -1695,7 +1704,7 @@ const Step4 = ({
                             {permissions.editPrompt && (
                               <button
                                 onClick={() => handleRegenerateWithTranslation(img.sceneNumber)}
-                                disabled={isRegenerating}
+                                disabled={isRegenerating || synthesisLoading}
                                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm"
                               >
                                 {isRegenerating ? '이미지 생성 중...' : '🔄 이미지 재생성'}
@@ -1706,7 +1715,7 @@ const Step4 = ({
                             {permissions.editPrompt && (
                               <button
                                 onClick={(e) => handleOpenPersonModal(img, e)}
-                                disabled={loading || isRegenerating}
+                                disabled={loading || isRegenerating || synthesisLoading}
                                 className="w-full px-4 py-2 bg-pink-600 hover:bg-pink-500 disabled:bg-gray-600 text-white rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
                               >
                                 <span>👤</span> 이미지 합성(인물/제품/로고)
@@ -1901,7 +1910,7 @@ const Step4 = ({
 
 
             {/* 3-Mode Selection UI - 🔥 POTAL 적용 & 중앙 정렬 */}
-            {showPersonModal && !synthesisMode && createPortal(
+            {showPersonModal && !synthesisLoading && !synthesisMode && createPortal(
               <>
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowPersonModal(false)} />
                 <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
@@ -1935,7 +1944,7 @@ const Step4 = ({
             )}
 
             {/* Product/Logo Upload UI - 🔥 POTAL 적용 & 중앙 정렬 */}
-            {showPersonModal && (synthesisMode === 'product' || synthesisMode === 'logo') && createPortal(
+            {showPersonModal && !synthesisLoading && (synthesisMode === 'product' || synthesisMode === 'logo') && createPortal(
               <>
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowPersonModal(false)} />
                 <div className="fixed z-50 bg-gray-900 rounded-xl border border-gray-600 shadow-2xl flex flex-col overflow-hidden"
@@ -1986,7 +1995,7 @@ const Step4 = ({
               document.body
             )}
             {/* 🔥 필터 모달 (Fixed Position + Vertical Sidebar) - Portal 사용 */}
-            {showPersonModal && synthesisMode === 'person' && createPortal(
+            {showPersonModal && !synthesisLoading && synthesisMode === 'person' && createPortal(
               <>
                 <div
                   className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[1px]"
