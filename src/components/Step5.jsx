@@ -229,17 +229,6 @@ const Step5 = ({ storyboard, selectedConceptId, onPrev, onComplete, currentProje
                             </button>
                         </div>
                     )}
-
-                    {/* 로그 */}
-                    <details className="mb-6">
-                        <summary className="cursor-pointer font-semibold text-gray-300 hover:text-white">
-                            📋 진행 로그
-                        </summary>
-                        <div className="mt-2 h-32 overflow-auto bg-gray-900 text-green-400 p-3 text-xs font-mono whitespace-pre-wrap rounded-lg border border-gray-700">
-                            {logs.length === 0 ? '로그가 없습니다.' : logs.join('\n')}
-                        </div>
-                    </details>
-
                     {/* 하단 버튼 */}
                     <div className="flex justify-between items-center pt-6 border-t border-gray-700">
                         <button
