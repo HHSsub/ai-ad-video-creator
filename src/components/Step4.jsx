@@ -629,10 +629,20 @@ const Step4 = ({
           const targetImage = storyboard.styles[styleIndex].images.find(img => String(img.sceneNumber) === String(sceneNumber));
           if (targetImage) {
             const newImageUrl = result.url || result.imageUrl;
-            targetImage.imageUrl = newImageUrl;
+            // 🔥 Add cache buster to force browser to load new image
+            targetImage.imageUrl = `${newImageUrl}?t=${Date.now()}`;
             targetImage.prompt = editedPrompt;
             targetImage.videoUrl = null;
             targetImage.status = 'image_done';
+
+            // 🔥 Mark as modified
+            setModifiedScenes(prev => {
+              if (prev.includes(sceneNumber)) return prev;
+              return [...prev, sceneNumber];
+            });
+
+            // 🔥 Force re-render
+            setForceUpdate(prev => prev + 1);
 
             log(`씬 ${sceneNumber} 이미지 재생성 완료: ${newImageUrl}`);
 
