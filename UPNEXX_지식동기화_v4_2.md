@@ -1,3 +1,17 @@
+### 2026-01-16 15:10 - [MAJOR] V11.0 "Direct Edit" Protocol (Seedream Native)
+- **배경**: 기존 Sharp 기반 수동 합성(V9.5)의 한계(Masking Artifacts, 복잡성)와 사용자 Ultimatum에 따라, Freepik Seedream의 **Native Edit Endpoint**로 전면 전환.
+- **핵심 변경**:
+  - **Endpoint 전환**: `/v1/ai/text-to-image/seedream-v4-5-edit` 사용 (API 규격 엄수).
+  - **Reference Images**: `[Base_Image, Overlay_Image]` 배열 구조로 서버에 전달.
+  - **Dynamic Aspect Ratio**: S3 메타데이터 대신 Base Image의 실제 해상도를 `sharp().metadata()`로 읽어 `widescreen_16_9`, `social_story_9_16`, `square_1_1`로 자동 매핑.
+  - **No Manual Composition**: Sharp Scissors/Eraser/Masking 로직 전면 폐기. 순수 AI 기반 Object Replacement 구현.
+- **영향**:
+  - 배경 보존성 극대화 (AI가 Context를 이해하고 Inpainting).
+  - 코드 복잡도 80% 감소 (순수 API Wrapper화).
+- **상태**: ✅ 적용 완료.
+
+---
+
 ### 2026-01-13 15:30 - [HOTFIX] 워크플로우 정상화, 자동 시작 및 상태 표시 오류 수정
 - **이슈 1 (Project Creation)**: 프로젝트 생성 직후 상세 화면으로 자동 리다이렉트되어, 사용자가 생성 여부를 목록에서 확인하기 어려움.
 - **이슈 2 (Frozen Screen)**: Step 1(정보입력) 완료 후 Step 2로 이동했으나 광고 생성이 자동으로 시작되지 않고 멈춰있는 현상.
