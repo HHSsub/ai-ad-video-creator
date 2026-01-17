@@ -121,7 +121,7 @@ const Step4 = ({
       return;
     }
 
-    if (!confirm(`Scene ${sceneNumber}을(를) 정말 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.`)) {
+    if (!confirm('씬을 정말로 삭제하시겠습니까? 삭제후에는 복구할 수 없습니다.')) {
       return;
     }
 
@@ -732,7 +732,10 @@ const Step4 = ({
           prompt: realScene.prompt, // 🔥 AI Video Prompt
           motionPrompt: realScene.motionPrompt, // 🔥 Detailed Motion Guide
           // 🔥 Auto vs Manual Duration Logic
-          duration: realScene.duration ? realScene.duration : (Math.round(formData.videoLength / sortedImages.length) || 5)
+          // 🔥 Auto Mode: Force 2s (Total 20s for 10 scenes)
+          duration: (formData?.mode === 'auto' || currentProject?.workflowMode === 'auto')
+            ? 2
+            : (realScene.duration ? realScene.duration : (Math.round(formData.videoLength / sortedImages.length) || 5))
         })
       });
 
@@ -955,7 +958,9 @@ const Step4 = ({
     } else {
       try {
         // 1. 영상 합치기 요청
-        const totalDuration = videoScenes.length * 3;
+        // 🔥 Auto Mode: Force 2s (Total 20s for 10 scenes)
+        const durationPerScene = (formData?.mode === 'auto' || currentProject?.workflowMode === 'auto') ? 2 : 3;
+        const totalDuration = videoScenes.length * durationPerScene;
 
         const compileResponse = await fetch(`${API_BASE}/api/compile-videos`, {
           method: 'POST',
@@ -1872,15 +1877,7 @@ const Step4 = ({
               </button>
             )}
 
-            {modifiedScenes.length > 0 && permissions.regenerate && (
-              <button
-                onClick={handleRegenerateAllVideos}
-                disabled={loading}
-                className="px-6 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium disabled:cursor-not-allowed"
-              >
-                {loading ? '재생성 중...' : `🔄 수정된 씬 재생성 (${modifiedScenes.length}개)`}
-              </button>
-            )}
+
           </div>
 
           {/* 🔥 E-3: 컨펌 완료 버튼 (1개 이상 영상 필요) */}
