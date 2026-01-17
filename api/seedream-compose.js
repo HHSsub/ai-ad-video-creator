@@ -40,37 +40,36 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
     const baseUrl = getFreepikApiBase();
     const url = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit`;
 
-    // 🔥 V11.2: URL Preservation Logic
-    // If ref is a URL, pass it. If buffer, use Base64 (JPEG optimized).
+    // 1. URL Preservation
     const processedRefs = referenceImages.map(ref => {
         if (typeof ref === 'string' && ref.startsWith('http')) return ref;
         if (Buffer.isBuffer(ref)) return `data:image/jpeg;base64,${ref.toString('base64')}`;
         return ref;
     });
 
+    // 🛑 V11.3 SPEC-PERFECT PAYLOAD (NO UNSUPPORTED PARAMS)
     const payload = {
         prompt: prompt,
         reference_images: processedRefs,
         aspect_ratio: aspectRatio,
-        enable_safety_checker: false, // 🛑 DEBUG: OFF
         seed: Math.floor(Math.random() * 1000000),
-        num_images: 1
+        enable_safety_checker: false // DEBUG: OFF
     };
 
-    console.log(`[V11.2] Sending Request to Seedream v4.5 Edit... (URLs used: ${processedRefs.filter(r => r.startsWith('http')).length})`);
+    console.log(`[V11.3] Sending Spec-Perfect Request to Seedream v4.5 Edit...`);
 
     const result = await safeCallFreepik(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-    }, `v11-edit-patch`);
+    }, `v11-edit-spec-perfect`);
 
-    // 🔥 Debug Logging for Response Structure
-    console.log('[V11.2] POST Response:', JSON.stringify(result, null, 2));
+    // 🔥 Debug Logging for Spec Verification
+    console.log('[V11.3] POST Response:', JSON.stringify(result, null, 2));
 
     const taskId = result.data?.task_id || result.task_id;
     if (!taskId) {
-        console.error('[V11.2] Task Init Failed. Response:', JSON.stringify(result, null, 2));
+        console.error('[V11.3] Task Init Failed. Response:', JSON.stringify(result, null, 2));
         throw new Error(`Task Init Failed: ${result.error?.message || 'Unknown API Error'}`);
     }
 
@@ -81,7 +80,7 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
     while (Date.now() - start < POLLING_TIMEOUT) {
         await sleep(3000);
         const statusUrl = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit/${taskId}`;
-        console.log(`[V11.2] Polling Status (${taskId}): ${statusUrl}`);
+        console.log(`[V11.3] Polling Status (${taskId}): ${statusUrl}`);
 
         const statusRes = await safeCallFreepik(statusUrl, { method: 'GET' });
 
@@ -89,8 +88,11 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
             const output = statusRes.data.generated[0];
             return output.url || output;
         } else if (statusRes?.data?.status === 'FAILED') {
-            console.error('[V11.2] API Synthesis FAILED Detail:', JSON.stringify(statusRes.data, null, 2));
+            console.error('[V11.3] API Synthesis FAILED Detail:', JSON.stringify(statusRes.data, null, 2));
             throw new Error(`Synthesis Failed: ${statusRes.data?.error_message || 'Internal Model Error'}`);
+        } else if (statusRes?.status === 'FAILED') {
+            console.error('[V11.3] API Synthesis FAILED (Flat):', JSON.stringify(statusRes, null, 2));
+            throw new Error(`Synthesis Failed (Flat Response)`);
         }
     }
     throw new Error(`Timeout waiting for V11 Edit`);
@@ -99,7 +101,7 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
 // [MAIN PIPELINE]
 export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, compositingInfo) {
     try {
-        console.log('[V11.2] URL-Preservation Protocol Start');
+        console.log('[V11.3] Spec-Perfect URL Protocol Start');
 
         // 1. Load Buffers (ONLY for Metadata/Analysis, NOT for API Payload if they are URLs)
         const baseBuffer = await fetchImageBuffer(baseImageUrl);
