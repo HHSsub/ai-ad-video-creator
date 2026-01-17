@@ -37,38 +37,40 @@ function getSceneAspectRatio(width, height) {
 
 // [API WRAPPER] Seedream V4.5 Edit
 async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
-    // 🔥 HARDCODED ENDPOINT (V11.0 Requirement)
     const baseUrl = getFreepikApiBase();
     const url = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit`;
 
-    // Prepare Base64 Reference Images
-    // Ref[0]: Base Image (Background)
-    // Ref[1]: Overlay Image (Subject)
+    // 1. JPEG Base64 (Size Optimization)
+    // Using JPEG instead of PNG to stay within payload limits and improve stability.
     const processedRefs = referenceImages.map(buf =>
-        `data:image/png;base64,${buf.toString('base64')}`
+        `data:image/jpeg;base64,${buf.toString('base64')}`
     );
 
     const payload = {
         prompt: prompt,
         reference_images: processedRefs,
         aspect_ratio: aspectRatio,
-        enable_safety_checker: true,
-        // Optional parameters for V4.5 Edit if needed default behavior
-        num_images: 1,
-        guidance_scale: 2.5
+        enable_safety_checker: false, // 🛑 DEBUG: OFF to check if failures are safety-related
+        seed: Math.floor(Math.random() * 1000000),
+        num_images: 1
     };
+
+    console.log(`[V11.1] Sending Request to Seedream v4.5 Edit...`);
 
     const result = await safeCallFreepik(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-    }, `v11-edit`, 'seedream-edit');
+    }, `v11-edit-patch`);
 
-    // 🔥 Debug Logging for V4.5 Edit Response
-    console.log('[V11.0] POST Response:', JSON.stringify(result, null, 2));
+    // 🔥 Debug Logging for Response Structure
+    console.log('[V11.1] POST Response:', JSON.stringify(result, null, 2));
 
-    const taskId = result.task_id || result.data?.task_id;
-    if (!taskId) throw new Error(`Task Init Failed: No task_id in response`);
+    const taskId = result.data?.task_id || result.task_id;
+    if (!taskId) {
+        console.error('[V11.1] Task Init Failed. Response:', JSON.stringify(result, null, 2));
+        throw new Error(`Task Init Failed: ${result.error?.message || 'Unknown API Error'}`);
+    }
 
     // Polling Logic
     const POLLING_TIMEOUT = 120000;
@@ -76,10 +78,9 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
 
     while (Date.now() - start < POLLING_TIMEOUT) {
         await sleep(3000);
-        // 🔥 STRICT ENDPOINT CORRECTION (V11.0)
-        // Docs: GET /v1/ai/text-to-image/seedream-v4-5-edit/{task-id}
+        // 🔥 STRICT ENDPOINT (GET /v1/ai/text-to-image/seedream-v4-5-edit/{task-id})
         const statusUrl = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit/${taskId}`;
-        console.log(`[V11.0] Polling Status: ${statusUrl}`); // Log URL to catch undefined/null
+        console.log(`[V11.1] Polling Status (${taskId}): ${statusUrl}`);
 
         const statusRes = await safeCallFreepik(statusUrl, { method: 'GET' });
 
@@ -87,7 +88,13 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
             const output = statusRes.data.generated[0];
             return output.url || output;
         } else if (statusRes?.data?.status === 'FAILED') {
-            throw new Error(`Synthesis Failed: V11 Edit`);
+            // 🛑 DETAILED ERROR LOGGING
+            console.error('[V11.1] API Synthesis FAILED Detail:', JSON.stringify(statusRes.data, null, 2));
+            throw new Error(`Synthesis Failed: ${statusRes.data?.error_message || 'Internal Model Error'}`);
+        } else if (statusRes?.data?.status === 'CREATED' || statusRes?.data?.status === 'PROCESSING') {
+            // Continue polling
+        } else {
+            console.log(`[V11.1] Unknown Status: ${statusRes?.data?.status}`);
         }
     }
     throw new Error(`Timeout waiting for V11 Edit`);
