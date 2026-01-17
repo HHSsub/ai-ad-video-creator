@@ -378,14 +378,23 @@ export async function safeCallFreepik(url, options = {}, conceptId = 0) {
       const { key: apiKey } = apiKeyManager.selectFreepikKeyForConcept(conceptId);
       console.log(`[${label}] 시도 ${attempt + 1}/${maxTotalAttempts} (컨셉: ${conceptId}, 키: ${keyIndex}, 사용된 키: ${usedKeys.size}/${totalKeys})`);
 
+      // 🔥 EXPLICIT HEADER MANAGEMENT (V11.4)
+      // Prevent duplicate headers and ensure lowercase standardized key
+      const baseHeaders = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'x-freepik-api-key': apiKey
+      };
+
+      const finalHeaders = {
+        ...options.headers, // Allow caller to provide some, but priority given to baseHeaders
+        ...baseHeaders
+      };
+
       const response = await withTimeout(
         fetch(url, {
           ...options,
-          headers: {
-            'X-Freepik-API-Key': apiKey,
-            'Content-Type': 'application/json',
-            ...options.headers
-          }
+          headers: finalHeaders
         }),
         timeout
       );
