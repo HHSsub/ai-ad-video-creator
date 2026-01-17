@@ -73,7 +73,9 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
 
     while (Date.now() - start < POLLING_TIMEOUT) {
         await sleep(3000);
-        const statusUrl = getTextToImageStatusUrl(taskId);
+        // 🔥 STRICT ENDPOINT CORRECTION (V11.0)
+        // Docs: GET /v1/ai/text-to-image/seedream-v4-5-edit/{task-id}
+        const statusUrl = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit/${taskId}`;
         const statusRes = await safeCallFreepik(statusUrl, { method: 'GET' });
 
         if (statusRes?.data?.status === 'COMPLETED') {
