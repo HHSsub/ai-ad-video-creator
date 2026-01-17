@@ -64,10 +64,13 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
         body: JSON.stringify(payload)
     }, `v11-edit`, 'seedream-edit');
 
-    if (!result?.data?.task_id) throw new Error(`Task Init Failed for V11 Edit`);
+    // 🔥 Debug Logging for V4.5 Edit Response
+    console.log('[V11.0] POST Response:', JSON.stringify(result, null, 2));
+
+    const taskId = result.task_id || result.data?.task_id;
+    if (!taskId) throw new Error(`Task Init Failed: No task_id in response`);
 
     // Polling Logic
-    const taskId = result.data.task_id;
     const POLLING_TIMEOUT = 120000;
     const start = Date.now();
 
@@ -76,6 +79,8 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
         // 🔥 STRICT ENDPOINT CORRECTION (V11.0)
         // Docs: GET /v1/ai/text-to-image/seedream-v4-5-edit/{task-id}
         const statusUrl = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit/${taskId}`;
+        console.log(`[V11.0] Polling Status: ${statusUrl}`); // Log URL to catch undefined/null
+
         const statusRes = await safeCallFreepik(statusUrl, { method: 'GET' });
 
         if (statusRes?.data?.status === 'COMPLETED') {
