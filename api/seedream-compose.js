@@ -27,7 +27,7 @@ async function fetchImageBuffer(source) {
     }
 }
 
-// [HELPER] Aspect Ratio Mapper
+// [HELPER] Aspect Ratio Mapper (Original 3-mode)
 function getSceneAspectRatio(width, height) {
     const ratio = width / height;
     if (ratio > 1.3) return 'widescreen_16_9';
@@ -40,14 +40,20 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
     const baseUrl = getFreepikApiBase();
     const url = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit`;
 
-    // 1. URL Preservation
-    const processedRefs = referenceImages.map(ref => {
-        if (typeof ref === 'string' && ref.startsWith('http')) return ref;
-        if (Buffer.isBuffer(ref)) return `data:image/jpeg;base64,${ref.toString('base64')}`;
+    // 1. URL Preservation (V11.5: Keep source logging)
+    const processedRefs = referenceImages.map((ref, idx) => {
+        if (typeof ref === 'string' && ref.startsWith('http')) {
+            console.log(`[V11.5] Ref[${idx}]: URL -> ${ref}`);
+            return ref;
+        }
+        if (Buffer.isBuffer(ref)) {
+            console.log(`[V11.5] Ref[${idx}]: Buffer -> Base64 (Size: ${Math.round(ref.length / 1024)}KB)`);
+            return `data:image/jpeg;base64,${ref.toString('base64')}`;
+        }
         return ref;
     });
 
-    // 🛑 V11.3 SPEC-PERFECT PAYLOAD (NO UNSUPPORTED PARAMS)
+    // 🛑 V11.5 SPEC-PERFECT PAYLOAD
     const payload = {
         prompt: prompt,
         reference_images: processedRefs,
@@ -56,22 +62,19 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
         enable_safety_checker: false // DEBUG: OFF
     };
 
-    console.log(`[V11.3] Sending Spec-Perfect Request to Seedream v4.5 Edit...`);
+    console.log(`[V11.5] Sending request to Seedream v4.5 Edit...`);
 
+    // safeCallFreepik in V11.4+ handles header merging robustly
     const result = await safeCallFreepik(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     }, `v11-edit-spec-perfect`);
 
-    // 🔥 Debug Logging for Spec Verification
-    console.log('[V11.3] POST Response:', JSON.stringify(result, null, 2));
+    console.log('[V11.5] POST Response:', JSON.stringify(result, null, 2));
 
     const taskId = result.data?.task_id || result.task_id;
-    if (!taskId) {
-        console.error('[V11.3] Task Init Failed. Response:', JSON.stringify(result, null, 2));
-        throw new Error(`Task Init Failed: ${result.error?.message || 'Unknown API Error'}`);
-    }
+    if (!taskId) throw new Error(`Task Init Failed: ${JSON.stringify(result)}`);
 
     // Polling Logic
     const POLLING_TIMEOUT = 120000;
@@ -80,19 +83,18 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
     while (Date.now() - start < POLLING_TIMEOUT) {
         await sleep(3000);
         const statusUrl = `${baseUrl}/ai/text-to-image/seedream-v4-5-edit/${taskId}`;
-        console.log(`[V11.3] Polling Status (${taskId}): ${statusUrl}`);
+        console.log(`[V11.5] Polling (${taskId}) Status Check...`);
 
-        const statusRes = await safeCallFreepik(statusUrl, { method: 'GET' });
+        const statusRes = await safeCallFreepik(statusUrl, { method: 'GET' }, 0);
+        const data = statusRes.data || statusRes;
+        const status = data.status;
 
-        if (statusRes?.data?.status === 'COMPLETED') {
-            const output = statusRes.data.generated[0];
+        if (status === 'COMPLETED') {
+            const output = data.generated[0];
             return output.url || output;
-        } else if (statusRes?.data?.status === 'FAILED') {
-            console.error('[V11.3] API Synthesis FAILED Detail:', JSON.stringify(statusRes.data, null, 2));
-            throw new Error(`Synthesis Failed: ${statusRes.data?.error_message || 'Internal Model Error'}`);
-        } else if (statusRes?.status === 'FAILED') {
-            console.error('[V11.3] API Synthesis FAILED (Flat):', JSON.stringify(statusRes, null, 2));
-            throw new Error(`Synthesis Failed (Flat Response)`);
+        } else if (status === 'FAILED') {
+            console.error('[V11.5] Synthesis FAILED Detail:', JSON.stringify(data, null, 2));
+            throw new Error(`Synthesis Failed: ${data.error_message || 'Internal Model Error'}`);
         }
     }
     throw new Error(`Timeout waiting for V11 Edit`);
@@ -101,25 +103,23 @@ async function callSeedreamEdit({ prompt, referenceImages, aspectRatio }) {
 // [MAIN PIPELINE]
 export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, compositingInfo) {
     try {
-        console.log('[V11.3] Spec-Perfect URL Protocol Start');
+        console.log('[V11.5] Pure-Repair Protocol Start');
 
-        // 1. Load Buffers (ONLY for Metadata/Analysis, NOT for API Payload if they are URLs)
+        // 1. Fetch Buffer for Analysis
         const baseBuffer = await fetchImageBuffer(baseImageUrl);
-        // overlayBuffer is not strictly needed for metadata here but kept for consistency if needed.
 
-        // 2. Analyze Geometry
+        // 2. Original Aspect Ratio Mapping
         const baseMeta = await sharp(baseBuffer).metadata();
         const aspectRatio = getSceneAspectRatio(baseMeta.width, baseMeta.height);
-        console.log(`[V11.2] Detected Aspect Ratio: ${aspectRatio}`);
+        console.log(`[V11.5] Aspect Ratio: ${aspectRatio}`);
 
-        // 3. Construct Prompt
-        const type = compositingInfo.synthesisType || 'object';
+        // 3. Original "Replace X with Y" Prompt
+        const type = compositingInfo.synthesisType || 'person';
         const finalPrompt = `Replace the main object in image 1 with the ${type} from image 2. Maintain background lighting and perspective exactly. Professional photography, contact shadows.`;
 
-        // 4. Call API (V11.2: Prefer URLs)
+        // 4. API Call
         const finalUrl = await callSeedreamEdit({
             prompt: finalPrompt,
-            // 🔥 Pass original URLs if they are URLs, otherwise pass buffers
             referenceImages: [
                 baseImageUrl.startsWith('http') ? baseImageUrl : baseBuffer,
                 (typeof overlayImageData === 'string' && overlayImageData.startsWith('http')) ? overlayImageData : await fetchImageBuffer(overlayImageData)
@@ -143,7 +143,7 @@ export async function safeComposeWithSeedream(baseImageUrl, overlayImageData, co
         };
 
     } catch (err) {
-        console.error('[V11.0] Critical Failure:', err);
+        console.error('[V11.5] Critical Failure:', err);
         throw err;
     }
 }
