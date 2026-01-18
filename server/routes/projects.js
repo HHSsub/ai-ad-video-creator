@@ -355,6 +355,7 @@ router.delete('/:id/members/:memberId', (req, res) => {
 
   const membersData = readMembers();
   const requester = membersData.members.find(m => m.projectId === id && m.username === username);
+  const project = readProjectFile(id); // 🔥 누락된 project 객체 로드 추가
   const isAdmin = username === 'admin';
   const isCreator = project && project.createdBy === username;
 
