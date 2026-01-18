@@ -47,13 +47,53 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext, userRole = 'viewer
   useEffect(() => {
     window.scrollTo(0, 0);
     const loadConfig = async () => {
-      const config = await loadFieldConfig();
+      let config = await loadFieldConfig();
+
+      // 🔥 userdescription 필드 강제 제거 (오토 모드에서 원치 않는 필드 노출 방지)
+      if (config.userdescription || config.hasOwnProperty('userdescription')) {
+        const { userdescription, ...rest } = config;
+        config = rest;
+        console.log('[Step1Auto] userdescription 필드 설정에서 제거됨');
+      }
+
       const settings = loadAdminSettings();
       setFieldConfig(config);
       setAdminSettings(settings);
     };
     loadConfig();
   }, []);
+
+  // 🔥 [Migration] 데이터 매핑(Mapping) 오류 및 구버전 호환성 해결
+  useEffect(() => {
+    let changed = false;
+    const newFormData = { ...formData };
+
+    // 1. Aspect Ratio: portrait_9_16 -> social_story_9_16
+    if (newFormData.aspectRatioCode === 'portrait_9_16') {
+      newFormData.aspectRatioCode = 'social_story_9_16';
+      changed = true;
+    }
+
+    // 2. Video Purpose: 한국어 값('제품', '서비스') -> English key 호환
+    if (newFormData.videoPurpose === '제품') {
+      newFormData.videoPurpose = 'product';
+      changed = true;
+    } else if (newFormData.videoPurpose === '서비스') {
+      newFormData.videoPurpose = 'service';
+      changed = true;
+    }
+
+    // 3. 강제 정화: formData 내에 잔존하는 userdescription 제거
+    if (newFormData.userdescription || newFormData.userdescription === '') {
+      delete newFormData.userdescription;
+      changed = true;
+    }
+
+    if (changed) {
+      console.log('[Step1Auto] 🛠 데이터 매핑 보정 완료');
+      setFormData(newFormData);
+    }
+  }, [formData.aspectRatioCode, formData.videoPurpose, formData.userdescription, setFormData]);
 
   const handleConfigUpdate = (newFieldConfig) => {
     setFieldConfig(newFieldConfig);
@@ -808,8 +848,9 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext, userRole = 'viewer
     );
   };
 
-  const visibleFields = Object.values(fieldConfig).filter(field => field.visible);
-  const hiddenFields = Object.values(fieldConfig).filter(field => !field.visible);
+  // 🔥 userdescription 필드는 오토 모드에서 원치 않으므로 렌더링 대상에서 강제 제외
+  const visibleFields = Object.values(fieldConfig).filter(field => field.visible && field.key !== 'userdescription');
+  const hiddenFields = Object.values(fieldConfig).filter(field => !field.visible && field.key !== 'userdescription');
 
   return (
     <>

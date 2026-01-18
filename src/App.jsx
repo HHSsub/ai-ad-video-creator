@@ -226,7 +226,6 @@ function App() {
   const handleSelectProject = async (project) => {
     setCurrentProject(project);
 
-    // 프로젝트 데이터 로드 (🔥 Cache Busting Added)
     try {
       const response = await fetch(`/nexxii/api/projects/${project.id}?t=${Date.now()}`, {
         headers: {
@@ -236,56 +235,75 @@ function App() {
 
       if (response.ok) {
         const data = await response.json();
+        const proj = data.project;
 
-        // 🔥 v4.1 워크플로우: 기존 작업이 있는지 확인 (styles 배열 길이 체크 필수)
-        if (data.project.storyboard &&
-          data.project.storyboard.styles &&
-          data.project.storyboard.styles.length > 0) {
+        // 🔥 v4.5: 데이터 우선순위 및 Fallback 로직 적용
+        // 1. formData 로드
+        let finalFormData = proj.formData || {};
+        // 2. metadata 추출 (storyboard 내부 또는 최상위 존재 가능)
+        const metadata = proj.storyboard?.metadata || proj.metadata || {};
 
-          console.log('[App] ✅ 기존 작업 발견, 역할:', data.userRole);
-          setStoryboard(data.project.storyboard);
-          setFormData(data.project.formData || {});
-          setCurrentMode(data.project.mode);
-          setUserRole(data.userRole || 'viewer'); // ✅ API에서 받은 역할 설정
+        // 3. Fallback: formData가 비어있으면 metadata에서 복구
+        const fieldsToRecover = ['videoPurpose', 'videoLength'];
+        fieldsToRecover.forEach(key => {
+          if ((!finalFormData[key] || finalFormData[key] === '') && metadata[key]) {
+            console.log(`[App] ${key} 데이터 복구: metadata -> formData`);
+            finalFormData[key] = metadata[key];
+          }
+        });
 
-          // 🔥 CRITICAL: finalVideos를 최우선으로 체크 (완성 프로젝트는 무조건 Step5)
-          if (data.project.storyboard.finalVideos && data.project.storyboard.finalVideos.length > 0) {
-            console.log('[App] 🎬 완성된 영상 발견 - Step5로 이동');
+        // 4. Aspect Ratio 특수 매핑: aspectRatio (metadata) -> aspectRatioCode (formData)
+        if ((!finalFormData.aspectRatioCode || finalFormData.aspectRatioCode === '') && metadata.aspectRatio) {
+          console.log('[App] aspectRatioCode 데이터 복구: metadata -> formData');
+          finalFormData.aspectRatioCode = metadata.aspectRatio;
+        }
+
+        // 5. 데이터 정규화: 한국어 -> 영문 키 호환 및 규격 통일
+        if (finalFormData.videoPurpose === '제품') finalFormData.videoPurpose = 'product';
+        if (finalFormData.videoPurpose === '서비스') finalFormData.videoPurpose = 'service';
+        if (finalFormData.aspectRatioCode === 'portrait_9_16') finalFormData.aspectRatioCode = 'social_story_9_16';
+
+        // 6. 강제 정화: 오토 모드에서 사용되지 않는 userdescription 제거
+        if (finalFormData.userdescription) {
+          delete finalFormData.userdescription;
+        }
+
+        console.log('[App] ✅ 프로젝트 데이터 로드 완료 (보정됨):', {
+          mode: proj.mode,
+          hasStoryboard: !!proj.storyboard,
+          formData: finalFormData
+        });
+
+        setStoryboard(proj.storyboard);
+        setFormData(finalFormData);
+        setUserRole(data.userRole || 'viewer');
+
+        // v4.5 워크플로우: 기존 작업이 있는지 확인 (styles 배열 길이 체크)
+        if (proj.storyboard && proj.storyboard.styles && proj.storyboard.styles.length > 0) {
+          setCurrentMode(proj.mode || 'auto');
+
+          // 상태에 따른 뷰 결정
+          if (proj.storyboard.finalVideos && proj.storyboard.finalVideos.length > 0) {
             setCurrentView('step5');
             setStep(5);
-            return;
-          }
-
-          // imageSetMode가 true면 이미지만 생성된 상태 → Step3으로
-          if (data.project.storyboard.imageSetMode) {
-            console.log('[App] 📸 이미지 세트 발견 - Step3으로 이동');
-            setCurrentView('step3');
+          } else {
+            setCurrentView('step3'); // 기본적으로 스토리보드 확인 단계로
             setStep(3);
-            return;
           }
-
-          // 기타 경우 (구버전 호환) → Step4로
-          console.log('[App] 📋 스토리보드 발견 - Step4로 이동 (구버전 호환)');
-          setCurrentView('step4');
-          setStep(4);
-          return;
         } else {
-          console.log('[App] ℹ️ 신규 프로젝트 또는 빈 프로젝트입니다.');
-          // 🔥 v4.1: 신규 프로젝트라도 기존의 formData를 유지하거나 
-          // 프로젝트 객체에 있는 formData가 있으면 그것을 우선 사용
-          if (data.project.formData && Object.keys(data.project.formData).length > 0) {
-            setFormData(data.project.formData);
-          }
+          // 신규 또는 기획 단계
+          setCurrentMode(proj.mode || null);
+          setCurrentView(proj.mode ? (proj.mode === 'auto' ? 'step1-auto' : 'step1-manual') : 'mode-select');
+          setStep(1);
         }
+        return;
       }
     } catch (error) {
       console.error('[App] 프로젝트 로드 실패:', error);
     }
 
-    // storyboard 없으면 모드 선택
+    // 로드 실패 시 초기화
     setCurrentMode(null);
-    // 🔥 CRITICAL: 여기서 formData를 하드하게 초기화해서 기존 입력값이 날아감.
-    // 프로젝트에 이미 저장된 formData가 있으면 그것을 유지해야 함.
     setStoryboard(null);
     setSelectedConceptId(null);
     setCurrentView('mode-select');

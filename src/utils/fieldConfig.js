@@ -52,8 +52,8 @@ const DEFAULT_FIELD_CONFIG = {
       { value: 'product', label: '제품' },
       { value: 'service', label: '서비스' },
     ],
-    defaultValue: '제품',
-    randomValues: ['제품', '서비스']
+    defaultValue: 'product',
+    randomValues: ['product', 'service']
   },
 
   videoLength: {
