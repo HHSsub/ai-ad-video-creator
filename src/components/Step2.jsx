@@ -845,9 +845,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
               <button
                 onClick={handleGenerateStoryboard}
                 disabled={isBusy || userRole !== 'owner'}
-                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 text-white rounded-lg transition-all duration-200 font-medium disabled:cursor-not-allowed"
+                style={(isBusy || userRole !== 'owner') ? { background: '#374151', backgroundImage: 'none', boxShadow: 'none' } : {}}
+                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 disabled:opacity-70 text-white rounded-lg transition-all duration-200 font-medium disabled:cursor-not-allowed"
               >
-                {userRole === 'owner' ? getButtonText() : '재생성 권한 없음 (Owner 전용)'}
+                {getButtonText()}
               </button>
             </div>
           </div>

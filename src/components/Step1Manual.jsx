@@ -415,8 +415,8 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext, userRole = '
                 <div
                   onClick={() => handleChange('personSelection', '')}
                   className={`flex - shrink - 0 w - 24 h - 32 rounded - lg border - 2 cursor - pointer flex items - center justify - center transition - all ${!formData.personSelection
-                      ? 'border-blue-500 bg-blue-900/20'
-                      : 'border-gray-700 bg-gray-800 hover:border-gray-500'
+                    ? 'border-blue-500 bg-blue-900/20'
+                    : 'border-gray-700 bg-gray-800 hover:border-gray-500'
                     } `}
                 >
                   <span className="text-sm text-gray-400 font-bold">선택 안함</span>
@@ -427,8 +427,8 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext, userRole = '
                     key={person.key}
                     onClick={() => handleChange('personSelection', person.url)}
                     className={`relative flex - shrink - 0 w - 24 h - 32 rounded - lg overflow - hidden border - 2 cursor - pointer transition - all ${formData.personSelection === person.url
-                        ? 'border-blue-500 ring-2 ring-blue-500/30'
-                        : 'border-gray-700 hover:border-gray-500'
+                      ? 'border-blue-500 ring-2 ring-blue-500/30'
+                      : 'border-gray-700 hover:border-gray-500'
                       } `}
                   >
                     <img src={person.url} alt={person.name} className="w-full h-full object-cover" />
@@ -481,11 +481,12 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext, userRole = '
 
           {/* 기존 다음 버튼 */}
           <button
-            className="btn-submit px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 text-white rounded-lg transition-all duration-200 font-medium disabled:cursor-not-allowed"
+            className="btn-submit px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 disabled:opacity-70 text-white rounded-lg transition-all duration-200 font-medium disabled:cursor-not-allowed"
+            style={userRole !== 'owner' ? { background: '#374151', backgroundImage: 'none', boxShadow: 'none' } : {}}
             onClick={handleSubmit}
             disabled={userRole !== 'owner'}
           >
-            {userRole === 'owner' ? '다음 단계로 →' : '수정 권한 없음 (Owner 전용)'}
+            다음 단계로 →
           </button>
         </div>
       </div>

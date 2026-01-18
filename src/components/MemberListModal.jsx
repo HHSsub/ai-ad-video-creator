@@ -85,11 +85,16 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
 
     if (!isOpen) return null;
 
-    const canManage = isAdmin || ['owner', 'manager'].currentMemberRole?.includes(currentMemberRole) || (isAdmin ? true : ['owner', 'manager'].includes(currentMemberRole));
-    // Correct logic:
-    const isOwnerOrAdmin = isAdmin || currentMemberRole === 'owner';
+    const isOwner = currentMemberRole === 'owner';
     const isManager = currentMemberRole === 'manager';
+    const isOwnerOrAdmin = isAdmin || isOwner;
     const hasManagePermission = isOwnerOrAdmin || isManager;
+
+    useEffect(() => {
+        if (isOpen) {
+            console.log(`[MemberListModal] User: ${currentUser}, Role: ${currentMemberRole}, isAdmin: ${isAdmin}, hasManagePermission: ${hasManagePermission}`);
+        }
+    }, [isOpen, currentMemberRole, isAdmin, hasManagePermission]);
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -147,7 +152,6 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
                                             <select
                                                 value={member.role}
                                                 onChange={(e) => handleRoleChange(member.id, e.target.value)}
-                                                disabled={isManager && e.target.value === 'owner'} // Actually managed by select change handler
                                                 className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none disabled:opacity-50"
                                             >
                                                 {ROLE_OPTIONS.map(opt => {
