@@ -26,6 +26,7 @@ const ROLE_OPTIONS = [
 
 const Step4 = ({
   storyboard,
+  setStoryboard,
   selectedConceptId,
   formData,
   onPrev,
@@ -555,16 +556,31 @@ const Step4 = ({
 
     setNewComment(prev => ({ ...prev, [sceneNumber]: '' }));
 
-    // 2. 스토리보드 객체 업데이트 (참조 수정)
-    const scene = sortedImages.find(img => img.sceneNumber === sceneNumber);
-    if (!scene) return;
+    // 2. 부모 상태 및 원본 객체 업데이트 (Reference 관점)
+    if (setStoryboard) {
+      setStoryboard(prev => {
+        if (!prev || !prev.styles) return prev;
+        const newStoryboard = { ...prev };
+        const targetStyle = newStoryboard.styles.find(s => s.id === selectedConceptId);
+        if (targetStyle) {
+          const targetScene = targetStyle.images.find(img => img.sceneNumber === sceneNumber);
+          if (targetScene) {
+            if (!targetScene.comments) targetScene.comments = [];
+            targetScene.comments = [...targetScene.comments, comment];
+          }
+        }
+        return newStoryboard;
+      });
+    }
 
-    if (!scene.comments) scene.comments = [];
-    scene.comments.push(comment);
-
-    // 3. 백엔드 저장 (PATCH)
+    // 3. 백엔드 즉시 저장 (storyboardUpdate 활용으로 속도 및 정합성 향상)
     try {
-      log(`씬 ${sceneNumber} 코멘트 저장 중...`);
+      log(`씬 ${sceneNumber} 코멘트 서버 저장 중...`);
+
+      // 현재 씬의 전체 코멘트 목록 (방금 추가한 것 포함)
+      const currentScene = sortedImages.find(img => img.sceneNumber === sceneNumber);
+      const allComments = [...(currentScene?.comments || []), comment];
+
       await fetch(`${API_BASE}/api/projects/${currentProject?.id}`, {
         method: 'PATCH',
         headers: {
@@ -572,15 +588,17 @@ const Step4 = ({
           'x-username': user?.username || 'anonymous'
         },
         body: JSON.stringify({
-          storyboard: storyboard, // 변경된 코멘트가 포함된 전체 스토리보드 저장
-          formData: formData
+          storyboardUpdate: {
+            conceptId: selectedConceptId,
+            sceneNumber: sceneNumber,
+            updates: { comments: allComments }
+          }
         })
       });
-      log(`씬 ${sceneNumber} 코멘트 저장 완료`);
+      log(`씬 ${sceneNumber} 코멘트 서버 저장 완료`);
     } catch (saveErr) {
       console.error('코멘트 저장 실패:', saveErr);
       setError('코멘트 저장 실패 (네트워크 오류)');
-      // 실패 시 롤백 로직이 필요할 수 있으나, 현재는 에러만 표시
     }
   };
 

@@ -9,6 +9,15 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['삼성', 'LG', '현대', 'SK', 'KT', '네이버', '카카오', '쿠팡', '배달의민족', '토스']
   },
+  userdescription: {
+    key: 'userdescription',
+    label: '영상 설명 (프롬프트)',
+    required: true,
+    visible: true,
+    type: 'textarea',
+    placeholder: '영상의 내용을 상세히 설명해주세요 (Manual 모드 연동)',
+    defaultValue: ''
+  },
 
   industryCategory: {
     key: 'industryCategory',
@@ -81,7 +90,7 @@ const DEFAULT_FIELD_CONFIG = {
     options: [
       { value: 'widescreen_16_9', label: '가로 (16:9)' },
       { value: 'square_1_1', label: '정사각형 (1:1)' },
-      { value: 'portrait_9_16', label: '세로 (9:16)' }
+      { value: 'social_story_9_16', label: '세로 (9:16)' }
     ],
     defaultValue: 'widescreen_16_9',
     randomValues: ['가로 (16:9)', '정사각형 (1:1)', '세로 (9:16)']
@@ -271,9 +280,10 @@ export const validateAndCleanFormData = async (formData) => {
 
   normalizeAspectRatio(cleaned);
 
-  delete cleaned.videoDescription;
-  delete cleaned.imageUploadDesc;
-  delete cleaned.videoAspectRatio;
+  // 🔥 데이터 유실 방지: 과도한 삭제 로직 제거
+  // delete cleaned.videoDescription;
+  // delete cleaned.imageUploadDesc;
+  // delete cleaned.videoAspectRatio;
 
   const config = await loadFieldConfig();
   Object.keys(config).forEach(key => {

@@ -801,6 +801,7 @@ function App() {
           {currentView === 'step4' && (
             <Step4
               storyboard={storyboard}
+              setStoryboard={setStoryboard}
               selectedConceptId={selectedConceptId}
               formData={formData}
               onPrev={() => {
