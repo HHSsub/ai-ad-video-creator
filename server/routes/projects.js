@@ -96,7 +96,8 @@ router.get('/', (req, res) => {
           status: projectData.status,
           mode: projectData.mode || 'manual',
           lastStep: projectData.lastStep,
-          storyboard: projectData.storyboard
+          storyboard: projectData.storyboard,
+          userRole: isSystemAdmin ? 'admin' : (isCreator ? 'owner' : (membership ? membership.role : 'viewer'))
         });
       }
     }

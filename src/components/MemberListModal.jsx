@@ -83,18 +83,12 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
         }
     };
 
-    if (!isOpen) return null;
-
     const isOwner = currentMemberRole === 'owner';
     const isManager = currentMemberRole === 'manager';
     const isOwnerOrAdmin = isAdmin || isOwner;
     const hasManagePermission = isOwnerOrAdmin || isManager;
 
-    useEffect(() => {
-        if (isOpen) {
-            console.log(`[MemberListModal] User: ${currentUser}, Role: ${currentMemberRole}, isAdmin: ${isAdmin}, hasManagePermission: ${hasManagePermission}`);
-        }
-    }, [isOpen, currentMemberRole, isAdmin, hasManagePermission]);
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
