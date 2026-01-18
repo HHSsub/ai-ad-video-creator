@@ -934,8 +934,6 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext, userRole = 'viewer
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={userRole !== 'owner'}
-                  style={userRole !== 'owner' ? { background: '#374151', backgroundImage: 'none', boxShadow: 'none' } : {}}
                   className="group relative bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 hover:from-blue-500 hover:via-blue-400 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 disabled:opacity-70 text-white px-12 py-5 rounded-2xl text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25 shadow-xl disabled:cursor-not-allowed"
                 >
                   <span className="relative z-10 flex items-center gap-4">
