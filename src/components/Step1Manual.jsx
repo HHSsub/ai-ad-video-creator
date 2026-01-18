@@ -4,7 +4,7 @@ import './Step1Manual.css';
 import { loadFieldConfig, saveFieldConfig } from '../utils/fieldConfig';
 import { forceScrollTop } from '../forceScrollTop';
 
-const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
+const Step1Manual = ({ formData, setFormData, user, onPrev, onNext, userRole = 'viewer' }) => {
   useEffect(() => {
     forceScrollTop();
   }, []);
@@ -30,7 +30,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
     const loadAspectRatios = async () => {
       try {
         const apiBase = import.meta.env.VITE_API_BASE_URL || '';
-        const response = await fetch(`${apiBase}/api/engines`);
+        const response = await fetch(`${apiBase} /api/engines`);
         const data = await response.json();
 
         if (data.success && data.currentEngine?.textToImage) {
@@ -255,7 +255,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
               <button
                 key={length}
                 type="button"
-                className={`option-btn ${formData.videoLength === length ? 'selected' : ''}`}
+                className={`option - btn ${formData.videoLength === length ? 'selected' : ''} `}
                 onClick={() => handleChange('videoLength', length)}
               >
                 {length}
@@ -275,7 +275,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
               <button
                 key={ratio.value}
                 type="button"
-                className={`option-btn ${formData.aspectRatioCode === ratio.value ? 'selected' : ''}`}
+                className={`option - btn ${formData.aspectRatioCode === ratio.value ? 'selected' : ''} `}
                 onClick={() => handleChange('aspectRatioCode', ratio.value)}
               >
                 {ratio.label}
@@ -295,7 +295,7 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
               <button
                 key={purpose.value}
                 type="button"
-                className={`option-btn ${formData.videoPurpose === purpose.value ? 'selected' : ''}`}
+                className={`option - btn ${formData.videoPurpose === purpose.value ? 'selected' : ''} `}
                 onClick={() => handleChange('videoPurpose', purpose.value)}
               >
                 {purpose.label}
@@ -414,10 +414,10 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
                 {/* None Option */}
                 <div
                   onClick={() => handleChange('personSelection', '')}
-                  className={`flex-shrink-0 w-24 h-32 rounded-lg border-2 cursor-pointer flex items-center justify-center transition-all ${!formData.personSelection
-                    ? 'border-blue-500 bg-blue-900/20'
-                    : 'border-gray-700 bg-gray-800 hover:border-gray-500'
-                    }`}
+                  className={`flex - shrink - 0 w - 24 h - 32 rounded - lg border - 2 cursor - pointer flex items - center justify - center transition - all ${!formData.personSelection
+                      ? 'border-blue-500 bg-blue-900/20'
+                      : 'border-gray-700 bg-gray-800 hover:border-gray-500'
+                    } `}
                 >
                   <span className="text-sm text-gray-400 font-bold">선택 안함</span>
                 </div>
@@ -426,10 +426,10 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
                   <div
                     key={person.key}
                     onClick={() => handleChange('personSelection', person.url)}
-                    className={`relative flex-shrink-0 w-24 h-32 rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${formData.personSelection === person.url
-                      ? 'border-blue-500 ring-2 ring-blue-500/30'
-                      : 'border-gray-700 hover:border-gray-500'
-                      }`}
+                    className={`relative flex - shrink - 0 w - 24 h - 32 rounded - lg overflow - hidden border - 2 cursor - pointer transition - all ${formData.personSelection === person.url
+                        ? 'border-blue-500 ring-2 ring-blue-500/30'
+                        : 'border-gray-700 hover:border-gray-500'
+                      } `}
                   >
                     <img src={person.url} alt={person.name} className="w-full h-full object-cover" />
                     <div className="absolute inset-x-0 bottom-0 bg-black/60 p-1 text-center">
@@ -481,10 +481,11 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext }) => {
 
           {/* 기존 다음 버튼 */}
           <button
-            className="btn-submit px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg transition-all duration-200 font-medium"
+            className="btn-submit px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 text-white rounded-lg transition-all duration-200 font-medium disabled:cursor-not-allowed"
             onClick={handleSubmit}
+            disabled={userRole !== 'owner'}
           >
-            다음 단계로 →
+            {userRole === 'owner' ? '다음 단계로 →' : '수정 권한 없음 (Owner 전용)'}
           </button>
         </div>
       </div>

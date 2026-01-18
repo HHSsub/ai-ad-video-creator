@@ -96,7 +96,7 @@ const getUnifiedImageData = (formData) => {
   };
 };
 
-const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading, user, currentProject }) => {
+const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoading, user, currentProject, userRole = 'viewer' }) => {
   const [percent, setPercent] = useState(0);
   const [logs, setLogs] = useState([]);
   const [imagesDone, setImagesDone] = useState(0);
@@ -844,10 +844,10 @@ const Step2 = ({ onNext, onPrev, formData, setStoryboard, setIsLoading, isLoadin
             <div className="flex items-center gap-3">
               <button
                 onClick={handleGenerateStoryboard}
-                disabled={isBusy}
-                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isBusy || userRole !== 'owner'}
+                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 text-white rounded-lg transition-all duration-200 font-medium disabled:cursor-not-allowed"
               >
-                {getButtonText()}
+                {userRole === 'owner' ? getButtonText() : '재생성 권한 없음 (Owner 전용)'}
               </button>
             </div>
           </div>

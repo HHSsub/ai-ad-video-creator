@@ -9,18 +9,19 @@ import InviteMemberModal from './InviteMemberModal';
 const API_BASE = '/nexxii';
 
 const ROLE_PERMISSIONS = {
-  viewer: { view: true, comment: false, editPrompt: false, regenerate: false, confirm: false, invite: false },
-  commenter: { view: true, comment: true, editPrompt: false, regenerate: false, confirm: false, invite: false },
-  editor: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: false, invite: false },
-  manager: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: true, invite: true },
-  owner: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: true, invite: true }
+  viewer: { view: true, comment: false, editPrompt: false, regenerate: false, confirm: false, invite: false, deleteScene: false },
+  commenter: { view: true, comment: true, editPrompt: false, regenerate: false, confirm: false, invite: false, deleteScene: false },
+  editor: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: false, invite: false, deleteScene: true },
+  manager: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: true, invite: true, deleteScene: true },
+  owner: { view: true, comment: true, editPrompt: true, regenerate: true, confirm: true, invite: true, deleteScene: true }
 };
 
 const ROLE_OPTIONS = [
   { value: 'viewer', label: 'Viewer (보기만)' },
   { value: 'commenter', label: 'Commenter (코멘트)' },
   { value: 'editor', label: 'Editor (편집)' },
-  { value: 'manager', label: 'Manager (관리)' }
+  { value: 'manager', label: 'Manager (관리)' },
+  { value: 'owner', label: 'Owner (소유자)' }
 ];
 
 const Step4 = ({
@@ -1574,7 +1575,7 @@ const Step4 = ({
 
                       <div className="flex items-center gap-2">
                         {/* 🔥 씬 삭제 버튼 (Use Stable ID) */}
-                        {permissions.editPrompt && (
+                        {permissions.deleteScene && (
                           <button
                             onClick={() => handleDeleteScene(img.originalSceneNumber)}
                             className="flex items-center gap-1 px-2 py-1 bg-red-900/30 hover:bg-red-900/60 text-red-400 hover:text-red-300 rounded transition-colors text-xs border border-red-900/50"

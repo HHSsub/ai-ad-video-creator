@@ -4,7 +4,7 @@ import { loadFieldConfig, saveFieldConfig, loadAdminSettings, saveAdminSettings 
 import RealtimeConfigSync from './RealtimeConfigSync';
 import { forceScrollTop } from '../forceScrollTop';
 
-const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
+const Step1 = ({ formData, setFormData, user, onPrev, onNext, userRole = 'viewer' }) => {
   const [fieldConfig, setFieldConfig] = useState({});
   const [adminSettings, setAdminSettings] = useState({});
   const [errors, setErrors] = useState({});
@@ -934,13 +934,16 @@ const Step1 = ({ formData, setFormData, user, onPrev, onNext }) => {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  className="group relative bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 hover:from-blue-500 hover:via-blue-400 hover:to-purple-500 text-white px-12 py-5 rounded-2xl text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25 shadow-xl"
+                  disabled={userRole !== 'owner'}
+                  className="group relative bg-gradient-to-r from-blue-600 via-blue-500 to-purple-600 hover:from-blue-500 hover:via-blue-400 hover:to-purple-500 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 text-white px-12 py-5 rounded-2xl text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25 shadow-xl disabled:cursor-not-allowed"
                 >
                   <span className="relative z-10 flex items-center gap-4">
-                    다음 단계
-                    <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
+                    {userRole === 'owner' ? '다음 단계' : '수정 권한 없음 (Owner 전용)'}
+                    {userRole === 'owner' && (
+                      <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    )}
                   </span>
                   <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 </button>

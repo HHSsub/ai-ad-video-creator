@@ -145,12 +145,14 @@ function App() {
       if (currentView === 'step5') {
         setStep(4);
         setCurrentView('step4');
-      } else if (currentView === 'step4') {
-        setStep(3);
-        setCurrentView('step3');
-      } else if (currentView === 'step3') {
-        setStep(2);
-        setCurrentView('step2');
+      } else if (currentView === 'step4' || currentView === 'step3') {
+        if (currentView === 'step4') {
+          setStep(3);
+          setCurrentView('step3');
+        } else {
+          setStep(2);
+          setCurrentView('step2');
+        }
       } else if (currentView === 'step2') {
         if (storyboard?.imageSetMode || storyboard?.styles?.length > 0) {
           handleBackToProjects();
@@ -240,10 +242,11 @@ function App() {
           data.project.storyboard.styles &&
           data.project.storyboard.styles.length > 0) {
 
-          console.log('[App] ✅ 기존 작업 발견');
+          console.log('[App] ✅ 기존 작업 발견, 역할:', data.userRole);
           setStoryboard(data.project.storyboard);
           setFormData(data.project.formData || {});
           setCurrentMode(data.project.mode);
+          setUserRole(data.userRole || 'viewer'); // ✅ API에서 받은 역할 설정
 
           // 🔥 CRITICAL: finalVideos를 최우선으로 체크 (완성 프로젝트는 무조건 Step5)
           if (data.project.storyboard.finalVideos && data.project.storyboard.finalVideos.length > 0) {
@@ -718,6 +721,7 @@ function App() {
               setFormData={setFormData}
               user={user}
               onPrev={handleBackToModeSelect}
+              userRole={userRole}
               onNext={() => {
                 console.log('Step1Auto 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
@@ -735,6 +739,7 @@ function App() {
               setFormData={setFormData}
               user={user}
               onPrev={handleBackToModeSelect}
+              userRole={userRole}
               onNext={() => {
                 console.log('Step1Manual 완료, formData:', formData);
                 console.log('🔥 선택된 영상 길이:', formData.videoLength);
@@ -753,6 +758,7 @@ function App() {
               setFormData={setFormData}
               user={user}
               onPrev={handleBackToModeSelect}
+              userRole={userRole}
               onNext={() => {
                 console.log('Step1Admin 완료, formData:', formData);
                 console.log('🔥 Gemini Response:', formData.geminiResponse?.substring(0, 100));
@@ -774,6 +780,7 @@ function App() {
               setIsLoading={setIsLoading}
               user={user}
               currentProject={currentProject}  // 🔥 추가
+              userRole={userRole}
               onPrev={() => {
                 // 🔥 G-4: 스토리보드가 이미 있으면 프로젝트 목록으로
                 if (storyboard?.imageSetMode || storyboard?.styles?.length > 0) {
@@ -820,6 +827,7 @@ function App() {
               formData={formData}
               user={user}
               currentProject={currentProject}
+              userRole={userRole}
             />
           )}
 

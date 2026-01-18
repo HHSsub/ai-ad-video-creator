@@ -1,3 +1,21 @@
+### 2026-01-17 16:30 - [MAJOR] V11.6 "Compression & Fallback" (The Final Fix)
+- **배경**: Freepik v4.5-edit 사용 중 10MB 이상의 고용량 PNG 파일이 유입될 때 "Internal Model Error"가 반복되는 문제 발생.
+- **핵심 해결**:
+  - **강제 압축**: `fetchImageBuffer` 단계에서 Sharp를 통해 모든 이미지를 `1024x1024` 리사이징 + `JPEG(85%)` 변환. (용량을 2~4MB 수준으로 강제 제한)
+  - **V4 Fallback**: v4.5-edit 실패 시 즉시 `seedream-v4-edit` 엔드포인트로 자동 시도하는 2중 안전장치 구현.
+  - **Header Robustness**: `apiHelpers.js`에서 API Key 소문화(`x-freepik-api-key`) 및 헤더 병합 순서 최우선화로 게이트웨이 충돌 방지.
+- **상태**: ✅ 적용 완료 및 사용자 확인.
+
+### 2026-01-17 06:45 - [PATCH] V11.1 ~ V11.5 Stability 및 Spec-Strict 패치
+- **V11.1**: 상세 로깅 강화, Safety Checker 디버그 비활성화, JPEG 최적화 도입.
+- **V11.2**: S3 URL 직접 전달(URL Preservation)로 페이로드 최소화.
+- **V11.3**: `num_images` 등 공식 문서 미지원 파라미터 전면 제거.
+- **V11.4**: 헤더 관리 결함 수정 및 정밀 종횡비 매핑.
+- **V11.5**: 자의적 개선(프롬프트 변형, 상세 종횡비)을 제거하고 사용자 요구에 따라 오리지널 로직("Replace X with Y", 3가지 비율)으로 원복.
+- **상태**: ✅ 적용 완료.
+
+---
+
 ### 2026-01-16 15:10 - [MAJOR] V11.0 "Direct Edit" Protocol (Seedream Native)
 - **배경**: 기존 Sharp 기반 수동 합성(V9.5)의 한계(Masking Artifacts, 복잡성)와 사용자 Ultimatum에 따라, Freepik Seedream의 **Native Edit Endpoint**로 전면 전환.
 - **핵심 변경**:

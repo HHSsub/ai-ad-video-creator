@@ -4,7 +4,7 @@ import './Step1Manual.css';
 import { loadFieldConfig } from '../utils/fieldConfig';
 import { forceScrollTop } from '../forceScrollTop';
 
-const Step1Admin = ({ formData, setFormData, user, onPrev, onNext }) => {
+const Step1Admin = ({ formData, setFormData, user, onPrev, onNext, userRole = 'viewer' }) => {
     useEffect(() => {
         forceScrollTop();
     }, []);
@@ -239,10 +239,11 @@ Visual Description: 어두운 배경 속, 스포트라이트를 받으며 빛나
                     </button>
 
                     <button
-                        className="btn-submit px-8 py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white rounded-lg transition-all duration-200 font-medium"
+                        className="btn-submit px-8 py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 text-white rounded-lg transition-all duration-200 font-medium disabled:cursor-not-allowed"
                         onClick={handleSubmit}
+                        disabled={userRole !== 'owner'}
                     >
-                        다음 단계로 →
+                        {userRole === 'owner' ? '다음 단계로 →' : '수정 권한 없음 (Owner 전용)'}
                     </button>
                 </div>
             </div>

@@ -12,7 +12,8 @@ const Step3 = ({
   onNext,
   formData,
   user,
-  currentProject
+  currentProject,
+  userRole = 'viewer'
 }) => {
   const [selectedId, setSelectedId] = useState(selectedConceptId || null);
   const [error, setError] = useState(null);

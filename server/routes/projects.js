@@ -170,10 +170,12 @@ router.patch('/:id', async (req, res) => {
       const membersData = readMembers();
       const isCreator = project.createdBy === username;
       const membership = membersData.members.find(m => m.projectId === id && m.username === username);
-      const isOwnerOrEditor = membership && ['owner', 'editor'].includes(membership.role);
-      const isAdmin = username === 'admin';
+      const isSystemAdmin = username === 'admin';
 
-      if (!isAdmin && !isCreator && !isOwnerOrEditor) {
+      // ✅ Role-based check: owner, manager, editor can update project
+      const hasUpdatePermission = isSystemAdmin || isCreator || (membership && ['owner', 'manager', 'editor'].includes(membership.role));
+
+      if (!hasUpdatePermission) {
         return res.status(403).json({ error: 'Permission denied' });
       }
 
@@ -255,7 +257,9 @@ router.get('/:id', (req, res) => {
     return res.status(403).json({ error: '접근 권한 없음' });
   }
 
-  res.json({ project });
+  const role = isAdmin ? 'owner' : (membership ? membership.role : (isCreator ? 'owner' : 'viewer'));
+
+  res.json({ project, userRole: role });
 });
 
 // 4-1. 프로젝트 멤버 조회 (GET /api/projects/:id/members)
@@ -312,10 +316,20 @@ router.patch('/:id/members/:memberId', (req, res) => {
   const isCreator = project && project.createdBy === username;
   const isAdmin = username === 'admin';
 
-  // 권한 체크: Admin 또는 Project Owner만 변경 가능
-  // requester.role === 'owner' 체크도 포함
-  if (!isAdmin && !isCreator && (!requester || requester.role !== 'owner')) {
-    return res.status(403).json({ error: 'Only Owners or Admins can change roles' });
+  // 권한 체크: Admin 또는 Project Owner 또는 Manager만 변경 가능
+  const isManager = requester && requester.role === 'manager';
+  if (!isAdmin && !isCreator && (!requester || !['owner', 'manager'].includes(requester.role))) {
+    return res.status(403).json({ error: '소유자(Owner), 관리자(Manager) 또는 시스템 관리자만 권한을 변경할 수 있습니다.' });
+  }
+
+  // 🔥 'owner'로의 변경은 절대 불가 (소유자는 프로젝트 생성자 1명 고정)
+  if (role === 'owner') {
+    return res.status(403).json({ error: '프로젝트당 소유자(Owner)는 한 명만 존재할 수 있습니다.' });
+  }
+
+  // 🔥 Managers cannot change Owner roles
+  if (isManager && (membersData.members.find(m => m.id === memberId)?.role === 'owner')) {
+    return res.status(403).json({ error: 'Manager는 소유자(Owner)의 권한을 수정할 수 없습니다.' });
   }
 
   const memberIndex = membersData.members.findIndex(m => m.id === memberId && m.projectId === id);
@@ -341,9 +355,11 @@ router.delete('/:id/members/:memberId', (req, res) => {
   const membersData = readMembers();
   const requester = membersData.members.find(m => m.projectId === id && m.username === username);
   const isAdmin = username === 'admin';
+  const isCreator = project && project.createdBy === username;
 
-  if (!isAdmin && (!requester || requester.role !== 'owner')) {
-    return res.status(403).json({ error: 'Only Owners or Admins can remove members' });
+  // 권한 체크: Owner 또는 Admin 또는 Manager만 삭제 가능
+  if (!isAdmin && !isCreator && (!requester || !['owner', 'manager'].includes(requester.role))) {
+    return res.status(403).json({ error: 'Only Owners, Managers or Admins can remove members' });
   }
 
   const member = membersData.members.find(m => m.id === memberId && m.projectId === id);
@@ -377,7 +393,12 @@ router.post('/:id/members', (req, res) => {
   const hasManagePermission = requesterMembership && ['owner', 'manager'].includes(requesterMembership.role);
 
   if (!isAdmin && !isCreator && !hasManagePermission) {
-    return res.status(403).json({ error: '초대 권한이 없습니다. (Project Owner 또는 Manager만 가능)' });
+    return res.status(403).json({ error: '초대 권한이 없습니다. (소유자 또는 Manager만 가능)' });
+  }
+
+  // 🔥 'owner'로의 초대는 절대 불가 (소유자는 프로젝트 생성자 1명 고정)
+  if (role === 'owner') {
+    return res.status(403).json({ error: '프로젝트당 소유자(Owner)는 한 명만 존재할 수 있습니다.' });
   }
 
   if (!inviteeUsername) return res.status(400).json({ error: '사용자명(username)이 필요합니다.' });
@@ -425,14 +446,15 @@ router.post('/:id/scenes/delete', async (req, res) => {
       const project = readProjectFile(id);
       if (!project) return res.status(404).json({ error: 'Project not found' });
 
-      // 권한 체크 (Owner/Editor/Admin 가능)
+      // 권한 체크 (Owner/Manager/Editor/Admin 가능)
       const membersData = readMembers();
       const isCreator = project.createdBy === username;
       const membership = membersData.members.find(m => m.projectId === id && m.username === username);
-      const isOwnerOrEditor = membership && ['owner', 'editor'].includes(membership.role);
       const isAdmin = username === 'admin';
 
-      if (!isAdmin && !isCreator && !isOwnerOrEditor) {
+      const hasDeletePermission = isAdmin || isCreator || (membership && ['owner', 'manager', 'editor'].includes(membership.role));
+
+      if (!hasDeletePermission) {
         return res.status(403).json({ error: 'Permission denied' });
       }
 

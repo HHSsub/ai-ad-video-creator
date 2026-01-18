@@ -85,7 +85,11 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
 
     if (!isOpen) return null;
 
-    const canManage = isAdmin || currentMemberRole === 'owner';
+    const canManage = isAdmin || ['owner', 'manager'].currentMemberRole?.includes(currentMemberRole) || (isAdmin ? true : ['owner', 'manager'].includes(currentMemberRole));
+    // Correct logic:
+    const isOwnerOrAdmin = isAdmin || currentMemberRole === 'owner';
+    const isManager = currentMemberRole === 'manager';
+    const hasManagePermission = isOwnerOrAdmin || isManager;
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -114,13 +118,13 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
                                 <th className="px-4 py-3">사용자</th>
                                 <th className="px-4 py-3">권한</th>
                                 <th className="px-4 py-3">초대일</th>
-                                {canManage && <th className="px-4 py-3 text-right">작업</th>}
+                                {hasManagePermission && <th className="px-4 py-3 text-right">작업</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-800 text-gray-300">
                             {members.length === 0 && !loading && (
                                 <tr>
-                                    <td colSpan={canManage ? 4 : 3} className="px-4 py-8 text-center text-gray-500">
+                                    <td colSpan={hasManagePermission ? 4 : 3} className="px-4 py-8 text-center text-gray-500">
                                         등록된 멤버가 없습니다.
                                     </td>
                                 </tr>
@@ -139,15 +143,18 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
                                         </div>
                                     </td>
                                     <td className="px-4 py-4">
-                                        {canManage && member.role !== 'owner' ? (
+                                        {hasManagePermission && member.role !== 'owner' ? (
                                             <select
                                                 value={member.role}
                                                 onChange={(e) => handleRoleChange(member.id, e.target.value)}
-                                                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none"
+                                                disabled={isManager && e.target.value === 'owner'} // Actually managed by select change handler
+                                                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none disabled:opacity-50"
                                             >
-                                                {ROLE_OPTIONS.map(opt => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                ))}
+                                                {ROLE_OPTIONS.map(opt => {
+                                                    // Manager cannot promote to Owner
+                                                    if (isManager && opt.value === 'owner') return null;
+                                                    return <option key={opt.value} value={opt.value}>{opt.label}</option>;
+                                                })}
                                             </select>
                                         ) : (
                                             <span className="capitalize">{member.role}</span>
@@ -156,7 +163,7 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
                                     <td className="px-4 py-4 text-gray-500 text-xs text-nowrap">
                                         {new Date(member.addedAt).toLocaleDateString()}
                                     </td>
-                                    {canManage && (
+                                    {hasManagePermission && (
                                         <td className="px-4 py-4 text-right">
                                             {member.role !== 'owner' && (
                                                 <button
