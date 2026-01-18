@@ -17,13 +17,6 @@ const Step1Manual = ({ formData, setFormData, user, onPrev, onNext, userRole = '
     { value: 'square_1_1', label: '1:1 (정사각형)' }
   ]);
 
-  // ✅ Manual mode 설정
-  useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      mode: 'manual'
-    }));
-  }, [setFormData]);
 
   // 🔥 동적 aspect ratio 로드 from engines.json
   useEffect(() => {

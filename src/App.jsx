@@ -271,6 +271,11 @@ function App() {
           return;
         } else {
           console.log('[App] ℹ️ 신규 프로젝트 또는 빈 프로젝트입니다.');
+          // 🔥 v4.1: 신규 프로젝트라도 기존의 formData를 유지하거나 
+          // 프로젝트 객체에 있는 formData가 있으면 그것을 우선 사용
+          if (data.project.formData && Object.keys(data.project.formData).length > 0) {
+            setFormData(data.project.formData);
+          }
         }
       }
     } catch (error) {
@@ -279,21 +284,8 @@ function App() {
 
     // storyboard 없으면 모드 선택
     setCurrentMode(null);
-    setFormData({
-      mode: 'auto',
-      userdescription: '',
-      videoLength: '',
-      aspectRatioCode: '',
-      videoPurpose: '',
-      brandName: '',
-      industryCategory: '',
-      productServiceCategory: '',
-      productServiceName: '',
-      coreTarget: '',
-      coreDifferentiation: '',
-      videoRequirements: '',
-      imageUpload: null
-    });
+    // 🔥 CRITICAL: 여기서 formData를 하드하게 초기화해서 기존 입력값이 날아감.
+    // 프로젝트에 이미 저장된 formData가 있으면 그것을 유지해야 함.
     setStoryboard(null);
     setSelectedConceptId(null);
     setCurrentView('mode-select');
@@ -385,21 +377,9 @@ function App() {
   const handleBackToProjects = () => {
     setCurrentProject(null);
     setCurrentMode(null);
-    setFormData({
-      mode: 'auto',
-      userdescription: '',
-      videoLength: '',
-      aspectRatioCode: '',
-      videoPurpose: '',
-      brandName: '',
-      industryCategory: '',
-      productServiceCategory: '',
-      productServiceName: '',
-      coreTarget: '',
-      coreDifferentiation: '',
-      videoRequirements: '',
-      imageUpload: null
-    });
+    // 🔥 데이터 초기화 완화: 다른 프로젝트 선택을 위해 목록으로 나갈 때는 
+    // formData를 남겨두어 다시 들어왔을 때나 캐시 역할을 할 수 있게 함.
+    // 단, 완전히 다른 프로젝트로 진입할 때는 handleSelectProject에서 덮어씌워짐.
     setStoryboard(null);
     setSelectedConceptId(null);
     setCurrentView('projects');
@@ -407,21 +387,8 @@ function App() {
 
   const handleBackToModeSelect = () => {
     setCurrentMode(null);
-    setFormData({
-      mode: 'auto',
-      userdescription: '',
-      videoLength: '',
-      aspectRatioCode: '',
-      videoPurpose: '',
-      brandName: '',
-      industryCategory: '',
-      productServiceCategory: '',
-      productServiceName: '',
-      coreTarget: '',
-      coreDifferentiation: '',
-      videoRequirements: '',
-      imageUpload: null
-    });
+    // 🔥 모드 선택으로 돌아갈 때 formData를 초기화하면 
+    // 정성껏 입력했던 기획 내용이 사라짐. 초기화 제거.
     setCurrentView('mode-select');
     setStep(1);
   };
