@@ -16,6 +16,7 @@ const UserManagement = ({ currentUser }) => {
     name: '',
     usageLimit: ''
   });
+  const [successMessage, setSuccessMessage] = useState('');
 
   const loadUsers = async () => {
     try {
@@ -69,7 +70,7 @@ const UserManagement = ({ currentUser }) => {
 
   const handleAddUser = async () => {
     if (!formData.username || !formData.password) {
-      alert('아이디와 비밀번호는 필수입니다.');
+      setError('아이디와 비밀번호는 필수입니다.');
       return;
     }
 
@@ -95,11 +96,12 @@ const UserManagement = ({ currentUser }) => {
         throw new Error(data.message || '사용자 추가에 실패했습니다.');
       }
 
-      alert('사용자가 추가되었습니다.');
+      setSuccessMessage('사용자가 성공적으로 추가되었습니다.');
       setModalOpen(false);
-      loadUsers();
+      await loadUsers();
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
@@ -125,12 +127,12 @@ const UserManagement = ({ currentUser }) => {
         throw new Error(data.message || '사용자 수정에 실패했습니다.');
       }
 
-      alert('사용자 정보가 수정되었습니다.');
+      setSuccessMessage('사용자 정보가 성공적으로 수정되었습니다.');
       setModalOpen(false);
       await loadUsers();
-
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
@@ -153,10 +155,11 @@ const UserManagement = ({ currentUser }) => {
         throw new Error(data.message || '사용자 삭제에 실패했습니다.');
       }
 
-      alert('사용자가 삭제되었습니다.');
-      loadUsers();
+      setSuccessMessage('사용자가 삭제되었습니다.');
+      await loadUsers();
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
@@ -176,16 +179,16 @@ const UserManagement = ({ currentUser }) => {
     return 'normal';
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-6 relative min-h-[400px]">
+      {loading && (
+        <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-[2px] z-20 flex items-center justify-center rounded-xl">
+          <div className="flex flex-col items-center gap-3 bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+            <span className="text-gray-300 text-sm font-medium">데이터 로드 중...</span>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-white">사용자 관리</h2>
         <button
@@ -197,8 +200,21 @@ const UserManagement = ({ currentUser }) => {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-          {error}
+        <div className="mb-4 p-4 bg-red-900/40 border border-red-500/50 rounded-lg text-red-200 flex justify-between items-center">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-200">✕</button>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-4 p-4 bg-green-900/40 border border-green-500/50 rounded-lg text-green-200 flex justify-between items-center transition-all animate-fade-in">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span>{successMessage}</span>
+          </div>
+          <button onClick={() => setSuccessMessage('')} className="text-green-400 hover:text-green-200">✕</button>
         </div>
       )}
 
