@@ -76,6 +76,7 @@ const Step4 = ({
   const [selectedScene, setSelectedScene] = useState(null); // Added for new synthesis logic
 
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.viewer;
+  const isAdmin = user?.username === 'admin';
 
   const styles = storyboard?.styles || [];
   const selectedStyle = styles.find(s => String(s.concept_id) === String(selectedConceptId) || String(s.conceptId) === String(selectedConceptId));
@@ -736,7 +737,7 @@ const Step4 = ({
           // 🔥 Auto Mode: Force 2s (Total 20s for 10 scenes)
           duration: (formData?.mode === 'auto' || currentProject?.workflowMode === 'auto')
             ? 2
-            : (realScene.duration ? realScene.duration : (Math.round(formData.videoLength / sortedImages.length) || 5))
+            : (realScene.duration ? realScene.duration : (Math.round(parseInt(formData?.videoLength || 10) / sortedImages.length) || 3))
         })
       });
 
@@ -959,8 +960,12 @@ const Step4 = ({
     } else {
       try {
         // 1. 영상 합치기 요청
-        // 🔥 Auto Mode: Force 2s (Total 20s for 10 scenes)
-        const durationPerScene = (formData?.mode === 'auto' || currentProject?.workflowMode === 'auto') ? 2 : 3;
+        // 🔥 Auto Mode: Force 2s
+        // 🔥 Manual: Calculate based on total length (e.g. 10s / 5 scenes = 2s)
+        const totalSec = parseInt(formData?.videoLength || 15);
+        const durationPerScene = (formData?.mode === 'auto' || currentProject?.workflowMode === 'auto')
+          ? 2
+          : (Math.round(totalSec / videoScenes.length) || 3);
         const totalDuration = videoScenes.length * durationPerScene;
 
         const compileResponse = await fetch(`${API_BASE}/api/compile-videos`, {
@@ -1890,7 +1895,7 @@ const Step4 = ({
               ← 이전 단계
             </button>
 
-            {permissions.confirm && (
+            {(permissions.confirm || isAdmin) && (
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-400">
                   영상 변환: {sortedImages.filter(img => img.videoUrl).length}/{sortedImages.length}개
