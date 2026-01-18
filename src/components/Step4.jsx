@@ -1496,25 +1496,23 @@ const Step4 = ({
                 )}
               </div>
             </div>
-            {/* 멤버 관리 버튼 그룹 (매니저/소유자만 노출) */}
-            {(permissions.invite || isAdmin) && (
-              <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
-                <button
-                  onClick={() => setShowMemberModal(true)}
-                  className="px-3 py-1.5 hover:bg-gray-700 text-green-400 rounded-md transition-colors text-xs flex items-center gap-1.5 border-r border-gray-700"
-                  title="멤버 목록 보기"
-                >
-                  <span>👥</span> 멤버 목록
-                </button>
-                <button
-                  onClick={() => setShowInviteModal(true)}
-                  className="px-3 py-1.5 hover:bg-gray-700 text-purple-400 rounded-md transition-colors text-xs flex items-center gap-1.5"
-                  title="새 멤버 초대"
-                >
-                  <span>➕</span> 멤버 초대
-                </button>
-              </div>
-            )}
+            {/* 멤버 관리 버튼 그룹 (모든 사용자 노출) */}
+            <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
+              <button
+                onClick={() => setShowMemberModal(true)}
+                className="px-3 py-1.5 hover:bg-gray-700 text-green-400 rounded-md transition-colors text-xs flex items-center gap-1.5 border-r border-gray-700"
+                title="멤버 목록 보기"
+              >
+                <span>👥</span> 멤버 목록
+              </button>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="px-3 py-1.5 hover:bg-gray-700 text-purple-400 rounded-md transition-colors text-xs flex items-center gap-1.5"
+                title="새 멤버 초대"
+              >
+                <span>➕</span> 멤버 초대
+              </button>
+            </div>
           </div>
 
           {error && (

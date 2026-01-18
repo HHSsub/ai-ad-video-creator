@@ -45,6 +45,8 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
     };
 
     const handleRoleChange = async (memberId, newRole) => {
+        // 즉각적인 UI 반영을 위해 로딩 상태 표시 (필요 시)
+        console.log(`[MemberListModal] 역할 변경 시도: ${memberId} -> ${newRole}`);
         try {
             const response = await fetch(`${API_BASE}/api/projects/${projectId}/members/${memberId}`, {
                 method: 'PATCH',
@@ -57,10 +59,14 @@ export default function MemberListModal({ isOpen, onClose, projectId, currentUse
             const result = await response.json();
             if (result.success) {
                 setMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: newRole } : m));
+                console.log(`[MemberListModal] 역할 변경 성공: ${memberId}`);
+                // 성공 알림 (선택 사항이지만 즉각적 반영을 위해 추가)
+                // alert('역할이 성공적으로 변경되었습니다.'); 
             } else {
                 alert(result.error || '권한 변경 실패');
             }
         } catch (err) {
+            console.error('역할 변경 중 오류:', err);
             alert('오류 발생: ' + err.message);
         }
     };
