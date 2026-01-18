@@ -9,16 +9,6 @@ const DEFAULT_FIELD_CONFIG = {
     defaultValue: '',
     randomValues: ['삼성', 'LG', '현대', 'SK', 'KT', '네이버', '카카오', '쿠팡', '배달의민족', '토스']
   },
-  userdescription: {
-    key: 'userdescription',
-    label: '영상 설명 (프롬프트)',
-    required: true,
-    visible: true,
-    type: 'textarea',
-    placeholder: '영상의 내용을 상세히 설명해주세요 (Manual 모드 연동)',
-    defaultValue: ''
-  },
-
   industryCategory: {
     key: 'industryCategory',
     label: '산업 카테고리',
