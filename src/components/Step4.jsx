@@ -1937,36 +1937,37 @@ const Step4 = ({
                   style={{
                     top: modalPosition.top,
                     left: modalPosition.left,
-                    width: '370px', // 인물 합성 한 줄 출력을 위해 너비만 확보
+                    width: '370px', // 지시하신 대로 370px로 수정
                     maxHeight: '90vh',
-                    marginLeft: '90px' // 550px 공간 내에서 420px 창 중앙 배치: (550-370)/2 = 90
+                    marginLeft: '90px' // (550-370)/2 = 90px 정확히 적용
                   }}>
                   <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                     <h3 className="text-lg font-bold text-white">이미지 합성 유형 선택</h3>
                     <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
                   </div>
 
-                  {/* 버튼 영역: 배경색 및 정렬 완전 원복 */}
-                  <div className="grid grid-cols-1 gap-2 p-2">
-                    <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-blue-500 group flex flex-col items-start">
-                      <div className="text-sm font-bold text-white group-hover:text-blue-400 whitespace-nowrap">👤 인물 합성 (Person)</div>
-                      <div className="text-xs text-gray-400 mt-1 text-left">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
+                  {/* 버튼 영역: ! 클래스를 사용하여 외부 CSS 강제 오버라이드 */}
+                  <div className="grid grid-cols-1 gap-2 p-2 bg-gray-900">
+                    <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-blue-500 group flex flex-col !items-start !text-left">
+                      <div className="text-sm font-bold text-white group-hover:text-blue-400 whitespace-nowrap !text-left w-full">👤 인물 합성 (Person)</div>
+                      <div className="text-xs text-gray-400 mt-1 !text-left w-full">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
                     </button>
 
-                    <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-purple-500 group flex flex-col items-start">
-                      <div className="text-sm font-bold text-white group-hover:text-purple-400">🛍️ 제품 합성 (Product)</div>
-                      <div className="text-xs text-gray-400 mt-1 text-left">제품 이미지를 업로드하여 자연스럽게 배치</div>
+                    <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-purple-500 group flex flex-col !items-start !text-left">
+                      <div className="text-sm font-bold text-white group-hover:text-purple-400 whitespace-nowrap !text-left w-full">🛍️ 제품 합성 (Product)</div>
+                      <div className="text-xs text-gray-400 mt-1 !text-left w-full">제품 이미지를 업로드하여 자연스럽게 배치</div>
                     </button>
 
-                    <button onClick={() => handleModeSelect('logo')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-green-500 group flex flex-col items-start">
-                      <div className="text-sm font-bold text-white group-hover:text-green-400">🏷️ 로고 합성 (Logo)</div>
-                      <div className="text-xs text-gray-400 mt-1 text-left">브랜드 로고를 업로드하여 배경에 자연스럽게 삽입</div>
+                    <button onClick={() => handleModeSelect('logo')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-green-500 group flex flex-col !items-start !text-left">
+                      <div className="text-sm font-bold text-white group-hover:text-green-400 whitespace-nowrap !text-left w-full">🏷️ 로고 합성 (Logo)</div>
+                      <div className="text-xs text-gray-400 mt-1 !text-left w-full">브랜드 로고를 업로드하여 배경에 자연스럽게 삽입</div>
                     </button>
                   </div>
                 </div>
               </>,
               document.body
             )}
+
             {/* Product/Logo Upload UI - 🔥 POTAL 적용 & 중앙 정렬 */}
             {showPersonModal && !synthesisLoading && (synthesisMode === 'product' || synthesisMode === 'logo') && createPortal(
               <>
