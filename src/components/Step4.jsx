@@ -1937,30 +1937,34 @@ const Step4 = ({
                   style={{
                     top: modalPosition.top,
                     left: modalPosition.left,
-                    width: '370px', // 지시하신 대로 370px로 수정
+                    width: '370px',
                     maxHeight: '90vh',
-                    marginLeft: '90px' // (550-370)/2 = 90px 정확히 적용
+                    marginLeft: '90px'
                   }}>
                   <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                     <h3 className="text-lg font-bold text-white">이미지 합성 유형 선택</h3>
                     <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
                   </div>
 
-                  {/* 버튼 영역: ! 클래스를 사용하여 외부 CSS 강제 오버라이드 */}
+                  {/* 버튼 영역: 모든 버튼의 구조와 스타일을 완전 동일하게 강제 */}
                   <div className="grid grid-cols-1 gap-2 p-2 bg-gray-900">
-                    <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-blue-500 group flex flex-col !items-start !text-left">
-                      <div className="text-sm font-bold text-white group-hover:text-blue-400 whitespace-nowrap !text-left w-full">👤 인물 합성 (Person)</div>
-                      <div className="text-xs text-gray-400 mt-1 !text-left w-full">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
+
+                    {/* 1. 인물 합성 (배경색 bg-gray-800 고정, !items-start로 왼쪽 밀착) */}
+                    <button onClick={() => handleModeSelect('person')} className="w-full p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-blue-500 group flex flex-col !items-start">
+                      <div className="text-sm font-bold text-white group-hover:text-blue-400 whitespace-nowrap !m-0 !p-0">👤 인물 합성 (Person)</div>
+                      <div className="text-xs text-gray-400 mt-0.5 !m-0 !p-0 !text-left">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
                     </button>
 
-                    <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-purple-500 group flex flex-col !items-start !text-left">
-                      <div className="text-sm font-bold text-white group-hover:text-purple-400 whitespace-nowrap !text-left w-full">🛍️ 제품 합성 (Product)</div>
-                      <div className="text-xs text-gray-400 mt-1 !text-left w-full">제품 이미지를 업로드하여 자연스럽게 배치</div>
+                    {/* 2. 제품 합성 */}
+                    <button onClick={() => handleModeSelect('product')} className="w-full p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-purple-500 group flex flex-col !items-start">
+                      <div className="text-sm font-bold text-white group-hover:text-purple-400 whitespace-nowrap !m-0 !p-0">🛍️ 제품 합성 (Product)</div>
+                      <div className="text-xs text-gray-400 mt-0.5 !m-0 !p-0 !text-left">제품 이미지를 업로드하여 자연스럽게 배치</div>
                     </button>
 
-                    <button onClick={() => handleModeSelect('logo')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-green-500 group flex flex-col !items-start !text-left">
-                      <div className="text-sm font-bold text-white group-hover:text-green-400 whitespace-nowrap !text-left w-full">🏷️ 로고 합성 (Logo)</div>
-                      <div className="text-xs text-gray-400 mt-1 !text-left w-full">브랜드 로고를 업로드하여 배경에 자연스럽게 삽입</div>
+                    {/* 3. 로고 합성 */}
+                    <button onClick={() => handleModeSelect('logo')} className="w-full p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700 hover:border-green-500 group flex flex-col !items-start">
+                      <div className="text-sm font-bold text-white group-hover:text-green-400 whitespace-nowrap !m-0 !p-0">🏷️ 로고 합성 (Logo)</div>
+                      <div className="text-xs text-gray-400 mt-0.5 !m-0 !p-0 !text-left">브랜드 로고를 업로드하여 배경에 자연스럽게 삽입</div>
                     </button>
                   </div>
                 </div>
