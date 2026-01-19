@@ -85,6 +85,48 @@ export const config = {
   maxDuration: 9000,
 };
 
+/**
+ * 🔥 NEW: [Post-Production] 섹션 파싱 (각 씬별 편집 가이드)
+ * Transition, Sound, SFX 정보 추출
+ */
+function parseScenePostProduction(sceneText) {
+  try {
+    const postProdPattern = /\[Post-Production\]:?\s*([\s\S]*?)(?=###|\[Sequence|$)/i;
+    const match = sceneText.match(postProdPattern);
+
+    if (!match) {
+      return null;
+    }
+
+    const postProdText = match[1];
+
+    // Transition 추출
+    const transitionMatch = postProdText.match(/Transition:\s*(.+?)(?=\n|Sound|SFX|$)/i);
+    const transition = transitionMatch ? transitionMatch[1].trim() : '';
+
+    // Sound 추출 (Suno AI Prompt 포함)
+    const soundMatch = postProdText.match(/Sound\s*\((?:Suno AI Prompt)?[^\)]*\):\s*(.+?)(?=\n|SFX|$)/is);
+    const sound = soundMatch ? soundMatch[1].trim() : '';
+
+    // SFX 추출
+    const sfxMatch = postProdText.match(/SFX:\s*(.+?)(?=\n\n|$)/is);
+    const sfx = sfxMatch ? sfxMatch[1].trim() : '';
+
+    if (!transition && !sound && !sfx) {
+      return null;
+    }
+
+    return {
+      transition: transition || '정보 없음',
+      sound: sound || '정보 없음',
+      sfx: sfx || '정보 없음'
+    };
+  } catch (error) {
+    console.error('[parseScenePostProduction] 오류:', error);
+    return null;
+  }
+}
+
 // 🔥 환경변수로 도메인 관리
 const API_DOMAIN = process.env.API_DOMAIN || 'https://upnexx.ai';
 const API_BASE = process.env.VITE_API_BASE_URL
@@ -389,13 +431,15 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
             const motionPromptJSON = JSON.parse(jsonBlocks[1]);
             const copyJSON = JSON.parse(jsonBlocks[2]);
 
+            const editingGuide = parseScenePostProduction(sceneText);
             conceptData[`scene_${sceneNum}`] = {
               title: `Scene ${sceneNum}`,
               timecode: timecode,
               visual_description: visualDescription,
               image_prompt: imagePromptJSON,
               motion_prompt: motionPromptJSON,
-              copy: copyJSON
+              copy: copyJSON,
+              editingGuide: editingGuide
             };
           } catch (e) {
             console.error(`JSON 파싱 실패 (씬 ${sceneNum}) - 정규식 블록 파싱 에러, Nuclear Parser 시도:`, e.message);
@@ -408,13 +452,17 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
                 const motionPromptJSON = JSON.parse(anyJsons[1]);
                 const copyJSON = JSON.parse(anyJsons[2]);
 
+                // 🔥 편집 가이드 파싱
+                const editingGuide = parseScenePostProduction(sceneText);
+
                 conceptData[`scene_${sceneNum}`] = {
                   title: `Scene ${sceneNum}`,
                   timecode: timecode,
                   visual_description: visualDescription,
                   image_prompt: imagePromptJSON,
                   motion_prompt: motionPromptJSON,
-                  copy: copyJSON
+                  copy: copyJSON,
+                  editingGuide: editingGuide // 🔥 추가
                 };
                 console.log(`[parseUnifiedConceptJSON] ☢️ Nuclear Parser로 씬 ${sceneNum} 복구 성공 (Fallback)`);
               } catch (nuclearError) {
@@ -433,6 +481,7 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
               const imagePromptJSON = JSON.parse(anyJsons[0]);
               const motionPromptJSON = JSON.parse(anyJsons[1]);
               const copyJSON = JSON.parse(anyJsons[2]);
+              const editingGuide = parseScenePostProduction(sceneText);
 
               conceptData[`scene_${sceneNum}`] = {
                 title: `Scene ${sceneNum}`,
@@ -440,7 +489,8 @@ function parseUnifiedConceptJSON(text, mode = 'auto') {
                 visual_description: visualDescription,
                 image_prompt: imagePromptJSON,
                 motion_prompt: motionPromptJSON,
-                copy: copyJSON
+                copy: copyJSON,
+                editingGuide: editingGuide
               };
               console.log(`[parseUnifiedConceptJSON] ☢️ Nuclear Parser로 씬 ${sceneNum} 복구 성공`);
             } catch (e) {

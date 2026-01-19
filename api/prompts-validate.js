@@ -67,6 +67,27 @@ router.post('/', (req, res) => {
         errors.push('[구분자 누락] "S#1", "Sequence 1", "Frame 1"과 같은 씬 구분자 형식이 프롬프트 지침에 포함되어야 합니다.');
     }
 
+    // 🔥 4. [Post-Production] 편집 가이드 검증 (새 양식)
+    if (mode === 'manual') {
+        const hasPostProduction = /\[Post-Production\]/i.test(prompt);
+        if (hasPostProduction) {
+            // Transition 지시어 확인
+            if (!/Transition:/i.test(prompt)) {
+                warnings.push('[편집 가이드] [Post-Production] 섹션에 "Transition:" 항목이 없습니다.');
+            }
+            // Sound 지시어 확인
+            if (!/Sound\s*\(/i.test(prompt)) {
+                warnings.push('[편집 가이드] [Post-Production] 섹션에 "Sound (Suno AI Prompt):" 항목이 없습니다.');
+            }
+            // SFX 지시어 확인
+            if (!/SFX:/i.test(prompt)) {
+                warnings.push('[편집 가이드] [Post-Production] 섹션에 "SFX:" 항목이 없습니다.');
+            }
+        } else {
+            warnings.push('[편집 가이드] 각 씬에 [Post-Production] 섹션이 없으면 편집 포인트 제안이 표시되지 않습니다. (선택사항)');
+        }
+    }
+
     if (errors.length > 0) {
         return res.json({
             success: false,

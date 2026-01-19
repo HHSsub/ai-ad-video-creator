@@ -1860,28 +1860,75 @@ const Step4 = ({
                 )}
 
                 {/* 🔥 SFX + Editing 메타데이터 */}
-                {storyboard?.metadata?.audioEditingGuide && (
+                {(storyboard?.metadata?.audioEditingGuide || sortedImages.some(img => img.editingGuide)) && (
                   <div className="space-y-3 text-sm">
-                    {storyboard.metadata.audioEditingGuide.sfx && storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' && (
+                    {/* 🔥 각 씬의 SFX 통합 표시 */}
+                    {sortedImages.some(img => img.editingGuide?.sfx && img.editingGuide.sfx !== '정보 없음') && (
+                      <div>
+                        <h4 className="font-semibold text-gray-300 mb-1">🔉 SFX (Sound Effects)</h4>
+                        {sortedImages.map((img) => {
+                          if (!img.editingGuide?.sfx || img.editingGuide.sfx === '정보 없음') return null;
+                          return (
+                            <p key={img.sceneNumber} className="text-gray-400">
+                              Scene {img.sceneNumber}: {img.editingGuide.sfx}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 🔥 각 씬의 Sound 통합 표시 */}
+                    {sortedImages.some(img => img.editingGuide?.sound && img.editingGuide.sound !== '정보 없음') && (
+                      <div>
+                        <h4 className="font-semibold text-gray-300 mb-1">🎵 Sound</h4>
+                        {sortedImages.map((img) => {
+                          if (!img.editingGuide?.sound || img.editingGuide.sound === '정보 없음') return null;
+                          return (
+                            <p key={img.sceneNumber} className="text-gray-400">
+                              Scene {img.sceneNumber}: {img.editingGuide.sound}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 🔥 각 씬의 Transition 통합 표시 */}
+                    {sortedImages.some(img => img.editingGuide?.transition && img.editingGuide.transition !== '정보 없음') && (
+                      <div>
+                        <h4 className="font-semibold text-gray-300 mb-1">🔄 Transition</h4>
+                        {sortedImages.map((img) => {
+                          if (!img.editingGuide?.transition || img.editingGuide.transition === '정보 없음') return null;
+                          return (
+                            <p key={img.sceneNumber} className="text-gray-400">
+                              Scene {img.sceneNumber}: {img.editingGuide.transition}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* 🔥 레거시 Section 3 방식 (하위 호환) */}
+                    {storyboard?.metadata?.audioEditingGuide?.sfx && storyboard.metadata.audioEditingGuide.sfx !== '정보 없음' && (
                       <div>
                         <h4 className="font-semibold text-gray-300 mb-1">🔉 SFX (Sound Effects)</h4>
                         <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.sfx}</p>
                       </div>
                     )}
-                    {storyboard.metadata.audioEditingGuide.editing && storyboard.metadata.audioEditingGuide.editing !== '정보 없음' && (
+                    {storyboard?.metadata?.audioEditingGuide?.editing && storyboard.metadata.audioEditingGuide.editing !== '정보 없음' && (
                       <div>
                         <h4 className="font-semibold text-gray-300 mb-1">✏️ Editing Pace</h4>
                         <p className="text-gray-400">{storyboard.metadata.audioEditingGuide.editing}</p>
                       </div>
                     )}
-                    {(!storyboard.metadata.audioEditingGuide.sfx || storyboard.metadata.audioEditingGuide.sfx === '정보 없음') &&
+
+                    {!sortedImages.some(img => img.editingGuide) &&
+                      (!storyboard.metadata.audioEditingGuide.sfx || storyboard.metadata.audioEditingGuide.sfx === '정보 없음') &&
                       (!storyboard.metadata.audioEditingGuide.editing || storyboard.metadata.audioEditingGuide.editing === '정보 없음') && (
-                        <p className="text-gray-500">편집 가이드 정보가 없습니다.</p>
+                        <p className="text-gray-500">편집 포인트 제안이 없습니다.</p>
                       )}
                   </div>
                 )}
-
-                {!recommendedVideo && !storyboard?.metadata?.audioEditingGuide && (
+                {!recommendedVideo && !storyboard?.metadata?.audioEditingGuide && !sortedImages.some(img => img.editingGuide) && (
                   <p className="text-gray-500 text-sm">편집 포인트 제안이 없습니다.</p>
                 )}
               </div>
