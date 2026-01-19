@@ -1946,8 +1946,13 @@ const Step4 = ({
                   </div>
                   <div className="p-4 flex flex-col gap-3">
                     <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-blue-500 group">
-                      <div className="text-sm font-bold text-white group-hover:text-blue-400 whitespace-nowrap">👤 인물 합성 (Person)</div>
-                      <div className="text-xs text-gray-400 mt-1">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
+                      <div className="text-sm font-bold text-white group-hover:text-blue-400">
+                        👤 인물 합성 (Person)
+                      </div>
+                      {/* whitespace-nowrap 삭제: 설명이 모달 너비 안에서 자연스럽게 줄바꿈됨 */}
+                      <div className="text-xs text-gray-400 mt-1">
+                        기존 인물 라이브러리에서 선택하여 얼굴/몸 합성
+                      </div>
                     </button>
                     <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-purple-500 group">
                       <div className="text-sm font-bold text-white group-hover:text-purple-400">🛍️ 제품 합성 (Product)</div>
