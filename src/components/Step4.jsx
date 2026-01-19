@@ -1928,7 +1928,7 @@ const Step4 = ({
             )}
 
 
-            {/* 3-Mode Selection UI - 🔥 POTAL 적용 & 중앙 정렬 */}
+            {/* 3-Mode Selection UI - 🔥 POTAL 적용 & 중앙 정렬  */}
             {showPersonModal && !synthesisLoading && !synthesisMode && createPortal(
               <>
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowPersonModal(false)} />
