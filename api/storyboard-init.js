@@ -1081,6 +1081,7 @@ async function processStoryboardAsync(body, username, sessionId) {
             prompt: scene.image_prompt?.prompt || '',
             motionPrompt: scene.motion_prompt,
             copy: scene.copy?.copy || '',
+            editingGuide: scene.editingGuide || null,  // 🔥 추가
             status: 'image_done'
           });
 
@@ -1098,6 +1099,7 @@ async function processStoryboardAsync(body, username, sessionId) {
             sceneNumber: sceneNum,
             imageUrl: null,
             videoUrl: null,
+            editingGuide: concept[`scene_${sceneNum}`]?.editingGuide || null,  // 🔥 추가
             status: 'image_failed',
             error: error.message
           });

@@ -306,6 +306,7 @@ async function processManualStoryboard(mcJson, formData, username, sessionId) {
                         imageUrl: null,
                         videoUrl: null,
                         title: `씬 ${sceneNum} (생성 실패)`,
+                        editingGuide: scene.editingGuide || null,  // 🔥 추가
                         status: 'image_failed',
                         error: result?.error || '알 수 없는 오류'
                     });
