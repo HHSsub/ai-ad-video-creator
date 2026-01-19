@@ -1937,26 +1937,27 @@ const Step4 = ({
                   style={{
                     top: modalPosition.top,
                     left: modalPosition.left,
-                    width: '320px',
+                    width: '360px', // 🔥 기존 320px에서 360px로 확장
                     maxHeight: '90vh',
-                    marginLeft: '115px' // 🔥 Center 320px in 550px space: (550-320)/2 = 115
+                    marginLeft: '95px' // 🔥 550px 기준 중앙 정렬: (550-360)/2 = 95
                   }}>
                   <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">
                     <h3 className="text-lg font-bold text-white">이미지 합성 유형 선택</h3>
                     <button onClick={() => setShowPersonModal(false)} className="text-gray-400 hover:text-white transition-colors p-1">✕</button>
                   </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    <button onClick={() => handleModeSelect('person')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-blue-500 group">
+                  {/* 패딩(p-3)과 간격(gap-3)을 충분히 주어 버튼끼리 밀착되지 않게 수정 */}
+                  <div className="grid grid-cols-1 gap-3 p-3">
+                    <button onClick={() => handleModeSelect('person')} className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-blue-500 group flex flex-col">
                       <div className="text-sm font-bold text-white group-hover:text-blue-400 whitespace-nowrap">👤 인물 합성 (Person)</div>
                       <div className="text-xs text-gray-400 mt-1">기존 인물 라이브러리에서 선택하여 얼굴/몸 합성</div>
                     </button>
 
-                    <button onClick={() => handleModeSelect('product')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-purple-500 group">
+                    <button onClick={() => handleModeSelect('product')} className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-purple-500 group flex flex-col">
                       <div className="text-sm font-bold text-white group-hover:text-purple-400">🛍️ 제품 합성 (Product)</div>
                       <div className="text-xs text-gray-400 mt-1">제품 이미지를 업로드하여 자연스럽게 배치</div>
                     </button>
 
-                    <button onClick={() => handleModeSelect('logo')} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-green-500 group">
+                    <button onClick={() => handleModeSelect('logo')} className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors border border-gray-700 hover:border-green-500 group flex flex-col">
                       <div className="text-sm font-bold text-white group-hover:text-green-400">🏷️ 로고 합성 (Logo)</div>
                       <div className="text-xs text-gray-400 mt-1">브랜드 로고를 업로드하여 배경에 자연스럽게 삽입</div>
                     </button>
