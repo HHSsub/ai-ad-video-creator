@@ -263,10 +263,7 @@ function App() {
         if (finalFormData.videoPurpose === '서비스') finalFormData.videoPurpose = 'service';
         if (finalFormData.aspectRatioCode === 'portrait_9_16') finalFormData.aspectRatioCode = 'social_story_9_16';
 
-        // 6. 강제 정화: 오토 모드에서 사용되지 않는 userdescription 제거
-        if (finalFormData.userdescription) {
-          delete finalFormData.userdescription;
-        }
+
 
         console.log('[App] ✅ 프로젝트 데이터 로드 완료 (보정됨):', {
           mode: proj.mode,
