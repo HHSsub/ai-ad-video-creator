@@ -94,7 +94,7 @@ router.get('/', (req, res) => {
           createdAt: projectData.createdAt,
           updatedAt: projectData.updatedAt,
           status: projectData.status,
-          mode: projectData.mode || 'manual',
+          mode: projectData.mode,
           lastStep: projectData.lastStep,
           storyboard: projectData.storyboard,
           userRole: isSystemAdmin ? 'admin' : (isCreator ? 'owner' : (membership ? membership.role : 'viewer'))
@@ -129,7 +129,7 @@ router.post('/', async (req, res) => {
     createdBy: username,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    mode: 'manual',
+    mode: null,
     formData: {},
     storyboard: { styles: [] }
   };
