@@ -1307,11 +1307,9 @@ export default async function handler(req, res) {
     }
 
     // 에러 상태였거나 다른 경우라면 재시도 허용 (세션 초기화 후 재시작)
-    sessionStore.updateSession(sessionId, {
-      status: 'in_progress',
-      error: null,
-      progress: { phase: 'INIT', percentage: 0, currentStep: '프로세스 재시작 중...' }
-    });
+    // 에러 상태였거나 다른 경우라면 재시도 허용 (세션 초기화 후 재시작)
+    sessionStore.updateStatus(sessionId, 'in_progress', null, null);
+    sessionStore.updateProgress(sessionId, { phase: 'INIT', percentage: 0, currentStep: '프로세스 재시작 중...' });
   }
 
   res.status(202).json({
