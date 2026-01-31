@@ -7,9 +7,10 @@ const __dirname = path.dirname(__filename);
 import bcrypt from 'bcrypt';
 
 const router = express.Router();
-const USERS_FILE = path.join(process.cwd(), 'config', 'users.json');
+// 🔥 FIX: process.cwd() 대신 __dirname 기반 절대 경로 사용 (실행 위치 무관하게 고정)
+const USERS_FILE = path.join(__dirname, '..', 'config', 'users.json');
 
-console.log('[users] 파일 경로:', USERS_FILE);
+console.log('[users] 🔥 Loaded. USERS_FILE Path:', USERS_FILE);
 
 function loadUsers() {
   try {
@@ -18,9 +19,15 @@ function loadUsers() {
       throw new Error('사용자 설정 파일이 없습니다.');
     }
 
+    // 🔥 파일 변경 시간 확인 (디버깅용)
+    const stats = fs.statSync(USERS_FILE);
+    const mtime = stats.mtime.toISOString();
+
+    // 🔥 캐시 방지를 위해 일반 readFileSync 사용 (Node.js는 fs 캐싱 안함, OS 의존)
     const data = fs.readFileSync(USERS_FILE, 'utf8');
     const users = JSON.parse(data);
-    console.log('[users] ✅ 로드 완료, 사용자 수:', Object.keys(users).length);
+
+    console.log(`[users] 📂 로드 완료 (수정시간: ${mtime}, 사용자 수: ${Object.keys(users).length})`);
     return users;
   } catch (error) {
     console.error('[users] ❌ 로드 오류:', error);
