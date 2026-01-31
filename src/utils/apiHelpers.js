@@ -1,7 +1,6 @@
 // src/utils/apiHelpers.js - 🔥 모델명 로깅 + 이미지 합성 모델 정확히 설정
 
 import { apiKeyManager } from './apiKeyManager.js';
-import { apiKeyManager } from './apiKeyManager.js';
 import { freepikRateLimiter, geminiRateLimiter } from './rateLimiter.js'; // 🔥 Gemini Rate Limiter 추가
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
