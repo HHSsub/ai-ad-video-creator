@@ -5,7 +5,7 @@ import { freepikRateLimiter, geminiRateLimiter } from './rateLimiter.js'; // �
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const MAX_RETRIES = 3;
-const MAX_RETRIES = 3;
+
 const BASE_DELAY = 2000; // 🔥 2000ms로 증가 (Google Rate Limit 대응)
 const MAX_DELAY = 30000; // 🔥 30초로 증가
 const REQUEST_TIMEOUT = 300000; // 🔥 5분 타임아웃
