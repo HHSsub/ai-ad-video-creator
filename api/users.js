@@ -426,6 +426,8 @@ export function checkUsageLimit(username) {
     }
 
     // 🔥 누적 총량 기준으로 체크 (일일 리셋 없음)
+    console.log(`[checkUsageLimit] 🔍 한도 체크: ${username} (사용: ${user.usageCount}, 한도: ${user.usageLimit || '무제한'})`);
+
     if (user.usageCount >= user.usageLimit) {
       return {
         allowed: false,

@@ -131,10 +131,11 @@ export default async function handler(req, res) {
         if (supportedDurations.length > 0) {
             const strDuration = String(duration);
             if (!supportedDurations.includes(strDuration)) {
-                console.warn(`[convert-single-scene] Requested duration ${duration} not supported by ${engineConfig.displayName}. Supported: ${supportedDurations.join(', ')}`);
-                // Fallback to default, prefer 6 if available for Hailuo
-                if (supportedDurations.includes("6")) targetDuration = 6;
-                else if (supportedDurations.includes("5")) targetDuration = 5;
+                // 🔥 Auto-Correction for unsupported duration
+                console.log(`[convert-single-scene] ℹ️ Requested duration ${duration} not supported by ${engineConfig.displayName}. Supported: ${supportedDurations.join(', ')}. Auto-correcting to 5s.`);
+
+                // 엔진이 원하는 값(문자열)으로 강제 변환
+                if (supportedDurations.includes("5")) targetDuration = 5;
                 else targetDuration = parseInt(supportedDurations[0], 10);
             }
         } else {

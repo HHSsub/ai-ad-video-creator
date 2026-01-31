@@ -1,11 +1,13 @@
 // src/utils/apiHelpers.js - 🔥 모델명 로깅 + 이미지 합성 모델 정확히 설정
 
 import { apiKeyManager } from './apiKeyManager.js';
-import { freepikRateLimiter } from './rateLimiter.js'; // 🔥 Rate Limiter 추가
+import { apiKeyManager } from './apiKeyManager.js';
+import { freepikRateLimiter, geminiRateLimiter } from './rateLimiter.js'; // 🔥 Gemini Rate Limiter 추가
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const MAX_RETRIES = 3;
-const BASE_DELAY = 1000;
+const MAX_RETRIES = 3;
+const BASE_DELAY = 2000; // 🔥 2000ms로 증가 (Google Rate Limit 대응)
 const MAX_DELAY = 30000; // 🔥 30초로 증가
 const REQUEST_TIMEOUT = 300000; // 🔥 5분 타임아웃
 
@@ -144,6 +146,10 @@ export async function safeCallGemini(prompt, options = {}) {
         // 🔥 동시 요청 부하 분산을 위한 스마트 딜레이
         const keyBasedDelay = (keyIndex * 200) + Math.random() * 800 + 300;
         await new Promise(resolve => setTimeout(resolve, keyBasedDelay));
+
+        // 🔥🔥🔥 [NEW] Gemini Strict Rate Limiter (10 RPM 강제 준수)
+        await geminiRateLimiter.waitForSlot();
+        console.log(`[${label}] ✅ Gemini Rate Limit 슬롯 확보 완료`);
 
         // Gemini API 클라이언트 생성 및 호출 (타임아웃 적용)
         const genAI = new GoogleGenerativeAI(apiKey);

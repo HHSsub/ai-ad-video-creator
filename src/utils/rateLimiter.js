@@ -87,4 +87,9 @@ class RateLimiter {
 // 🔥 글로벌 인스턴스 (Freepik 전용)
 export const freepikRateLimiter = new RateLimiter(10, 50, 5000);
 
-export default freepikRateLimiter;
+// 🔥 Gemini Strict Rate Limiter (Free Tier: 10 RPM)
+// 60초 / 10회 = 6초에 1회 허용 (매우 보수적 설정)
+// maxPerSecond: 0.2 (5초에 1회), burstMax: 1 (동시 요청 불가), burstWindow: 6000 (6초)
+export const geminiRateLimiter = new RateLimiter(1, 1, 6000);
+
+export default { freepikRateLimiter, geminiRateLimiter };
